@@ -187,42 +187,54 @@ class _HomePageState extends ConsumerState<HomePage> {
 
     return Scaffold(
       appBar: AppBar(
+        centerTitle: true, // <- montant centré
         title: InkWell(
           borderRadius: BorderRadius.circular(6),
-          onTap: _showAccountPicker,
+          onTap: _showAccountPicker, // on continue d’ouvrir le picker au tap
           child: accAsync.when(
-            loading: () => Row(
+            loading: () => Column(
+              mainAxisSize: MainAxisSize.min,
               children: [
-                const Text('...'),
-                const Spacer(),
                 MoneyText(
                   amountCents: 0,
                   currency: 'XOF',
                   style: Theme.of(context).textTheme.titleLarge,
                 ),
+                const SizedBox(height: 2),
+                const Text('...', style: TextStyle(fontSize: 12)),
               ],
             ),
-            error: (_, __) => Row(
+            error: (_, __) => Column(
+              mainAxisSize: MainAxisSize.min,
               children: [
-                const Text('Account'),
-                const Spacer(),
                 MoneyText(
                   amountCents: 0,
                   currency: 'XOF',
                   style: Theme.of(context).textTheme.titleLarge,
                 ),
+                const SizedBox(height: 2),
+                const Text('Account', style: TextStyle(fontSize: 12)),
               ],
             ),
-            data: (acc) => Row(
+            data: (acc) => Column(
+              mainAxisSize: MainAxisSize.min,
               children: [
-                Text(acc?.code ?? 'Account'),
-                const SizedBox(width: 8),
-                const Icon(Icons.expand_more, size: 18),
-                const Spacer(),
                 MoneyText(
                   amountCents: acc?.balance ?? 0,
                   currency: acc?.currency ?? 'XOF',
                   style: Theme.of(context).textTheme.titleLarge,
+                ),
+                const SizedBox(height: 2),
+                Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(
+                      acc?.code ?? 'Account',
+                      style: const TextStyle(fontSize: 12),
+                    ),
+                    const SizedBox(width: 4),
+                    const Icon(Icons.expand_more, size: 16),
+                  ],
                 ),
               ],
             ),
