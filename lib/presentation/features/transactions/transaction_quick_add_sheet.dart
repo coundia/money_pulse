@@ -59,6 +59,37 @@ class _TransactionQuickAddSheetState
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
+              // --- Header with close button ---
+              Row(
+                children: [
+                  const SizedBox(width: 8),
+                  Text(
+                    'Ajouter une transaction',
+                    style: Theme.of(context).textTheme.titleMedium,
+                  ),
+                  const Spacer(),
+                  IconButton(
+                    tooltip: 'Close',
+                    icon: const Icon(Icons.close),
+                    onPressed: () => Navigator.of(context).pop(false),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 4),
+              // Optional grab handle for nicer sheet UX
+              Container(
+                width: 36,
+                height: 4,
+                decoration: BoxDecoration(
+                  color: Theme.of(
+                    context,
+                  ).colorScheme.onSurface.withOpacity(0.2),
+                  borderRadius: BorderRadius.circular(999),
+                ),
+              ),
+              const SizedBox(height: 12),
+
+              // ---------------------------------
               SegmentedButton<bool>(
                 segments: const [
                   ButtonSegment(value: true, label: Text('Expense')),
@@ -98,7 +129,6 @@ class _TransactionQuickAddSheetState
                 ),
               ),
               const SizedBox(height: 12),
-              // NEW: date picker
               ListTile(
                 contentPadding: EdgeInsets.zero,
                 title: const Text('Date'),
@@ -136,7 +166,7 @@ class _TransactionQuickAddSheetState
                             ? null
                             : descCtrl.text.trim(),
                         categoryId: categoryId,
-                        dateTransaction: when, // pass selected date
+                        dateTransaction: when,
                       );
                   if (mounted) Navigator.of(context).pop(true);
                 },

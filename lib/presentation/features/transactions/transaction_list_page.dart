@@ -7,11 +7,15 @@ import 'package:money_pulse/domain/transactions/entities/transaction_entry.dart'
 import 'package:money_pulse/presentation/features/transactions/transaction_form_sheet.dart';
 import 'package:money_pulse/domain/accounts/entities/account.dart';
 
+// NEW: import settings page
+import 'package:money_pulse/presentation/features/settings/settings_page.dart';
+
 enum TxnTypeFilter { all, expense, income }
 
 enum Period { weekly, monthly, yearly }
 
-enum _MenuAction { search, period, changeAccount, sync, share }
+// NEW: add settings to menu actions
+enum _MenuAction { search, period, changeAccount, sync, share, settings }
 
 class TransactionListPage extends ConsumerStatefulWidget {
   const TransactionListPage({super.key});
@@ -22,16 +26,13 @@ class TransactionListPage extends ConsumerStatefulWidget {
 }
 
 class _TransactionListPageState extends ConsumerState<TransactionListPage> {
-  // period + anchor
   Period period = Period.monthly;
   DateTime anchor = DateTime(DateTime.now().year, DateTime.now().month, 1);
-
-  // filters
   TxnTypeFilter typeFilter = TxnTypeFilter.all;
   String? selectedAccountId;
 
   DateTime _startOfWeek(DateTime d) {
-    final wd = d.weekday; // 1=Mon
+    final wd = d.weekday;
     final first = d.subtract(Duration(days: wd - 1));
     return DateTime(first.year, first.month, first.day);
   }
@@ -114,8 +115,9 @@ class _TransactionListPageState extends ConsumerState<TransactionListPage> {
   }
 
   Future<Account?> _resolveAccount() async {
-    if (selectedAccountId == null)
+    if (selectedAccountId == null) {
       return ref.read(accountRepoProvider).findDefault();
+    }
     return ref.read(accountRepoProvider).findById(selectedAccountId!);
   }
 
@@ -130,7 +132,6 @@ class _TransactionListPageState extends ConsumerState<TransactionListPage> {
 
   @override
   Widget build(BuildContext context) {
-    // Rebuild when txs change
     ref.watch(transactionsProvider);
 
     final (from, to, periodLabel) = _rangeLabel();
@@ -150,7 +151,6 @@ class _TransactionListPageState extends ConsumerState<TransactionListPage> {
         final net = inc - exp;
 
         final children = <Widget>[
-          // Header
           Card(
             elevation: 0,
             shape: RoundedRectangleBorder(
@@ -205,7 +205,6 @@ class _TransactionListPageState extends ConsumerState<TransactionListPage> {
                         icon: const Icon(Icons.chevron_right),
                         onPressed: _next,
                       ),
-                      // Ellipsis menu
                       PopupMenuButton<_MenuAction>(
                         tooltip: 'More',
                         onSelected: (_MenuAction action) async {
@@ -217,8 +216,6 @@ class _TransactionListPageState extends ConsumerState<TransactionListPage> {
                                     delegate: _TxnSearchDelegate(items),
                                   );
                               if (result != null) {
-                                // open edit for selected
-                                // ignore: use_build_context_synchronously
                                 final ok = await showModalBottomSheet<bool>(
                                   context: context,
                                   isScrollControlled: true,
@@ -266,43 +263,62 @@ class _TransactionListPageState extends ConsumerState<TransactionListPage> {
                               if (!mounted || acc == null) break;
                               await _showShareDialog(acc);
                               break;
+                            // NEW: open Settings page
+                            case _MenuAction.settings:
+                              if (!mounted) break;
+                              await Navigator.of(context).push(
+                                MaterialPageRoute(
+                                  builder: (_) => const SettingsPage(),
+                                ),
+                              );
+                              // After returning, you can refresh if something changed
+                              setState(() {});
+                              break;
                           }
                         },
-                        itemBuilder: (context) => [
-                          const PopupMenuItem(
+                        itemBuilder: (context) => const [
+                          PopupMenuItem(
                             value: _MenuAction.search,
                             child: ListTile(
                               leading: Icon(Icons.search),
                               title: Text('Search'),
                             ),
                           ),
-                          const PopupMenuDivider(),
-                          const PopupMenuItem(
+                          PopupMenuDivider(),
+                          PopupMenuItem(
                             value: _MenuAction.period,
                             child: ListTile(
                               leading: Icon(Icons.filter_alt),
                               title: Text('Select period'),
                             ),
                           ),
-                          const PopupMenuItem(
+                          PopupMenuItem(
                             value: _MenuAction.changeAccount,
                             child: ListTile(
                               leading: Icon(Icons.account_balance_wallet),
                               title: Text('Change account'),
                             ),
                           ),
-                          const PopupMenuItem(
+                          PopupMenuItem(
                             value: _MenuAction.sync,
                             child: ListTile(
                               leading: Icon(Icons.sync),
                               title: Text('Sync transactions'),
                             ),
                           ),
-                          const PopupMenuItem(
+                          PopupMenuItem(
                             value: _MenuAction.share,
                             child: ListTile(
                               leading: Icon(Icons.ios_share),
                               title: Text('Share account'),
+                            ),
+                          ),
+                          PopupMenuDivider(),
+                          PopupMenuItem(
+                            value: _MenuAction.settings,
+                            child: ListTile(
+                              leading: Icon(Icons.settings),
+                              title: Text('Settings'),
                             ),
                           ),
                         ],
@@ -335,7 +351,6 @@ class _TransactionListPageState extends ConsumerState<TransactionListPage> {
                     ),
                   ),
                   const SizedBox(height: 4),
-                  // Filter UI
                   SingleChildScrollView(
                     scrollDirection: Axis.horizontal,
                     padding: const EdgeInsets.symmetric(vertical: 4),
@@ -364,27 +379,37 @@ class _TransactionListPageState extends ConsumerState<TransactionListPage> {
                     ),
                   ),
                   const SizedBox(height: 8),
-                  // Summary texts
                   Row(
                     mainAxisAlignment: MainAxisAlignment.spaceEvenly,
                     children: [
                       _summaryText(
                         context,
                         'Expense',
-                        '-${exp ~/ 100}',
+                        '-${(items.where((e) => e.typeEntry == 'DEBIT').fold<int>(0, (p, e) => p + e.amount)) ~/ 100}',
                         Colors.red,
                       ),
                       _summaryText(
                         context,
                         'Income',
-                        '+${inc ~/ 100}',
+                        '+${(items.where((e) => e.typeEntry == 'CREDIT').fold<int>(0, (p, e) => p + e.amount)) ~/ 100}',
                         Colors.green,
                       ),
                       _summaryText(
                         context,
                         'Net',
-                        '${net >= 0 ? '+' : ''}${net ~/ 100}',
-                        net >= 0 ? Colors.green : Colors.red,
+                        '${(((items.where((e) => e.typeEntry == 'CREDIT').fold<int>(0, (p, e) => p + e.amount)) - (items.where((e) => e.typeEntry == 'DEBIT').fold<int>(0, (p, e) => p + e.amount)))) >= 0 ? '+' : ''}${(((items.where((e) => e.typeEntry == 'CREDIT').fold<int>(0, (p, e) => p + e.amount)) - (items.where((e) => e.typeEntry == 'DEBIT').fold<int>(0, (p, e) => p + e.amount)))) ~/ 100}',
+                        (((items
+                                        .where((e) => e.typeEntry == 'CREDIT')
+                                        .fold<int>(0, (p, e) => p + e.amount)) -
+                                    (items
+                                        .where((e) => e.typeEntry == 'DEBIT')
+                                        .fold<int>(
+                                          0,
+                                          (p, e) => p + e.amount,
+                                        )))) >=
+                                0
+                            ? Colors.green
+                            : Colors.red,
                       ),
                     ],
                   ),
@@ -439,7 +464,6 @@ class _TransactionListPageState extends ConsumerState<TransactionListPage> {
     );
   }
 
-  // Period picker bottom sheet
   Future<void> _showPeriodSheet() async {
     final sel = await showModalBottomSheet<Period>(
       context: context,
@@ -485,7 +509,6 @@ class _TransactionListPageState extends ConsumerState<TransactionListPage> {
     if (sel != null) {
       setState(() {
         period = sel;
-        // normalize anchor
         switch (period) {
           case Period.weekly:
             anchor = _startOfWeek(anchor);
@@ -569,7 +592,6 @@ class _TransactionListPageState extends ConsumerState<TransactionListPage> {
     );
   }
 
-  // Group transactions by local day, newest day first
   List<_DayGroup> _groupByDay(List<TransactionEntry> items) {
     final map = <DateTime, List<TransactionEntry>>{};
     for (final e in items) {
@@ -580,7 +602,7 @@ class _TransactionListPageState extends ConsumerState<TransactionListPage> {
       );
       map.putIfAbsent(d, () => []).add(e);
     }
-    final days = map.keys.toList()..sort((a, b) => b.compareTo(a)); // desc
+    final days = map.keys.toList()..sort((a, b) => b.compareTo(a));
     return days.map((d) {
       final dayItems = map[d]!
         ..sort((a, b) => b.dateTransaction.compareTo(a.dateTransaction));
@@ -599,7 +621,6 @@ class _TransactionListPageState extends ConsumerState<TransactionListPage> {
     }).toList();
   }
 
-  // Simple text-only summary (no borders, no background)
   Widget _summaryText(
     BuildContext context,
     String label,

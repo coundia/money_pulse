@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:uuid/uuid.dart';
+
 import 'package:money_pulse/presentation/app/providers.dart';
-import 'package:money_pulse/presentation/features/categories/category_form_sheet.dart';
 import 'package:money_pulse/domain/categories/entities/category.dart';
+import 'package:money_pulse/domain/categories/repositories/category_repository.dart';
 
 class CategoryListPage extends ConsumerStatefulWidget {
   const CategoryListPage({super.key});
@@ -12,96 +14,216 @@ class CategoryListPage extends ConsumerStatefulWidget {
 }
 
 class _CategoryListPageState extends ConsumerState<CategoryListPage> {
-  @override
-  void initState() {
-    super.initState();
-    Future.microtask(() async {
-      await ref.read(categoriesProvider.notifier).load();
-    });
-  }
+  late final CategoryRepository _repo = ref.read(categoryRepoProvider);
 
-  Future<void> _reload() async {
-    await ref.read(categoriesProvider.notifier).load();
-  }
+  Future<List<Category>> _load() => _repo.findAllActive();
 
-  Future<bool?> _confirmDelete(BuildContext context, Category c) {
-    return showDialog<bool>(
+  Future<void> _addOrEdit({Category? existing}) async {
+    final result = await showDialog<_CategoryFormResult>(
       context: context,
-      builder: (_) => AlertDialog(
-        title: const Text('Delete category?'),
-        content: Text(c.code),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(false),
-            child: const Text('Cancel'),
-          ),
-          FilledButton(
-            onPressed: () => Navigator.of(context).pop(true),
-            child: const Text('Delete'),
-          ),
-        ],
-      ),
+      builder: (_) => _CategoryFormDialog(existing: existing),
     );
+    if (result == null) return;
+
+    try {
+      if (existing == null) {
+        final now = DateTime.now();
+        final cat = Category(
+          id: const Uuid().v4(),
+          remoteId: null,
+          code: result.code,
+          description: result.description?.trim().isEmpty == true
+              ? null
+              : result.description!.trim(),
+          createdAt: now,
+          updatedAt: now,
+          deletedAt: null,
+          syncAt: null,
+          version: 0,
+          isDirty: true,
+        );
+        await _repo.create(cat);
+      } else {
+        final updated = existing.copyWith(
+          code: result.code,
+          description: result.description?.trim().isEmpty == true
+              ? null
+              : result.description!.trim(),
+        );
+        await _repo.update(updated);
+      }
+      if (mounted) setState(() {});
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('Failed to save: $e')));
+    }
+  }
+
+  Future<void> _delete(Category c) async {
+    await _repo.softDelete(c.id);
+    if (mounted) setState(() {});
   }
 
   @override
   Widget build(BuildContext context) {
-    final items = ref.watch(categoriesProvider);
-    if (items.isEmpty) return const Center(child: Text('No categories'));
-    return ListView.separated(
-      padding: const EdgeInsets.all(12),
-      itemBuilder: (_, i) {
-        final c = items[i];
-        return Dismissible(
-          key: ValueKey(c.id),
-          direction: DismissDirection.endToStart,
-          confirmDismiss: (_) => _confirmDelete(context, c),
-          background: Container(
-            alignment: Alignment.centerRight,
-            color: Colors.red,
-            padding: const EdgeInsets.symmetric(horizontal: 16),
-            child: const Icon(Icons.delete, color: Colors.white),
-          ),
-          onDismissed: (_) async {
-            await ref.read(categoryRepoProvider).softDelete(c.id);
-            await _reload();
-            if (mounted) {
-              ScaffoldMessenger.of(
-                context,
-              ).showSnackBar(SnackBar(content: Text('Deleted ${c.code}')));
-            }
-          },
-          child: ListTile(
-            title: Text(c.code),
-            subtitle: Text(c.description ?? ''),
-            onTap: () async {
-              final ok = await showModalBottomSheet<bool>(
-                context: context,
-                isScrollControlled: true,
-                builder: (_) => CategoryFormSheet(category: c),
+    return Scaffold(
+      appBar: AppBar(title: const Text('Categories')),
+      floatingActionButton: FloatingActionButton.extended(
+        onPressed: () => _addOrEdit(),
+        icon: const Icon(Icons.add),
+        label: const Text('Add category'),
+      ),
+      body: FutureBuilder<List<Category>>(
+        future: _load(),
+        builder: (context, snap) {
+          final items = snap.data ?? const <Category>[];
+          if (snap.connectionState == ConnectionState.waiting) {
+            return const Center(child: CircularProgressIndicator());
+          }
+          if (items.isEmpty) {
+            return const Center(child: Text('No categories'));
+          }
+          return ListView.separated(
+            padding: const EdgeInsets.fromLTRB(12, 12, 12, 96),
+            itemCount: items.length,
+            separatorBuilder: (_, __) => const Divider(height: 1),
+            itemBuilder: (_, i) {
+              final c = items[i];
+              return ListTile(
+                leading: CircleAvatar(
+                  child: Text(
+                    (c.code.isNotEmpty ? c.code[0] : '?').toUpperCase(),
+                  ),
+                ),
+                title: Text(c.code),
+                subtitle: Text(c.description ?? ''),
+                onTap: () => _addOrEdit(existing: c),
+                trailing: PopupMenuButton<String>(
+                  onSelected: (v) {
+                    switch (v) {
+                      case 'edit':
+                        _addOrEdit(existing: c);
+                        break;
+                      case 'delete':
+                        _delete(c);
+                        break;
+                    }
+                  },
+                  itemBuilder: (_) => const [
+                    PopupMenuItem(
+                      value: 'edit',
+                      child: ListTile(
+                        leading: Icon(Icons.edit_outlined),
+                        title: Text('Edit'),
+                      ),
+                    ),
+                    PopupMenuItem(
+                      value: 'delete',
+                      child: ListTile(
+                        leading: Icon(Icons.delete_outline),
+                        title: Text('Delete'),
+                      ),
+                    ),
+                  ],
+                ),
               );
-              if (ok == true) {
-                await _reload();
-              }
             },
-            trailing: IconButton(
-              icon: const Icon(Icons.edit),
-              onPressed: () async {
-                final ok = await showModalBottomSheet<bool>(
-                  context: context,
-                  isScrollControlled: true,
-                  builder: (_) => CategoryFormSheet(category: c),
-                );
-                if (ok == true) {
-                  await _reload();
-                }
-              },
-            ),
+          );
+        },
+      ),
+    );
+  }
+}
+
+/* ------------------------------ Add/Edit dialog ------------------------------ */
+
+class _CategoryFormResult {
+  final String code;
+  final String? description;
+  const _CategoryFormResult({required this.code, this.description});
+}
+
+class _CategoryFormDialog extends StatefulWidget {
+  final Category? existing;
+  const _CategoryFormDialog({this.existing});
+
+  @override
+  State<_CategoryFormDialog> createState() => _CategoryFormDialogState();
+}
+
+class _CategoryFormDialogState extends State<_CategoryFormDialog> {
+  final _formKey = GlobalKey<FormState>();
+  late final TextEditingController _code = TextEditingController(
+    text: widget.existing?.code ?? '',
+  );
+  late final TextEditingController _desc = TextEditingController(
+    text: widget.existing?.description ?? '',
+  );
+
+  @override
+  void dispose() {
+    _code.dispose();
+    _desc.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final isEdit = widget.existing != null;
+    return AlertDialog(
+      title: Text(isEdit ? 'Edit category' : 'Add category'),
+      content: Form(
+        key: _formKey,
+        child: SizedBox(
+          width: 360,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              TextFormField(
+                controller: _code,
+                decoration: const InputDecoration(
+                  labelText: 'Code (e.g. Food)',
+                  border: OutlineInputBorder(),
+                ),
+                validator: (v) =>
+                    (v == null || v.trim().isEmpty) ? 'Required' : null,
+                autofocus: true,
+              ),
+              const SizedBox(height: 10),
+              TextFormField(
+                controller: _desc,
+                decoration: const InputDecoration(
+                  labelText: 'Description (optional)',
+                  border: OutlineInputBorder(),
+                ),
+              ),
+            ],
           ),
-        );
-      },
-      separatorBuilder: (_, __) => const Divider(height: 1),
-      itemCount: items.length,
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(context),
+          child: const Text('Cancel'),
+        ),
+        FilledButton(
+          onPressed: () {
+            if (!_formKey.currentState!.validate()) return;
+            Navigator.pop(
+              context,
+              _CategoryFormResult(
+                code: _code.text.trim(),
+                description: _desc.text.trim().isEmpty
+                    ? null
+                    : _desc.text.trim(),
+              ),
+            );
+          },
+          child: Text(isEdit ? 'Save' : 'Add'),
+        ),
+      ],
     );
   }
 }

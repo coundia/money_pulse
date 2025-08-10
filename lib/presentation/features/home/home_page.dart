@@ -3,10 +3,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:money_pulse/presentation/app/providers.dart';
 import 'package:money_pulse/presentation/widgets/money_text.dart';
 import 'package:money_pulse/presentation/features/transactions/transaction_list_page.dart';
-import 'package:money_pulse/presentation/features/categories/category_list_page.dart';
 import 'package:money_pulse/presentation/features/reports/report_page.dart';
 import 'package:money_pulse/presentation/features/transactions/transaction_quick_add_sheet.dart';
-import 'package:money_pulse/presentation/features/categories/category_form_sheet.dart';
 
 class HomePage extends ConsumerStatefulWidget {
   const HomePage({super.key});
@@ -16,7 +14,8 @@ class HomePage extends ConsumerStatefulWidget {
 }
 
 class _HomePageState extends ConsumerState<HomePage> {
-  int idx = 0;
+  /// Page index: 0 = Transactions, 1 = Reports
+  int pageIdx = 0;
 
   @override
   void initState() {
@@ -28,43 +27,37 @@ class _HomePageState extends ConsumerState<HomePage> {
     });
   }
 
+  Future<void> _openQuickAdd() async {
+    final ok = await showModalBottomSheet<bool>(
+      context: context,
+      isScrollControlled: true,
+      builder: (_) => const TransactionQuickAddSheet(),
+    );
+    if (ok == true) {
+      await ref.read(balanceProvider.notifier).load();
+      await ref.read(transactionsProvider.notifier).load();
+      setState(() {}); // refresh
+    }
+  }
+
+  /// Map current page -> selected destination index (0=Tx, 1=Add action (not selected), 2=Reports)
+  int get _navSelectedIndex => pageIdx == 0 ? 0 : 2;
+
+  void _onDestinationSelected(int v) {
+    if (v == 1) {
+      // central "+" action: quick add transaction
+      _openQuickAdd();
+      return;
+    }
+    setState(() {
+      // 0 -> Transactions page(0), 2 -> Reports page(1)
+      pageIdx = (v == 0) ? 0 : 1;
+    });
+  }
+
   @override
   Widget build(BuildContext context) {
     final balanceCents = ref.watch(balanceProvider);
-
-    Widget? fab;
-    if (idx == 0) {
-      fab = FloatingActionButton.extended(
-        onPressed: () async {
-          final ok = await showModalBottomSheet<bool>(
-            context: context,
-            isScrollControlled: true,
-            builder: (_) => const TransactionQuickAddSheet(),
-          );
-          if (ok == true) {
-            await ref.read(balanceProvider.notifier).load();
-            await ref.read(transactionsProvider.notifier).load();
-          }
-        },
-        icon: const Icon(Icons.add),
-        label: const Text('Add'),
-      );
-    } else if (idx == 1) {
-      fab = FloatingActionButton.extended(
-        onPressed: () async {
-          final ok = await showModalBottomSheet<bool>(
-            context: context,
-            isScrollControlled: true,
-            builder: (_) => const CategoryFormSheet(),
-          );
-          if (ok == true) {
-            await ref.read(categoriesProvider.notifier).load();
-          }
-        },
-        icon: const Icon(Icons.add),
-        label: const Text('Add'),
-      );
-    }
 
     return Scaffold(
       appBar: AppBar(
@@ -81,29 +74,31 @@ class _HomePageState extends ConsumerState<HomePage> {
         ),
       ),
       body: IndexedStack(
-        index: idx,
-        children: const [
-          TransactionListPage(),
-          CategoryListPage(),
-          ReportPage(),
-        ],
+        index: pageIdx,
+        children: const [TransactionListPage(), ReportPage()],
       ),
       bottomNavigationBar: NavigationBar(
-        selectedIndex: idx,
-        onDestinationSelected: (v) => setState(() => idx = v),
+        labelBehavior:
+            NavigationDestinationLabelBehavior.onlyShowSelected, // hide labels
+        selectedIndex: _navSelectedIndex,
+        onDestinationSelected: _onDestinationSelected,
         destinations: const [
           NavigationDestination(
             icon: Icon(Icons.list_alt),
-            label: 'Transactions',
+            label: 'Transactions', // hidden by labelBehavior
           ),
           NavigationDestination(
-            icon: Icon(Icons.category),
-            label: 'Categories',
+            // big + icon, no visible label
+            icon: Icon(Icons.add_circle, size: 36),
+            selectedIcon: Icon(Icons.add_circle, size: 36),
+            label: 'Add', // hidden
           ),
-          NavigationDestination(icon: Icon(Icons.pie_chart), label: 'Reports'),
+          NavigationDestination(
+            icon: Icon(Icons.pie_chart),
+            label: 'Reports', // hidden by labelBehavior
+          ),
         ],
       ),
-      floatingActionButton: fab,
     );
   }
 }
