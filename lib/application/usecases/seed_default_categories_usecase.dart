@@ -8,10 +8,8 @@ class SeedDefaultCategoriesUseCase {
 
   Future<void> execute() async {
     final defaults = [
-      'EXPENSE_FOOD',
-      'EXPENSE_SHOPPING',
-      'INCOME_SALARY',
-      'INCOME_GIFT',
+      // 'ENTREE',
+      // 'SORTIE'
     ];
     final existing = await repo.findAllActive();
     final have = existing.map((e) => e.code).toSet();

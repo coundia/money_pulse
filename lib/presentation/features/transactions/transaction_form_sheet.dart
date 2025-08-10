@@ -1,20 +1,20 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
-import 'package:money_pulse/presentation/app/providers.dart';
-import 'package:money_pulse/domain/categories/repositories/category_repository.dart';
 import 'package:money_pulse/domain/categories/entities/category.dart';
+import 'package:money_pulse/presentation/app/providers.dart';
+import 'package:money_pulse/domain/transactions/entities/transaction_entry.dart';
 
-class TransactionQuickAddSheet extends ConsumerStatefulWidget {
-  const TransactionQuickAddSheet({super.key});
+class TransactionFormSheet extends ConsumerStatefulWidget {
+  final TransactionEntry entry;
+  const TransactionFormSheet({super.key, required this.entry});
 
   @override
-  ConsumerState<TransactionQuickAddSheet> createState() =>
-      _TransactionQuickAddSheetState();
+  ConsumerState<TransactionFormSheet> createState() =>
+      _TransactionFormSheetState();
 }
 
-class _TransactionQuickAddSheetState
-    extends ConsumerState<TransactionQuickAddSheet> {
+class _TransactionFormSheetState extends ConsumerState<TransactionFormSheet> {
   final formKey = GlobalKey<FormState>();
   final amountCtrl = TextEditingController();
   final descCtrl = TextEditingController();
@@ -26,10 +26,14 @@ class _TransactionQuickAddSheetState
   @override
   void initState() {
     super.initState();
+    final e = widget.entry;
+    isDebit = e.typeEntry == 'DEBIT';
+    amountCtrl.text = (e.amount / 100).toStringAsFixed(0);
+    descCtrl.text = e.description ?? '';
+    categoryId = e.categoryId;
+    when = e.dateTransaction;
     Future.microtask(() async {
-      final repo = ref.read(categoryRepoProvider);
-      categories = await repo.findAllActive();
-      if (categories.isNotEmpty) categoryId = categories.first.id;
+      categories = await ref.read(categoryRepoProvider).findAllActive();
       setState(() {});
     });
   }
@@ -81,7 +85,6 @@ class _TransactionQuickAddSheetState
                 ),
                 validator: (v) =>
                     (v == null || v.trim().isEmpty) ? 'Required' : null,
-                autofocus: true,
               ),
               const SizedBox(height: 12),
               DropdownButtonFormField<String>(
@@ -98,7 +101,14 @@ class _TransactionQuickAddSheetState
                 ),
               ),
               const SizedBox(height: 12),
-              // NEW: date picker
+              TextFormField(
+                controller: descCtrl,
+                decoration: const InputDecoration(
+                  border: OutlineInputBorder(),
+                  labelText: 'Description',
+                ),
+              ),
+              const SizedBox(height: 12),
               ListTile(
                 contentPadding: EdgeInsets.zero,
                 title: const Text('Date'),
@@ -114,34 +124,25 @@ class _TransactionQuickAddSheetState
                   if (picked != null) setState(() => when = picked);
                 },
               ),
-              const SizedBox(height: 12),
-              TextFormField(
-                controller: descCtrl,
-                decoration: const InputDecoration(
-                  border: OutlineInputBorder(),
-                  labelText: 'Description',
-                ),
-              ),
               const SizedBox(height: 16),
               FilledButton.icon(
                 onPressed: () async {
                   if (!formKey.currentState!.validate()) return;
                   final cents = _toCents(amountCtrl.text);
-                  await ref
-                      .read(quickAddTransactionUseCaseProvider)
-                      .execute(
-                        amountCents: cents,
-                        isDebit: isDebit,
-                        description: descCtrl.text.trim().isEmpty
-                            ? null
-                            : descCtrl.text.trim(),
-                        categoryId: categoryId,
-                        dateTransaction: when, // pass selected date
-                      );
+                  final updated = widget.entry.copyWith(
+                    amount: cents,
+                    typeEntry: isDebit ? 'DEBIT' : 'CREDIT',
+                    description: descCtrl.text.trim().isEmpty
+                        ? null
+                        : descCtrl.text.trim(),
+                    categoryId: categoryId,
+                    dateTransaction: when,
+                  );
+                  await ref.read(transactionRepoProvider).update(updated);
                   if (mounted) Navigator.of(context).pop(true);
                 },
                 icon: const Icon(Icons.check),
-                label: const Text('Save'),
+                label: const Text('Update'),
               ),
             ],
           ),

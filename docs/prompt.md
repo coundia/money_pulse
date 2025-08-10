@@ -22,6 +22,6 @@ abstract class AccountRepository {
 
  - Add a header to select a month ( prev month current month and next month), with good ui in transaction too
  
- 
+ - just improve ui of list transaction , grouped it by day
 
  

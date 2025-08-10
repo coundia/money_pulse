@@ -5,34 +5,45 @@ import 'package:money_pulse/domain/accounts/repositories/account_repository.dart
 
 class QuickAddTransactionUseCase {
   final TransactionRepository txRepo;
-  final AccountRepository accountRepo;
-  QuickAddTransactionUseCase(this.txRepo, this.accountRepo);
+  final AccountRepository accRepo;
 
-  Future<TransactionEntry> execute({
+  QuickAddTransactionUseCase(this.txRepo, this.accRepo);
+
+  /// Add a transaction quickly with optional [dateTransaction].
+  Future<void> execute({
     required int amountCents,
     required bool isDebit,
     String? description,
     String? categoryId,
-    DateTime? when,
+    DateTime? dateTransaction,
   }) async {
-    final acc = await accountRepo.findDefault();
+    final acc = await accRepo.findDefault();
     if (acc == null) {
-      throw StateError('No default account');
+      throw Exception('No default account');
     }
-    final now = when ?? DateTime.now();
-    final e = TransactionEntry(
+    final now = DateTime.now();
+    final entry = TransactionEntry(
       id: const Uuid().v4(),
+      remoteId: null,
+      code: null,
+      description: (description?.trim().isEmpty ?? true)
+          ? null
+          : description!.trim(),
       amount: amountCents,
       typeEntry: isDebit ? 'DEBIT' : 'CREDIT',
-      dateTransaction: now,
-      description: description,
+      dateTransaction: dateTransaction ?? now,
+      status: null,
+      entityName: null,
+      entityId: null,
       accountId: acc.id,
       categoryId: categoryId,
       createdAt: now,
       updatedAt: now,
+      deletedAt: null,
+      syncAt: null,
       version: 0,
       isDirty: true,
     );
-    return await txRepo.create(e);
+    await txRepo.create(entry);
   }
 }
