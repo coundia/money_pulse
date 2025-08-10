@@ -33,6 +33,19 @@ class _TransactionListPageState extends ConsumerState<TransactionListPage> {
     }
   }
 
+  Future<void> _pickMonth() async {
+    final picked = await showDatePicker(
+      context: context,
+      initialDate: month,
+      firstDate: DateTime(2000),
+      lastDate: DateTime(2100),
+      helpText: 'Select any day in the month',
+    );
+    if (picked != null) {
+      setState(() => month = DateTime(picked.year, picked.month, 1));
+    }
+  }
+
   Future<List<TransactionEntry>> _load() async {
     final acc = await ref.read(accountRepoProvider).findDefault();
     if (acc == null) return const <TransactionEntry>[];
@@ -75,7 +88,7 @@ class _TransactionListPageState extends ConsumerState<TransactionListPage> {
                 ),
                 child: Column(
                   children: [
-                    // Month navigator + "This month" action
+                    // Month navigator with tappable title (opens month picker)
                     Row(
                       children: [
                         IconButton(
@@ -90,10 +103,32 @@ class _TransactionListPageState extends ConsumerState<TransactionListPage> {
                               duration: const Duration(milliseconds: 200),
                               transitionBuilder: (c, a) =>
                                   FadeTransition(opacity: a, child: c),
-                              child: Text(
-                                monthLabel,
+                              child: InkWell(
                                 key: ValueKey(monthLabel),
-                                style: Theme.of(context).textTheme.titleMedium,
+                                onTap: _pickMonth,
+                                borderRadius: BorderRadius.circular(8),
+                                child: Padding(
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 8,
+                                    vertical: 6,
+                                  ),
+                                  child: Row(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      const SizedBox(width: 6),
+                                      const Icon(
+                                        Icons.calendar_month,
+                                        size: 18,
+                                      ),
+                                      Text(
+                                        monthLabel,
+                                        style: Theme.of(
+                                          context,
+                                        ).textTheme.titleMedium,
+                                      ),
+                                    ],
+                                  ),
+                                ),
                               ),
                             ),
                           ),
@@ -106,53 +141,53 @@ class _TransactionListPageState extends ConsumerState<TransactionListPage> {
                         ),
                       ],
                     ),
-                    const SizedBox(height: 8),
-                    // Filter UI: SegmentedButton with icons (no ChoiceChip)
+                    const SizedBox(height: 6),
+                    // Moved "This month" link under header, right-aligned (cleaner UI)
+                    Align(
+                      alignment: Alignment.centerRight,
+                      child: TextButton.icon(
+                        onPressed: () => setState(() {
+                          month = DateTime(
+                            DateTime.now().year,
+                            DateTime.now().month,
+                            1,
+                          );
+                        }),
+                        icon: const Icon(Icons.today),
+                        label: const Text('This month'),
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    // Filter UI: SegmentedButton with icons (compact, scrollable if needed)
                     SingleChildScrollView(
                       scrollDirection: Axis.horizontal,
                       padding: const EdgeInsets.symmetric(vertical: 4),
-                      child: Row(
-                        children: [
-                          SegmentedButton<TxnTypeFilter>(
-                            segments: const [
-                              ButtonSegment(
-                                value: TxnTypeFilter.all,
-                                icon: Icon(Icons.all_inclusive),
-                                label: Text('All'),
-                              ),
-                              ButtonSegment(
-                                value: TxnTypeFilter.expense,
-                                icon: Icon(Icons.south),
-                                label: Text('Expense'),
-                              ),
-                              ButtonSegment(
-                                value: TxnTypeFilter.income,
-                                icon: Icon(Icons.north),
-                                label: Text('Income'),
-                              ),
-                            ],
-                            selected: {typeFilter},
-                            onSelectionChanged: (s) =>
-                                setState(() => typeFilter = s.first),
-                            showSelectedIcon: false,
+                      child: SegmentedButton<TxnTypeFilter>(
+                        segments: const [
+                          ButtonSegment(
+                            value: TxnTypeFilter.all,
+                            icon: Icon(Icons.all_inclusive),
+                            label: Text('All'),
                           ),
-                          const SizedBox(width: 8),
-                          OutlinedButton.icon(
-                            onPressed: () => setState(() {
-                              month = DateTime(
-                                DateTime.now().year,
-                                DateTime.now().month,
-                                1,
-                              );
-                            }),
-                            icon: const Icon(Icons.today),
-                            label: const Text('This month'),
+                          ButtonSegment(
+                            value: TxnTypeFilter.expense,
+                            icon: Icon(Icons.south),
+                            label: Text('Expense'),
+                          ),
+                          ButtonSegment(
+                            value: TxnTypeFilter.income,
+                            icon: Icon(Icons.north),
+                            label: Text('Income'),
                           ),
                         ],
+                        selected: {typeFilter},
+                        onSelectionChanged: (s) =>
+                            setState(() => typeFilter = s.first),
+                        showSelectedIcon: false,
                       ),
                     ),
                     const SizedBox(height: 8),
-                    // Summary texts (no borders, no pills)
+                    // Summary texts (no borders)
                     Row(
                       mainAxisAlignment: MainAxisAlignment.spaceEvenly,
                       children: [
