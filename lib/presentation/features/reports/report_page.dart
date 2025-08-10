@@ -14,24 +14,23 @@ class ReportPage extends ConsumerStatefulWidget {
 
 class _ReportPageState extends ConsumerState<ReportPage> {
   bool isDebit = true; // Expense by default
-  /// 0 = Today, 7/30/90 = last N days
-  int days = 30;
+  // Month cursor = first day of the selected month
+  DateTime month = DateTime(DateTime.now().year, DateTime.now().month, 1);
+
+  DateTime _firstOfMonth(DateTime d) => DateTime(d.year, d.month, 1);
+  DateTime _nextMonth(DateTime d) => DateTime(d.year, d.month + 1, 1);
+  DateTime _prevMonth(DateTime d) => DateTime(d.year, d.month - 1, 1);
 
   Future<List<Map<String, Object?>>> _load() async {
     final acc = await ref.read(accountRepoProvider).findDefault();
     if (acc == null) return <Map<String, Object?>>[];
-    final repo = ref.read(reportRepoProvider);
-    if (days == 0) {
-      return repo.sumByCategoryToday(
-        acc.id,
-        typeEntry: isDebit ? 'DEBIT' : 'CREDIT',
-      );
-    }
-    return repo.sumByCategoryLastNDays(
-      acc.id,
-      typeEntry: isDebit ? 'DEBIT' : 'CREDIT',
-      days: days,
-    );
+    return ref
+        .read(reportRepoProvider)
+        .sumByCategoryForMonth(
+          acc.id,
+          typeEntry: isDebit ? 'DEBIT' : 'CREDIT',
+          month: month,
+        );
   }
 
   List<Color> _palette(BuildContext context) {
@@ -57,6 +56,8 @@ class _ReportPageState extends ConsumerState<ReportPage> {
   Widget build(BuildContext context) {
     // Refresh when transactions change
     ref.watch(transactionsProvider);
+
+    final monthLabel = DateFormat.yMMMM().format(month);
 
     return FutureBuilder<List<Map<String, Object?>>>(
       future: _load(),
@@ -90,36 +91,81 @@ class _ReportPageState extends ConsumerState<ReportPage> {
           child: ListView(
             padding: const EdgeInsets.all(16),
             children: [
-              Wrap(
-                spacing: 12,
-                runSpacing: 8,
-                children: [
-                  SegmentedButton<bool>(
-                    segments: const [
-                      ButtonSegment(value: true, label: Text('Expense')),
-                      ButtonSegment(value: false, label: Text('Income')),
-                    ],
-                    selected: {isDebit},
-                    onSelectionChanged: (s) =>
-                        setState(() => isDebit = s.first),
+              // Header with month navigation + type selector
+              Card(
+                elevation: 0,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(14),
+                ),
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 8,
+                    vertical: 6,
                   ),
-                  SegmentedButton<int>(
-                    segments: const [
-                      ButtonSegment(value: 0, label: Text('Today')),
-                      ButtonSegment(value: 7, label: Text('7d')),
-                      ButtonSegment(value: 30, label: Text('30d')),
-                      ButtonSegment(value: 90, label: Text('90d')),
+                  child: Column(
+                    children: [
+                      Row(
+                        children: [
+                          IconButton(
+                            tooltip: 'Previous month',
+                            icon: const Icon(Icons.chevron_left),
+                            onPressed: () =>
+                                setState(() => month = _prevMonth(month)),
+                          ),
+                          Expanded(
+                            child: Center(
+                              child: AnimatedSwitcher(
+                                duration: const Duration(milliseconds: 200),
+                                transitionBuilder: (child, anim) =>
+                                    FadeTransition(opacity: anim, child: child),
+                                child: Text(
+                                  monthLabel,
+                                  key: ValueKey(monthLabel),
+                                  style: Theme.of(
+                                    context,
+                                  ).textTheme.titleMedium,
+                                ),
+                              ),
+                            ),
+                          ),
+                          IconButton(
+                            tooltip: 'Next month',
+                            icon: const Icon(Icons.chevron_right),
+                            onPressed: () =>
+                                setState(() => month = _nextMonth(month)),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 6),
+                      SegmentedButton<bool>(
+                        segments: const [
+                          ButtonSegment(value: true, label: Text('Expense')),
+                          ButtonSegment(value: false, label: Text('Income')),
+                        ],
+                        selected: {isDebit},
+                        onSelectionChanged: (s) =>
+                            setState(() => isDebit = s.first),
+                      ),
+                      const SizedBox(height: 6),
+                      Align(
+                        alignment: Alignment.centerRight,
+                        child: TextButton.icon(
+                          onPressed: () => setState(() {
+                            month = _firstOfMonth(DateTime.now());
+                          }),
+                          icon: const Icon(Icons.today),
+                          label: const Text('This month'),
+                        ),
+                      ),
                     ],
-                    selected: {days},
-                    onSelectionChanged: (s) => setState(() => days = s.first),
                   ),
-                ],
+                ),
               ),
-              const SizedBox(height: 16),
+              const SizedBox(height: 12),
               if (rows.isEmpty)
                 const SizedBox(
                   height: 220,
-                  child: Center(child: Text('No data for this range')),
+                  child: Center(child: Text('No data for this month')),
                 )
               else
                 SizedBox(
@@ -143,8 +189,7 @@ class _ReportPageState extends ConsumerState<ReportPage> {
                             style: Theme.of(context).textTheme.titleLarge,
                           ),
                           Text(
-                            (isDebit ? 'Expense' : 'Income') +
-                                (days == 0 ? ' · Today' : ' · Last $days days'),
+                            (isDebit ? 'Expense · ' : 'Income · ') + monthLabel,
                             style: Theme.of(context).textTheme.bodyMedium,
                           ),
                         ],

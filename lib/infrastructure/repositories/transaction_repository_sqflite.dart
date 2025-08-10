@@ -262,32 +262,27 @@ class TransactionRepositorySqflite implements TransactionRepository {
   }
 
   @override
-  Future<List<Map<String, Object?>>> spendingByCategoryLast30Days(
+  Future<List<TransactionEntry>> findByAccountForMonth(
     String accountId,
-  ) async {
-    return sumByCategory(accountId, typeEntry: 'DEBIT', days: 30);
-  }
-
-  @override
-  Future<List<Map<String, Object?>>> sumByCategory(
-    String accountId, {
-    required String typeEntry,
-    int days = 30,
+    DateTime month, {
+    String? typeEntry,
   }) async {
-    final cutoff = DateTime.now()
-        .subtract(Duration(days: days))
-        .toIso8601String();
-    final rows = await _db.db.rawQuery(
-      '''
-      SELECT COALESCE(c.code,'UNCAT') AS categoryCode, SUM(t.amount) AS total
-      FROM transaction_entry t
-      LEFT JOIN category c ON c.id = t.categoryId
-      WHERE t.accountId = ? AND t.deletedAt IS NULL AND t.typeEntry = ? AND t.dateTransaction >= ?
-      GROUP BY COALESCE(c.code,'UNCAT')
-      ORDER BY total DESC
-    ''',
-      [accountId, typeEntry, cutoff],
+    final start = DateTime(month.year, month.month, 1).toIso8601String();
+    final end = DateTime(month.year, month.month + 1, 1).toIso8601String();
+    final where = StringBuffer(
+      'accountId=? AND deletedAt IS NULL AND dateTransaction >= ? AND dateTransaction < ?',
     );
-    return rows;
+    final args = <Object?>[accountId, start, end];
+    if (typeEntry != null) {
+      where.write(' AND typeEntry = ?');
+      args.add(typeEntry);
+    }
+    final rows = await _db.db.query(
+      'transaction_entry',
+      where: where.toString(),
+      whereArgs: args,
+      orderBy: 'dateTransaction DESC, createdAt DESC',
+    );
+    return rows.map(TransactionEntry.fromMap).toList();
   }
 }

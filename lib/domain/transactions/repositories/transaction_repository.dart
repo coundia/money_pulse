@@ -5,18 +5,17 @@ abstract class TransactionRepository {
   Future<void> update(TransactionEntry entry);
   Future<void> softDelete(String id);
   Future<TransactionEntry?> findById(String id);
+
   Future<List<TransactionEntry>> findRecentByAccount(
     String accountId, {
     int limit = 50,
   });
 
-  Future<List<Map<String, Object?>>> spendingByCategoryLast30Days(
+  /// NEW: fetch transactions for a whole calendar month (local).
+  /// If [typeEntry] is provided ('DEBIT' or 'CREDIT'), filter by it.
+  Future<List<TransactionEntry>> findByAccountForMonth(
     String accountId,
-  );
-
-  Future<List<Map<String, Object?>>> sumByCategory(
-    String accountId, {
-    required String typeEntry, // 'DEBIT' or 'CREDIT'
-    int days = 30,
+    DateTime month, {
+    String? typeEntry,
   });
 }
