@@ -1,58 +1,209 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:fl_chart/fl_chart.dart';
+import 'package:intl/intl.dart';
 import 'package:money_pulse/presentation/app/providers.dart';
+import 'package:money_pulse/presentation/widgets/money_text.dart';
 
-class ReportPage extends ConsumerWidget {
+class ReportPage extends ConsumerStatefulWidget {
   const ReportPage({super.key});
 
-  Future<List<Map<String, Object?>>> _load(WidgetRef ref) async {
+  @override
+  ConsumerState<ReportPage> createState() => _ReportPageState();
+}
+
+class _ReportPageState extends ConsumerState<ReportPage> {
+  bool isDebit = true; // Expense by default
+  int days = 30;
+
+  Future<List<Map<String, Object?>>> _load() async {
     final acc = await ref.read(accountRepoProvider).findDefault();
     if (acc == null) return <Map<String, Object?>>[];
     return ref
         .read(transactionRepoProvider)
-        .spendingByCategoryLast30Days(acc.id);
+        .sumByCategory(
+          acc.id,
+          typeEntry: isDebit ? 'DEBIT' : 'CREDIT',
+          days: days,
+        );
+  }
+
+  List<Color> _palette(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    return [
+      cs.primary,
+      cs.secondary,
+      cs.tertiary,
+      cs.error,
+      cs.primaryContainer,
+      cs.secondaryContainer,
+      cs.tertiaryContainer,
+    ].map((c) => c.withOpacity(0.85)).toList();
+  }
+
+  String _percent(num part, num total) {
+    if (total == 0) return '0%';
+    final p = (part / total * 100);
+    return '${p.toStringAsFixed(0)}%';
   }
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  Widget build(BuildContext context) {
+    // Rebuild when transactions change to refresh report automatically
+    ref.watch(transactionsProvider);
+
     return FutureBuilder<List<Map<String, Object?>>>(
-      future: _load(ref),
+      future: _load(),
       builder: (context, snap) {
         if (snap.connectionState == ConnectionState.waiting) {
           return const Center(child: CircularProgressIndicator());
         }
         final rows = snap.data ?? <Map<String, Object?>>[];
-        if (rows.isEmpty) return const Center(child: Text('No data'));
         final total = rows.fold<int>(
           0,
           (p, e) => p + (e['total'] as int? ?? 0),
         );
+        final palette = _palette(context);
+
         final sections = <PieChartSectionData>[];
         for (var i = 0; i < rows.length; i++) {
           final r = rows[i];
           final v = (r['total'] as int? ?? 0).toDouble();
-          final label = r['categoryCode']?.toString() ?? 'Uncategorized';
-          sections.add(PieChartSectionData(value: v, title: label, radius: 60));
+          sections.add(
+            PieChartSectionData(
+              value: v,
+              title: '',
+              color: palette[i % palette.length],
+              radius: 70,
+            ),
+          );
         }
-        return Padding(
-          padding: const EdgeInsets.all(16),
-          child: Column(
+
+        return RefreshIndicator(
+          onRefresh: () async => setState(() {}),
+          child: ListView(
+            padding: const EdgeInsets.all(16),
             children: [
-              const Text('Spending last 30 days'),
-              const SizedBox(height: 12),
-              SizedBox(
-                height: 240,
-                child: PieChart(
-                  PieChartData(
-                    sections: sections,
-                    sectionsSpace: 2,
-                    centerSpaceRadius: 0,
+              // Controls: use Wrap to prevent horizontal overflow on small screens
+              Wrap(
+                spacing: 12,
+                runSpacing: 8,
+                children: [
+                  SegmentedButton<bool>(
+                    segments: const [
+                      ButtonSegment(value: true, label: Text('Expense')),
+                      ButtonSegment(value: false, label: Text('Income')),
+                    ],
+                    selected: {isDebit},
+                    onSelectionChanged: (s) =>
+                        setState(() => isDebit = s.first),
+                  ),
+                  SegmentedButton<int>(
+                    segments: const [
+                      ButtonSegment(value: 7, label: Text('7d')),
+                      ButtonSegment(value: 30, label: Text('30d')),
+                      ButtonSegment(value: 90, label: Text('90d')),
+                    ],
+                    selected: {days},
+                    onSelectionChanged: (s) => setState(() => days = s.first),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 16),
+              if (rows.isEmpty)
+                const SizedBox(
+                  height: 220,
+                  child: Center(child: Text('No data for this range')),
+                )
+              else
+                SizedBox(
+                  height: 260,
+                  child: Stack(
+                    alignment: Alignment.center,
+                    children: [
+                      PieChart(
+                        PieChartData(
+                          sections: sections,
+                          sectionsSpace: 2,
+                          centerSpaceRadius: 60,
+                        ),
+                      ),
+                      Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          MoneyText(
+                            amountCents: total,
+                            currency: 'XOF',
+                            style: Theme.of(context).textTheme.titleLarge,
+                          ),
+                          Text(
+                            isDebit ? 'Total expense' : 'Total income',
+                            style: Theme.of(context).textTheme.bodyMedium,
+                          ),
+                        ],
+                      ),
+                    ],
                   ),
                 ),
-              ),
-              const SizedBox(height: 12),
-              Text('Total ${(total ~/ 100)}'),
+              const SizedBox(height: 16),
+              if (rows.isNotEmpty) ...[
+                Text(
+                  'Breakdown',
+                  style: Theme.of(context).textTheme.titleMedium,
+                ),
+                const SizedBox(height: 8),
+                ...rows.asMap().entries.map((e) {
+                  final i = e.key;
+                  final r = e.value;
+                  final label =
+                      r['categoryCode']?.toString() ?? 'Uncategorized';
+                  final v = (r['total'] as int? ?? 0);
+                  final percent = _percent(v, total == 0 ? 1 : total);
+                  return ListTile(
+                    contentPadding: EdgeInsets.zero,
+                    leading: CircleAvatar(
+                      backgroundColor: palette[i % palette.length],
+                      radius: 10,
+                    ),
+                    title: Text(
+                      label,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                    // Constrain trailing width to avoid overflow on small screens
+                    trailing: SizedBox(
+                      width: 110,
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        crossAxisAlignment: CrossAxisAlignment.end,
+                        children: [
+                          MoneyText(
+                            amountCents: v,
+                            currency: 'XOF',
+                            style: const TextStyle(fontWeight: FontWeight.w600),
+                          ),
+                          Text(
+                            percent,
+                            style: Theme.of(context).textTheme.bodySmall,
+                          ),
+                        ],
+                      ),
+                    ),
+                    subtitle: LinearProgressIndicator(
+                      value: total == 0 ? 0 : v / total,
+                      minHeight: 6,
+                      borderRadius: BorderRadius.circular(3),
+                    ),
+                  );
+                }),
+              ],
+              const SizedBox(height: 8),
+              if (rows.isNotEmpty)
+                Text(
+                  'Updated ${DateFormat.yMMMd().add_Hm().format(DateTime.now())}',
+                  textAlign: TextAlign.center,
+                  style: Theme.of(context).textTheme.bodySmall,
+                ),
             ],
           ),
         );

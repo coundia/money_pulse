@@ -9,7 +9,14 @@ abstract class TransactionRepository {
     String accountId, {
     int limit = 50,
   });
+
   Future<List<Map<String, Object?>>> spendingByCategoryLast30Days(
     String accountId,
   );
+
+  Future<List<Map<String, Object?>>> sumByCategory(
+    String accountId, {
+    required String typeEntry, // 'DEBIT' or 'CREDIT'
+    int days = 30,
+  });
 }

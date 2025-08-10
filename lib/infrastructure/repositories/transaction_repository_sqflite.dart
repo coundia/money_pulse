@@ -265,18 +265,28 @@ class TransactionRepositorySqflite implements TransactionRepository {
   Future<List<Map<String, Object?>>> spendingByCategoryLast30Days(
     String accountId,
   ) async {
-    final now = DateTime.now();
-    final cutoff = now.subtract(const Duration(days: 30)).toIso8601String();
+    return sumByCategory(accountId, typeEntry: 'DEBIT', days: 30);
+  }
+
+  @override
+  Future<List<Map<String, Object?>>> sumByCategory(
+    String accountId, {
+    required String typeEntry,
+    int days = 30,
+  }) async {
+    final cutoff = DateTime.now()
+        .subtract(Duration(days: days))
+        .toIso8601String();
     final rows = await _db.db.rawQuery(
       '''
-      SELECT c.code AS categoryCode, SUM(t.amount) AS total
+      SELECT COALESCE(c.code,'UNCAT') AS categoryCode, SUM(t.amount) AS total
       FROM transaction_entry t
       LEFT JOIN category c ON c.id = t.categoryId
-      WHERE t.accountId = ? AND t.deletedAt IS NULL AND t.typeEntry = 'DEBIT' AND t.dateTransaction >= ?
-      GROUP BY c.code
+      WHERE t.accountId = ? AND t.deletedAt IS NULL AND t.typeEntry = ? AND t.dateTransaction >= ?
+      GROUP BY COALESCE(c.code,'UNCAT')
       ORDER BY total DESC
     ''',
-      [accountId, cutoff],
+      [accountId, typeEntry, cutoff],
     );
     return rows;
   }
