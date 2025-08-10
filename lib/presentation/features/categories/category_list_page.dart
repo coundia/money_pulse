@@ -11,21 +11,25 @@ class CategoryListPage extends ConsumerStatefulWidget {
 
 class _CategoryListPageState extends ConsumerState<CategoryListPage> {
   @override
+  void initState() {
+    super.initState();
+    Future.microtask(() async {
+      await ref.read(categoriesProvider.notifier).load();
+    });
+  }
+
+  @override
   Widget build(BuildContext context) {
-    return FutureBuilder(
-      future: ref.read(categoryRepoProvider).findAllActive(),
-      builder: (context, snap) {
-        final items = snap.data ?? [];
-        return ListView.separated(
-          padding: const EdgeInsets.all(12),
-          itemBuilder: (_, i) => ListTile(
-            title: Text(items[i].code),
-            subtitle: Text(items[i].description ?? ''),
-          ),
-          separatorBuilder: (_, __) => const Divider(height: 1),
-          itemCount: items.length,
-        );
-      },
+    final items = ref.watch(categoriesProvider);
+    if (items.isEmpty) return const Center(child: Text('No categories'));
+    return ListView.separated(
+      padding: const EdgeInsets.all(12),
+      itemBuilder: (_, i) => ListTile(
+        title: Text(items[i].code),
+        subtitle: Text(items[i].description ?? ''),
+      ),
+      separatorBuilder: (_, __) => const Divider(height: 1),
+      itemCount: items.length,
     );
   }
 }

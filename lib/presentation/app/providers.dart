@@ -10,6 +10,7 @@ import 'package:money_pulse/application/usecases/ensure_default_account_usecase.
 import 'package:money_pulse/application/usecases/seed_default_categories_usecase.dart';
 import 'package:money_pulse/application/usecases/quick_add_transaction_usecase.dart';
 import 'package:money_pulse/domain/accounts/entities/account.dart';
+import 'package:money_pulse/domain/categories/entities/category.dart';
 import 'package:money_pulse/domain/transactions/entities/transaction_entry.dart';
 
 final dbProvider = Provider<AppDatabase>((ref) => AppDatabase.I);
@@ -48,7 +49,6 @@ final quickAddTransactionUseCaseProvider = Provider<QuickAddTransactionUseCase>(
 class BalanceStateNotifier extends StateNotifier<int> {
   final AccountRepository repo;
   BalanceStateNotifier(this.repo) : super(0);
-
   Future<void> load() async {
     final a = await repo.findDefault();
     state = a?.balance ?? 0;
@@ -63,7 +63,6 @@ class TransactionsStateNotifier extends StateNotifier<List<TransactionEntry>> {
   final TransactionRepository txRepo;
   final AccountRepository accRepo;
   TransactionsStateNotifier(this.txRepo, this.accRepo) : super(const []);
-
   Future<void> load() async {
     final a = await accRepo.findDefault();
     if (a == null) {
@@ -82,4 +81,17 @@ final transactionsProvider =
         ref.read(transactionRepoProvider),
         ref.read(accountRepoProvider),
       );
+    });
+
+class CategoriesStateNotifier extends StateNotifier<List<Category>> {
+  final CategoryRepository repo;
+  CategoriesStateNotifier(this.repo) : super(const []);
+  Future<void> load() async {
+    state = await repo.findAllActive();
+  }
+}
+
+final categoriesProvider =
+    StateNotifierProvider<CategoriesStateNotifier, List<Category>>((ref) {
+      return CategoriesStateNotifier(ref.read(categoryRepoProvider));
     });

@@ -6,6 +6,7 @@ import 'package:money_pulse/presentation/features/transactions/transaction_list_
 import 'package:money_pulse/presentation/features/categories/category_list_page.dart';
 import 'package:money_pulse/presentation/features/reports/report_page.dart';
 import 'package:money_pulse/presentation/features/transactions/transaction_quick_add_sheet.dart';
+import 'package:money_pulse/presentation/features/categories/category_form_sheet.dart';
 
 class HomePage extends ConsumerStatefulWidget {
   const HomePage({super.key});
@@ -23,12 +24,48 @@ class _HomePageState extends ConsumerState<HomePage> {
     Future.microtask(() async {
       await ref.read(balanceProvider.notifier).load();
       await ref.read(transactionsProvider.notifier).load();
+      await ref.read(categoriesProvider.notifier).load();
     });
   }
 
   @override
   Widget build(BuildContext context) {
     final balanceCents = ref.watch(balanceProvider);
+
+    Widget? fab;
+    if (idx == 0) {
+      fab = FloatingActionButton.extended(
+        onPressed: () async {
+          final ok = await showModalBottomSheet<bool>(
+            context: context,
+            isScrollControlled: true,
+            builder: (_) => const TransactionQuickAddSheet(),
+          );
+          if (ok == true) {
+            await ref.read(balanceProvider.notifier).load();
+            await ref.read(transactionsProvider.notifier).load();
+          }
+        },
+        icon: const Icon(Icons.add),
+        label: const Text('Add'),
+      );
+    } else if (idx == 1) {
+      fab = FloatingActionButton.extended(
+        onPressed: () async {
+          final ok = await showModalBottomSheet<bool>(
+            context: context,
+            isScrollControlled: true,
+            builder: (_) => const CategoryFormSheet(),
+          );
+          if (ok == true) {
+            await ref.read(categoriesProvider.notifier).load();
+          }
+        },
+        icon: const Icon(Icons.add),
+        label: const Text('Add'),
+      );
+    }
+
     return Scaffold(
       appBar: AppBar(
         title: Row(
@@ -66,21 +103,7 @@ class _HomePageState extends ConsumerState<HomePage> {
           NavigationDestination(icon: Icon(Icons.pie_chart), label: 'Reports'),
         ],
       ),
-      floatingActionButton: FloatingActionButton.extended(
-        onPressed: () async {
-          final ok = await showModalBottomSheet<bool>(
-            context: context,
-            isScrollControlled: true,
-            builder: (_) => const TransactionQuickAddSheet(),
-          );
-          if (ok == true) {
-            await ref.read(balanceProvider.notifier).load();
-            await ref.read(transactionsProvider.notifier).load();
-          }
-        },
-        icon: const Icon(Icons.add),
-        label: const Text('Add'),
-      ),
+      floatingActionButton: fab,
     );
   }
 }
