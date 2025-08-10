@@ -3,9 +3,10 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:money_pulse/presentation/app/providers.dart';
 import 'package:money_pulse/presentation/app/account_selection.dart';
 import 'package:money_pulse/presentation/widgets/money_text.dart';
-import 'package:money_pulse/presentation/features/transactions/transaction_list_page.dart';
 import 'package:money_pulse/presentation/features/transactions/transaction_quick_add_sheet.dart';
 import 'package:money_pulse/presentation/features/settings/settings_page.dart';
+
+import '../transactions/pages/transaction_list_page.dart';
 
 class HomePage extends ConsumerStatefulWidget {
   const HomePage({super.key});
