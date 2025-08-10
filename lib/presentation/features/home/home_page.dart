@@ -5,7 +5,7 @@ import 'package:money_pulse/presentation/app/account_selection.dart';
 import 'package:money_pulse/presentation/widgets/money_text.dart';
 import 'package:money_pulse/presentation/features/transactions/transaction_quick_add_sheet.dart';
 import 'package:money_pulse/presentation/features/settings/settings_page.dart';
-
+import 'package:money_pulse/presentation/widgets/left_drawer.dart';
 import '../transactions/pages/transaction_list_page.dart';
 
 class HomePage extends ConsumerStatefulWidget {
@@ -16,7 +16,6 @@ class HomePage extends ConsumerStatefulWidget {
 }
 
 class _HomePageState extends ConsumerState<HomePage> {
-  /// Page index: 0 = Transactions, 1 = Settings
   int pageIdx = 0;
 
   @override
@@ -25,18 +24,16 @@ class _HomePageState extends ConsumerState<HomePage> {
     Future.microtask(() async {
       await ref.read(transactionsProvider.notifier).load();
       await ref.read(categoriesProvider.notifier).load();
-      // no need to manually load balance; we bind AppBar to the account itself
     });
   }
 
   Future<void> _openQuickAdd() async {
-    final ok = await showModalBottomSheet<bool>(
-      context: context,
-      isScrollControlled: true,
-      builder: (_) => const TransactionQuickAddSheet(),
+    final ok = await showLeftDrawer<bool>(
+      context,
+      child: const TransactionQuickAddSheet(),
+      widthFraction: 0.92,
     );
     if (ok == true) {
-      // After add, transactionsProvider notifies and AppBar will refresh via selectedAccountProvider
       await ref.read(transactionsProvider.notifier).load();
       setState(() {});
     }
@@ -86,7 +83,6 @@ class _HomePageState extends ConsumerState<HomePage> {
               Text(acc?.code ?? 'Account'),
               const Spacer(),
               MoneyText(
-                // ✅ always read fresh balance from the selected account
                 amountCents: acc?.balance ?? 0,
                 currency: acc?.currency ?? 'XOF',
                 style: Theme.of(context).textTheme.titleLarge,
