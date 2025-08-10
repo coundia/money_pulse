@@ -54,7 +54,11 @@ class _HomePageState extends ConsumerState<HomePage> {
             return ListTile(
               leading: const Icon(Icons.account_balance_wallet),
               title: Text(a.code ?? ''),
-              subtitle: Text(a.description ?? ''),
+              subtitle: MoneyText(
+                amountCents: a.balance,
+                currency: 'XOF',
+                style: Theme.of(context).textTheme.titleLarge,
+              ),
               trailing: (ref.read(selectedAccountIdProvider) ?? '') == a.id
                   ? const Icon(Icons.check)
                   : null,
