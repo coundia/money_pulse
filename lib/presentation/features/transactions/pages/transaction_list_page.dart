@@ -4,7 +4,7 @@ import 'package:intl/intl.dart';
 import 'package:money_pulse/presentation/app/providers.dart';
 import '../../reports/report_page.dart';
 import '../controllers/transaction_list_controller.dart';
-import '../models/transaction_filters.dart';
+// removed: ../models/transaction_filters.dart
 import '../providers/transaction_list_providers.dart';
 import '../utils/transaction_grouping.dart';
 import '../widgets/day_header.dart';
@@ -116,35 +116,6 @@ class TransactionListPage extends ConsumerWidget {
                           .resetToThisPeriod(),
                       icon: const Icon(Icons.today),
                       label: const Text('This period'),
-                    ),
-                  ),
-                  const SizedBox(height: 4),
-                  SingleChildScrollView(
-                    scrollDirection: Axis.horizontal,
-                    padding: const EdgeInsets.symmetric(vertical: 4),
-                    child: SegmentedButton<TxnTypeFilter>(
-                      segments: const [
-                        ButtonSegment(
-                          value: TxnTypeFilter.all,
-                          icon: Icon(Icons.all_inclusive),
-                          label: Text('All'),
-                        ),
-                        ButtonSegment(
-                          value: TxnTypeFilter.expense,
-                          icon: Icon(Icons.south),
-                          label: Text('Expense'),
-                        ),
-                        ButtonSegment(
-                          value: TxnTypeFilter.income,
-                          icon: Icon(Icons.north),
-                          label: Text('Income'),
-                        ),
-                      ],
-                      selected: {state.typeFilter},
-                      onSelectionChanged: (s) => ref
-                          .read(transactionListStateProvider.notifier)
-                          .setTypeFilter(s.first),
-                      showSelectedIcon: false,
                     ),
                   ),
                   const SizedBox(height: 8),
