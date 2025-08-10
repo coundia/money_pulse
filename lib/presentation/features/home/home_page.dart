@@ -6,6 +6,7 @@ import 'package:money_pulse/presentation/widgets/money_text.dart';
 import 'package:money_pulse/presentation/features/transactions/transaction_quick_add_sheet.dart';
 import 'package:money_pulse/presentation/features/settings/settings_page.dart';
 import 'package:money_pulse/presentation/widgets/right_drawer.dart';
+import 'package:money_pulse/domain/accounts/entities/account.dart';
 import '../transactions/pages/transaction_list_page.dart';
 
 class HomePage extends ConsumerStatefulWidget {
@@ -40,6 +41,39 @@ class _HomePageState extends ConsumerState<HomePage> {
     }
   }
 
+  Future<void> _showAccountPicker() async {
+    final accounts = await ref.read(accountRepoProvider).findAllActive();
+    if (!mounted) return;
+    final picked = await showModalBottomSheet<Account>(
+      context: context,
+      builder: (_) => SafeArea(
+        child: ListView.separated(
+          padding: const EdgeInsets.all(8),
+          itemBuilder: (c, i) {
+            final a = accounts[i];
+            return ListTile(
+              leading: const Icon(Icons.account_balance_wallet),
+              title: Text(a.code ?? ''),
+              subtitle: Text(a.description ?? ''),
+              trailing: (ref.read(selectedAccountIdProvider) ?? '') == a.id
+                  ? const Icon(Icons.check)
+                  : null,
+              onTap: () => Navigator.pop(c, a),
+            );
+          },
+          separatorBuilder: (_, __) => const Divider(height: 1),
+          itemCount: accounts.length,
+        ),
+      ),
+    );
+    if (picked != null) {
+      ref.read(selectedAccountIdProvider.notifier).state = picked.id;
+      await ref.read(balanceProvider.notifier).load();
+      await ref.read(transactionsProvider.notifier).load();
+      if (mounted) setState(() {});
+    }
+  }
+
   int get _navSelectedIndex => pageIdx == 0 ? 0 : 2;
 
   void _onDestinationSelected(int v) {
@@ -56,39 +90,44 @@ class _HomePageState extends ConsumerState<HomePage> {
 
     return Scaffold(
       appBar: AppBar(
-        title: accAsync.when(
-          loading: () => Row(
-            children: [
-              const Text('...'),
-              const Spacer(),
-              MoneyText(
-                amountCents: 0,
-                currency: 'XOF',
-                style: Theme.of(context).textTheme.titleLarge,
-              ),
-            ],
-          ),
-          error: (_, __) => Row(
-            children: [
-              const Text('Account'),
-              const Spacer(),
-              MoneyText(
-                amountCents: 0,
-                currency: 'XOF',
-                style: Theme.of(context).textTheme.titleLarge,
-              ),
-            ],
-          ),
-          data: (acc) => Row(
-            children: [
-              Text(acc?.code ?? 'Account'),
-              const Spacer(),
-              MoneyText(
-                amountCents: acc?.balance ?? 0,
-                currency: acc?.currency ?? 'XOF',
-                style: Theme.of(context).textTheme.titleLarge,
-              ),
-            ],
+        title: InkWell(
+          borderRadius: BorderRadius.circular(6),
+          onTap: _showAccountPicker,
+          child: accAsync.when(
+            loading: () => Row(
+              children: [
+                const Text('...'),
+                const Spacer(),
+                MoneyText(
+                  amountCents: 0,
+                  currency: 'XOF',
+                  style: Theme.of(context).textTheme.titleLarge,
+                ),
+              ],
+            ),
+            error: (_, __) => Row(
+              children: [
+                const Text('Account'),
+                const Spacer(),
+                MoneyText(
+                  amountCents: 0,
+                  currency: 'XOF',
+                  style: Theme.of(context).textTheme.titleLarge,
+                ),
+              ],
+            ),
+            data: (acc) => Row(
+              children: [
+                Text(acc?.code ?? 'Account'),
+                const SizedBox(width: 8),
+                const Spacer(),
+                MoneyText(
+                  amountCents: acc?.balance ?? 0,
+                  currency: acc?.currency ?? 'XOF',
+                  style: Theme.of(context).textTheme.titleLarge,
+                ),
+              ],
+            ),
           ),
         ),
       ),
