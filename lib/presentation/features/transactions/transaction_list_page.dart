@@ -3,18 +3,16 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 import 'package:money_pulse/presentation/app/providers.dart';
+import 'package:money_pulse/presentation/app/account_selection.dart';
 import 'package:money_pulse/domain/transactions/entities/transaction_entry.dart';
 import 'package:money_pulse/presentation/features/transactions/transaction_form_sheet.dart';
 import 'package:money_pulse/domain/accounts/entities/account.dart';
-
-// NEW: import settings page
 import 'package:money_pulse/presentation/features/settings/settings_page.dart';
 
 enum TxnTypeFilter { all, expense, income }
 
 enum Period { weekly, monthly, yearly }
 
-// NEW: add settings to menu actions
 enum _MenuAction { search, period, changeAccount, sync, share, settings }
 
 class TransactionListPage extends ConsumerStatefulWidget {
@@ -29,7 +27,6 @@ class _TransactionListPageState extends ConsumerState<TransactionListPage> {
   Period period = Period.monthly;
   DateTime anchor = DateTime(DateTime.now().year, DateTime.now().month, 1);
   TxnTypeFilter typeFilter = TxnTypeFilter.all;
-  String? selectedAccountId;
 
   DateTime _startOfWeek(DateTime d) {
     final wd = d.weekday;
@@ -114,11 +111,9 @@ class _TransactionListPageState extends ConsumerState<TransactionListPage> {
     }
   }
 
-  Future<Account?> _resolveAccount() async {
-    if (selectedAccountId == null) {
-      return ref.read(accountRepoProvider).findDefault();
-    }
-    return ref.read(accountRepoProvider).findById(selectedAccountId!);
+  Future<Account?> _resolveAccount() {
+    // Use shared selection provider so HomePage AppBar updates too.
+    return ref.read(selectedAccountProvider.future);
   }
 
   Future<List<TransactionEntry>> _load() async {
@@ -132,7 +127,9 @@ class _TransactionListPageState extends ConsumerState<TransactionListPage> {
 
   @override
   Widget build(BuildContext context) {
+    // Rebuild when txs or current account changes
     ref.watch(transactionsProvider);
+    ref.watch(selectedAccountProvider);
 
     final (from, to, periodLabel) = _rangeLabel();
 
@@ -263,7 +260,6 @@ class _TransactionListPageState extends ConsumerState<TransactionListPage> {
                               if (!mounted || acc == null) break;
                               await _showShareDialog(acc);
                               break;
-                            // NEW: open Settings page
                             case _MenuAction.settings:
                               if (!mounted) break;
                               await Navigator.of(context).push(
@@ -271,7 +267,6 @@ class _TransactionListPageState extends ConsumerState<TransactionListPage> {
                                   builder: (_) => const SettingsPage(),
                                 ),
                               );
-                              // After returning, you can refresh if something changed
                               setState(() {});
                               break;
                           }
@@ -536,9 +531,9 @@ class _TransactionListPageState extends ConsumerState<TransactionListPage> {
             final a = accounts[i];
             return ListTile(
               leading: const Icon(Icons.account_balance_wallet),
-              title: Text(a.code ?? 'NA'),
+              title: Text(a.code ?? ""),
               subtitle: Text(a.description ?? ''),
-              trailing: (selectedAccountId ?? '') == a.id
+              trailing: (ref.read(selectedAccountIdProvider) ?? '') == a.id
                   ? const Icon(Icons.check)
                   : null,
               onTap: () => Navigator.pop(c, a),
@@ -550,7 +545,13 @@ class _TransactionListPageState extends ConsumerState<TransactionListPage> {
       ),
     );
     if (picked != null) {
-      setState(() => selectedAccountId = picked.id);
+      // Update the shared selection -> HomePage AppBar reacts automatically.
+      ref.read(selectedAccountIdProvider.notifier).state = picked.id;
+
+      // Optional: refresh balance and transactions after account switch
+      await ref.read(balanceProvider.notifier).load();
+      await ref.read(transactionsProvider.notifier).load();
+      if (mounted) setState(() {});
     }
   }
 

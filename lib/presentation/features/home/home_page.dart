@@ -1,10 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:money_pulse/presentation/app/providers.dart';
+import 'package:money_pulse/presentation/app/account_selection.dart';
 import 'package:money_pulse/presentation/widgets/money_text.dart';
 import 'package:money_pulse/presentation/features/transactions/transaction_list_page.dart';
 import 'package:money_pulse/presentation/features/transactions/transaction_quick_add_sheet.dart';
-// NEW: replace reports import with settings
 import 'package:money_pulse/presentation/features/settings/settings_page.dart';
 
 class HomePage extends ConsumerStatefulWidget {
@@ -37,49 +37,66 @@ class _HomePageState extends ConsumerState<HomePage> {
     if (ok == true) {
       await ref.read(balanceProvider.notifier).load();
       await ref.read(transactionsProvider.notifier).load();
-      setState(() {}); // refresh
+      setState(() {});
     }
   }
 
-  /// Map current page -> selected destination index (0=Tx, 1=Add action (not selected), 2=Settings)
   int get _navSelectedIndex => pageIdx == 0 ? 0 : 2;
 
   void _onDestinationSelected(int v) {
     if (v == 1) {
-      // central "+" action: quick add transaction
       _openQuickAdd();
       return;
     }
-    setState(() {
-      // 0 -> Transactions page(0), 2 -> Settings page(1)
-      pageIdx = (v == 0) ? 0 : 1;
-    });
+    setState(() => pageIdx = (v == 0) ? 0 : 1);
   }
 
   @override
   Widget build(BuildContext context) {
     final balanceCents = ref.watch(balanceProvider);
+    final accAsync = ref.watch(selectedAccountProvider);
 
     return Scaffold(
       appBar: AppBar(
-        title: Row(
-          children: [
-            const Text('Money Pulse'),
-            const Spacer(),
-            MoneyText(
-              amountCents: balanceCents,
-              currency: 'XOF',
-              style: Theme.of(context).textTheme.titleLarge,
-            ),
-          ],
+        title: accAsync.when(
+          loading: () => Row(
+            children: [
+              const Text('...'),
+              const Spacer(),
+              MoneyText(
+                amountCents: balanceCents,
+                currency: 'XOF',
+                style: Theme.of(context).textTheme.titleLarge,
+              ),
+            ],
+          ),
+          error: (_, __) => Row(
+            children: [
+              const Text('Account'),
+              const Spacer(),
+              MoneyText(
+                amountCents: balanceCents,
+                currency: 'XOF',
+                style: Theme.of(context).textTheme.titleLarge,
+              ),
+            ],
+          ),
+          data: (acc) => Row(
+            children: [
+              Text(acc?.code ?? 'Account'),
+              const Spacer(),
+              MoneyText(
+                amountCents: balanceCents,
+                currency: acc?.currency ?? 'XOF',
+                style: Theme.of(context).textTheme.titleLarge,
+              ),
+            ],
+          ),
         ),
       ),
       body: IndexedStack(
         index: pageIdx,
-        children: const [
-          TransactionListPage(),
-          SettingsPage(), // NEW: settings page instead of reports
-        ],
+        children: const [TransactionListPage(), SettingsPage()],
       ),
       bottomNavigationBar: NavigationBar(
         labelBehavior: NavigationDestinationLabelBehavior.onlyShowSelected,
@@ -91,17 +108,11 @@ class _HomePageState extends ConsumerState<HomePage> {
             label: 'Transactions',
           ),
           NavigationDestination(
-            icon: Icon(
-              Icons.add_circle,
-              size: 36,
-            ), // big + icon, no visible label
+            icon: Icon(Icons.add_circle, size: 36),
             selectedIcon: Icon(Icons.add_circle, size: 36),
             label: 'Add',
           ),
-          NavigationDestination(
-            icon: Icon(Icons.settings), // NEW: settings icon
-            label: 'Settings',
-          ),
+          NavigationDestination(icon: Icon(Icons.person), label: 'COMPTE'),
         ],
       ),
     );
