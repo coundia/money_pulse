@@ -285,4 +285,32 @@ class TransactionRepositorySqflite implements TransactionRepository {
     );
     return rows.map(TransactionEntry.fromMap).toList();
   }
+
+  @override
+  Future<List<TransactionEntry>> findByAccountBetween(
+    String accountId,
+    DateTime from,
+    DateTime to, {
+    String? typeEntry,
+  }) async {
+    final where = StringBuffer(
+      'accountId=? AND deletedAt IS NULL AND dateTransaction >= ? AND dateTransaction < ?',
+    );
+    final args = <Object?>[
+      accountId,
+      from.toIso8601String(),
+      to.toIso8601String(),
+    ];
+    if (typeEntry != null) {
+      where.write(' AND typeEntry = ?');
+      args.add(typeEntry);
+    }
+    final rows = await _db.db.query(
+      'transaction_entry',
+      where: where.toString(),
+      whereArgs: args,
+      orderBy: 'dateTransaction DESC, createdAt DESC',
+    );
+    return rows.map(TransactionEntry.fromMap).toList();
+  }
 }

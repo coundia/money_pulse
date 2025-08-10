@@ -10,12 +10,17 @@ abstract class TransactionRepository {
     String accountId, {
     int limit = 50,
   });
-
-  /// NEW: fetch transactions for a whole calendar month (local).
-  /// If [typeEntry] is provided ('DEBIT' or 'CREDIT'), filter by it.
   Future<List<TransactionEntry>> findByAccountForMonth(
     String accountId,
     DateTime month, {
     String? typeEntry,
+  });
+
+  /// NEW: generic period query
+  Future<List<TransactionEntry>> findByAccountBetween(
+    String accountId,
+    DateTime from,
+    DateTime to, {
+    String? typeEntry, // 'DEBIT' or 'CREDIT'
   });
 }

@@ -1,11 +1,17 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 import 'package:money_pulse/presentation/app/providers.dart';
 import 'package:money_pulse/domain/transactions/entities/transaction_entry.dart';
 import 'package:money_pulse/presentation/features/transactions/transaction_form_sheet.dart';
+import 'package:money_pulse/domain/accounts/entities/account.dart';
 
 enum TxnTypeFilter { all, expense, income }
+
+enum Period { weekly, monthly, yearly }
+
+enum _MenuAction { search, period, changeAccount, sync, share }
 
 class TransactionListPage extends ConsumerStatefulWidget {
   const TransactionListPage({super.key});
@@ -16,11 +22,72 @@ class TransactionListPage extends ConsumerStatefulWidget {
 }
 
 class _TransactionListPageState extends ConsumerState<TransactionListPage> {
-  DateTime month = DateTime(DateTime.now().year, DateTime.now().month, 1);
-  TxnTypeFilter typeFilter = TxnTypeFilter.all;
+  // period + anchor
+  Period period = Period.monthly;
+  DateTime anchor = DateTime(DateTime.now().year, DateTime.now().month, 1);
 
-  DateTime _nextMonth(DateTime d) => DateTime(d.year, d.month + 1, 1);
-  DateTime _prevMonth(DateTime d) => DateTime(d.year, d.month - 1, 1);
+  // filters
+  TxnTypeFilter typeFilter = TxnTypeFilter.all;
+  String? selectedAccountId;
+
+  DateTime _startOfWeek(DateTime d) {
+    final wd = d.weekday; // 1=Mon
+    final first = d.subtract(Duration(days: wd - 1));
+    return DateTime(first.year, first.month, first.day);
+  }
+
+  (DateTime from, DateTime to, String label) _rangeLabel() {
+    switch (period) {
+      case Period.weekly:
+        final start = _startOfWeek(anchor);
+        final end = start.add(const Duration(days: 7));
+        final label =
+            '${DateFormat.MMMd().format(start)} – ${DateFormat.MMMd().format(end.subtract(const Duration(days: 1)))}';
+        return (start, end, label);
+      case Period.monthly:
+        final start = DateTime(anchor.year, anchor.month, 1);
+        final end = DateTime(anchor.year, anchor.month + 1, 1);
+        final label = DateFormat.yMMMM().format(start);
+        return (start, end, label);
+      case Period.yearly:
+        final start = DateTime(anchor.year, 1, 1);
+        final end = DateTime(anchor.year + 1, 1, 1);
+        final label = DateFormat.y().format(start);
+        return (start, end, label);
+    }
+  }
+
+  void _prev() {
+    setState(() {
+      switch (period) {
+        case Period.weekly:
+          anchor = anchor.subtract(const Duration(days: 7));
+          break;
+        case Period.monthly:
+          anchor = DateTime(anchor.year, anchor.month - 1, 1);
+          break;
+        case Period.yearly:
+          anchor = DateTime(anchor.year - 1, 1, 1);
+          break;
+      }
+    });
+  }
+
+  void _next() {
+    setState(() {
+      switch (period) {
+        case Period.weekly:
+          anchor = anchor.add(const Duration(days: 7));
+          break;
+        case Period.monthly:
+          anchor = DateTime(anchor.year, anchor.month + 1, 1);
+          break;
+        case Period.yearly:
+          anchor = DateTime(anchor.year + 1, 1, 1);
+          break;
+      }
+    });
+  }
 
   String? _typeEntryString() {
     switch (typeFilter) {
@@ -36,22 +103,29 @@ class _TransactionListPageState extends ConsumerState<TransactionListPage> {
   Future<void> _pickMonth() async {
     final picked = await showDatePicker(
       context: context,
-      initialDate: month,
+      initialDate: anchor,
       firstDate: DateTime(2000),
       lastDate: DateTime(2100),
-      helpText: 'Select any day in the month',
+      helpText: 'Select any day',
     );
     if (picked != null) {
-      setState(() => month = DateTime(picked.year, picked.month, 1));
+      setState(() => anchor = DateTime(picked.year, picked.month, picked.day));
     }
   }
 
+  Future<Account?> _resolveAccount() async {
+    if (selectedAccountId == null)
+      return ref.read(accountRepoProvider).findDefault();
+    return ref.read(accountRepoProvider).findById(selectedAccountId!);
+  }
+
   Future<List<TransactionEntry>> _load() async {
-    final acc = await ref.read(accountRepoProvider).findDefault();
+    final acc = await _resolveAccount();
     if (acc == null) return const <TransactionEntry>[];
+    final (from, to, _) = _rangeLabel();
     return ref
         .read(transactionRepoProvider)
-        .findByAccountForMonth(acc.id, month, typeEntry: _typeEntryString());
+        .findByAccountBetween(acc.id, from, to, typeEntry: _typeEntryString());
   }
 
   @override
@@ -59,7 +133,7 @@ class _TransactionListPageState extends ConsumerState<TransactionListPage> {
     // Rebuild when txs change
     ref.watch(transactionsProvider);
 
-    final monthLabel = DateFormat.yMMMM().format(month);
+    final (from, to, periodLabel) = _rangeLabel();
 
     return FutureBuilder<List<TransactionEntry>>(
       future: _load(),
@@ -76,7 +150,7 @@ class _TransactionListPageState extends ConsumerState<TransactionListPage> {
         final net = inc - exp;
 
         final children = <Widget>[
-          // Top header (month + filters + totals)
+          // Header
           Card(
             elevation: 0,
             shape: RoundedRectangleBorder(
@@ -86,14 +160,12 @@ class _TransactionListPageState extends ConsumerState<TransactionListPage> {
               padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
               child: Column(
                 children: [
-                  // Month navigator with tappable title (opens month picker)
                   Row(
                     children: [
                       IconButton(
-                        tooltip: 'Previous month',
+                        tooltip: 'Previous',
                         icon: const Icon(Icons.chevron_left),
-                        onPressed: () =>
-                            setState(() => month = _prevMonth(month)),
+                        onPressed: _prev,
                       ),
                       Expanded(
                         child: Center(
@@ -102,7 +174,7 @@ class _TransactionListPageState extends ConsumerState<TransactionListPage> {
                             transitionBuilder: (c, a) =>
                                 FadeTransition(opacity: a, child: c),
                             child: InkWell(
-                              key: ValueKey(monthLabel),
+                              key: ValueKey(periodLabel),
                               onTap: _pickMonth,
                               borderRadius: BorderRadius.circular(8),
                               child: Padding(
@@ -116,7 +188,7 @@ class _TransactionListPageState extends ConsumerState<TransactionListPage> {
                                     const Icon(Icons.calendar_month, size: 18),
                                     const SizedBox(width: 6),
                                     Text(
-                                      monthLabel,
+                                      periodLabel,
                                       style: Theme.of(
                                         context,
                                       ).textTheme.titleMedium,
@@ -129,10 +201,111 @@ class _TransactionListPageState extends ConsumerState<TransactionListPage> {
                         ),
                       ),
                       IconButton(
-                        tooltip: 'Next month',
+                        tooltip: 'Next',
                         icon: const Icon(Icons.chevron_right),
-                        onPressed: () =>
-                            setState(() => month = _nextMonth(month)),
+                        onPressed: _next,
+                      ),
+                      // Ellipsis menu
+                      PopupMenuButton<_MenuAction>(
+                        tooltip: 'More',
+                        onSelected: (_MenuAction action) async {
+                          switch (action) {
+                            case _MenuAction.search:
+                              final result =
+                                  await showSearch<TransactionEntry?>(
+                                    context: context,
+                                    delegate: _TxnSearchDelegate(items),
+                                  );
+                              if (result != null) {
+                                // open edit for selected
+                                // ignore: use_build_context_synchronously
+                                final ok = await showModalBottomSheet<bool>(
+                                  context: context,
+                                  isScrollControlled: true,
+                                  builder: (_) =>
+                                      TransactionFormSheet(entry: result),
+                                );
+                                if (ok == true) {
+                                  await ref
+                                      .read(balanceProvider.notifier)
+                                      .load();
+                                  await ref
+                                      .read(transactionsProvider.notifier)
+                                      .load();
+                                  setState(() {});
+                                }
+                              }
+                              break;
+                            case _MenuAction.period:
+                              _showPeriodSheet();
+                              break;
+                            case _MenuAction.changeAccount:
+                              _showAccountPicker();
+                              break;
+                            case _MenuAction.sync:
+                              if (mounted) {
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  const SnackBar(
+                                    content: Text('Sync started… (demo)'),
+                                  ),
+                                );
+                                await Future.delayed(
+                                  const Duration(milliseconds: 800),
+                                );
+                                if (mounted) {
+                                  ScaffoldMessenger.of(context).showSnackBar(
+                                    const SnackBar(
+                                      content: Text('Sync complete'),
+                                    ),
+                                  );
+                                }
+                              }
+                              break;
+                            case _MenuAction.share:
+                              final acc = await _resolveAccount();
+                              if (!mounted || acc == null) break;
+                              await _showShareDialog(acc);
+                              break;
+                          }
+                        },
+                        itemBuilder: (context) => [
+                          const PopupMenuItem(
+                            value: _MenuAction.search,
+                            child: ListTile(
+                              leading: Icon(Icons.search),
+                              title: Text('Search'),
+                            ),
+                          ),
+                          const PopupMenuDivider(),
+                          const PopupMenuItem(
+                            value: _MenuAction.period,
+                            child: ListTile(
+                              leading: Icon(Icons.filter_alt),
+                              title: Text('Select period'),
+                            ),
+                          ),
+                          const PopupMenuItem(
+                            value: _MenuAction.changeAccount,
+                            child: ListTile(
+                              leading: Icon(Icons.account_balance_wallet),
+                              title: Text('Change account'),
+                            ),
+                          ),
+                          const PopupMenuItem(
+                            value: _MenuAction.sync,
+                            child: ListTile(
+                              leading: Icon(Icons.sync),
+                              title: Text('Sync transactions'),
+                            ),
+                          ),
+                          const PopupMenuItem(
+                            value: _MenuAction.share,
+                            child: ListTile(
+                              leading: Icon(Icons.ios_share),
+                              title: Text('Share account'),
+                            ),
+                          ),
+                        ],
                       ),
                     ],
                   ),
@@ -141,14 +314,24 @@ class _TransactionListPageState extends ConsumerState<TransactionListPage> {
                     alignment: Alignment.centerRight,
                     child: TextButton.icon(
                       onPressed: () => setState(() {
-                        month = DateTime(
-                          DateTime.now().year,
-                          DateTime.now().month,
-                          1,
-                        );
+                        switch (period) {
+                          case Period.weekly:
+                            anchor = _startOfWeek(DateTime.now());
+                            break;
+                          case Period.monthly:
+                            anchor = DateTime(
+                              DateTime.now().year,
+                              DateTime.now().month,
+                              1,
+                            );
+                            break;
+                          case Period.yearly:
+                            anchor = DateTime(DateTime.now().year, 1, 1);
+                            break;
+                        }
                       }),
                       icon: const Icon(Icons.today),
-                      label: const Text('This month'),
+                      label: const Text('This period'),
                     ),
                   ),
                   const SizedBox(height: 4),
@@ -223,14 +406,12 @@ class _TransactionListPageState extends ConsumerState<TransactionListPage> {
           children.add(
             const Padding(
               padding: EdgeInsets.all(32.0),
-              child: Center(child: Text('No transactions for this month')),
+              child: Center(child: Text('No transactions for this period')),
             ),
           );
         } else {
           for (final g in groups) {
-            // Section header
             children.add(_DayHeader(group: g));
-            // Items of the day
             children.addAll(
               g.items.map(
                 (e) => _TransactionTile(
@@ -239,12 +420,12 @@ class _TransactionListPageState extends ConsumerState<TransactionListPage> {
                     await ref.read(transactionRepoProvider).softDelete(e.id);
                     await ref.read(balanceProvider.notifier).load();
                     await ref.read(transactionsProvider.notifier).load();
-                    setState(() {}); // reload month
+                    setState(() {});
                   },
                   onUpdated: () async {
                     await ref.read(balanceProvider.notifier).load();
                     await ref.read(transactionsProvider.notifier).load();
-                    setState(() {}); // reload month
+                    setState(() {});
                   },
                 ),
               ),
@@ -255,6 +436,136 @@ class _TransactionListPageState extends ConsumerState<TransactionListPage> {
 
         return ListView(padding: const EdgeInsets.all(12), children: children);
       },
+    );
+  }
+
+  // Period picker bottom sheet
+  Future<void> _showPeriodSheet() async {
+    final sel = await showModalBottomSheet<Period>(
+      context: context,
+      builder: (context) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const SizedBox(height: 8),
+            const Text(
+              'View period',
+              style: TextStyle(fontWeight: FontWeight.w600),
+            ),
+            const SizedBox(height: 8),
+            ListTile(
+              leading: const Icon(Icons.view_week),
+              title: const Text('Weekly'),
+              onTap: () => Navigator.pop(context, Period.weekly),
+              trailing: period == Period.weekly
+                  ? const Icon(Icons.check)
+                  : null,
+            ),
+            ListTile(
+              leading: const Icon(Icons.calendar_month),
+              title: const Text('Monthly'),
+              onTap: () => Navigator.pop(context, Period.monthly),
+              trailing: period == Period.monthly
+                  ? const Icon(Icons.check)
+                  : null,
+            ),
+            ListTile(
+              leading: const Icon(Icons.event),
+              title: const Text('Yearly'),
+              onTap: () => Navigator.pop(context, Period.yearly),
+              trailing: period == Period.yearly
+                  ? const Icon(Icons.check)
+                  : null,
+            ),
+            const SizedBox(height: 8),
+          ],
+        ),
+      ),
+    );
+    if (sel != null) {
+      setState(() {
+        period = sel;
+        // normalize anchor
+        switch (period) {
+          case Period.weekly:
+            anchor = _startOfWeek(anchor);
+            break;
+          case Period.monthly:
+            anchor = DateTime(anchor.year, anchor.month, 1);
+            break;
+          case Period.yearly:
+            anchor = DateTime(anchor.year, 1, 1);
+            break;
+        }
+      });
+    }
+  }
+
+  Future<void> _showAccountPicker() async {
+    final accounts = await ref.read(accountRepoProvider).findAllActive();
+    if (!mounted) return;
+    final picked = await showModalBottomSheet<Account>(
+      context: context,
+      builder: (_) => SafeArea(
+        child: ListView.separated(
+          padding: const EdgeInsets.all(8),
+          itemBuilder: (c, i) {
+            final a = accounts[i];
+            return ListTile(
+              leading: const Icon(Icons.account_balance_wallet),
+              title: Text(a.code ?? 'NA'),
+              subtitle: Text(a.description ?? ''),
+              trailing: (selectedAccountId ?? '') == a.id
+                  ? const Icon(Icons.check)
+                  : null,
+              onTap: () => Navigator.pop(c, a),
+            );
+          },
+          separatorBuilder: (_, __) => const Divider(height: 1),
+          itemCount: accounts.length,
+        ),
+      ),
+    );
+    if (picked != null) {
+      setState(() => selectedAccountId = picked.id);
+    }
+  }
+
+  Future<void> _showShareDialog(Account acc) async {
+    await showDialog<void>(
+      context: context,
+      builder: (_) => AlertDialog(
+        title: const Text('Share account'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text('Code: ${acc.code}'),
+            const SizedBox(height: 6),
+            SelectableText('ID: ${acc.id}'),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () async {
+              await Clipboard.setData(
+                ClipboardData(text: 'Account ${acc.code} (${acc.id})'),
+              );
+              if (mounted) Navigator.pop(context);
+              if (mounted) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(content: Text('Copied to clipboard')),
+                );
+              }
+            },
+            child: const Text('Copy'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Close'),
+          ),
+        ],
+      ),
     );
   }
 
@@ -320,7 +631,6 @@ class _DayGroup {
     required this.expense,
     required this.income,
   });
-
   int get net => income - expense;
 }
 
@@ -351,14 +661,9 @@ class _DayHeader extends StatelessWidget {
             style: Theme.of(context).textTheme.titleMedium,
           ),
           const Spacer(),
-          Row(
-            children: [
-              const SizedBox(width: 10),
-              Text(
-                '${net >= 0 ? '+' : ''}${net ~/ 100}',
-                style: TextStyle(color: netColor, fontWeight: FontWeight.w700),
-              ),
-            ],
+          Text(
+            '${net >= 0 ? '+' : ''}${net ~/ 100}',
+            style: TextStyle(color: netColor, fontWeight: FontWeight.w700),
           ),
         ],
       ),
@@ -382,7 +687,7 @@ class _TransactionTile extends StatelessWidget {
     final isDebit = entry.typeEntry == 'DEBIT';
     final sign = isDebit ? '-' : '+';
     final amount = (entry.amount ~/ 100).toString();
-    final date = DateFormat.Hm().format(entry.dateTransaction);
+    final time = DateFormat.Hm().format(entry.dateTransaction);
     final color = isDebit ? Colors.red : Colors.green;
 
     return Dismissible(
@@ -400,7 +705,7 @@ class _TransactionTile extends StatelessWidget {
           maxLines: 1,
           overflow: TextOverflow.ellipsis,
         ),
-        subtitle: Text(date),
+        subtitle: Text(time),
         trailing: Text(
           '$sign$amount',
           style: TextStyle(color: color, fontWeight: FontWeight.w600),
@@ -411,11 +716,65 @@ class _TransactionTile extends StatelessWidget {
             isScrollControlled: true,
             builder: (_) => TransactionFormSheet(entry: entry),
           );
-          if (ok == true) {
-            await onUpdated();
-          }
+          if (ok == true) await onUpdated();
         },
       ),
     );
   }
+}
+
+class _TxnSearchDelegate extends SearchDelegate<TransactionEntry?> {
+  final List<TransactionEntry> items;
+  _TxnSearchDelegate(this.items);
+
+  List<TransactionEntry> _filter(String q) {
+    final query = q.trim().toLowerCase();
+    if (query.isEmpty) return items;
+    return items.where((e) {
+      final text = '${e.code ?? ''} ${e.description ?? ''}'.toLowerCase();
+      return text.contains(query);
+    }).toList();
+  }
+
+  @override
+  Widget buildSuggestions(BuildContext context) => _buildList(context);
+  @override
+  Widget buildResults(BuildContext context) => _buildList(context);
+
+  Widget _buildList(BuildContext context) {
+    final filtered = _filter(query);
+    return ListView.separated(
+      itemCount: filtered.length,
+      separatorBuilder: (_, __) => const Divider(height: 1),
+      itemBuilder: (_, i) {
+        final e = filtered[i];
+        final isDebit = e.typeEntry == 'DEBIT';
+        final color = isDebit ? Colors.red : Colors.green;
+        final sign = isDebit ? '-' : '+';
+        return ListTile(
+          title: Text(
+            e.description ?? e.code ?? 'Transaction',
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+          ),
+          subtitle: Text(DateFormat.yMMMd().add_Hm().format(e.dateTransaction)),
+          trailing: Text(
+            '$sign${e.amount ~/ 100}',
+            style: TextStyle(color: color, fontWeight: FontWeight.w600),
+          ),
+          onTap: () => close(context, e),
+        );
+      },
+    );
+  }
+
+  @override
+  List<Widget>? buildActions(BuildContext context) => [
+    IconButton(icon: const Icon(Icons.clear), onPressed: () => query = ''),
+  ];
+  @override
+  Widget? buildLeading(BuildContext context) => IconButton(
+    icon: const Icon(Icons.arrow_back),
+    onPressed: () => close(context, null),
+  );
 }
