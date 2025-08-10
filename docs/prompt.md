@@ -4,3 +4,18 @@ Base on this schemas create an app to manage personal finances with good UI/UX, 
 I want always use console to create file and install deps, give all command
 
 
+
+touch lib/domain/accounts/repositories/account_repository.dart
+
+import '../entities/account.dart';
+
+abstract class AccountRepository {
+  Future<Account> create(Account account);
+  Future<void> update(Account account);
+  Future<Account?> findById(String id);
+  Future<Account?> findDefault();
+  Future<List<Account>> findAllActive();
+  Future<void> setDefault(String id);
+  Future<void> softDelete(String id);
+}
+ 
