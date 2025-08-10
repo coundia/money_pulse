@@ -14,18 +14,24 @@ class ReportPage extends ConsumerStatefulWidget {
 
 class _ReportPageState extends ConsumerState<ReportPage> {
   bool isDebit = true; // Expense by default
+  /// 0 = Today, 7/30/90 = last N days
   int days = 30;
 
   Future<List<Map<String, Object?>>> _load() async {
     final acc = await ref.read(accountRepoProvider).findDefault();
     if (acc == null) return <Map<String, Object?>>[];
-    return ref
-        .read(transactionRepoProvider)
-        .sumByCategory(
-          acc.id,
-          typeEntry: isDebit ? 'DEBIT' : 'CREDIT',
-          days: days,
-        );
+    final repo = ref.read(reportRepoProvider);
+    if (days == 0) {
+      return repo.sumByCategoryToday(
+        acc.id,
+        typeEntry: isDebit ? 'DEBIT' : 'CREDIT',
+      );
+    }
+    return repo.sumByCategoryLastNDays(
+      acc.id,
+      typeEntry: isDebit ? 'DEBIT' : 'CREDIT',
+      days: days,
+    );
   }
 
   List<Color> _palette(BuildContext context) {
@@ -49,7 +55,7 @@ class _ReportPageState extends ConsumerState<ReportPage> {
 
   @override
   Widget build(BuildContext context) {
-    // Rebuild when transactions change to refresh report automatically
+    // Refresh when transactions change
     ref.watch(transactionsProvider);
 
     return FutureBuilder<List<Map<String, Object?>>>(
@@ -84,7 +90,6 @@ class _ReportPageState extends ConsumerState<ReportPage> {
           child: ListView(
             padding: const EdgeInsets.all(16),
             children: [
-              // Controls: use Wrap to prevent horizontal overflow on small screens
               Wrap(
                 spacing: 12,
                 runSpacing: 8,
@@ -100,6 +105,7 @@ class _ReportPageState extends ConsumerState<ReportPage> {
                   ),
                   SegmentedButton<int>(
                     segments: const [
+                      ButtonSegment(value: 0, label: Text('Today')),
                       ButtonSegment(value: 7, label: Text('7d')),
                       ButtonSegment(value: 30, label: Text('30d')),
                       ButtonSegment(value: 90, label: Text('90d')),
@@ -137,7 +143,8 @@ class _ReportPageState extends ConsumerState<ReportPage> {
                             style: Theme.of(context).textTheme.titleLarge,
                           ),
                           Text(
-                            isDebit ? 'Total expense' : 'Total income',
+                            (isDebit ? 'Expense' : 'Income') +
+                                (days == 0 ? ' · Today' : ' · Last $days days'),
                             style: Theme.of(context).textTheme.bodyMedium,
                           ),
                         ],
@@ -170,7 +177,6 @@ class _ReportPageState extends ConsumerState<ReportPage> {
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                     ),
-                    // Constrain trailing width to avoid overflow on small screens
                     trailing: SizedBox(
                       width: 110,
                       child: Column(

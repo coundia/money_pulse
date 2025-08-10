@@ -1,17 +1,26 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:money_pulse/infrastructure/db/app_database.dart';
+
 import 'package:money_pulse/domain/accounts/repositories/account_repository.dart';
 import 'package:money_pulse/infrastructure/repositories/account_repository_sqflite.dart';
+
 import 'package:money_pulse/domain/categories/repositories/category_repository.dart';
 import 'package:money_pulse/infrastructure/repositories/category_repository_sqflite.dart';
+
 import 'package:money_pulse/domain/transactions/repositories/transaction_repository.dart';
 import 'package:money_pulse/infrastructure/repositories/transaction_repository_sqflite.dart';
+
 import 'package:money_pulse/application/usecases/ensure_default_account_usecase.dart';
 import 'package:money_pulse/application/usecases/seed_default_categories_usecase.dart';
 import 'package:money_pulse/application/usecases/quick_add_transaction_usecase.dart';
+
 import 'package:money_pulse/domain/accounts/entities/account.dart';
 import 'package:money_pulse/domain/categories/entities/category.dart';
 import 'package:money_pulse/domain/transactions/entities/transaction_entry.dart';
+
+// REPORT REPO
+import 'package:money_pulse/domain/reports/repositories/report_repository.dart';
+import 'package:money_pulse/infrastructure/repositories/report_repository_sqflite.dart';
 
 final dbProvider = Provider<AppDatabase>((ref) => AppDatabase.I);
 
@@ -25,6 +34,11 @@ final categoryRepoProvider = Provider<CategoryRepository>((ref) {
 
 final transactionRepoProvider = Provider<TransactionRepository>((ref) {
   return TransactionRepositorySqflite(ref.read(dbProvider));
+});
+
+// NEW: Report repository provider
+final reportRepoProvider = Provider<ReportRepository>((ref) {
+  return ReportRepositorySqflite(ref.read(dbProvider));
 });
 
 final ensureDefaultAccountUseCaseProvider =
