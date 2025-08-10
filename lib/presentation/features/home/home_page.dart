@@ -22,9 +22,9 @@ class _HomePageState extends ConsumerState<HomePage> {
   void initState() {
     super.initState();
     Future.microtask(() async {
-      await ref.read(balanceProvider.notifier).load();
       await ref.read(transactionsProvider.notifier).load();
       await ref.read(categoriesProvider.notifier).load();
+      // no need to manually load balance; we bind AppBar to the account itself
     });
   }
 
@@ -35,7 +35,7 @@ class _HomePageState extends ConsumerState<HomePage> {
       builder: (_) => const TransactionQuickAddSheet(),
     );
     if (ok == true) {
-      await ref.read(balanceProvider.notifier).load();
+      // After add, transactionsProvider notifies and AppBar will refresh via selectedAccountProvider
       await ref.read(transactionsProvider.notifier).load();
       setState(() {});
     }
@@ -53,7 +53,6 @@ class _HomePageState extends ConsumerState<HomePage> {
 
   @override
   Widget build(BuildContext context) {
-    final balanceCents = ref.watch(balanceProvider);
     final accAsync = ref.watch(selectedAccountProvider);
 
     return Scaffold(
@@ -64,7 +63,7 @@ class _HomePageState extends ConsumerState<HomePage> {
               const Text('...'),
               const Spacer(),
               MoneyText(
-                amountCents: balanceCents,
+                amountCents: 0,
                 currency: 'XOF',
                 style: Theme.of(context).textTheme.titleLarge,
               ),
@@ -75,7 +74,7 @@ class _HomePageState extends ConsumerState<HomePage> {
               const Text('Account'),
               const Spacer(),
               MoneyText(
-                amountCents: balanceCents,
+                amountCents: 0,
                 currency: 'XOF',
                 style: Theme.of(context).textTheme.titleLarge,
               ),
@@ -86,7 +85,8 @@ class _HomePageState extends ConsumerState<HomePage> {
               Text(acc?.code ?? 'Account'),
               const Spacer(),
               MoneyText(
-                amountCents: balanceCents,
+                // ✅ always read fresh balance from the selected account
+                amountCents: acc?.balance ?? 0,
                 currency: acc?.currency ?? 'XOF',
                 style: Theme.of(context).textTheme.titleLarge,
               ),
