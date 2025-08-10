@@ -3,7 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 import 'package:money_pulse/presentation/app/providers.dart';
 import 'package:money_pulse/domain/transactions/entities/transaction_entry.dart';
-import 'package:money_pulse/domain/transactions/repositories/transaction_repository.dart';
+import 'package:money_pulse/presentation/features/transactions/transaction_form_sheet.dart';
 
 class TransactionListPage extends ConsumerWidget {
   const TransactionListPage({super.key});
@@ -15,9 +15,11 @@ class TransactionListPage extends ConsumerWidget {
       padding: const EdgeInsets.all(12),
       itemBuilder: (_, i) {
         final e = items[i];
-        final sign = e.typeEntry == 'DEBIT' ? '-' : '+';
+        final isDebit = e.typeEntry == 'DEBIT';
+        final sign = isDebit ? '-' : '+';
         final amount = (e.amount ~/ 100).toString();
         final date = DateFormat.yMMMd().format(e.dateTransaction);
+        final color = isDebit ? Colors.red : Colors.green;
         return Dismissible(
           key: ValueKey(e.id),
           background: Container(color: Colors.red),
@@ -27,9 +29,27 @@ class TransactionListPage extends ConsumerWidget {
             await ref.read(transactionsProvider.notifier).load();
           },
           child: ListTile(
+            leading: CircleAvatar(
+              backgroundColor: color.withOpacity(0.15),
+              child: Icon(isDebit ? Icons.south : Icons.north, color: color),
+            ),
             title: Text(e.description ?? e.code ?? 'Transaction'),
             subtitle: Text(date),
-            trailing: Text('$sign$amount'),
+            trailing: Text(
+              '$sign$amount',
+              style: TextStyle(color: color, fontWeight: FontWeight.w600),
+            ),
+            onTap: () async {
+              final ok = await showModalBottomSheet<bool>(
+                context: context,
+                isScrollControlled: true,
+                builder: (_) => TransactionFormSheet(entry: e),
+              );
+              if (ok == true) {
+                await ref.read(balanceProvider.notifier).load();
+                await ref.read(transactionsProvider.notifier).load();
+              }
+            },
           ),
         );
       },

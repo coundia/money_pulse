@@ -69,6 +69,121 @@ class TransactionRepositorySqflite implements TransactionRepository {
   }
 
   @override
+  Future<void> update(TransactionEntry entry) async {
+    await _db.tx((txn) async {
+      final rows = await txn.query(
+        'transaction_entry',
+        where: 'id=?',
+        whereArgs: [entry.id],
+        limit: 1,
+      );
+      if (rows.isEmpty) return;
+      final old = TransactionEntry.fromMap(rows.first);
+      final now = _now();
+
+      if (old.accountId == entry.accountId) {
+        int delta = 0;
+        delta += old.typeEntry == 'DEBIT' ? old.amount : -old.amount;
+        delta += entry.typeEntry == 'DEBIT' ? -entry.amount : entry.amount;
+        if (delta != 0) {
+          await txn.rawUpdate(
+            'UPDATE account SET balance=balance+?, isDirty=1, version=version+1, updatedAt=? WHERE id=?',
+            [delta, now, entry.accountId],
+          );
+          final idLogAcc = const Uuid().v4();
+          await txn.rawInsert(
+            'INSERT INTO change_log(id, entityTable, entityId, operation, payload, status, createdAt, updatedAt) VALUES(?,?,?,?,?,?,?,?) '
+            'ON CONFLICT(entityTable, entityId, status) DO UPDATE SET operation=excluded.operation, updatedAt=excluded.updatedAt, payload=excluded.payload',
+            [
+              idLogAcc,
+              'account',
+              entry.accountId,
+              'UPDATE',
+              null,
+              'PENDING',
+              now,
+              now,
+            ],
+          );
+        }
+      } else {
+        final undoOld = old.typeEntry == 'DEBIT' ? old.amount : -old.amount;
+        final applyNew = entry.typeEntry == 'DEBIT'
+            ? -entry.amount
+            : entry.amount;
+        await txn.rawUpdate(
+          'UPDATE account SET balance=balance+?, isDirty=1, version=version+1, updatedAt=? WHERE id=?',
+          [undoOld, now, old.accountId],
+        );
+        await txn.rawUpdate(
+          'UPDATE account SET balance=balance+?, isDirty=1, version=version+1, updatedAt=? WHERE id=?',
+          [applyNew, now, entry.accountId],
+        );
+        final idLogAcc1 = const Uuid().v4();
+        final idLogAcc2 = const Uuid().v4();
+        await txn.rawInsert(
+          'INSERT INTO change_log(id, entityTable, entityId, operation, payload, status, createdAt, updatedAt) VALUES(?,?,?,?,?,?,?,?) '
+          'ON CONFLICT(entityTable, entityId, status) DO UPDATE SET operation=excluded.operation, updatedAt=excluded.updatedAt, payload=excluded.payload',
+          [
+            idLogAcc1,
+            'account',
+            old.accountId,
+            'UPDATE',
+            null,
+            'PENDING',
+            now,
+            now,
+          ],
+        );
+        await txn.rawInsert(
+          'INSERT INTO change_log(id, entityTable, entityId, operation, payload, status, createdAt, updatedAt) VALUES(?,?,?,?,?,?,?,?) '
+          'ON CONFLICT(entityTable, entityId, status) DO UPDATE SET operation=excluded.operation, updatedAt=excluded.updatedAt, payload=excluded.payload',
+          [
+            idLogAcc2,
+            'account',
+            entry.accountId,
+            'UPDATE',
+            null,
+            'PENDING',
+            now,
+            now,
+          ],
+        );
+      }
+
+      final updated = entry.copyWith(
+        updatedAt: DateTime.now(),
+        version: old.version + 1,
+        isDirty: true,
+        createdAt: old.createdAt,
+      );
+      await txn.update(
+        'transaction_entry',
+        updated.toMap(),
+        where: 'id=?',
+        whereArgs: [entry.id],
+        conflictAlgorithm: ConflictAlgorithm.abort,
+      );
+
+      final idLogTx = const Uuid().v4();
+      await txn.rawInsert(
+        'INSERT INTO change_log(id, entityTable, entityId, operation, payload, status, createdAt, updatedAt) VALUES(?,?,?,?,?,?,?,?) '
+        'ON CONFLICT(entityTable, entityId, status) DO UPDATE SET operation=excluded.operation, updatedAt=excluded.updatedAt, payload=excluded.payload',
+        [
+          idLogTx,
+          'transaction_entry',
+          entry.id,
+          'UPDATE',
+          null,
+          'PENDING',
+          now,
+          now,
+        ],
+      );
+    });
+  }
+
+  @override
   Future<void> softDelete(String id) async {
     await _db.tx((txn) async {
       final rows = await txn.query(
@@ -117,6 +232,18 @@ class TransactionRepositorySqflite implements TransactionRepository {
         ],
       );
     });
+  }
+
+  @override
+  Future<TransactionEntry?> findById(String id) async {
+    final rows = await _db.db.query(
+      'transaction_entry',
+      where: 'id=?',
+      whereArgs: [id],
+      limit: 1,
+    );
+    if (rows.isEmpty) return null;
+    return TransactionEntry.fromMap(rows.first);
   }
 
   @override

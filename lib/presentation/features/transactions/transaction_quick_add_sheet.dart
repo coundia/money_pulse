@@ -71,12 +71,15 @@ class _TransactionQuickAddSheetState
                 keyboardType: const TextInputType.numberWithOptions(
                   decimal: true,
                 ),
+                textAlign: TextAlign.center,
+                style: Theme.of(context).textTheme.headlineMedium,
                 decoration: const InputDecoration(
                   border: OutlineInputBorder(),
                   labelText: 'Amount',
                 ),
                 validator: (v) =>
                     (v == null || v.trim().isEmpty) ? 'Required' : null,
+                autofocus: true,
               ),
               const SizedBox(height: 12),
               DropdownButtonFormField<String>(
