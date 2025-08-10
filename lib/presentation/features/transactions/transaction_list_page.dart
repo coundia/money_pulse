@@ -5,6 +5,8 @@ import 'package:money_pulse/presentation/app/providers.dart';
 import 'package:money_pulse/domain/transactions/entities/transaction_entry.dart';
 import 'package:money_pulse/presentation/features/transactions/transaction_form_sheet.dart';
 
+enum TxnTypeFilter { all, expense, income }
+
 class TransactionListPage extends ConsumerStatefulWidget {
   const TransactionListPage({super.key});
 
@@ -15,17 +17,28 @@ class TransactionListPage extends ConsumerStatefulWidget {
 
 class _TransactionListPageState extends ConsumerState<TransactionListPage> {
   DateTime month = DateTime(DateTime.now().year, DateTime.now().month, 1);
-  String? typeFilter; // null = All, 'DEBIT' = Expense, 'CREDIT' = Income
+  TxnTypeFilter typeFilter = TxnTypeFilter.all;
 
   DateTime _nextMonth(DateTime d) => DateTime(d.year, d.month + 1, 1);
   DateTime _prevMonth(DateTime d) => DateTime(d.year, d.month - 1, 1);
+
+  String? _typeEntryString() {
+    switch (typeFilter) {
+      case TxnTypeFilter.expense:
+        return 'DEBIT';
+      case TxnTypeFilter.income:
+        return 'CREDIT';
+      case TxnTypeFilter.all:
+        return null;
+    }
+  }
 
   Future<List<TransactionEntry>> _load() async {
     final acc = await ref.read(accountRepoProvider).findDefault();
     if (acc == null) return const <TransactionEntry>[];
     return ref
         .read(transactionRepoProvider)
-        .findByAccountForMonth(acc.id, month, typeEntry: typeFilter);
+        .findByAccountForMonth(acc.id, month, typeEntry: _typeEntryString());
   }
 
   @override
@@ -56,9 +69,13 @@ class _TransactionListPageState extends ConsumerState<TransactionListPage> {
                 borderRadius: BorderRadius.circular(14),
               ),
               child: Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 12,
+                  vertical: 10,
+                ),
                 child: Column(
                   children: [
+                    // Month navigator + "This month" action
                     Row(
                       children: [
                         IconButton(
@@ -89,54 +106,69 @@ class _TransactionListPageState extends ConsumerState<TransactionListPage> {
                         ),
                       ],
                     ),
-                    const SizedBox(height: 6),
-                    Wrap(
-                      spacing: 8,
-                      runSpacing: 8,
-                      alignment: WrapAlignment.center,
-                      children: [
-                        ChoiceChip(
-                          label: const Text('All'),
-                          selected: typeFilter == null,
-                          onSelected: (_) => setState(() => typeFilter = null),
-                        ),
-                        ChoiceChip(
-                          label: const Text('Expense'),
-                          selected: typeFilter == 'DEBIT',
-                          onSelected: (_) =>
-                              setState(() => typeFilter = 'DEBIT'),
-                        ),
-                        ChoiceChip(
-                          label: const Text('Income'),
-                          selected: typeFilter == 'CREDIT',
-                          onSelected: (_) =>
-                              setState(() => typeFilter = 'CREDIT'),
-                        ),
-                        TextButton.icon(
-                          onPressed: () => setState(() {
-                            month = DateTime(
-                              DateTime.now().year,
-                              DateTime.now().month,
-                              1,
-                            );
-                          }),
-                          icon: const Icon(Icons.today),
-                          label: const Text('This month'),
-                        ),
-                      ],
+                    const SizedBox(height: 8),
+                    // Filter UI: SegmentedButton with icons (no ChoiceChip)
+                    SingleChildScrollView(
+                      scrollDirection: Axis.horizontal,
+                      padding: const EdgeInsets.symmetric(vertical: 4),
+                      child: Row(
+                        children: [
+                          SegmentedButton<TxnTypeFilter>(
+                            segments: const [
+                              ButtonSegment(
+                                value: TxnTypeFilter.all,
+                                icon: Icon(Icons.all_inclusive),
+                                label: Text('All'),
+                              ),
+                              ButtonSegment(
+                                value: TxnTypeFilter.expense,
+                                icon: Icon(Icons.south),
+                                label: Text('Expense'),
+                              ),
+                              ButtonSegment(
+                                value: TxnTypeFilter.income,
+                                icon: Icon(Icons.north),
+                                label: Text('Income'),
+                              ),
+                            ],
+                            selected: {typeFilter},
+                            onSelectionChanged: (s) =>
+                                setState(() => typeFilter = s.first),
+                            showSelectedIcon: false,
+                          ),
+                          const SizedBox(width: 8),
+                          OutlinedButton.icon(
+                            onPressed: () => setState(() {
+                              month = DateTime(
+                                DateTime.now().year,
+                                DateTime.now().month,
+                                1,
+                              );
+                            }),
+                            icon: const Icon(Icons.today),
+                            label: const Text('This month'),
+                          ),
+                        ],
+                      ),
                     ),
-                    const SizedBox(height: 6),
+                    const SizedBox(height: 8),
+                    // Summary texts (no borders, no pills)
                     Row(
                       mainAxisAlignment: MainAxisAlignment.spaceEvenly,
                       children: [
-                        _pill(context, 'Expense', '-${exp ~/ 100}', Colors.red),
-                        _pill(
+                        _summaryText(
+                          context,
+                          'Expense',
+                          '-${exp ~/ 100}',
+                          Colors.red,
+                        ),
+                        _summaryText(
                           context,
                           'Income',
                           '+${inc ~/ 100}',
                           Colors.green,
                         ),
-                        _pill(
+                        _summaryText(
                           context,
                           'Net',
                           '${net >= 0 ? '+' : ''}${net ~/ 100}',
@@ -221,24 +253,23 @@ class _TransactionListPageState extends ConsumerState<TransactionListPage> {
     );
   }
 
-  Widget _pill(BuildContext context, String label, String value, Color color) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(999),
-        color: color.withOpacity(0.08),
-        border: Border.all(color: color.withOpacity(0.25)),
-      ),
-      child: Column(
-        children: [
-          Text(label, style: Theme.of(context).textTheme.bodySmall),
-          const SizedBox(height: 2),
-          Text(
-            value,
-            style: TextStyle(color: color, fontWeight: FontWeight.w700),
-          ),
-        ],
-      ),
+  // Simple text-only summary (no borders, no background)
+  Widget _summaryText(
+    BuildContext context,
+    String label,
+    String value,
+    Color color,
+  ) {
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Text(label, style: Theme.of(context).textTheme.bodySmall),
+        const SizedBox(height: 2),
+        Text(
+          value,
+          style: TextStyle(color: color, fontWeight: FontWeight.w700),
+        ),
+      ],
     );
   }
 }
