@@ -5,7 +5,7 @@ import 'package:money_pulse/presentation/app/account_selection.dart';
 import 'package:money_pulse/presentation/widgets/money_text.dart';
 import 'package:money_pulse/presentation/features/transactions/transaction_quick_add_sheet.dart';
 import 'package:money_pulse/presentation/features/settings/settings_page.dart';
-import 'package:money_pulse/presentation/widgets/left_drawer.dart';
+import 'package:money_pulse/presentation/widgets/right_drawer.dart';
 import '../transactions/pages/transaction_list_page.dart';
 
 class HomePage extends ConsumerStatefulWidget {
@@ -28,10 +28,11 @@ class _HomePageState extends ConsumerState<HomePage> {
   }
 
   Future<void> _openQuickAdd() async {
-    final ok = await showLeftDrawer<bool>(
+    final ok = await showRightDrawer<bool>(
       context,
       child: const TransactionQuickAddSheet(),
-      widthFraction: 0.92,
+      widthFraction: 0.86,
+      heightFraction: 0.96,
     );
     if (ok == true) {
       await ref.read(transactionsProvider.notifier).load();

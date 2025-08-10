@@ -1,10 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:uuid/uuid.dart';
-
 import 'package:money_pulse/presentation/app/providers.dart';
 import 'package:money_pulse/domain/categories/entities/category.dart';
 import 'package:money_pulse/domain/categories/repositories/category_repository.dart';
+import 'package:money_pulse/presentation/widgets/right_drawer.dart';
 
 class CategoryListPage extends ConsumerStatefulWidget {
   const CategoryListPage({super.key});
@@ -19,9 +19,11 @@ class _CategoryListPageState extends ConsumerState<CategoryListPage> {
   Future<List<Category>> _load() => _repo.findAllActive();
 
   Future<void> _addOrEdit({Category? existing}) async {
-    final result = await showDialog<_CategoryFormResult>(
-      context: context,
-      builder: (_) => _CategoryFormDialog(existing: existing),
+    final result = await showRightDrawer<_CategoryFormResult>(
+      context,
+      child: _CategoryFormPanel(existing: existing),
+      widthFraction: 0.86,
+      heightFraction: 0.96,
     );
     if (result == null) return;
 
@@ -137,23 +139,21 @@ class _CategoryListPageState extends ConsumerState<CategoryListPage> {
   }
 }
 
-/* ------------------------------ Add/Edit dialog ------------------------------ */
-
 class _CategoryFormResult {
   final String code;
   final String? description;
   const _CategoryFormResult({required this.code, this.description});
 }
 
-class _CategoryFormDialog extends StatefulWidget {
+class _CategoryFormPanel extends StatefulWidget {
   final Category? existing;
-  const _CategoryFormDialog({this.existing});
+  const _CategoryFormPanel({this.existing});
 
   @override
-  State<_CategoryFormDialog> createState() => _CategoryFormDialogState();
+  State<_CategoryFormPanel> createState() => _CategoryFormPanelState();
 }
 
-class _CategoryFormDialogState extends State<_CategoryFormDialog> {
+class _CategoryFormPanelState extends State<_CategoryFormPanel> {
   final _formKey = GlobalKey<FormState>();
   late final TextEditingController _code = TextEditingController(
     text: widget.existing?.code ?? '',
@@ -169,61 +169,57 @@ class _CategoryFormDialogState extends State<_CategoryFormDialog> {
     super.dispose();
   }
 
+  void _save() {
+    if (!_formKey.currentState!.validate()) return;
+    Navigator.pop(
+      context,
+      _CategoryFormResult(
+        code: _code.text.trim(),
+        description: _desc.text.trim().isEmpty ? null : _desc.text.trim(),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final isEdit = widget.existing != null;
-    return AlertDialog(
-      title: Text(isEdit ? 'Edit category' : 'Add category'),
-      content: Form(
+    return Scaffold(
+      appBar: AppBar(
+        leading: IconButton(
+          icon: const Icon(Icons.close),
+          onPressed: () => Navigator.pop(context),
+        ),
+        title: Text(isEdit ? 'Edit category' : 'Add category'),
+        actions: [
+          TextButton(onPressed: _save, child: Text(isEdit ? 'Save' : 'Add')),
+        ],
+      ),
+      body: Form(
         key: _formKey,
-        child: SizedBox(
-          width: 360,
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              TextFormField(
-                controller: _code,
-                decoration: const InputDecoration(
-                  labelText: 'Code (e.g. Food)',
-                  border: OutlineInputBorder(),
-                ),
-                validator: (v) =>
-                    (v == null || v.trim().isEmpty) ? 'Required' : null,
-                autofocus: true,
+        child: ListView(
+          padding: const EdgeInsets.all(16),
+          children: [
+            TextFormField(
+              controller: _code,
+              decoration: const InputDecoration(
+                labelText: 'Code (e.g. Food)',
+                border: OutlineInputBorder(),
               ),
-              const SizedBox(height: 10),
-              TextFormField(
-                controller: _desc,
-                decoration: const InputDecoration(
-                  labelText: 'Description (optional)',
-                  border: OutlineInputBorder(),
-                ),
+              validator: (v) =>
+                  (v == null || v.trim().isEmpty) ? 'Required' : null,
+              autofocus: true,
+            ),
+            const SizedBox(height: 10),
+            TextFormField(
+              controller: _desc,
+              decoration: const InputDecoration(
+                labelText: 'Description (optional)',
+                border: OutlineInputBorder(),
               ),
-            ],
-          ),
+            ),
+          ],
         ),
       ),
-      actions: [
-        TextButton(
-          onPressed: () => Navigator.pop(context),
-          child: const Text('Cancel'),
-        ),
-        FilledButton(
-          onPressed: () {
-            if (!_formKey.currentState!.validate()) return;
-            Navigator.pop(
-              context,
-              _CategoryFormResult(
-                code: _code.text.trim(),
-                description: _desc.text.trim().isEmpty
-                    ? null
-                    : _desc.text.trim(),
-              ),
-            );
-          },
-          child: Text(isEdit ? 'Save' : 'Add'),
-        ),
-      ],
     );
   }
 }

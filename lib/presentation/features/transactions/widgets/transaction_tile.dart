@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:money_pulse/domain/transactions/entities/transaction_entry.dart';
 import 'package:money_pulse/presentation/features/transactions/transaction_form_sheet.dart';
+import 'package:money_pulse/presentation/widgets/right_drawer.dart';
 
 class TransactionTile extends StatelessWidget {
   final TransactionEntry entry;
@@ -44,10 +45,11 @@ class TransactionTile extends StatelessWidget {
           style: TextStyle(color: color, fontWeight: FontWeight.w600),
         ),
         onTap: () async {
-          final ok = await showModalBottomSheet<bool>(
-            context: context,
-            isScrollControlled: true,
-            builder: (_) => TransactionFormSheet(entry: entry),
+          final ok = await showRightDrawer<bool>(
+            context,
+            child: TransactionFormSheet(entry: entry),
+            widthFraction: 0.86,
+            heightFraction: 0.96,
           );
           if (ok == true) await onUpdated();
         },

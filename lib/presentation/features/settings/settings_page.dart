@@ -2,13 +2,11 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 import 'package:uuid/uuid.dart';
-
 import 'package:money_pulse/presentation/app/providers.dart';
 import 'package:money_pulse/domain/accounts/entities/account.dart';
 import 'package:money_pulse/domain/accounts/repositories/account_repository.dart';
-
-// If your CategoryListPage lives elsewhere, adjust this import.
 import 'package:money_pulse/presentation/features/categories/category_list_page.dart';
+import 'package:money_pulse/presentation/widgets/right_drawer.dart';
 
 class SettingsPage extends ConsumerWidget {
   const SettingsPage({super.key});
@@ -65,7 +63,6 @@ class _SectionHeader extends StatelessWidget {
   }
 }
 
-/// Minimal accounts manager (list + add/edit/delete + set default)
 class _AccountManagerPage extends ConsumerStatefulWidget {
   const _AccountManagerPage({super.key});
 
@@ -80,9 +77,11 @@ class _AccountManagerPageState extends ConsumerState<_AccountManagerPage> {
   Future<List<Account>> _load() => _repo.findAllActive();
 
   Future<void> _addOrEdit({Account? existing}) async {
-    final result = await showDialog<_AccountFormResult>(
-      context: context,
-      builder: (_) => _AccountFormDialog(existing: existing),
+    final result = await showRightDrawer<_AccountFormResult>(
+      context,
+      child: _AccountFormPanel(existing: existing),
+      widthFraction: 0.86,
+      heightFraction: 0.96,
     );
     if (result == null) return;
 
@@ -127,12 +126,9 @@ class _AccountManagerPageState extends ConsumerState<_AccountManagerPage> {
   }
 
   Future<void> _setDefault(Account acc) async {
-    // Prefer a repository method like setDefault if available.
-    // Otherwise update will be handled in repository to ensure single default.
     try {
       await _repo.setDefault(acc.id);
     } catch (_) {
-      // fallback: naive (may rely on repo constraints/logic)
       await _repo.update(acc.copyWith(isDefault: true));
     }
     if (mounted) setState(() {});
@@ -238,8 +234,6 @@ class _AccountManagerPageState extends ConsumerState<_AccountManagerPage> {
   }
 }
 
-/* ------------------------------ Add/Edit dialog ------------------------------ */
-
 class _AccountFormResult {
   final String code;
   final String? description;
@@ -251,15 +245,15 @@ class _AccountFormResult {
   });
 }
 
-class _AccountFormDialog extends StatefulWidget {
+class _AccountFormPanel extends StatefulWidget {
   final Account? existing;
-  const _AccountFormDialog({this.existing});
+  const _AccountFormPanel({this.existing});
 
   @override
-  State<_AccountFormDialog> createState() => _AccountFormDialogState();
+  State<_AccountFormPanel> createState() => _AccountFormPanelState();
 }
 
-class _AccountFormDialogState extends State<_AccountFormDialog> {
+class _AccountFormPanelState extends State<_AccountFormPanel> {
   final _formKey = GlobalKey<FormState>();
   late final TextEditingController _code = TextEditingController(
     text: widget.existing?.code ?? '',
@@ -279,70 +273,66 @@ class _AccountFormDialogState extends State<_AccountFormDialog> {
     super.dispose();
   }
 
+  void _save() {
+    if (!_formKey.currentState!.validate()) return;
+    Navigator.pop(
+      context,
+      _AccountFormResult(
+        code: _code.text.trim(),
+        description: _desc.text.trim().isEmpty ? null : _desc.text.trim(),
+        currency: _curr.text.trim().isEmpty ? null : _curr.text.trim(),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final isEdit = widget.existing != null;
-    return AlertDialog(
-      title: Text(isEdit ? 'Edit account' : 'Add account'),
-      content: Form(
+    return Scaffold(
+      appBar: AppBar(
+        leading: IconButton(
+          icon: const Icon(Icons.close),
+          onPressed: () => Navigator.pop(context),
+        ),
+        title: Text(isEdit ? 'Edit account' : 'Add account'),
+        actions: [
+          TextButton(onPressed: _save, child: Text(isEdit ? 'Save' : 'Add')),
+        ],
+      ),
+      body: Form(
         key: _formKey,
-        child: SizedBox(
-          width: 360,
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              TextFormField(
-                controller: _code,
-                decoration: const InputDecoration(
-                  labelText: 'Code',
-                  border: OutlineInputBorder(),
-                ),
-                validator: (v) =>
-                    (v == null || v.trim().isEmpty) ? 'Required' : null,
-                autofocus: true,
+        child: ListView(
+          padding: const EdgeInsets.all(16),
+          children: [
+            TextFormField(
+              controller: _code,
+              decoration: const InputDecoration(
+                labelText: 'Code',
+                border: OutlineInputBorder(),
               ),
-              const SizedBox(height: 10),
-              TextFormField(
-                controller: _desc,
-                decoration: const InputDecoration(
-                  labelText: 'Description',
-                  border: OutlineInputBorder(),
-                ),
+              validator: (v) =>
+                  (v == null || v.trim().isEmpty) ? 'Required' : null,
+              autofocus: true,
+            ),
+            const SizedBox(height: 10),
+            TextFormField(
+              controller: _desc,
+              decoration: const InputDecoration(
+                labelText: 'Description',
+                border: OutlineInputBorder(),
               ),
-              const SizedBox(height: 10),
-              TextFormField(
-                controller: _curr,
-                decoration: const InputDecoration(
-                  labelText: 'Currency (e.g. XOF)',
-                  border: OutlineInputBorder(),
-                ),
+            ),
+            const SizedBox(height: 10),
+            TextFormField(
+              controller: _curr,
+              decoration: const InputDecoration(
+                labelText: 'Currency (e.g. XOF)',
+                border: OutlineInputBorder(),
               ),
-            ],
-          ),
+            ),
+          ],
         ),
       ),
-      actions: [
-        TextButton(
-          onPressed: () => Navigator.pop(context),
-          child: const Text('Cancel'),
-        ),
-        FilledButton(
-          onPressed: () {
-            if (!_formKey.currentState!.validate()) return;
-            Navigator.pop(
-              context,
-              _AccountFormResult(
-                code: _code.text.trim(),
-                description: _desc.text.trim().isEmpty
-                    ? null
-                    : _desc.text.trim(),
-                currency: _curr.text.trim().isEmpty ? null : _curr.text.trim(),
-              ),
-            );
-          },
-          child: Text(isEdit ? 'Save' : 'Add'),
-        ),
-      ],
     );
   }
 }
