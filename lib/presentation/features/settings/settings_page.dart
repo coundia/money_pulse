@@ -265,10 +265,10 @@ class _AccountFormDialogState extends State<_AccountFormDialog> {
     text: widget.existing?.code ?? '',
   );
   late final TextEditingController _desc = TextEditingController(
-    text: widget.existing?.description ?? '',
+    text: widget.existing?.description ?? _code.value.text,
   );
   late final TextEditingController _curr = TextEditingController(
-    text: widget.existing?.currency ?? '',
+    text: widget.existing?.currency ?? 'XOF',
   );
 
   @override

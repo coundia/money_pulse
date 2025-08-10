@@ -3,8 +3,9 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:money_pulse/presentation/app/providers.dart';
 import 'package:money_pulse/presentation/widgets/money_text.dart';
 import 'package:money_pulse/presentation/features/transactions/transaction_list_page.dart';
-import 'package:money_pulse/presentation/features/reports/report_page.dart';
 import 'package:money_pulse/presentation/features/transactions/transaction_quick_add_sheet.dart';
+// NEW: replace reports import with settings
+import 'package:money_pulse/presentation/features/settings/settings_page.dart';
 
 class HomePage extends ConsumerStatefulWidget {
   const HomePage({super.key});
@@ -14,7 +15,7 @@ class HomePage extends ConsumerStatefulWidget {
 }
 
 class _HomePageState extends ConsumerState<HomePage> {
-  /// Page index: 0 = Transactions, 1 = Reports
+  /// Page index: 0 = Transactions, 1 = Settings
   int pageIdx = 0;
 
   @override
@@ -40,7 +41,7 @@ class _HomePageState extends ConsumerState<HomePage> {
     }
   }
 
-  /// Map current page -> selected destination index (0=Tx, 1=Add action (not selected), 2=Reports)
+  /// Map current page -> selected destination index (0=Tx, 1=Add action (not selected), 2=Settings)
   int get _navSelectedIndex => pageIdx == 0 ? 0 : 2;
 
   void _onDestinationSelected(int v) {
@@ -50,7 +51,7 @@ class _HomePageState extends ConsumerState<HomePage> {
       return;
     }
     setState(() {
-      // 0 -> Transactions page(0), 2 -> Reports page(1)
+      // 0 -> Transactions page(0), 2 -> Settings page(1)
       pageIdx = (v == 0) ? 0 : 1;
     });
   }
@@ -75,27 +76,31 @@ class _HomePageState extends ConsumerState<HomePage> {
       ),
       body: IndexedStack(
         index: pageIdx,
-        children: const [TransactionListPage(), ReportPage()],
+        children: const [
+          TransactionListPage(),
+          SettingsPage(), // NEW: settings page instead of reports
+        ],
       ),
       bottomNavigationBar: NavigationBar(
-        labelBehavior:
-            NavigationDestinationLabelBehavior.onlyShowSelected, // hide labels
+        labelBehavior: NavigationDestinationLabelBehavior.onlyShowSelected,
         selectedIndex: _navSelectedIndex,
         onDestinationSelected: _onDestinationSelected,
         destinations: const [
           NavigationDestination(
             icon: Icon(Icons.list_alt),
-            label: 'Transactions', // hidden by labelBehavior
+            label: 'Transactions',
           ),
           NavigationDestination(
-            // big + icon, no visible label
-            icon: Icon(Icons.add_circle, size: 36),
+            icon: Icon(
+              Icons.add_circle,
+              size: 36,
+            ), // big + icon, no visible label
             selectedIcon: Icon(Icons.add_circle, size: 36),
-            label: 'Add', // hidden
+            label: 'Add',
           ),
           NavigationDestination(
-            icon: Icon(Icons.pie_chart),
-            label: 'Reports', // hidden by labelBehavior
+            icon: Icon(Icons.settings), // NEW: settings icon
+            label: 'Settings',
           ),
         ],
       ),
