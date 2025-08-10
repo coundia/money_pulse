@@ -8,12 +8,17 @@ import 'widgets/txn_filter_sheet.dart';
 class TxnSearchDelegate extends SearchDelegate<TransactionEntry?> {
   final List<TransactionEntry> items;
 
-  // État des filtres
-  final ValueNotifier<TxnFilterState> _filter = ValueNotifier<TxnFilterState>(
-    const TxnFilterState(),
-  );
+  // ⬇️ Par défaut: filtre sur "AUJOURD'HUI" (from = to = aujourd’hui)
+  final ValueNotifier<TxnFilterState> _filter;
 
-  TxnSearchDelegate(this.items);
+  TxnSearchDelegate(this.items)
+    : _filter = ValueNotifier<TxnFilterState>(_todayFilter());
+
+  static TxnFilterState _todayFilter() {
+    final now = DateTime.now();
+    final d = DateTime(now.year, now.month, now.day);
+    return TxnFilterState(from: d, to: d);
+  }
 
   // Pipeline de filtres pour la LISTE affichée
   List<TransactionEntry> _applyFilters(String q, TxnFilterState f) {
@@ -88,8 +93,7 @@ class TxnSearchDelegate extends SearchDelegate<TransactionEntry?> {
 
   String _formatWhen(DateTime d) => DateFormat.yMMMd().add_Hm().format(d);
   String _amount(int cents, {bool withSign = true, required bool debit}) {
-    final sign = '';
-    // !withSign ? '' : (debit ? '-' : '+');
+    final sign = withSign ? (debit ? '-' : '+') : '';
     return '$sign${cents ~/ 100}';
   }
 
@@ -116,6 +120,37 @@ class TxnSearchDelegate extends SearchDelegate<TransactionEntry?> {
     return TextSpan(children: spans);
   }
 
+  // ⬇️ Label lisible de la plage de dates sélectionnée (affiché dans la barre)
+  String _rangeLabel(TxnFilterState f) {
+    DateTime? from = f.from;
+    DateTime? to = f.to;
+    if (from == null && to == null) return 'Any date';
+
+    final sameDay = (from != null && to != null)
+        ? (from.year == to.year && from.month == to.month && from.day == to.day)
+        : false;
+
+    if (sameDay) {
+      final isToday = _isSameDay(from!, DateTime.now());
+      return isToday ? 'Today' : DateFormat.yMMMd().format(from);
+    }
+
+    if (from != null && to != null) {
+      final left = DateFormat.MMMd().format(from);
+      final right = DateFormat.MMMd().format(to);
+      final year = from.year == to.year ? ' ${from.year}' : '';
+      return '$left – $right$year';
+    }
+
+    if (from != null) return 'From ${DateFormat.yMMMd().format(from)}';
+    return 'Until ${DateFormat.yMMMd().format(to!)}';
+  }
+
+  bool _isSameDay(DateTime a, DateTime b) =>
+      a.year == b.year && a.month == b.month && a.day == b.day;
+
+  DateTime _strip(DateTime d) => DateTime(d.year, d.month, d.day);
+
   @override
   Widget buildSuggestions(BuildContext context) => _buildBody(context);
 
@@ -133,7 +168,7 @@ class TxnSearchDelegate extends SearchDelegate<TransactionEntry?> {
 
         return Column(
           children: [
-            // Quick controls
+            // ====== Barre d’actions rapides (avec date sélectionnée) ======
             Padding(
               padding: const EdgeInsets.fromLTRB(12, 8, 12, 4),
               child: Wrap(
@@ -144,28 +179,78 @@ class TxnSearchDelegate extends SearchDelegate<TransactionEntry?> {
                   ChoiceChip(
                     label: const Text('All'),
                     selected: f.type == TxnTypeFilter.all,
-                    onSelected: (selected) {
-                      if (selected)
+                    onSelected: (sel) {
+                      if (sel)
                         _filter.value = f.copyWith(type: TxnTypeFilter.all);
                     },
                   ),
                   ChoiceChip(
                     label: const Text('Expense'),
                     selected: f.type == TxnTypeFilter.expense,
-                    onSelected: (selected) {
-                      if (selected)
+                    onSelected: (sel) {
+                      if (sel)
                         _filter.value = f.copyWith(type: TxnTypeFilter.expense);
                     },
                   ),
                   ChoiceChip(
                     label: const Text('Income'),
                     selected: f.type == TxnTypeFilter.income,
-                    onSelected: (selected) {
-                      // ✅ Fix: en cliquant sur INCOME, il est bien sélectionné
-                      if (selected)
+                    onSelected: (sel) {
+                      if (sel)
                         _filter.value = f.copyWith(type: TxnTypeFilter.income);
                     },
                   ),
+
+                  // ⬇️ Chip Date visible (tap = 1 jour, long-press = plage)
+                  GestureDetector(
+                    onTap: () async {
+                      final picked = await showDatePicker(
+                        context: context,
+                        initialDate: f.from ?? DateTime.now(),
+                        firstDate: DateTime(2000),
+                        lastDate: DateTime(2100),
+                      );
+                      if (picked != null) {
+                        final d = DateTime(
+                          picked.year,
+                          picked.month,
+                          picked.day,
+                        );
+                        _filter.value = f.copyWith(from: d, to: d);
+                      }
+                    },
+                    onLongPress: () async {
+                      final initRange = (f.from != null && f.to != null)
+                          ? DateTimeRange(start: f.from!, end: f.to!)
+                          : null;
+                      final range = await showDateRangePicker(
+                        context: context,
+                        firstDate: DateTime(2000),
+                        lastDate: DateTime(2100),
+                        initialDateRange: initRange,
+                      );
+                      if (range != null) {
+                        _filter.value = f.copyWith(
+                          from: DateTime(
+                            range.start.year,
+                            range.start.month,
+                            range.start.day,
+                          ),
+                          to: DateTime(
+                            range.end.year,
+                            range.end.month,
+                            range.end.day,
+                          ),
+                        );
+                      }
+                    },
+                    child: Chip(
+                      avatar: const Icon(Icons.calendar_month, size: 18),
+                      label: Text(_rangeLabel(f)),
+                      materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                    ),
+                  ),
+
                   const SizedBox(width: 12),
                   FilterChip(
                     label: Text(switch (f.sortBy) {
@@ -186,19 +271,12 @@ class TxnSearchDelegate extends SearchDelegate<TransactionEntry?> {
                     },
                   ),
                   const SizedBox(width: 12),
-                  ActionChip(
-                    avatar: const Icon(Icons.tune, size: 18),
-                    label: Text(f.isEmpty ? 'Filters' : 'Filters •'),
-                    onPressed: () async {
-                      final updated = await openTxnFilterSheet(context, f);
-                      if (updated != null) _filter.value = updated;
-                    },
-                  ),
+
                   if (!f.isEmpty)
                     TextButton.icon(
-                      onPressed: () => _filter.value = const TxnFilterState(),
-                      icon: const Icon(Icons.refresh),
-                      label: const Text('Reset'),
+                      onPressed: () => _filter.value = _todayFilter(),
+                      icon: const Icon(Icons.today),
+                      label: const Text('Today'),
                     ),
                   const SizedBox(width: 8),
                   Row(
@@ -216,11 +294,7 @@ class TxnSearchDelegate extends SearchDelegate<TransactionEntry?> {
                       ),
                       const SizedBox(width: 4),
                       Text(
-                        _amount(
-                          net,
-                          withSign: true,
-                          debit: net < 0,
-                        ), // affichage signé
+                        _amount(net, withSign: true, debit: net < 0),
                         style: theme.textTheme.bodySmall?.copyWith(
                           color: netColor,
                           fontWeight: FontWeight.w600,
@@ -233,14 +307,14 @@ class TxnSearchDelegate extends SearchDelegate<TransactionEntry?> {
             ),
             const Divider(height: 1),
 
-            // Results
+            // ====== Résultats ======
             Expanded(
               child: list.isEmpty
                   ? _EmptyState(
                       query: query,
                       onClear: () {
                         query = '';
-                        _filter.value = const TxnFilterState();
+                        _filter.value = _todayFilter();
                       },
                     )
                   : ListView.separated(
