@@ -1,10 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:intl/intl.dart';
 import 'package:money_pulse/domain/transactions/entities/transaction_entry.dart';
 import 'package:money_pulse/presentation/app/providers.dart';
 import 'package:money_pulse/presentation/features/transactions/providers/transaction_list_providers.dart';
 import 'package:money_pulse/presentation/features/transactions/transaction_form_sheet.dart';
+import 'package:money_pulse/presentation/shared/formatters.dart';
 import 'package:money_pulse/presentation/widgets/right_drawer.dart';
 
 class TransactionDetailView extends ConsumerWidget {
@@ -16,10 +16,8 @@ class TransactionDetailView extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final isDebit = entry.typeEntry == 'DEBIT';
     final sign = isDebit ? '-' : '+';
-    final amount = NumberFormat.decimalPattern().format(entry.amount / 100);
-    final dateLabel = DateFormat.yMMMMEEEEd().add_Hm().format(
-      entry.dateTransaction,
-    );
+    final amount = Formatters.amountFromCents(entry.amount);
+    final dateLabel = Formatters.dateFull(entry.dateTransaction);
 
     return Scaffold(
       appBar: AppBar(

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:money_pulse/domain/transactions/entities/transaction_entry.dart';
+import 'package:money_pulse/presentation/shared/formatters.dart';
 
 import 'models/txn_search_filters.dart';
 import 'widgets/txn_filter_sheet.dart';
@@ -8,13 +9,13 @@ import 'widgets/txn_filter_sheet.dart';
 class TxnSearchDelegate extends SearchDelegate<TransactionEntry?> {
   final List<TransactionEntry> items;
 
-  // ⬇️ Par défaut: filtre sur "AUJOURD'HUI" (from = to = aujourd’hui)
+  // Par défaut: filtre sur "AUJOURD’HUI" (from = to = aujourd’hui)
   final ValueNotifier<TxnFilterState> _filter;
 
   TxnSearchDelegate(this.items)
     : _filter = ValueNotifier<TxnFilterState>(_todayFilter());
 
-  // ------------------ Quick date helpers ------------------
+  // ------------------ Aides date ------------------
   static DateTime _strip(DateTime d) => DateTime(d.year, d.month, d.day);
 
   static TxnFilterState _todayFilter() {
@@ -25,7 +26,7 @@ class TxnSearchDelegate extends SearchDelegate<TransactionEntry?> {
   static (DateTime from, DateTime to) _thisMonthRange() {
     final now = DateTime.now();
     final from = DateTime(now.year, now.month, 1);
-    final to = DateTime(now.year, now.month + 1, 0); // last day of month
+    final to = DateTime(now.year, now.month + 1, 0);
     return (from, to);
   }
 
@@ -57,12 +58,11 @@ class TxnSearchDelegate extends SearchDelegate<TransactionEntry?> {
     return _isSameDay(f.from!, yFrom) && _isSameDay(f.to!, yTo);
   }
 
-  // ------------------ Filtering pipeline ------------------
+  // ------------------ Filtrage ------------------
   List<TransactionEntry> _applyFilters(String q, TxnFilterState f) {
     final query = q.trim().toLowerCase();
     Iterable<TransactionEntry> it = items;
 
-    // Type
     switch (f.type) {
       case TxnTypeFilter.expense:
         it = it.where((e) => e.typeEntry == 'DEBIT');
@@ -74,7 +74,6 @@ class TxnSearchDelegate extends SearchDelegate<TransactionEntry?> {
         break;
     }
 
-    // Date range
     if (f.from != null) {
       final start = DateTime(f.from!.year, f.from!.month, f.from!.day);
       it = it.where((e) => !e.dateTransaction.isBefore(start));
@@ -84,11 +83,9 @@ class TxnSearchDelegate extends SearchDelegate<TransactionEntry?> {
       it = it.where((e) => !e.dateTransaction.isAfter(end));
     }
 
-    // Amount range
     if (f.minCents != null) it = it.where((e) => e.amount >= f.minCents!);
     if (f.maxCents != null) it = it.where((e) => e.amount <= f.maxCents!);
 
-    // Text
     if (query.isNotEmpty) {
       it = it.where((e) {
         final text = '${e.code ?? ''} ${e.description ?? ''}'.toLowerCase();
@@ -96,7 +93,6 @@ class TxnSearchDelegate extends SearchDelegate<TransactionEntry?> {
       });
     }
 
-    // Sort
     final list = it.toList();
     switch (f.sortBy) {
       case TxnSortBy.dateDesc:
@@ -115,7 +111,7 @@ class TxnSearchDelegate extends SearchDelegate<TransactionEntry?> {
     return list;
   }
 
-  // Netto (toujours CREDIT − DEBIT) en ignorant le filtre "type"
+  // Netto (toujours CRÉDIT − DÉBIT) en ignorant le filtre "type"
   int _computeNetCents(String q, TxnFilterState f) {
     final base = _applyFilters(q, f.copyWith(type: TxnTypeFilter.all));
     final credit = base
@@ -128,9 +124,11 @@ class TxnSearchDelegate extends SearchDelegate<TransactionEntry?> {
   }
 
   String _formatWhen(DateTime d) => DateFormat.yMMMd().add_Hm().format(d);
+
   String _amount(int cents, {bool withSign = true, required bool debit}) {
-    final sign = ""; // you chose no sign in UI
-    return '$sign${cents ~/ 100}';
+    final sign = "";
+    //withSign ? (debit ? '−' : '+') : '';
+    return '$sign${Formatters.amountFromCents(cents)}';
   }
 
   InlineSpan _highlight(String text, String q, TextStyle base, TextStyle hi) {
@@ -156,10 +154,10 @@ class TxnSearchDelegate extends SearchDelegate<TransactionEntry?> {
     return TextSpan(children: spans);
   }
 
-  // Label lisible de la plage
+  // Libellé de la plage en français
   String _rangeLabel(TxnFilterState f) {
     final from = f.from, to = f.to;
-    if (from == null && to == null) return 'Any date';
+    if (from == null && to == null) return 'Toutes dates';
 
     final sameDay = (from != null && to != null)
         ? (from.year == to.year && from.month == to.month && from.day == to.day)
@@ -167,22 +165,25 @@ class TxnSearchDelegate extends SearchDelegate<TransactionEntry?> {
 
     if (sameDay) {
       final isToday = _isSameDay(from!, _strip(DateTime.now()));
-      return isToday ? 'Today' : DateFormat.yMMMd().format(from);
+      return isToday ? 'Aujourd’hui' : DateFormat.yMMMd().format(from);
     }
 
     if (from != null && to != null) {
       final left = DateFormat.MMMd().format(from);
       final right = DateFormat.MMMd().format(to);
-      final year = from.year == to.year ? ' ${from.year}' : '';
-      return '$left – $right$year';
+      final sameYear = from.year == to.year;
+      return sameYear
+          ? 'Du $left au $right ${from.year}'
+          : 'Du $left ${from.year} au $right ${to.year}';
     }
 
-    if (from != null) return 'From ${DateFormat.yMMMd().format(from)}';
-    return 'Until ${DateFormat.yMMMd().format(to!)}';
+    if (from != null) return 'À partir du ${DateFormat.yMMMd().format(from)}';
+    return 'Jusqu’au ${DateFormat.yMMMd().format(to!)}';
   }
 
   @override
   Widget buildSuggestions(BuildContext context) => _buildBody(context);
+
   @override
   Widget buildResults(BuildContext context) => _buildBody(context);
 
@@ -197,7 +198,7 @@ class TxnSearchDelegate extends SearchDelegate<TransactionEntry?> {
 
         return Column(
           children: [
-            // ====== Quick actions (always show Today / This month / This year) ======
+            // ====== Actions rapides ======
             Padding(
               padding: const EdgeInsets.fromLTRB(12, 8, 12, 4),
               child: Wrap(
@@ -207,7 +208,7 @@ class TxnSearchDelegate extends SearchDelegate<TransactionEntry?> {
                 children: [
                   // Type
                   ChoiceChip(
-                    label: const Text('All'),
+                    label: const Text('Tous'),
                     selected: f.type == TxnTypeFilter.all,
                     onSelected: (sel) {
                       if (sel)
@@ -215,7 +216,7 @@ class TxnSearchDelegate extends SearchDelegate<TransactionEntry?> {
                     },
                   ),
                   ChoiceChip(
-                    label: const Text('Expense'),
+                    label: const Text('Dépenses'),
                     selected: f.type == TxnTypeFilter.expense,
                     onSelected: (sel) {
                       if (sel)
@@ -223,7 +224,7 @@ class TxnSearchDelegate extends SearchDelegate<TransactionEntry?> {
                     },
                   ),
                   ChoiceChip(
-                    label: const Text('Income'),
+                    label: const Text('Revenus'),
                     selected: f.type == TxnTypeFilter.income,
                     onSelected: (sel) {
                       if (sel)
@@ -233,10 +234,10 @@ class TxnSearchDelegate extends SearchDelegate<TransactionEntry?> {
 
                   const SizedBox(width: 8),
 
-                  // ⬇️ Quick dates: Today / This month / This year
+                  // Dates rapides
                   FilterChip(
                     avatar: const Icon(Icons.today, size: 18),
-                    label: const Text('Today'),
+                    label: const Text('Aujourd’hui'),
                     selected: _isTodayRange(f),
                     onSelected: (_) {
                       final d = _strip(DateTime.now());
@@ -245,7 +246,7 @@ class TxnSearchDelegate extends SearchDelegate<TransactionEntry?> {
                   ),
                   FilterChip(
                     avatar: const Icon(Icons.calendar_view_month, size: 18),
-                    label: const Text('This month'),
+                    label: const Text('Ce mois-ci'),
                     selected: _isThisMonthRange(f),
                     onSelected: (_) {
                       final (from, to) = _thisMonthRange();
@@ -254,7 +255,7 @@ class TxnSearchDelegate extends SearchDelegate<TransactionEntry?> {
                   ),
                   FilterChip(
                     avatar: const Icon(Icons.calendar_month, size: 18),
-                    label: const Text('This year'),
+                    label: const Text('Cette année'),
                     selected: _isThisYearRange(f),
                     onSelected: (_) {
                       final (from, to) = _thisYearRange();
@@ -262,7 +263,7 @@ class TxnSearchDelegate extends SearchDelegate<TransactionEntry?> {
                     },
                   ),
 
-                  // Tap chip to pick a single day; long-press for a range
+                  // Choisir une date / plage
                   GestureDetector(
                     onTap: () async {
                       final picked = await showDatePicker(
@@ -302,13 +303,13 @@ class TxnSearchDelegate extends SearchDelegate<TransactionEntry?> {
 
                   const SizedBox(width: 8),
 
-                  // Sort
+                  // Tri
                   FilterChip(
                     label: Text(switch (f.sortBy) {
                       TxnSortBy.dateDesc => 'Date ↓',
                       TxnSortBy.dateAsc => 'Date ↑',
-                      TxnSortBy.amountDesc => 'Amount ↓',
-                      TxnSortBy.amountAsc => 'Amount ↑',
+                      TxnSortBy.amountDesc => 'Montant ↓',
+                      TxnSortBy.amountAsc => 'Montant ↑',
                     }),
                     selected: true,
                     onSelected: (_) {
@@ -328,7 +329,7 @@ class TxnSearchDelegate extends SearchDelegate<TransactionEntry?> {
                     children: [
                       const SizedBox(width: 8),
                       Text(
-                        '${list.length} result${list.length == 1 ? '' : 's'}',
+                        '${list.length} résultat${list.length > 1 ? 's' : ''}',
                         style: theme.textTheme.bodySmall,
                       ),
                       const SizedBox(width: 8),
@@ -352,7 +353,7 @@ class TxnSearchDelegate extends SearchDelegate<TransactionEntry?> {
             ),
             const Divider(height: 1),
 
-            // ====== Results ======
+            // ====== Résultats ======
             Expanded(
               child: list.isEmpty
                   ? _EmptyState(
@@ -413,14 +414,18 @@ class TxnSearchDelegate extends SearchDelegate<TransactionEntry?> {
   @override
   List<Widget>? buildActions(BuildContext context) => [
     IconButton(
-      tooltip: 'Filters',
+      tooltip: 'Filtres',
       icon: const Icon(Icons.tune),
       onPressed: () async {
         final updated = await openTxnFilterSheet(context, _filter.value);
         if (updated != null) _filter.value = updated;
       },
     ),
-    IconButton(icon: const Icon(Icons.clear), onPressed: () => query = ''),
+    IconButton(
+      tooltip: 'Effacer',
+      icon: const Icon(Icons.clear),
+      onPressed: () => query = '',
+    ),
   ];
 
   @override
@@ -430,7 +435,7 @@ class TxnSearchDelegate extends SearchDelegate<TransactionEntry?> {
   );
 }
 
-/// Empty state
+/// État vide
 class _EmptyState extends StatelessWidget {
   final String query;
   final VoidCallback onClear;
@@ -439,6 +444,9 @@ class _EmptyState extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final subtitle = query.isEmpty
+        ? 'Ajustez vos filtres.'
+        : 'Aucune correspondance pour « $query ».';
     return Center(
       child: Padding(
         padding: const EdgeInsets.all(24),
@@ -447,12 +455,10 @@ class _EmptyState extends StatelessWidget {
           children: [
             Icon(Icons.search_off, size: 56, color: theme.colorScheme.outline),
             const SizedBox(height: 12),
-            Text('No results', style: theme.textTheme.titleMedium),
+            Text('Aucun résultat', style: theme.textTheme.titleMedium),
             const SizedBox(height: 6),
             Text(
-              query.isEmpty
-                  ? 'Try adjusting your filters.'
-                  : 'No matches for “$query”.',
+              subtitle,
               style: theme.textTheme.bodyMedium,
               textAlign: TextAlign.center,
             ),
@@ -460,7 +466,7 @@ class _EmptyState extends StatelessWidget {
             OutlinedButton.icon(
               onPressed: onClear,
               icon: const Icon(Icons.refresh),
-              label: const Text('Clear search & filters'),
+              label: const Text('Réinitialiser la recherche et les filtres'),
             ),
           ],
         ),

@@ -47,10 +47,9 @@ class TransactionListPage extends ConsumerWidget {
               onNext: () =>
                   ref.read(transactionListStateProvider.notifier).next(),
               onTapPeriod: () => _openAnchorPicker(context, ref),
-              expenseText: '-${exp ~/ 100}',
-              incomeText: '+${inc ~/ 100}',
-              netText: '${net >= 0 ? '+' : ''}${net ~/ 100}',
-              netPositive: net >= 0,
+              expenseCents: exp,
+              incomeCents: inc,
+              netCents: net,
               onOpenReport: () {
                 Navigator.of(
                   context,
@@ -64,6 +63,7 @@ class TransactionListPage extends ConsumerWidget {
               onAddExpense: () => _onAdd(context, ref, 'DEBIT'),
               onAddIncome: () => _onAdd(context, ref, 'CREDIT'),
             ),
+
             const SizedBox(height: 8),
             if (txns.isEmpty)
               const Padding(

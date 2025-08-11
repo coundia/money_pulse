@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -17,20 +16,18 @@ import 'package:money_pulse/presentation/features/transactions/search/txn_search
 import 'package:money_pulse/domain/accounts/entities/account.dart';
 import 'package:money_pulse/domain/transactions/entities/transaction_entry.dart';
 
-// Manage pages
 import 'package:money_pulse/presentation/features/accounts/account_page.dart';
 import 'package:money_pulse/presentation/features/categories/category_list_page.dart';
 
-// Feature-internal
 import '../transactions/controllers/transaction_list_controller.dart';
 import '../transactions/providers/transaction_list_providers.dart'
     show transactionListItemsProvider;
 
-// NEW: extracted widgets
-
 import 'widgets/account_picker_sheet.dart';
 import 'widgets/period_picker_sheet.dart';
 import 'widgets/share_account_dialog.dart';
+
+import 'package:money_pulse/presentation/shared/formatters.dart';
 
 class HomePage extends ConsumerStatefulWidget {
   const HomePage({super.key});
@@ -72,7 +69,6 @@ class _HomePageState extends ConsumerState<HomePage> {
 
   Future<void> _showAccountPicker() async {
     if (!mounted) return;
-
     final picked = await showAccountPickerSheet(
       context: context,
       accountsFuture: ref
@@ -81,7 +77,6 @@ class _HomePageState extends ConsumerState<HomePage> {
           .then((_) => ref.read(accountRepoProvider).findAllActive()),
       selectedAccountId: ref.read(selectedAccountIdProvider),
     );
-
     if (picked != null) {
       ref.read(selectedAccountIdProvider.notifier).state = picked.id;
       final prefs = await SharedPreferences.getInstance();
@@ -141,7 +136,7 @@ class _HomePageState extends ConsumerState<HomePage> {
                   style: Theme.of(context).textTheme.titleLarge,
                 ),
                 const SizedBox(height: 2),
-                const Text('...', style: TextStyle(fontSize: 12)),
+                const Text('…', style: TextStyle(fontSize: 12)),
               ],
             ),
             error: (_, __) => Column(
@@ -153,7 +148,7 @@ class _HomePageState extends ConsumerState<HomePage> {
                   style: Theme.of(context).textTheme.titleLarge,
                 ),
                 const SizedBox(height: 2),
-                const Text('Account', style: TextStyle(fontSize: 12)),
+                const Text('Compte', style: TextStyle(fontSize: 12)),
               ],
             ),
             data: (acc) => Column(
@@ -169,7 +164,7 @@ class _HomePageState extends ConsumerState<HomePage> {
                   mainAxisSize: MainAxisSize.min,
                   children: [
                     Text(
-                      acc?.code ?? 'Account',
+                      acc?.code ?? 'Compte',
                       style: const TextStyle(fontSize: 12),
                     ),
                     const SizedBox(width: 4),
@@ -183,7 +178,7 @@ class _HomePageState extends ConsumerState<HomePage> {
         actions: [
           if (pageIdx == 0)
             PopupMenuButton<String>(
-              tooltip: 'More',
+              tooltip: 'Plus',
               onSelected: (action) async {
                 switch (action) {
                   case 'search':
@@ -208,41 +203,36 @@ class _HomePageState extends ConsumerState<HomePage> {
                       }
                     }
                     break;
-
                   case 'period':
                     await _showPeriodSheet();
                     break;
-
                   case 'changeAccount':
                     await _showAccountPicker();
                     break;
-
                   case 'sync':
                     if (!mounted) break;
                     ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(content: Text('Sync started… (demo)')),
+                      const SnackBar(
+                        content: Text('Synchronisation démarrée…'),
+                      ),
                     );
                     await Future.delayed(const Duration(milliseconds: 800));
                     if (!mounted) break;
                     ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(content: Text('Sync complete')),
+                      const SnackBar(content: Text('Synchronisation terminée')),
                     );
                     break;
-
                   case 'share':
                     final acc = await ref.read(selectedAccountProvider.future);
                     if (!mounted || acc == null) break;
                     await _showShareDialog(acc);
                     break;
-
                   case 'settings':
                     if (!mounted) break;
                     await Navigator.of(context).push(
                       MaterialPageRoute(builder: (_) => const SettingsPage()),
                     );
                     break;
-
-                  // Manage categories / accounts
                   case 'manageCategories':
                     if (!mounted) break;
                     await Navigator.of(context).push(
@@ -251,7 +241,6 @@ class _HomePageState extends ConsumerState<HomePage> {
                       ),
                     );
                     break;
-
                   case 'manageAccounts':
                     if (!mounted) break;
                     await Navigator.of(context).push(
@@ -265,7 +254,7 @@ class _HomePageState extends ConsumerState<HomePage> {
                   value: 'search',
                   child: ListTile(
                     leading: Icon(Icons.search),
-                    title: Text('Search'),
+                    title: Text('Rechercher'),
                   ),
                 ),
                 PopupMenuDivider(),
@@ -273,28 +262,28 @@ class _HomePageState extends ConsumerState<HomePage> {
                   value: 'period',
                   child: ListTile(
                     leading: Icon(Icons.filter_alt),
-                    title: Text('Select period'),
+                    title: Text('Sélectionner la période'),
                   ),
                 ),
                 PopupMenuItem(
                   value: 'changeAccount',
                   child: ListTile(
                     leading: Icon(Icons.account_balance_wallet),
-                    title: Text('Change account'),
+                    title: Text('Changer de compte'),
                   ),
                 ),
                 PopupMenuItem(
                   value: 'sync',
                   child: ListTile(
                     leading: Icon(Icons.sync),
-                    title: Text('Sync transactions'),
+                    title: Text('Synchroniser les transactions'),
                   ),
                 ),
                 PopupMenuItem(
                   value: 'share',
                   child: ListTile(
                     leading: Icon(Icons.ios_share),
-                    title: Text('Share account'),
+                    title: Text('Partager le compte'),
                   ),
                 ),
                 PopupMenuDivider(),
@@ -302,14 +291,14 @@ class _HomePageState extends ConsumerState<HomePage> {
                   value: 'manageCategories',
                   child: ListTile(
                     leading: Icon(Icons.category_outlined),
-                    title: Text('Categories'),
+                    title: Text('Catégories'),
                   ),
                 ),
                 PopupMenuItem(
                   value: 'manageAccounts',
                   child: ListTile(
                     leading: Icon(Icons.account_balance_wallet_outlined),
-                    title: Text('Accounts'),
+                    title: Text('Comptes'),
                   ),
                 ),
                 PopupMenuDivider(),
@@ -317,7 +306,7 @@ class _HomePageState extends ConsumerState<HomePage> {
                   value: 'settings',
                   child: ListTile(
                     leading: Icon(Icons.settings),
-                    title: Text('Settings'),
+                    title: Text('Paramètres'),
                   ),
                 ),
               ],
@@ -326,7 +315,7 @@ class _HomePageState extends ConsumerState<HomePage> {
       ),
       body: IndexedStack(
         index: pageIdx,
-        children: const [TransactionListPage(), SettingsPage()],
+        children: const [TransactionListPage(), AccountPage()],
       ),
       bottomNavigationBar: NavigationBar(
         labelBehavior: NavigationDestinationLabelBehavior.onlyShowSelected,
@@ -340,9 +329,9 @@ class _HomePageState extends ConsumerState<HomePage> {
           NavigationDestination(
             icon: Icon(Icons.add_circle, size: 36),
             selectedIcon: Icon(Icons.add_circle, size: 36),
-            label: 'Add',
+            label: 'Ajouter',
           ),
-          NavigationDestination(icon: Icon(Icons.person), label: 'COMPTE'),
+          NavigationDestination(icon: Icon(Icons.person), label: 'Compte'),
         ],
       ),
     );

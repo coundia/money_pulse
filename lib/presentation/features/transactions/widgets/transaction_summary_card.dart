@@ -1,17 +1,17 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:money_pulse/presentation/shared/formatters.dart';
 
 class TransactionSummaryCard extends StatelessWidget {
   final String periodLabel;
   final VoidCallback onPrev;
   final VoidCallback onNext;
   final VoidCallback onTapPeriod;
-  final String expenseText;
-  final String incomeText;
-  final String netText;
-  final bool netPositive;
+  final int expenseCents;
+  final int incomeCents;
+  final int netCents;
   final VoidCallback onOpenReport;
-  final VoidCallback onOpenSettings; // NEW
+  final VoidCallback onOpenSettings;
   final VoidCallback? onAddExpense;
   final VoidCallback? onAddIncome;
 
@@ -21,18 +21,23 @@ class TransactionSummaryCard extends StatelessWidget {
     required this.onPrev,
     required this.onNext,
     required this.onTapPeriod,
-    required this.expenseText,
-    required this.incomeText,
-    required this.netText,
-    required this.netPositive,
+    required this.expenseCents,
+    required this.incomeCents,
+    required this.netCents,
     required this.onOpenReport,
-    required this.onOpenSettings, // NEW
+    required this.onOpenSettings,
     this.onAddExpense,
     this.onAddIncome,
   });
 
   @override
   Widget build(BuildContext context) {
+    final expenseText = '−${Formatters.amountFromCents(expenseCents)}';
+    final incomeText = '+${Formatters.amountFromCents(incomeCents)}';
+    final netIsPositive = netCents >= 0;
+    final netText =
+        '${netIsPositive ? '+' : '−'}${Formatters.amountFromCents(netCents.abs())}';
+
     return Card(
       elevation: 0,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
@@ -43,7 +48,7 @@ class TransactionSummaryCard extends StatelessWidget {
             Row(
               children: [
                 IconButton(
-                  tooltip: 'Previous',
+                  tooltip: 'Précédent',
                   icon: const Icon(Icons.chevron_left),
                   onPressed: onPrev,
                 ),
@@ -79,33 +84,31 @@ class TransactionSummaryCard extends StatelessWidget {
                   ),
                 ),
                 IconButton(
-                  tooltip: 'Next',
+                  tooltip: 'Suivant',
                   icon: const Icon(Icons.chevron_right),
                   onPressed: onNext,
                 ),
               ],
             ),
             const SizedBox(height: 8),
-            // Stats + quick actions
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceEvenly,
               children: [
                 IconButton(
-                  // NEW
-                  tooltip: 'Settings',
+                  tooltip: 'Paramètres',
                   icon: const Icon(Icons.settings_outlined),
                   onPressed: onOpenSettings,
                 ),
-                _summaryText(context, 'Expense', expenseText, Colors.red),
-                _summaryText(context, 'Income', incomeText, Colors.green),
+                _summaryText(context, 'Dépenses', expenseText, Colors.red),
+                _summaryText(context, 'Revenus', incomeText, Colors.green),
                 _summaryText(
                   context,
                   'Net',
                   netText,
-                  netPositive ? Colors.green : Colors.red,
+                  netIsPositive ? Colors.green : Colors.red,
                 ),
                 IconButton(
-                  tooltip: 'Report',
+                  tooltip: 'Rapport',
                   icon: const Icon(Icons.pie_chart),
                   onPressed: onOpenReport,
                 ),
@@ -158,14 +161,14 @@ class _ActionButtonsRow extends StatelessWidget {
         final isNarrow = c.maxWidth < 360;
         final children = <Widget>[
           _ActionButton(
-            label: 'Add expense',
+            label: 'Ajouter dépense',
             icon: Icons.remove_circle_outline,
             tone: Colors.red,
             onPressed: onAddExpense,
           ),
           SizedBox(width: isNarrow ? 0 : 12, height: isNarrow ? 12 : 0),
           _ActionButton(
-            label: 'Add income',
+            label: 'Ajouter revenu',
             icon: Icons.add_circle_outline,
             tone: Colors.green,
             onPressed: onAddIncome,

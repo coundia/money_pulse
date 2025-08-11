@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
-import 'package:intl/intl.dart';
 import 'package:money_pulse/domain/transactions/entities/transaction_entry.dart';
 import 'package:money_pulse/presentation/features/transactions/transaction_form_sheet.dart';
+import 'package:money_pulse/presentation/shared/formatters.dart';
 import 'package:money_pulse/presentation/widgets/right_drawer.dart';
 import 'transaction_detail_view.dart';
 
@@ -23,10 +23,8 @@ class TransactionTile extends StatelessWidget {
   Widget build(BuildContext context) {
     final isDebit = entry.typeEntry == 'DEBIT';
     final sign = isDebit ? '-' : '+';
-    final amount = NumberFormat.decimalPattern(
-      'fr_FR',
-    ).format(entry.amount / 100);
-    final time = DateFormat.Hm().format(entry.dateTransaction);
+    final amount = Formatters.amountFromCents(entry.amount);
+    final time = Formatters.timeHm(entry.dateTransaction);
     final color = isDebit ? Colors.red : Colors.green;
 
     return Dismissible(

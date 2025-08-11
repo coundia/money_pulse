@@ -1,5 +1,6 @@
 import 'package:flutter/widgets.dart';
 import 'package:intl/intl.dart';
+import 'package:money_pulse/presentation/shared/formatters.dart';
 
 class MoneyText extends StatelessWidget {
   final int amountCents;
@@ -19,7 +20,7 @@ class MoneyText extends StatelessWidget {
       decimalDigits: 0,
       symbol: '',
     );
-    final v = amountCents ~/ 100;
+    final v = Formatters.amountFromCents(amountCents);
     return Text('$v $currency', style: style);
   }
 }
