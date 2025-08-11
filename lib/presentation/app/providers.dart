@@ -14,7 +14,6 @@ import 'package:money_pulse/application/usecases/ensure_default_account_usecase.
 import 'package:money_pulse/application/usecases/seed_default_categories_usecase.dart';
 import 'package:money_pulse/application/usecases/quick_add_transaction_usecase.dart';
 
-import 'package:money_pulse/domain/accounts/entities/account.dart';
 import 'package:money_pulse/domain/categories/entities/category.dart';
 import 'package:money_pulse/domain/transactions/entities/transaction_entry.dart';
 

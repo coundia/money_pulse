@@ -3,12 +3,12 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:uuid/uuid.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:intl/intl.dart';
 import 'package:money_pulse/presentation/app/providers.dart';
 import 'package:money_pulse/presentation/app/account_selection.dart';
 import 'package:money_pulse/domain/accounts/entities/account.dart';
 import 'package:money_pulse/domain/accounts/repositories/account_repository.dart';
 import 'package:money_pulse/presentation/widgets/right_drawer.dart';
+import 'package:money_pulse/presentation/shared/formatters.dart';
 import 'widgets/account_tile.dart';
 import 'widgets/account_context_menu.dart';
 
@@ -27,9 +27,7 @@ class _AccountPageState extends ConsumerState<AccountPage> {
   void initState() {
     super.initState();
     _searchCtrl.addListener(() {
-      setState(() {
-        _query = _searchCtrl.text.trim().toLowerCase();
-      });
+      setState(() => _query = _searchCtrl.text.trim().toLowerCase());
     });
   }
 
@@ -47,24 +45,12 @@ class _AccountPageState extends ConsumerState<AccountPage> {
     return v.isEmpty ? null : v;
   }
 
-  int _decimalDigits(String? code) {
-    final c = code?.toUpperCase() ?? '';
-    const zeros = {'XOF', 'XAF', 'JPY', 'KRW'};
-    return zeros.contains(c) ? 0 : 2;
-  }
-
   String _fmtMoney(int cents, String? code) {
-    final amount = cents / 100;
-    final digits = _decimalDigits(code);
-    final fmt = NumberFormat.currency(
-      name: code ?? 'XOF',
-      decimalDigits: digits,
-    );
-    return fmt.format(amount);
+    final a = Formatters.amountFromCents(cents);
+    return code == null ? a : '$a $code';
   }
 
-  String _fmtDate(DateTime? d) =>
-      d == null ? '-' : DateFormat.yMMMd().add_Hm().format(d);
+  String _fmtDate(DateTime? d) => d == null ? '—' : Formatters.dateFull(d);
 
   Future<void> _addOrEdit({Account? existing}) async {
     final result = await showRightDrawer<_AccountFormResult>(
@@ -118,25 +104,29 @@ class _AccountPageState extends ConsumerState<AccountPage> {
     ref.read(selectedAccountIdProvider.notifier).state = acc.id;
     if (mounted) setState(() {});
     if (!mounted) return;
-    ScaffoldMessenger.of(
-      context,
-    ).showSnackBar(SnackBar(content: Text('“${acc.code}” is now default')));
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text('« ${acc.code} » est désormais le compte par défaut'),
+      ),
+    );
   }
 
   Future<void> _delete(Account acc) async {
     final ok = await showDialog<bool>(
       context: context,
       builder: (_) => AlertDialog(
-        title: const Text('Delete account?'),
-        content: Text('This will move “${acc.code ?? 'Account'}” to trash.'),
+        title: const Text('Supprimer le compte ?'),
+        content: Text(
+          '« ${acc.code ?? 'Compte'} » sera déplacé dans la corbeille.',
+        ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context, false),
-            child: const Text('Cancel'),
+            child: const Text('Annuler'),
           ),
           FilledButton(
             onPressed: () => Navigator.pop(context, true),
-            child: const Text('Delete'),
+            child: const Text('Supprimer'),
           ),
         ],
       ),
@@ -148,11 +138,11 @@ class _AccountPageState extends ConsumerState<AccountPage> {
 
   Future<void> _share(Account a) async {
     final text =
-        'Account: ${a.code ?? '-'}\nBalance: ${_fmtMoney(a.balance, a.currency)}\nCurrency: ${a.currency ?? '-'}\nUpdated: ${_fmtDate(a.updatedAt)}';
+        'Compte: ${a.code ?? '—'}\nSolde: ${_fmtMoney(a.balance, a.currency)}\nDevise: ${a.currency ?? '—'}\nMis à jour: ${_fmtDate(a.updatedAt)}';
     await Clipboard.setData(ClipboardData(text: text));
     if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Details copied to clipboard')),
+      const SnackBar(content: Text('Détails copiés dans le presse‑papiers')),
     );
   }
 
@@ -198,7 +188,7 @@ class _AccountPageState extends ConsumerState<AccountPage> {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         const SizedBox(height: 8),
-        Text('Accounts', style: Theme.of(context).textTheme.headlineSmall),
+        Text('Comptes', style: Theme.of(context).textTheme.headlineSmall),
         const SizedBox(height: 8),
         Wrap(
           spacing: 8,
@@ -206,7 +196,9 @@ class _AccountPageState extends ConsumerState<AccountPage> {
           children: currencyGroups.entries
               .map(
                 (e) => Chip(
-                  label: Text(_fmtMoney(e.value, e.key)),
+                  label: Text(
+                    '${Formatters.amountFromCents(e.value)} ${e.key}',
+                  ),
                   avatar: const Icon(
                     Icons.account_balance_wallet_outlined,
                     size: 18,
@@ -219,7 +211,7 @@ class _AccountPageState extends ConsumerState<AccountPage> {
         TextField(
           controller: _searchCtrl,
           decoration: InputDecoration(
-            hintText: 'Search by code, currency, description',
+            hintText: 'Rechercher par code, devise, description',
             prefixIcon: const Icon(Icons.search),
             border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
             isDense: true,
@@ -251,27 +243,27 @@ class _AccountPageState extends ConsumerState<AccountPage> {
     await showDialog<void>(
       context: context,
       builder: (_) => AlertDialog(
-        title: const Text('Account details'),
+        title: const Text('Détails du compte'),
         content: SingleChildScrollView(
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              _kv('Code', a.code ?? '-'),
-              _kv('Description', a.description ?? '-'),
-              _kv('Currency', a.currency ?? '-'),
+              _kv('Code', a.code ?? '—'),
+              _kv('Description', a.description ?? '—'),
+              _kv('Devise', a.currency ?? '—'),
               const SizedBox(height: 8),
-              _kv('Balance', _fmtMoney(a.balance, a.currency)),
-              _kv('Previous balance', _fmtMoney(a.balancePrev, a.currency)),
-              _kv('Blocked balance', _fmtMoney(a.balanceBlocked, a.currency)),
+              _kv('Solde', _fmtMoney(a.balance, a.currency)),
+              _kv('Solde précédent', _fmtMoney(a.balancePrev, a.currency)),
+              _kv('Solde bloqué', _fmtMoney(a.balanceBlocked, a.currency)),
               const SizedBox(height: 8),
-              _kv('Default', _isDefault(a) ? 'Yes' : 'No'),
-              _kv('Status', a.status ?? '-'),
-              _kv('Remote ID', a.remoteId ?? '-'),
+              _kv('Par défaut', _isDefault(a) ? 'Oui' : 'Non'),
+              _kv('Statut', a.status ?? '—'),
+              _kv('ID distant', a.remoteId ?? '—'),
               const SizedBox(height: 8),
-              _kv('Created at', _fmtDate(a.createdAt)),
-              _kv('Updated at', _fmtDate(a.updatedAt)),
-              _kv('Deleted at', _fmtDate(a.deletedAt)),
-              _kv('Sync at', _fmtDate(a.syncAt)),
+              _kv('Créé le', _fmtDate(a.createdAt)),
+              _kv('Mis à jour le', _fmtDate(a.updatedAt)),
+              _kv('Supprimé le', _fmtDate(a.deletedAt)),
+              _kv('Synchronisé le', _fmtDate(a.syncAt)),
               _kv('Version', '${a.version}'),
               const SizedBox(height: 8),
               const Text('ID', style: TextStyle(fontWeight: FontWeight.w600)),
@@ -286,11 +278,11 @@ class _AccountPageState extends ConsumerState<AccountPage> {
               Navigator.pop(context);
               _addOrEdit(existing: a);
             },
-            child: const Text('Edit'),
+            child: const Text('Modifier'),
           ),
           FilledButton(
             onPressed: () => Navigator.pop(context),
-            child: const Text('Close'),
+            child: const Text('Fermer'),
           ),
         ],
       ),
@@ -308,9 +300,7 @@ class _AccountPageState extends ConsumerState<AccountPage> {
         final body = snap.connectionState == ConnectionState.waiting
             ? const Center(child: CircularProgressIndicator())
             : RefreshIndicator(
-                onRefresh: () async {
-                  setState(() {});
-                },
+                onRefresh: () async => setState(() {}),
                 child: items.isEmpty
                     ? _empty()
                     : ListView.separated(
@@ -329,6 +319,10 @@ class _AccountPageState extends ConsumerState<AccountPage> {
                                 onEdit: () => _addOrEdit(existing: a),
                                 onDelete: () => _delete(a),
                                 onShare: () => _share(a),
+                                accountLabel: a.code,
+                                balanceCents: a.balance,
+                                currency: a.currency,
+                                updatedAt: a.updatedAt,
                               );
                             },
                             onSecondaryTapDown: (d) {
@@ -341,13 +335,18 @@ class _AccountPageState extends ConsumerState<AccountPage> {
                                 onEdit: () => _addOrEdit(existing: a),
                                 onDelete: () => _delete(a),
                                 onShare: () => _share(a),
+                                accountLabel: a.code,
+                                balanceCents: a.balance,
+                                currency: a.currency,
+                                updatedAt: a.updatedAt,
                               );
                             },
                             child: AccountTile(
                               account: a,
                               isDefault: _isDefault(a),
                               balanceText: _fmtMoney(a.balance, a.currency),
-                              updatedAtText: 'Updated ${_fmtDate(a.updatedAt)}',
+                              updatedAtText:
+                                  'Mis à jour ${_fmtDate(a.updatedAt)}',
                               onView: () => _view(a),
                               onMakeDefault: null,
                               onEdit: () => _addOrEdit(existing: a),
@@ -364,11 +363,12 @@ class _AccountPageState extends ConsumerState<AccountPage> {
 
         return Scaffold(
           appBar: AppBar(
-            title: const Text('Accounts'),
+            title: const Text('Comptes'),
             actions: [
               IconButton(
                 onPressed: () => _addOrEdit(),
                 icon: const Icon(Icons.add),
+                tooltip: 'Ajouter un compte',
               ),
               PopupMenuButton<String>(
                 onSelected: (v) {
@@ -379,7 +379,7 @@ class _AccountPageState extends ConsumerState<AccountPage> {
                     value: 'refresh',
                     child: ListTile(
                       leading: Icon(Icons.refresh),
-                      title: Text('Refresh'),
+                      title: Text('Rafraîchir'),
                     ),
                   ),
                 ],
@@ -389,7 +389,7 @@ class _AccountPageState extends ConsumerState<AccountPage> {
           floatingActionButton: FloatingActionButton.extended(
             onPressed: () => _addOrEdit(),
             icon: const Icon(Icons.add),
-            label: const Text('Add account'),
+            label: const Text('Ajouter un compte'),
           ),
           body: body,
         );
@@ -407,16 +407,16 @@ class _AccountPageState extends ConsumerState<AccountPage> {
             const Icon(Icons.account_balance_outlined, size: 72),
             const SizedBox(height: 12),
             const Text(
-              'No accounts',
+              'Aucun compte',
               style: TextStyle(fontSize: 18, fontWeight: FontWeight.w600),
             ),
             const SizedBox(height: 6),
-            const Text('Create your first account to start tracking balances.'),
+            const Text('Créez votre premier compte pour suivre vos soldes.'),
             const SizedBox(height: 16),
             FilledButton.icon(
               onPressed: () => _addOrEdit(),
               icon: const Icon(Icons.add),
-              label: const Text('Add account'),
+              label: const Text('Ajouter un compte'),
             ),
           ],
         ),
@@ -484,9 +484,12 @@ class _AccountFormPanelState extends State<_AccountFormPanel> {
           icon: const Icon(Icons.close),
           onPressed: () => Navigator.pop(context),
         ),
-        title: Text(isEdit ? 'Edit account' : 'Add account'),
+        title: Text(isEdit ? 'Modifier le compte' : 'Ajouter un compte'),
         actions: [
-          TextButton(onPressed: _save, child: Text(isEdit ? 'Save' : 'Add')),
+          TextButton(
+            onPressed: _save,
+            child: Text(isEdit ? 'Enregistrer' : 'Ajouter'),
+          ),
         ],
       ),
       body: Form(
@@ -501,7 +504,7 @@ class _AccountFormPanelState extends State<_AccountFormPanel> {
                 border: OutlineInputBorder(),
               ),
               validator: (v) =>
-                  (v == null || v.trim().isEmpty) ? 'Required' : null,
+                  (v == null || v.trim().isEmpty) ? 'Obligatoire' : null,
               autofocus: true,
             ),
             const SizedBox(height: 10),
@@ -516,7 +519,7 @@ class _AccountFormPanelState extends State<_AccountFormPanel> {
             TextFormField(
               controller: _curr,
               decoration: const InputDecoration(
-                labelText: 'Currency (e.g. XOF)',
+                labelText: 'Devise (ex. XOF)',
                 border: OutlineInputBorder(),
               ),
             ),

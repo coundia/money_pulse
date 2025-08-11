@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:intl/intl.dart';
 import 'package:money_pulse/presentation/features/categories/category_list_page.dart';
 import 'package:money_pulse/presentation/features/accounts/account_page.dart';
+import 'package:money_pulse/presentation/shared/formatters.dart';
 
 class SettingsPage extends ConsumerWidget {
   const SettingsPage({super.key});
@@ -10,14 +10,14 @@ class SettingsPage extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     return Scaffold(
-      appBar: AppBar(title: const Text('Settings')),
+      appBar: AppBar(title: const Text('Paramètres')),
       body: ListView(
         children: [
-          const _SectionHeader('Management'),
+          const _SectionHeader('Gestion'),
           ListTile(
             leading: const Icon(Icons.category_outlined),
-            title: const Text('Manage categories'),
-            subtitle: const Text('Create, edit, delete categories'),
+            title: const Text('Gérer les catégories'),
+            subtitle: const Text('Créer, modifier, supprimer des catégories'),
             trailing: const Icon(Icons.chevron_right),
             onTap: () => Navigator.of(
               context,
@@ -25,19 +25,21 @@ class SettingsPage extends ConsumerWidget {
           ),
           ListTile(
             leading: const Icon(Icons.account_balance_wallet_outlined),
-            title: const Text('Manage accounts'),
-            subtitle: const Text('Add, set default, edit, delete'),
+            title: const Text('Gérer les comptes'),
+            subtitle: const Text(
+              'Ajouter, définir par défaut, modifier, supprimer',
+            ),
             trailing: const Icon(Icons.chevron_right),
             onTap: () => Navigator.of(
               context,
             ).push(MaterialPageRoute(builder: (_) => const AccountPage())),
           ),
           const Divider(height: 24),
-          const _SectionHeader('About'),
+          const _SectionHeader('À propos'),
           ListTile(
             leading: const Icon(Icons.info_outline),
-            title: const Text('App version'),
-            subtitle: Text(DateFormat.yMMMd().format(DateTime.now())),
+            title: const Text('Version de l’application'),
+            subtitle: Text(Formatters.dateFull(DateTime.now())),
           ),
         ],
       ),
