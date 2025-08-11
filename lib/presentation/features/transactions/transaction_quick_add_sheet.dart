@@ -4,7 +4,6 @@ import 'package:intl/intl.dart';
 import 'package:money_pulse/presentation/app/providers.dart';
 import 'package:money_pulse/domain/categories/repositories/category_repository.dart';
 import 'package:money_pulse/domain/categories/entities/category.dart';
-
 import '../../app/account_selection.dart';
 import 'providers/transaction_list_providers.dart';
 
@@ -62,7 +61,6 @@ class _TransactionQuickAddSheetState
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              // --- Header with close button ---
               Row(
                 children: [
                   const SizedBox(width: 8),
@@ -79,7 +77,6 @@ class _TransactionQuickAddSheetState
                 ],
               ),
               const SizedBox(height: 4),
-              // Optional grab handle for nicer sheet UX
               Container(
                 width: 36,
                 height: 4,
@@ -91,8 +88,6 @@ class _TransactionQuickAddSheetState
                 ),
               ),
               const SizedBox(height: 12),
-
-              // ---------------------------------
               SegmentedButton<bool>(
                 segments: const [
                   ButtonSegment(value: true, label: Text('Expense')),
@@ -159,7 +154,6 @@ class _TransactionQuickAddSheetState
               FilledButton.icon(
                 onPressed: () async {
                   if (!formKey.currentState!.validate()) return;
-
                   final accountId = ref.read(selectedAccountIdProvider);
                   if (accountId == null || accountId.isEmpty) {
                     if (!mounted) return;
@@ -168,9 +162,7 @@ class _TransactionQuickAddSheetState
                     );
                     return;
                   }
-
                   final cents = _toCents(amountCtrl.text);
-
                   await ref
                       .read(quickAddTransactionUseCaseProvider)
                       .execute(
@@ -183,13 +175,12 @@ class _TransactionQuickAddSheetState
                         categoryId: categoryId,
                         dateTransaction: when,
                       );
-
                   await ref.read(transactionsProvider.notifier).load();
                   await ref.read(balanceProvider.notifier).load();
-
+                  ref.invalidate(transactionListItemsProvider);
+                  ref.invalidate(selectedAccountProvider);
                   if (mounted) Navigator.of(context).pop(true);
                 },
-
                 icon: const Icon(Icons.check),
                 label: const Text('Save'),
               ),
