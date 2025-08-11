@@ -380,7 +380,7 @@ class _HomePageState extends ConsumerState<HomePage> {
         index: pageIdx,
         children: const [TransactionListPage(), SettingsPage()],
       ),
-      bottomNavigationBar: NavigationBar(
+      /*bottomNavigationBar: NavigationBar(
         labelBehavior: NavigationDestinationLabelBehavior.onlyShowSelected,
         selectedIndex: _navSelectedIndex,
         onDestinationSelected: _onDestinationSelected,
@@ -396,7 +396,7 @@ class _HomePageState extends ConsumerState<HomePage> {
           ),
           NavigationDestination(icon: Icon(Icons.person), label: 'COMPTE'),
         ],
-      ),
+      ),*/
     );
   }
 }

@@ -18,67 +18,72 @@ class TransactionListPage extends ConsumerWidget {
     final state = ref.watch(transactionListStateProvider);
     final itemsAsync = ref.watch(transactionListItemsProvider);
 
-    return itemsAsync.when(
-      loading: () => const Center(child: CircularProgressIndicator()),
-      error: (e, _) => Center(child: Text('$e')),
-      data: (items) {
-        final groups = groupByDay(items);
-        final exp = items
-            .where((e) => e.typeEntry == 'DEBIT')
-            .fold<int>(0, (p, e) => p + e.amount);
-        final inc = items
-            .where((e) => e.typeEntry == 'CREDIT')
-            .fold<int>(0, (p, e) => p + e.amount);
-        final net = inc - exp;
+    return Scaffold(
+      body: itemsAsync.when(
+        loading: () => const Center(child: CircularProgressIndicator()),
+        error: (e, _) => Center(child: Text('$e')),
+        data: (items) {
+          final groups = groupByDay(items);
+          final exp = items
+              .where((e) => e.typeEntry == 'DEBIT')
+              .fold<int>(0, (p, e) => p + e.amount);
+          final inc = items
+              .where((e) => e.typeEntry == 'CREDIT')
+              .fold<int>(0, (p, e) => p + e.amount);
+          final net = inc - exp;
 
-        final children = <Widget>[
-          TransactionSummaryCard(
-            periodLabel: state.label,
-            onPrev: () =>
-                ref.read(transactionListStateProvider.notifier).prev(),
-            onNext: () =>
-                ref.read(transactionListStateProvider.notifier).next(),
-            onTapPeriod: () => _openAnchorPicker(context, ref),
-            expenseText: '-${exp ~/ 100}',
-            incomeText: '+${inc ~/ 100}',
-            netText: '${net >= 0 ? '+' : ''}${net ~/ 100}',
-            netPositive: net >= 0,
-            onOpenReport: () {
-              Navigator.of(
-                context,
-              ).push(MaterialPageRoute(builder: (_) => const ReportPage()));
-            },
-          ),
-          const SizedBox(height: 8),
-          if (items.isEmpty)
-            const Padding(
-              padding: EdgeInsets.all(32.0),
-              child: Center(child: Text('No transactions for this period')),
-            )
-          else ...[
-            for (final g in groups) ...[
-              DayHeader(group: g),
-              ...g.items.map(
-                (e) => TransactionTile(
-                  entry: e,
-                  onDeleted: () async {
-                    await ref.read(transactionRepoProvider).softDelete(e.id);
-                    await ref.read(balanceProvider.notifier).load();
-                    await ref.read(transactionsProvider.notifier).load();
-                  },
-                  onUpdated: () async {
-                    await ref.read(balanceProvider.notifier).load();
-                    await ref.read(transactionsProvider.notifier).load();
-                  },
+          final children = <Widget>[
+            TransactionSummaryCard(
+              periodLabel: state.label,
+              onPrev: () =>
+                  ref.read(transactionListStateProvider.notifier).prev(),
+              onNext: () =>
+                  ref.read(transactionListStateProvider.notifier).next(),
+              onTapPeriod: () => _openAnchorPicker(context, ref),
+              expenseText: '-${exp ~/ 100}',
+              incomeText: '+${inc ~/ 100}',
+              netText: '${net >= 0 ? '+' : ''}${net ~/ 100}',
+              netPositive: net >= 0,
+              onOpenReport: () {
+                Navigator.of(
+                  context,
+                ).push(MaterialPageRoute(builder: (_) => const ReportPage()));
+              },
+            ),
+            const SizedBox(height: 8),
+            if (items.isEmpty)
+              const Padding(
+                padding: EdgeInsets.all(32.0),
+                child: Center(child: Text('No transactions for this period')),
+              )
+            else ...[
+              for (final g in groups) ...[
+                DayHeader(group: g),
+                ...g.items.map(
+                  (e) => TransactionTile(
+                    entry: e,
+                    onDeleted: () async {
+                      await ref.read(transactionRepoProvider).softDelete(e.id);
+                      await ref.read(balanceProvider.notifier).load();
+                      await ref.read(transactionsProvider.notifier).load();
+                    },
+                    onUpdated: () async {
+                      await ref.read(balanceProvider.notifier).load();
+                      await ref.read(transactionsProvider.notifier).load();
+                    },
+                  ),
                 ),
-              ),
-              const SizedBox(height: 8),
+                const SizedBox(height: 8),
+              ],
             ],
-          ],
-        ];
+          ];
 
-        return ListView(padding: const EdgeInsets.all(12), children: children);
-      },
+          return ListView(
+            padding: const EdgeInsets.all(12),
+            children: children,
+          );
+        },
+      ),
     );
   }
 
