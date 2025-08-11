@@ -1,13 +1,14 @@
 import 'dart:async';
-import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:intl/intl.dart';
 import 'package:intl/date_symbol_data_local.dart';
 import 'package:sqflite/sqflite.dart';
 import 'package:money_pulse/infrastructure/db/app_database.dart';
 import 'package:money_pulse/presentation/app/app.dart';
 import 'package:money_pulse/presentation/app/providers.dart';
+import 'package:money_pulse/presentation/app/restart_app.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -24,7 +25,7 @@ Future<void> main() async {
   Intl.defaultLocale = 'fr_FR';
   await AppDatabase.I.init();
   runZonedGuarded(() {
-    runApp(const ProviderScope(child: Bootstrap()));
+    runApp(RestartApp(child: const ProviderScope(child: Bootstrap())));
   }, (error, stack) {});
 }
 
@@ -69,7 +70,7 @@ class _BootstrapState extends ConsumerState<Bootstrap> {
   Future<void> _resetDbAndRetry() async {
     await AppDatabase.I.recreate(version: 1);
     if (!mounted) return;
-    await _retry();
+    RestartApp.restart(context);
   }
 
   @override
@@ -81,9 +82,9 @@ class _BootstrapState extends ConsumerState<Bootstrap> {
           return MaterialApp(
             debugShowCheckedModeBanner: false,
             localizationsDelegates: const [
-              DefaultMaterialLocalizations.delegate,
-              DefaultWidgetsLocalizations.delegate,
-              DefaultCupertinoLocalizations.delegate,
+              GlobalMaterialLocalizations.delegate,
+              GlobalWidgetsLocalizations.delegate,
+              GlobalCupertinoLocalizations.delegate,
             ],
             supportedLocales: const [Locale('fr'), Locale('fr', 'FR')],
             home: const Scaffold(
@@ -95,9 +96,9 @@ class _BootstrapState extends ConsumerState<Bootstrap> {
           return MaterialApp(
             debugShowCheckedModeBanner: false,
             localizationsDelegates: const [
-              DefaultMaterialLocalizations.delegate,
-              DefaultWidgetsLocalizations.delegate,
-              DefaultCupertinoLocalizations.delegate,
+              GlobalMaterialLocalizations.delegate,
+              GlobalWidgetsLocalizations.delegate,
+              GlobalCupertinoLocalizations.delegate,
             ],
             supportedLocales: const [Locale('fr'), Locale('fr', 'FR')],
             home: _BootstrapErrorScreen(
@@ -107,7 +108,16 @@ class _BootstrapState extends ConsumerState<Bootstrap> {
             ),
           );
         }
-        return const AppRoot();
+        return MaterialApp(
+          debugShowCheckedModeBanner: false,
+          localizationsDelegates: const [
+            GlobalMaterialLocalizations.delegate,
+            GlobalWidgetsLocalizations.delegate,
+            GlobalCupertinoLocalizations.delegate,
+          ],
+          supportedLocales: const [Locale('fr'), Locale('fr', 'FR')],
+          home: const AppRoot(),
+        );
       },
     );
   }
