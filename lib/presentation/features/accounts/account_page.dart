@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:uuid/uuid.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -8,6 +9,8 @@ import 'package:money_pulse/presentation/app/account_selection.dart';
 import 'package:money_pulse/domain/accounts/entities/account.dart';
 import 'package:money_pulse/domain/accounts/repositories/account_repository.dart';
 import 'package:money_pulse/presentation/widgets/right_drawer.dart';
+import 'widgets/account_tile.dart';
+import 'widgets/account_context_menu.dart';
 
 class AccountPage extends ConsumerStatefulWidget {
   const AccountPage({super.key});
@@ -143,6 +146,16 @@ class _AccountPageState extends ConsumerState<AccountPage> {
     if (mounted) setState(() {});
   }
 
+  Future<void> _share(Account a) async {
+    final text =
+        'Account: ${a.code ?? '-'}\nBalance: ${_fmtMoney(a.balance, a.currency)}\nCurrency: ${a.currency ?? '-'}\nUpdated: ${_fmtDate(a.updatedAt)}';
+    await Clipboard.setData(ClipboardData(text: text));
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('Details copied to clipboard')),
+    );
+  }
+
   bool _isDefault(Account a) {
     final v = a.isDefault;
     if (v is bool) return v;
@@ -151,10 +164,11 @@ class _AccountPageState extends ConsumerState<AccountPage> {
   }
 
   List<Account> _filterAndSort(List<Account> items) {
+    final base = List<Account>.of(items);
     final q = _query;
     final filtered = q.isEmpty
-        ? items
-        : items.where((a) {
+        ? base
+        : base.where((a) {
             final s = [
               a.code ?? '',
               a.description ?? '',
@@ -216,33 +230,6 @@ class _AccountPageState extends ConsumerState<AccountPage> {
     );
   }
 
-  Widget _empty() {
-    return Center(
-      child: Padding(
-        padding: const EdgeInsets.all(24),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            const Icon(Icons.account_balance_outlined, size: 72),
-            const SizedBox(height: 12),
-            const Text(
-              'No accounts',
-              style: TextStyle(fontSize: 18, fontWeight: FontWeight.w600),
-            ),
-            const SizedBox(height: 6),
-            const Text('Create your first account to start tracking balances.'),
-            const SizedBox(height: 16),
-            FilledButton.icon(
-              onPressed: () => _addOrEdit(),
-              icon: const Icon(Icons.add),
-              label: const Text('Add account'),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
   Widget _kv(String k, String v) {
     return Padding(
       padding: const EdgeInsets.only(bottom: 6),
@@ -294,84 +281,18 @@ class _AccountPageState extends ConsumerState<AccountPage> {
           ),
         ),
         actions: [
+          TextButton(
+            onPressed: () {
+              Navigator.pop(context);
+              _addOrEdit(existing: a);
+            },
+            child: const Text('Edit'),
+          ),
           FilledButton(
             onPressed: () => Navigator.pop(context),
             child: const Text('Close'),
           ),
         ],
-      ),
-    );
-  }
-
-  Widget _tile(Account a) {
-    final isDefault = _isDefault(a);
-    final code = (a.code ?? '').trim();
-    final two = code.isEmpty
-        ? '?'
-        : (code.length >= 2 ? code.substring(0, 2) : code).toUpperCase();
-    final bal = _fmtMoney(a.balance, a.currency);
-    final sub = a.description?.trim().isNotEmpty == true
-        ? a.description!.trim()
-        : (a.currency ?? '-');
-    return InkWell(
-      onLongPress: () => _setDefault(a),
-      child: ListTile(
-        leading: CircleAvatar(child: Text(two)),
-        title: Row(
-          children: [
-            Expanded(child: Text(a.code ?? 'NA')),
-            if (isDefault)
-              Padding(
-                padding: const EdgeInsets.only(left: 8),
-                child: DecoratedBox(
-                  decoration: BoxDecoration(
-                    color: Theme.of(
-                      context,
-                    ).colorScheme.primary.withOpacity(0.12),
-                    borderRadius: BorderRadius.circular(6),
-                  ),
-                  child: Padding(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 8,
-                      vertical: 2,
-                    ),
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: const [
-                        Icon(Icons.star, size: 14),
-                        SizedBox(width: 4),
-                        Text(
-                          'Default',
-                          style: TextStyle(
-                            fontSize: 12,
-                            fontWeight: FontWeight.w600,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-              ),
-          ],
-        ),
-        subtitle: Text(sub),
-        trailing: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          crossAxisAlignment: CrossAxisAlignment.end,
-          children: [
-            Text(bal, style: const TextStyle(fontWeight: FontWeight.w600)),
-            const SizedBox(height: 2),
-            Text(
-              'Updated ${_fmtDate(a.updatedAt)}',
-              style: Theme.of(context).textTheme.bodySmall,
-            ),
-          ],
-        ),
-        onTap: () => _view(a),
-        selected: isDefault,
-        selectedTileColor: Theme.of(
-          context,
-        ).colorScheme.primary.withOpacity(0.06),
       ),
     );
   }
@@ -383,6 +304,64 @@ class _AccountPageState extends ConsumerState<AccountPage> {
       builder: (context, snap) {
         final items = snap.data ?? const <Account>[];
         final filtered = _filterAndSort(items);
+
+        final body = snap.connectionState == ConnectionState.waiting
+            ? const Center(child: CircularProgressIndicator())
+            : RefreshIndicator(
+                onRefresh: () async {
+                  setState(() {});
+                },
+                child: items.isEmpty
+                    ? _empty()
+                    : ListView.separated(
+                        padding: const EdgeInsets.fromLTRB(12, 12, 12, 120),
+                        itemBuilder: (_, i) {
+                          if (i == 0) return _header(items);
+                          final a = filtered[i - 1];
+                          return GestureDetector(
+                            onLongPressStart: (d) {
+                              showAccountContextMenu(
+                                context,
+                                d.globalPosition,
+                                canMakeDefault: !_isDefault(a),
+                                onView: () => _view(a),
+                                onMakeDefault: () => _setDefault(a),
+                                onEdit: () => _addOrEdit(existing: a),
+                                onDelete: () => _delete(a),
+                                onShare: () => _share(a),
+                              );
+                            },
+                            onSecondaryTapDown: (d) {
+                              showAccountContextMenu(
+                                context,
+                                d.globalPosition,
+                                canMakeDefault: !_isDefault(a),
+                                onView: () => _view(a),
+                                onMakeDefault: () => _setDefault(a),
+                                onEdit: () => _addOrEdit(existing: a),
+                                onDelete: () => _delete(a),
+                                onShare: () => _share(a),
+                              );
+                            },
+                            child: AccountTile(
+                              account: a,
+                              isDefault: _isDefault(a),
+                              balanceText: _fmtMoney(a.balance, a.currency),
+                              updatedAtText: 'Updated ${_fmtDate(a.updatedAt)}',
+                              onView: () => _view(a),
+                              onMakeDefault: null,
+                              onEdit: () => _addOrEdit(existing: a),
+                              onDelete: () => _delete(a),
+                            ),
+                          );
+                        },
+                        separatorBuilder: (_, i) => i == 0
+                            ? const SizedBox.shrink()
+                            : const Divider(height: 1),
+                        itemCount: filtered.isEmpty ? 1 : filtered.length + 1,
+                      ),
+              );
+
         return Scaffold(
           appBar: AppBar(
             title: const Text('Accounts'),
@@ -412,49 +391,36 @@ class _AccountPageState extends ConsumerState<AccountPage> {
             icon: const Icon(Icons.add),
             label: const Text('Add account'),
           ),
-          body: switch (snap.connectionState) {
-            ConnectionState.waiting => const Center(
-              child: CircularProgressIndicator(),
-            ),
-            _ => RefreshIndicator(
-              onRefresh: () async {
-                setState(() {});
-              },
-              child: items.isEmpty
-                  ? _empty()
-                  : ListView.separated(
-                      padding: const EdgeInsets.fromLTRB(12, 12, 12, 120),
-                      itemBuilder: (_, i) {
-                        if (i == 0) return _header(items);
-                        final a = filtered[i - 1];
-                        return Dismissible(
-                          key: ValueKey(a.id),
-                          direction: DismissDirection.endToStart,
-                          background: Container(
-                            alignment: Alignment.centerRight,
-                            padding: const EdgeInsets.symmetric(horizontal: 20),
-                            color: Colors.red,
-                            child: const Icon(
-                              Icons.delete,
-                              color: Colors.white,
-                            ),
-                          ),
-                          confirmDismiss: (_) async {
-                            await _delete(a);
-                            return false;
-                          },
-                          child: _tile(a),
-                        );
-                      },
-                      separatorBuilder: (_, i) => i == 0
-                          ? const SizedBox.shrink()
-                          : const Divider(height: 1),
-                      itemCount: filtered.isEmpty ? 1 : filtered.length + 1,
-                    ),
-            ),
-          },
+          body: body,
         );
       },
+    );
+  }
+
+  Widget _empty() {
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(24),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Icon(Icons.account_balance_outlined, size: 72),
+            const SizedBox(height: 12),
+            const Text(
+              'No accounts',
+              style: TextStyle(fontSize: 18, fontWeight: FontWeight.w600),
+            ),
+            const SizedBox(height: 6),
+            const Text('Create your first account to start tracking balances.'),
+            const SizedBox(height: 16),
+            FilledButton.icon(
+              onPressed: () => _addOrEdit(),
+              icon: const Icon(Icons.add),
+              label: const Text('Add account'),
+            ),
+          ],
+        ),
+      ),
     );
   }
 }

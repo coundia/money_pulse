@@ -3,6 +3,7 @@ cd money_pulse
  
 # install deps
 flutter pub add flutter_riverpod go_router sqflite path_provider uuid intl shared_preferences  path fl_chart
+flutter pub add share_plus
 
 mkdir -p assets/db
 mkdir -p lib/domain/accounts/entities lib/domain/accounts/repositories
