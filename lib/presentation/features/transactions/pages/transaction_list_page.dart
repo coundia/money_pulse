@@ -3,15 +3,18 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 import 'package:money_pulse/presentation/app/providers.dart';
 import 'package:money_pulse/presentation/widgets/right_drawer.dart';
+import 'package:money_pulse/domain/transactions/entities/transaction_entry.dart'; // NEW
 import '../../reports/report_page.dart';
-import '../../settings/settings_page.dart'; // NEW import
+import '../../settings/settings_page.dart';
 import '../controllers/transaction_list_controller.dart';
 import '../providers/transaction_list_providers.dart';
+import '../search/widgets/txn_search_cta.dart';
 import '../transaction_quick_add_sheet.dart';
 import '../utils/transaction_grouping.dart';
 import '../widgets/day_header.dart';
 import '../widgets/transaction_tile.dart';
 import '../widgets/transaction_summary_card.dart';
+import '../search/txn_search_delegate.dart'; // NEW (chemin basé sur ta structure)
 
 class TransactionListPage extends ConsumerWidget {
   const TransactionListPage({super.key});
@@ -26,11 +29,13 @@ class TransactionListPage extends ConsumerWidget {
         loading: () => const Center(child: CircularProgressIndicator()),
         error: (e, _) => Center(child: Text('$e')),
         data: (items) {
-          final groups = groupByDay(items);
-          final exp = items
+          // items est supposé être List<TransactionEntry>
+          final txns = items.cast<TransactionEntry>();
+          final groups = groupByDay(txns);
+          final exp = txns
               .where((e) => e.typeEntry == 'DEBIT')
               .fold<int>(0, (p, e) => p + e.amount);
-          final inc = items
+          final inc = txns
               .where((e) => e.typeEntry == 'CREDIT')
               .fold<int>(0, (p, e) => p + e.amount);
           final net = inc - exp;
@@ -53,7 +58,6 @@ class TransactionListPage extends ConsumerWidget {
                 ).push(MaterialPageRoute(builder: (_) => const ReportPage()));
               },
               onOpenSettings: () {
-                // NEW
                 Navigator.of(
                   context,
                 ).push(MaterialPageRoute(builder: (_) => const SettingsPage()));
@@ -62,7 +66,7 @@ class TransactionListPage extends ConsumerWidget {
               onAddIncome: () => _onAdd(context, ref, 'CREDIT'),
             ),
             const SizedBox(height: 8),
-            if (items.isEmpty)
+            if (txns.isEmpty)
               const Padding(
                 padding: EdgeInsets.all(32.0),
                 child: Center(child: Text('No transactions for this period')),
@@ -87,6 +91,8 @@ class TransactionListPage extends ConsumerWidget {
                 const SizedBox(height: 8),
               ],
             ],
+            // ⬇️ CTA Search en bas de la liste
+            TxnSearchCta(onTap: () => _openTxnSearch(context, txns)),
           ];
 
           return ListView(
@@ -96,6 +102,27 @@ class TransactionListPage extends ConsumerWidget {
         },
       ),
     );
+  }
+
+  Future<void> _openTxnSearch(
+    BuildContext context,
+    List<TransactionEntry> items,
+  ) async {
+    final result = await showSearch<TransactionEntry?>(
+      context: context,
+      delegate: TxnSearchDelegate(items),
+    );
+
+    if (result != null && context.mounted) {
+      // Ici tu peux ouvrir un détail, ou juste notifier
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            'Selected: ${result.description ?? result.code ?? result.id}',
+          ),
+        ),
+      );
+    }
   }
 
   Future<void> _openAnchorPicker(BuildContext context, WidgetRef ref) async {
