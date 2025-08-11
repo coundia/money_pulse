@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:money_pulse/presentation/app/providers.dart';
 import 'package:money_pulse/presentation/app/account_selection.dart';
 import 'package:money_pulse/presentation/widgets/money_text.dart';
@@ -12,9 +13,8 @@ import 'package:money_pulse/domain/transactions/entities/transaction_entry.dart'
 import 'package:money_pulse/presentation/features/transactions/providers/transaction_list_providers.dart';
 import 'package:money_pulse/presentation/features/transactions/search/txn_search_delegate.dart';
 import 'package:money_pulse/presentation/features/transactions/transaction_form_sheet.dart';
-import 'package:money_pulse/presentation/features/transactions/controllers/transaction_list_controller.dart';
-import 'package:money_pulse/presentation/features/transactions/models/transaction_filters.dart';
-import 'package:shared_preferences/shared_preferences.dart';
+import '../transactions/controllers/transaction_list_controller.dart';
+import '../transactions/models/transaction_filters.dart';
 import '../transactions/pages/transaction_list_page.dart';
 
 class HomePage extends ConsumerStatefulWidget {
@@ -31,11 +31,11 @@ class _HomePageState extends ConsumerState<HomePage> {
   void initState() {
     super.initState();
     Future.microtask(() async {
-      // Load base data
       await ref.read(transactionsProvider.notifier).load();
       await ref.read(categoriesProvider.notifier).load();
-
       await ref.read(ensureSelectedAccountProvider.future);
+      ref.invalidate(selectedAccountProvider);
+      ref.invalidate(transactionListItemsProvider);
     });
   }
 
@@ -49,18 +49,18 @@ class _HomePageState extends ConsumerState<HomePage> {
     if (ok == true) {
       await ref.read(transactionsProvider.notifier).load();
       await ref.read(balanceProvider.notifier).load();
+      ref.invalidate(selectedAccountProvider);
+      ref.invalidate(transactionListItemsProvider);
       if (mounted) setState(() {});
     }
   }
 
   Future<void> _showAccountPicker() async {
     if (!mounted) return;
-
     final picked = await showModalBottomSheet<Account>(
       context: context,
       builder: (_) => SafeArea(
         child: FutureBuilder<List<Account>>(
-          // Ensure balances are recalculated, then fetch fresh accounts
           future: ref
               .read(balanceProvider.notifier)
               .load()
@@ -84,8 +84,7 @@ class _HomePageState extends ConsumerState<HomePage> {
                   title: Text(a.code ?? ''),
                   subtitle: MoneyText(
                     amountCents: a.balance,
-                    currency:
-                        a.currency ?? 'XOF', // use account currency if set
+                    currency: a.currency ?? 'XOF',
                     style: Theme.of(context).textTheme.titleLarge,
                   ),
                   trailing: (ref.read(selectedAccountIdProvider) ?? '') == a.id
@@ -101,17 +100,14 @@ class _HomePageState extends ConsumerState<HomePage> {
         ),
       ),
     );
-
     if (picked != null) {
       ref.read(selectedAccountIdProvider.notifier).state = picked.id;
-
       final prefs = await SharedPreferences.getInstance();
       await prefs.setString(kLastAccountIdKey, picked.id);
-
-      // keep everything in sync
       await ref.read(balanceProvider.notifier).load();
       await ref.read(transactionsProvider.notifier).load();
-
+      ref.invalidate(selectedAccountProvider);
+      ref.invalidate(transactionListItemsProvider);
       if (mounted) setState(() {});
     }
   }
@@ -161,6 +157,8 @@ class _HomePageState extends ConsumerState<HomePage> {
     );
     if (sel != null) {
       ref.read(transactionListStateProvider.notifier).setPeriod(sel);
+      ref.invalidate(transactionListItemsProvider);
+      if (mounted) setState(() {});
     }
   }
 
@@ -218,10 +216,10 @@ class _HomePageState extends ConsumerState<HomePage> {
 
     return Scaffold(
       appBar: AppBar(
-        centerTitle: true, // <- montant centré
+        centerTitle: true,
         title: InkWell(
           borderRadius: BorderRadius.circular(6),
-          onTap: _showAccountPicker, // on continue d’ouvrir le picker au tap
+          onTap: _showAccountPicker,
           child: accAsync.when(
             loading: () => Column(
               mainAxisSize: MainAxisSize.min,
@@ -294,6 +292,8 @@ class _HomePageState extends ConsumerState<HomePage> {
                       if (ok == true) {
                         await ref.read(balanceProvider.notifier).load();
                         await ref.read(transactionsProvider.notifier).load();
+                        ref.invalidate(selectedAccountProvider);
+                        ref.invalidate(transactionListItemsProvider);
                       }
                     }
                     break;
