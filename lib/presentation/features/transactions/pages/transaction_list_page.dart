@@ -4,11 +4,11 @@ import 'package:intl/intl.dart';
 import 'package:money_pulse/presentation/app/providers.dart';
 import '../../reports/report_page.dart';
 import '../controllers/transaction_list_controller.dart';
-// removed: ../models/transaction_filters.dart
 import '../providers/transaction_list_providers.dart';
 import '../utils/transaction_grouping.dart';
 import '../widgets/day_header.dart';
 import '../widgets/transaction_tile.dart';
+import '../widgets/transaction_summary_card.dart';
 
 class TransactionListPage extends ConsumerWidget {
   const TransactionListPage({super.key});
@@ -32,106 +32,22 @@ class TransactionListPage extends ConsumerWidget {
         final net = inc - exp;
 
         final children = <Widget>[
-          Card(
-            elevation: 0,
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(14),
-            ),
-            child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-              child: Column(
-                children: [
-                  Row(
-                    children: [
-                      IconButton(
-                        tooltip: 'Previous',
-                        icon: const Icon(Icons.chevron_left),
-                        onPressed: () => ref
-                            .read(transactionListStateProvider.notifier)
-                            .prev(),
-                      ),
-                      Expanded(
-                        child: Center(
-                          child: AnimatedSwitcher(
-                            duration: const Duration(milliseconds: 200),
-                            transitionBuilder: (c, a) =>
-                                FadeTransition(opacity: a, child: c),
-                            child: InkWell(
-                              key: ValueKey(state.label),
-                              onTap: () => _openAnchorPicker(context, ref),
-                              borderRadius: BorderRadius.circular(8),
-                              child: Padding(
-                                padding: const EdgeInsets.symmetric(
-                                  horizontal: 8,
-                                  vertical: 6,
-                                ),
-                                child: Row(
-                                  mainAxisSize: MainAxisSize.min,
-                                  children: [
-                                    const Icon(Icons.calendar_month, size: 18),
-                                    const SizedBox(width: 6),
-                                    Text(
-                                      state.label,
-                                      style: Theme.of(
-                                        context,
-                                      ).textTheme.titleMedium,
-                                    ),
-                                  ],
-                                ),
-                              ),
-                            ),
-                          ),
-                        ),
-                      ),
-                      IconButton(
-                        tooltip: 'Next',
-                        icon: const Icon(Icons.chevron_right),
-                        onPressed: () => ref
-                            .read(transactionListStateProvider.notifier)
-                            .next(),
-                      ),
-                    ],
-                  ),
-
-                  // ⛔️ Bouton "This period" supprimé (désormais dans le date picker)
-                  const SizedBox(height: 8),
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                    children: [
-                      _summaryText(
-                        context,
-                        'Expense',
-                        '-${exp ~/ 100}',
-                        Colors.red,
-                      ),
-                      _summaryText(
-                        context,
-                        'Income',
-                        '+${inc ~/ 100}',
-                        Colors.green,
-                      ),
-                      _summaryText(
-                        context,
-                        'Net',
-                        '${net >= 0 ? '+' : ''}${net ~/ 100}',
-                        net >= 0 ? Colors.green : Colors.red,
-                      ),
-                      IconButton(
-                        tooltip: 'Report',
-                        icon: const Icon(Icons.pie_chart),
-                        onPressed: () {
-                          Navigator.of(context).push(
-                            MaterialPageRoute(
-                              builder: (_) => const ReportPage(),
-                            ),
-                          );
-                        },
-                      ),
-                    ],
-                  ),
-                ],
-              ),
-            ),
+          TransactionSummaryCard(
+            periodLabel: state.label,
+            onPrev: () =>
+                ref.read(transactionListStateProvider.notifier).prev(),
+            onNext: () =>
+                ref.read(transactionListStateProvider.notifier).next(),
+            onTapPeriod: () => _openAnchorPicker(context, ref),
+            expenseText: '-${exp ~/ 100}',
+            incomeText: '+${inc ~/ 100}',
+            netText: '${net >= 0 ? '+' : ''}${net ~/ 100}',
+            netPositive: net >= 0,
+            onOpenReport: () {
+              Navigator.of(
+                context,
+              ).push(MaterialPageRoute(builder: (_) => const ReportPage()));
+            },
           ),
           const SizedBox(height: 8),
           if (items.isEmpty)
@@ -166,14 +82,13 @@ class TransactionListPage extends ConsumerWidget {
     );
   }
 
-  /// Ouvre un "date picker" en bottom sheet avec l’action "This period" intégrée.
   Future<void> _openAnchorPicker(BuildContext context, WidgetRef ref) async {
     final state = ref.read(transactionListStateProvider);
     DateTime temp = state.anchor;
 
     await showModalBottomSheet<void>(
       context: context,
-      isScrollControlled: true, // ← allow tall content
+      isScrollControlled: true,
       showDragHandle: true,
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
@@ -181,13 +96,13 @@ class TransactionListPage extends ConsumerWidget {
       builder: (ctx) {
         return DraggableScrollableSheet(
           expand: false,
-          initialChildSize: 0.6, // 60% of screen by default
+          initialChildSize: 0.6,
           minChildSize: 0.45,
           maxChildSize: 0.95,
           builder: (ctx, scrollController) {
             return SafeArea(
               child: ListView(
-                controller: scrollController, // ← makes the sheet scrollable
+                controller: scrollController,
                 padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
                 children: [
                   Text(
@@ -195,19 +110,15 @@ class TransactionListPage extends ConsumerWidget {
                     style: Theme.of(ctx).textTheme.titleMedium,
                   ),
                   const SizedBox(height: 8),
-
-                  // The calendar is tall; in a scrollable ListView it won't overflow
                   CalendarDatePicker(
                     initialDate: state.anchor,
                     firstDate: DateTime(2000),
                     lastDate: DateTime(2100),
                     onDateChanged: (d) => temp = d,
                   ),
-
                   const SizedBox(height: 8),
                   Row(
                     children: [
-                      // “This period” action stays in the picker
                       TextButton.icon(
                         onPressed: () {
                           ref
@@ -241,25 +152,6 @@ class TransactionListPage extends ConsumerWidget {
           },
         );
       },
-    );
-  }
-
-  Widget _summaryText(
-    BuildContext context,
-    String label,
-    String value,
-    Color color,
-  ) {
-    return Column(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        Text(label, style: Theme.of(context).textTheme.bodySmall),
-        const SizedBox(height: 2),
-        Text(
-          value,
-          style: TextStyle(color: color, fontWeight: FontWeight.w700),
-        ),
-      ],
     );
   }
 }
