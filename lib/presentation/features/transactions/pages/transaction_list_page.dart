@@ -4,6 +4,7 @@ import 'package:intl/intl.dart';
 import 'package:money_pulse/presentation/app/providers.dart';
 import 'package:money_pulse/presentation/widgets/right_drawer.dart';
 import '../../reports/report_page.dart';
+import '../../settings/settings_page.dart'; // NEW import
 import '../controllers/transaction_list_controller.dart';
 import '../providers/transaction_list_providers.dart';
 import '../transaction_quick_add_sheet.dart';
@@ -50,6 +51,12 @@ class TransactionListPage extends ConsumerWidget {
                 Navigator.of(
                   context,
                 ).push(MaterialPageRoute(builder: (_) => const ReportPage()));
+              },
+              onOpenSettings: () {
+                // NEW
+                Navigator.of(
+                  context,
+                ).push(MaterialPageRoute(builder: (_) => const SettingsPage()));
               },
               onAddExpense: () => _onAdd(context, ref, 'DEBIT'),
               onAddIncome: () => _onAdd(context, ref, 'CREDIT'),
@@ -173,7 +180,6 @@ class TransactionListPage extends ConsumerWidget {
       heightFraction: 0.96,
     );
 
-    // Le sheet rafraîchit déjà les providers; on invalide au cas où.
     if (ok == true) {
       await ref.read(transactionsProvider.notifier).load();
       await ref.read(balanceProvider.notifier).load();

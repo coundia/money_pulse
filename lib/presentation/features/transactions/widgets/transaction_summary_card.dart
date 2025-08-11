@@ -11,6 +11,7 @@ class TransactionSummaryCard extends StatelessWidget {
   final String netText;
   final bool netPositive;
   final VoidCallback onOpenReport;
+  final VoidCallback onOpenSettings; // NEW
   final VoidCallback? onAddExpense;
   final VoidCallback? onAddIncome;
 
@@ -25,6 +26,7 @@ class TransactionSummaryCard extends StatelessWidget {
     required this.netText,
     required this.netPositive,
     required this.onOpenReport,
+    required this.onOpenSettings, // NEW
     this.onAddExpense,
     this.onAddIncome,
   });
@@ -84,9 +86,16 @@ class TransactionSummaryCard extends StatelessWidget {
               ],
             ),
             const SizedBox(height: 8),
+            // Stats + quick actions
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceEvenly,
               children: [
+                IconButton(
+                  // NEW
+                  tooltip: 'Settings',
+                  icon: const Icon(Icons.settings_outlined),
+                  onPressed: onOpenSettings,
+                ),
                 _summaryText(context, 'Expense', expenseText, Colors.red),
                 _summaryText(context, 'Income', incomeText, Colors.green),
                 _summaryText(
@@ -133,7 +142,6 @@ class TransactionSummaryCard extends StatelessWidget {
   }
 }
 
-/// Responsive & polished buttons with better feedback, contrast and spacing.
 class _ActionButtonsRow extends StatelessWidget {
   final VoidCallback? onAddExpense;
   final VoidCallback? onAddIncome;
@@ -172,7 +180,7 @@ class _ActionButtonsRow extends StatelessWidget {
 class _ActionButton extends StatelessWidget {
   final String label;
   final IconData icon;
-  final MaterialColor tone; // Use MaterialColor to access shades
+  final MaterialColor tone;
   final VoidCallback? onPressed;
 
   const _ActionButton({
@@ -217,9 +225,8 @@ class _ActionButton extends StatelessWidget {
               ).merge(
                 ButtonStyle(
                   overlayColor: MaterialStateProperty.resolveWith((states) {
-                    if (states.contains(MaterialState.pressed)) {
+                    if (states.contains(MaterialState.pressed))
                       return fg.withOpacity(0.08);
-                    }
                     if (states.contains(MaterialState.hovered) ||
                         states.contains(MaterialState.focused)) {
                       return fg.withOpacity(0.06);
