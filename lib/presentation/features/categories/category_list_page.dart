@@ -11,6 +11,7 @@ import 'package:money_pulse/domain/categories/entities/category.dart';
 import 'package:money_pulse/domain/categories/repositories/category_repository.dart';
 
 // Widgets internes (seront fournis dans les fichiers 2/4, 3/4, 4/4)
+import 'widgets/category_details_panel.dart';
 import 'widgets/category_form_panel.dart';
 import 'widgets/category_tile.dart';
 import 'widgets/category_context_menu.dart';
@@ -193,49 +194,17 @@ class _CategoryListPageState extends ConsumerState<CategoryListPage> {
 
   Future<void> _view(Category c) async {
     if (!mounted) return;
-    await showDialog<void>(
-      context: context,
-      builder: (dialogContext) => AlertDialog(
-        title: const Text('Détails de la catégorie'),
-        content: SingleChildScrollView(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              _kv('Code', c.code),
-              _kv('Description', c.description ?? '—'),
-              const SizedBox(height: 8),
-              _kv('ID distant', c.remoteId ?? '—'),
-              const SizedBox(height: 8),
-              _kv('Créée le', _fmtDate(c.createdAt)),
-              _kv('Mis à jour le', _fmtDate(c.updatedAt)),
-              _kv('Supprimée le', _fmtDate(c.deletedAt)),
-              _kv('Synchronisée le', _fmtDate(c.syncAt)),
-              _kv('Version', '${c.version}'),
-              const SizedBox(height: 8),
-              const Text('ID', style: TextStyle(fontWeight: FontWeight.w600)),
-              const SizedBox(height: 4),
-              SelectableText(c.id),
-            ],
-          ),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () {
-              Navigator.of(dialogContext).pop();
-              if (!mounted) return;
-              WidgetsBinding.instance.addPostFrameCallback((_) {
-                if (!mounted) return;
-                _addOrEdit(existing: c);
-              });
-            },
-            child: const Text('Modifier'),
-          ),
-          FilledButton(
-            onPressed: () => Navigator.of(dialogContext).pop(),
-            child: const Text('Fermer'),
-          ),
-        ],
+    await showRightDrawer<void>(
+      context,
+      child: CategoryDetailsPanel(
+        category: c,
+        onEdit: () {
+          if (!mounted) return;
+          _addOrEdit(existing: c);
+        },
       ),
+      widthFraction: 0.86,
+      heightFraction: 0.96,
     );
   }
 
@@ -306,15 +275,7 @@ class _CategoryListPageState extends ConsumerState<CategoryListPage> {
                                   (c.description?.isNotEmpty == true)
                                   ? c.description!
                                   : updatedText,
-                              onTap: () => _addOrEdit(existing: c),
-                              onMore: () {
-                                final box =
-                                    context.findRenderObject() as RenderBox?;
-                                final offset =
-                                    box?.localToGlobal(Offset.zero) ??
-                                    Offset.zero;
-                                _showContextMenu(offset, c);
-                              },
+                              onTap: () => _view(c),
                             ),
                           );
                         },
