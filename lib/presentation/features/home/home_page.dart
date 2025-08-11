@@ -2,20 +2,30 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:intl/intl.dart';
+
 import 'package:money_pulse/presentation/app/providers.dart';
 import 'package:money_pulse/presentation/app/account_selection.dart';
 import 'package:money_pulse/presentation/widgets/money_text.dart';
-import 'package:money_pulse/presentation/features/transactions/transaction_quick_add_sheet.dart';
-import 'package:money_pulse/presentation/features/settings/settings_page.dart';
 import 'package:money_pulse/presentation/widgets/right_drawer.dart';
+
+import 'package:money_pulse/presentation/features/settings/settings_page.dart';
+import 'package:money_pulse/presentation/features/transactions/transaction_quick_add_sheet.dart';
+import 'package:money_pulse/presentation/features/transactions/transaction_form_sheet.dart';
+import 'package:money_pulse/presentation/features/transactions/pages/transaction_list_page.dart';
+import 'package:money_pulse/presentation/features/transactions/search/txn_search_delegate.dart';
+
 import 'package:money_pulse/domain/accounts/entities/account.dart';
 import 'package:money_pulse/domain/transactions/entities/transaction_entry.dart';
-import 'package:money_pulse/presentation/features/transactions/providers/transaction_list_providers.dart';
-import 'package:money_pulse/presentation/features/transactions/search/txn_search_delegate.dart';
-import 'package:money_pulse/presentation/features/transactions/transaction_form_sheet.dart';
+
+// + NEW: manage pages
+import 'package:money_pulse/presentation/features/accounts/account_page.dart';
+import 'package:money_pulse/presentation/features/categories/category_list_page.dart';
+
+// Relative (feature) imports
 import '../transactions/controllers/transaction_list_controller.dart';
 import '../transactions/models/transaction_filters.dart';
-import '../transactions/pages/transaction_list_page.dart';
+import '../transactions/providers/transaction_list_providers.dart';
 
 class HomePage extends ConsumerStatefulWidget {
   const HomePage({super.key});
@@ -297,12 +307,15 @@ class _HomePageState extends ConsumerState<HomePage> {
                       }
                     }
                     break;
+
                   case 'period':
                     await _showPeriodSheet();
                     break;
+
                   case 'changeAccount':
                     await _showAccountPicker();
                     break;
+
                   case 'sync':
                     if (!mounted) break;
                     ScaffoldMessenger.of(context).showSnackBar(
@@ -314,15 +327,34 @@ class _HomePageState extends ConsumerState<HomePage> {
                       const SnackBar(content: Text('Sync complete')),
                     );
                     break;
+
                   case 'share':
                     final acc = await ref.read(selectedAccountProvider.future);
                     if (!mounted || acc == null) break;
                     await _showShareDialog(acc);
                     break;
+
                   case 'settings':
                     if (!mounted) break;
                     await Navigator.of(context).push(
                       MaterialPageRoute(builder: (_) => const SettingsPage()),
+                    );
+                    break;
+
+                  // NEW: manage categories / accounts
+                  case 'manageCategories':
+                    if (!mounted) break;
+                    await Navigator.of(context).push(
+                      MaterialPageRoute(
+                        builder: (_) => const CategoryListPage(),
+                      ),
+                    );
+                    break;
+
+                  case 'manageAccounts':
+                    if (!mounted) break;
+                    await Navigator.of(context).push(
+                      MaterialPageRoute(builder: (_) => const AccountPage()),
                     );
                     break;
                 }
@@ -366,6 +398,21 @@ class _HomePageState extends ConsumerState<HomePage> {
                 ),
                 PopupMenuDivider(),
                 PopupMenuItem(
+                  value: 'manageCategories',
+                  child: ListTile(
+                    leading: Icon(Icons.category_outlined),
+                    title: Text('Categories'),
+                  ),
+                ),
+                PopupMenuItem(
+                  value: 'manageAccounts',
+                  child: ListTile(
+                    leading: Icon(Icons.account_balance_wallet_outlined),
+                    title: Text('Accounts'),
+                  ),
+                ),
+                PopupMenuDivider(),
+                PopupMenuItem(
                   value: 'settings',
                   child: ListTile(
                     leading: Icon(Icons.settings),
@@ -380,7 +427,7 @@ class _HomePageState extends ConsumerState<HomePage> {
         index: pageIdx,
         children: const [TransactionListPage(), SettingsPage()],
       ),
-      /*bottomNavigationBar: NavigationBar(
+      bottomNavigationBar: NavigationBar(
         labelBehavior: NavigationDestinationLabelBehavior.onlyShowSelected,
         selectedIndex: _navSelectedIndex,
         onDestinationSelected: _onDestinationSelected,
@@ -396,7 +443,7 @@ class _HomePageState extends ConsumerState<HomePage> {
           ),
           NavigationDestination(icon: Icon(Icons.person), label: 'COMPTE'),
         ],
-      ),*/
+      ),
     );
   }
 }
