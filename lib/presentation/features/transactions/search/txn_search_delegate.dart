@@ -93,7 +93,8 @@ class TxnSearchDelegate extends SearchDelegate<TransactionEntry?> {
 
   String _formatWhen(DateTime d) => DateFormat.yMMMd().add_Hm().format(d);
   String _amount(int cents, {bool withSign = true, required bool debit}) {
-    final sign = withSign ? (debit ? '-' : '+') : '';
+    final sign = "";
+    //withSign ? (debit ? '-' : '+') : '';
     return '$sign${cents ~/ 100}';
   }
 

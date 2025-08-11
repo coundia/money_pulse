@@ -58,22 +58,7 @@ class TransactionListPage extends ConsumerWidget {
                                 FadeTransition(opacity: a, child: c),
                             child: InkWell(
                               key: ValueKey(state.label),
-                              onTap: () async {
-                                final picked = await showDatePicker(
-                                  context: context,
-                                  initialDate: state.anchor,
-                                  firstDate: DateTime(2000),
-                                  lastDate: DateTime(2100),
-                                  helpText: 'Select any day',
-                                );
-                                if (picked != null) {
-                                  ref
-                                      .read(
-                                        transactionListStateProvider.notifier,
-                                      )
-                                      .setAnchor(picked);
-                                }
-                              },
+                              onTap: () => _openAnchorPicker(context, ref),
                               borderRadius: BorderRadius.circular(8),
                               child: Padding(
                                 padding: const EdgeInsets.symmetric(
@@ -107,17 +92,8 @@ class TransactionListPage extends ConsumerWidget {
                       ),
                     ],
                   ),
-                  const SizedBox(height: 6),
-                  Align(
-                    alignment: Alignment.centerRight,
-                    child: TextButton.icon(
-                      onPressed: () => ref
-                          .read(transactionListStateProvider.notifier)
-                          .resetToThisPeriod(),
-                      icon: const Icon(Icons.today),
-                      label: const Text('This period'),
-                    ),
-                  ),
+
+                  // ⛔️ Bouton "This period" supprimé (désormais dans le date picker)
                   const SizedBox(height: 8),
                   Row(
                     mainAxisAlignment: MainAxisAlignment.spaceEvenly,
@@ -186,6 +162,84 @@ class TransactionListPage extends ConsumerWidget {
         ];
 
         return ListView(padding: const EdgeInsets.all(12), children: children);
+      },
+    );
+  }
+
+  /// Ouvre un "date picker" en bottom sheet avec l’action "This period" intégrée.
+  Future<void> _openAnchorPicker(BuildContext context, WidgetRef ref) async {
+    final state = ref.read(transactionListStateProvider);
+    DateTime temp = state.anchor;
+
+    await showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true, // ← allow tall content
+      showDragHandle: true,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+      ),
+      builder: (ctx) {
+        return DraggableScrollableSheet(
+          expand: false,
+          initialChildSize: 0.6, // 60% of screen by default
+          minChildSize: 0.45,
+          maxChildSize: 0.95,
+          builder: (ctx, scrollController) {
+            return SafeArea(
+              child: ListView(
+                controller: scrollController, // ← makes the sheet scrollable
+                padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
+                children: [
+                  Text(
+                    'Select date',
+                    style: Theme.of(ctx).textTheme.titleMedium,
+                  ),
+                  const SizedBox(height: 8),
+
+                  // The calendar is tall; in a scrollable ListView it won't overflow
+                  CalendarDatePicker(
+                    initialDate: state.anchor,
+                    firstDate: DateTime(2000),
+                    lastDate: DateTime(2100),
+                    onDateChanged: (d) => temp = d,
+                  ),
+
+                  const SizedBox(height: 8),
+                  Row(
+                    children: [
+                      // “This period” action stays in the picker
+                      TextButton.icon(
+                        onPressed: () {
+                          ref
+                              .read(transactionListStateProvider.notifier)
+                              .resetToThisPeriod();
+                          Navigator.pop(ctx);
+                        },
+                        icon: const Icon(Icons.today),
+                        label: const Text('This period'),
+                      ),
+                      const Spacer(),
+                      TextButton(
+                        onPressed: () => Navigator.pop(ctx),
+                        child: const Text('Cancel'),
+                      ),
+                      const SizedBox(width: 8),
+                      FilledButton(
+                        onPressed: () {
+                          ref
+                              .read(transactionListStateProvider.notifier)
+                              .setAnchor(temp);
+                          Navigator.pop(ctx);
+                        },
+                        child: const Text('Apply'),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            );
+          },
+        );
       },
     );
   }
