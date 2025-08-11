@@ -112,37 +112,39 @@ class _AccountPageState extends ConsumerState<AccountPage> {
   }
 
   Future<void> _delete(Account acc) async {
+    if (!mounted) return;
     final ok = await showDialog<bool>(
       context: context,
-      builder: (_) => AlertDialog(
+      builder: (dialogContext) => AlertDialog(
         title: const Text('Supprimer le compte ?'),
         content: Text(
           '« ${acc.code ?? 'Compte'} » sera déplacé dans la corbeille.',
         ),
         actions: [
           TextButton(
-            onPressed: () => Navigator.pop(context, false),
+            onPressed: () => Navigator.of(dialogContext).pop(false),
             child: const Text('Annuler'),
           ),
           FilledButton(
-            onPressed: () => Navigator.pop(context, true),
+            onPressed: () => Navigator.of(dialogContext).pop(true),
             child: const Text('Supprimer'),
           ),
         ],
       ),
     );
-    if (ok != true) return;
+    if (ok != true || !mounted) return;
     await _repo.softDelete(acc.id);
     if (mounted) setState(() {});
   }
 
   Future<void> _share(Account a) async {
+    if (!mounted) return;
     final text =
         'Compte: ${a.code ?? '—'}\nSolde: ${_fmtMoney(a.balance, a.currency)}\nDevise: ${a.currency ?? '—'}\nMis à jour: ${_fmtDate(a.updatedAt)}';
     await Clipboard.setData(ClipboardData(text: text));
     if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Détails copiés dans le presse‑papiers')),
+      const SnackBar(content: Text('Détails copiés dans le presse-papiers')),
     );
   }
 
@@ -188,8 +190,6 @@ class _AccountPageState extends ConsumerState<AccountPage> {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         const SizedBox(height: 8),
-        Text('Comptes', style: Theme.of(context).textTheme.headlineSmall),
-        const SizedBox(height: 8),
         Wrap(
           spacing: 8,
           runSpacing: 8,
@@ -197,7 +197,7 @@ class _AccountPageState extends ConsumerState<AccountPage> {
               .map(
                 (e) => Chip(
                   label: Text(
-                    '${Formatters.amountFromCents(e.value)} ${e.key}',
+                    'Total: ${Formatters.amountFromCents(e.value)} ${e.key}',
                   ),
                   avatar: const Icon(
                     Icons.account_balance_wallet_outlined,
@@ -240,9 +240,10 @@ class _AccountPageState extends ConsumerState<AccountPage> {
   }
 
   Future<void> _view(Account a) async {
+    if (!mounted) return;
     await showDialog<void>(
       context: context,
-      builder: (_) => AlertDialog(
+      builder: (dialogContext) => AlertDialog(
         title: const Text('Détails du compte'),
         content: SingleChildScrollView(
           child: Column(
@@ -275,13 +276,17 @@ class _AccountPageState extends ConsumerState<AccountPage> {
         actions: [
           TextButton(
             onPressed: () {
-              Navigator.pop(context);
-              _addOrEdit(existing: a);
+              Navigator.of(dialogContext).pop();
+              if (!mounted) return;
+              WidgetsBinding.instance.addPostFrameCallback((_) {
+                if (!mounted) return;
+                _addOrEdit(existing: a);
+              });
             },
             child: const Text('Modifier'),
           ),
           FilledButton(
-            onPressed: () => Navigator.pop(context),
+            onPressed: () => Navigator.of(dialogContext).pop(),
             child: const Text('Fermer'),
           ),
         ],

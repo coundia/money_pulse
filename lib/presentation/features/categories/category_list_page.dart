@@ -2,11 +2,18 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:uuid/uuid.dart';
+
 import 'package:money_pulse/presentation/shared/formatters.dart';
 import 'package:money_pulse/presentation/widgets/right_drawer.dart';
 import 'package:money_pulse/presentation/app/providers.dart';
+
 import 'package:money_pulse/domain/categories/entities/category.dart';
 import 'package:money_pulse/domain/categories/repositories/category_repository.dart';
+
+// Widgets internes (seront fournis dans les fichiers 2/4, 3/4, 4/4)
+import 'widgets/category_form_panel.dart';
+import 'widgets/category_tile.dart';
+import 'widgets/category_context_menu.dart';
 
 class CategoryListPage extends ConsumerStatefulWidget {
   const CategoryListPage({super.key});
@@ -23,6 +30,7 @@ class _CategoryListPageState extends ConsumerState<CategoryListPage> {
   void initState() {
     super.initState();
     _searchCtrl.addListener(() {
+      if (!mounted) return;
       setState(() => _query = _searchCtrl.text.trim().toLowerCase());
     });
   }
@@ -44,13 +52,15 @@ class _CategoryListPageState extends ConsumerState<CategoryListPage> {
   String _fmtDate(DateTime? d) => d == null ? '—' : Formatters.dateFull(d);
 
   Future<void> _addOrEdit({Category? existing}) async {
-    final result = await showRightDrawer<_CategoryFormResult>(
+    if (!mounted) return;
+    final result = await showRightDrawer<CategoryFormResult>(
       context,
-      child: _CategoryFormPanel(existing: existing),
+      child: CategoryFormPanel(existing: existing),
       widthFraction: 0.86,
       heightFraction: 0.96,
     );
-    if (result == null) return;
+    if (!mounted || result == null) return;
+
     if (existing == null) {
       final now = DateTime.now();
       final cat = Category(
@@ -78,35 +88,37 @@ class _CategoryListPageState extends ConsumerState<CategoryListPage> {
   }
 
   Future<void> _delete(Category c) async {
+    if (!mounted) return;
     final ok = await showDialog<bool>(
       context: context,
-      builder: (_) => AlertDialog(
+      builder: (dialogContext) => AlertDialog(
         title: const Text('Supprimer la catégorie ?'),
         content: Text('« ${c.code} » sera déplacée dans la corbeille.'),
         actions: [
           TextButton(
-            onPressed: () => Navigator.pop(context, false),
+            onPressed: () => Navigator.of(dialogContext).pop(false),
             child: const Text('Annuler'),
           ),
           FilledButton(
-            onPressed: () => Navigator.pop(context, true),
+            onPressed: () => Navigator.of(dialogContext).pop(true),
             child: const Text('Supprimer'),
           ),
         ],
       ),
     );
-    if (ok == true) {
-      await _repo.softDelete(c.id);
-      if (mounted) setState(() {});
-    }
+    if (!mounted || ok != true) return;
+    await _repo.softDelete(c.id);
+    if (mounted) setState(() {});
   }
 
   Future<void> _share(Category c) async {
+    if (!mounted) return;
+    final messenger = ScaffoldMessenger.maybeOf(context);
     final text =
         'Catégorie: ${c.code}\nDescription: ${c.description ?? '—'}\nMis à jour: ${_fmtDate(c.updatedAt)}\nCréée le: ${_fmtDate(c.createdAt)}\nID: ${c.id}';
     await Clipboard.setData(ClipboardData(text: text));
     if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(
+    messenger?.showSnackBar(
       const SnackBar(content: Text('Détails copiés dans le presse-papiers')),
     );
   }
@@ -180,9 +192,10 @@ class _CategoryListPageState extends ConsumerState<CategoryListPage> {
   }
 
   Future<void> _view(Category c) async {
+    if (!mounted) return;
     await showDialog<void>(
       context: context,
-      builder: (_) => AlertDialog(
+      builder: (dialogContext) => AlertDialog(
         title: const Text('Détails de la catégorie'),
         content: SingleChildScrollView(
           child: Column(
@@ -208,13 +221,17 @@ class _CategoryListPageState extends ConsumerState<CategoryListPage> {
         actions: [
           TextButton(
             onPressed: () {
-              Navigator.pop(context);
-              _addOrEdit(existing: c);
+              Navigator.of(dialogContext).pop();
+              if (!mounted) return;
+              WidgetsBinding.instance.addPostFrameCallback((_) {
+                if (!mounted) return;
+                _addOrEdit(existing: c);
+              });
             },
             child: const Text('Modifier'),
           ),
           FilledButton(
-            onPressed: () => Navigator.pop(context),
+            onPressed: () => Navigator.of(dialogContext).pop(),
             child: const Text('Fermer'),
           ),
         ],
@@ -223,7 +240,8 @@ class _CategoryListPageState extends ConsumerState<CategoryListPage> {
   }
 
   Future<void> _showContextMenu(Offset position, Category c) async {
-    final v = await showMenu<String>(
+    if (!mounted) return;
+    final action = await showMenu<String>(
       context: context,
       position: RelativeRect.fromLTRB(
         position.dx,
@@ -231,49 +249,23 @@ class _CategoryListPageState extends ConsumerState<CategoryListPage> {
         position.dx,
         position.dy,
       ),
-      items: const [
-        PopupMenuItem(
-          value: 'view',
-          child: ListTile(
-            leading: Icon(Icons.visibility_outlined),
-            title: Text('Voir'),
-          ),
-        ),
-        PopupMenuItem(
-          value: 'edit',
-          child: ListTile(
-            leading: Icon(Icons.edit_outlined),
-            title: Text('Modifier'),
-          ),
-        ),
-        PopupMenuItem(
-          value: 'delete',
-          child: ListTile(
-            leading: Icon(Icons.delete_outline),
-            title: Text('Supprimer'),
-          ),
-        ),
-        PopupMenuItem(
-          value: 'share',
-          child: ListTile(
-            leading: Icon(Icons.share_outlined),
-            title: Text('Copier les détails'),
-          ),
-        ),
-      ],
+      items: buildCategoryContextMenuItems(), // vient du fichier 4/4
     );
-    switch (v) {
-      case 'view':
+    if (!mounted) return;
+    switch (action) {
+      case CategoryContextMenu.view:
         _view(c);
         break;
-      case 'edit':
+      case CategoryContextMenu.edit:
         _addOrEdit(existing: c);
         break;
-      case 'delete':
+      case CategoryContextMenu.delete:
         _delete(c);
         break;
-      case 'share':
+      case CategoryContextMenu.share:
         _share(c);
+        break;
+      default:
         break;
     }
   }
@@ -285,10 +277,14 @@ class _CategoryListPageState extends ConsumerState<CategoryListPage> {
       builder: (context, snap) {
         final items = snap.data ?? const <Category>[];
         final filtered = _filterAndSort(items);
+
         final body = snap.connectionState == ConnectionState.waiting
             ? const Center(child: CircularProgressIndicator())
             : RefreshIndicator(
-                onRefresh: () async => setState(() {}),
+                onRefresh: () async {
+                  if (!mounted) return;
+                  setState(() {});
+                },
                 child: items.isEmpty
                     ? _empty()
                     : ListView.separated(
@@ -303,32 +299,22 @@ class _CategoryListPageState extends ConsumerState<CategoryListPage> {
                                 _showContextMenu(d.globalPosition, c),
                             onSecondaryTapDown: (d) =>
                                 _showContextMenu(d.globalPosition, c),
-                            child: ListTile(
-                              leading: CircleAvatar(
-                                child: Text(
-                                  (c.code.isNotEmpty ? c.code[0] : '?')
-                                      .toUpperCase(),
-                                ),
-                              ),
-                              title: Text(c.code),
-                              subtitle: Text(
-                                c.description?.isNotEmpty == true
-                                    ? c.description!
-                                    : updatedText,
-                              ),
+                            child: CategoryTile(
+                              // vient du fichier 3/4
+                              code: c.code,
+                              descriptionOrUpdatedText:
+                                  (c.description?.isNotEmpty == true)
+                                  ? c.description!
+                                  : updatedText,
                               onTap: () => _addOrEdit(existing: c),
-                              trailing: IconButton(
-                                tooltip: 'Actions',
-                                onPressed: () async {
-                                  final box =
-                                      context.findRenderObject() as RenderBox?;
-                                  final offset =
-                                      box?.localToGlobal(Offset.zero) ??
-                                      Offset.zero;
-                                  _showContextMenu(offset, c);
-                                },
-                                icon: const Icon(Icons.more_vert),
-                              ),
+                              onMore: () {
+                                final box =
+                                    context.findRenderObject() as RenderBox?;
+                                final offset =
+                                    box?.localToGlobal(Offset.zero) ??
+                                    Offset.zero;
+                                _showContextMenu(offset, c);
+                              },
                             ),
                           );
                         },
@@ -350,7 +336,7 @@ class _CategoryListPageState extends ConsumerState<CategoryListPage> {
               ),
               PopupMenuButton<String>(
                 onSelected: (v) {
-                  if (v == 'refresh') setState(() {});
+                  if (v == 'refresh' && mounted) setState(() {});
                 },
                 itemBuilder: (_) => const [
                   PopupMenuItem(
@@ -397,93 +383,6 @@ class _CategoryListPageState extends ConsumerState<CategoryListPage> {
               onPressed: () => _addOrEdit(),
               icon: const Icon(Icons.add),
               label: const Text('Ajouter une catégorie'),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-class _CategoryFormResult {
-  final String code;
-  final String? description;
-  const _CategoryFormResult({required this.code, this.description});
-}
-
-class _CategoryFormPanel extends StatefulWidget {
-  final Category? existing;
-  const _CategoryFormPanel({this.existing});
-  @override
-  State<_CategoryFormPanel> createState() => _CategoryFormPanelState();
-}
-
-class _CategoryFormPanelState extends State<_CategoryFormPanel> {
-  final _formKey = GlobalKey<FormState>();
-  late final TextEditingController _code = TextEditingController(
-    text: widget.existing?.code ?? '',
-  );
-  late final TextEditingController _desc = TextEditingController(
-    text: widget.existing?.description ?? '',
-  );
-
-  @override
-  void dispose() {
-    _code.dispose();
-    _desc.dispose();
-    super.dispose();
-  }
-
-  void _save() {
-    if (!_formKey.currentState!.validate()) return;
-    Navigator.pop(
-      context,
-      _CategoryFormResult(
-        code: _code.text.trim(),
-        description: _desc.text.trim().isEmpty ? null : _desc.text.trim(),
-      ),
-    );
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final isEdit = widget.existing != null;
-    return Scaffold(
-      appBar: AppBar(
-        leading: IconButton(
-          icon: const Icon(Icons.close),
-          onPressed: () => Navigator.pop(context),
-        ),
-        title: Text(isEdit ? 'Modifier la catégorie' : 'Ajouter une catégorie'),
-        actions: [
-          TextButton(
-            onPressed: _save,
-            child: Text(isEdit ? 'Enregistrer' : 'Ajouter'),
-          ),
-        ],
-      ),
-      body: Form(
-        key: _formKey,
-        child: ListView(
-          padding: const EdgeInsets.all(16),
-          children: [
-            TextFormField(
-              controller: _code,
-              decoration: const InputDecoration(
-                labelText: 'Code',
-                border: OutlineInputBorder(),
-              ),
-              validator: (v) =>
-                  (v == null || v.trim().isEmpty) ? 'Obligatoire' : null,
-              autofocus: true,
-            ),
-            const SizedBox(height: 10),
-            TextFormField(
-              controller: _desc,
-              decoration: const InputDecoration(
-                labelText: 'Description',
-                border: OutlineInputBorder(),
-              ),
             ),
           ],
         ),
