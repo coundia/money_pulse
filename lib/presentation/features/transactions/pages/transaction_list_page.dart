@@ -49,6 +49,8 @@ class TransactionListPage extends ConsumerWidget {
                   context,
                 ).push(MaterialPageRoute(builder: (_) => const ReportPage()));
               },
+              onAddExpense: () => _onAdd(context, ref, 'DEBIT'),
+              onAddIncome: () => _onAdd(context, ref, 'CREDIT'),
             ),
             const SizedBox(height: 8),
             if (items.isEmpty)
@@ -158,5 +160,11 @@ class TransactionListPage extends ConsumerWidget {
         );
       },
     );
+  }
+
+  Future<void> _onAdd(BuildContext context, WidgetRef ref, String type) async {
+    final label = type == 'DEBIT' ? 'Add expense' : 'Add income';
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(label)));
+    // Branche ici ton TransactionQuickAddSheet/TransactionFormSheet si disponible.
   }
 }
