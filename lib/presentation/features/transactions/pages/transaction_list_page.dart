@@ -3,7 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 import 'package:money_pulse/presentation/app/providers.dart';
 import 'package:money_pulse/presentation/widgets/right_drawer.dart';
-import 'package:money_pulse/domain/transactions/entities/transaction_entry.dart'; // NEW
+import 'package:money_pulse/domain/transactions/entities/transaction_entry.dart';
 import '../../reports/report_page.dart';
 import '../../settings/settings_page.dart';
 import '../controllers/transaction_list_controller.dart';
@@ -14,7 +14,7 @@ import '../utils/transaction_grouping.dart';
 import '../widgets/day_header.dart';
 import '../widgets/transaction_tile.dart';
 import '../widgets/transaction_summary_card.dart';
-import '../search/txn_search_delegate.dart'; // NEW (chemin basé sur ta structure)
+import '../search/txn_search_delegate.dart';
 
 class TransactionListPage extends ConsumerWidget {
   const TransactionListPage({super.key});
@@ -29,7 +29,6 @@ class TransactionListPage extends ConsumerWidget {
         loading: () => const Center(child: CircularProgressIndicator()),
         error: (e, _) => Center(child: Text('$e')),
         data: (items) {
-          // items est supposé être List<TransactionEntry>
           final txns = items.cast<TransactionEntry>();
           final groups = groupByDay(txns);
           final exp = txns
@@ -69,7 +68,9 @@ class TransactionListPage extends ConsumerWidget {
             if (txns.isEmpty)
               const Padding(
                 padding: EdgeInsets.all(32.0),
-                child: Center(child: Text('No transactions for this period')),
+                child: Center(
+                  child: Text('Aucune transaction pour cette période'),
+                ),
               )
             else ...[
               for (final g in groups) ...[
@@ -81,17 +82,26 @@ class TransactionListPage extends ConsumerWidget {
                       await ref.read(transactionRepoProvider).softDelete(e.id);
                       await ref.read(balanceProvider.notifier).load();
                       await ref.read(transactionsProvider.notifier).load();
+                      ref.invalidate(transactionListItemsProvider);
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(content: Text('Transaction supprimée')),
+                      );
                     },
                     onUpdated: () async {
                       await ref.read(balanceProvider.notifier).load();
                       await ref.read(transactionsProvider.notifier).load();
+                      ref.invalidate(transactionListItemsProvider);
+                    },
+                    onSync: (entry) async {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(content: Text('Synchronisation lancée')),
+                      );
                     },
                   ),
                 ),
                 const SizedBox(height: 8),
               ],
             ],
-            // ⬇️ CTA Search en bas de la liste
             TxnSearchCta(onTap: () => _openTxnSearch(context, txns)),
           ];
 
@@ -112,13 +122,11 @@ class TransactionListPage extends ConsumerWidget {
       context: context,
       delegate: TxnSearchDelegate(items),
     );
-
     if (result != null && context.mounted) {
-      // Ici tu peux ouvrir un détail, ou juste notifier
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(
-            'Selected: ${result.description ?? result.code ?? result.id}',
+            'Sélectionné: ${result.description ?? result.code ?? result.id}',
           ),
         ),
       );
@@ -149,7 +157,7 @@ class TransactionListPage extends ConsumerWidget {
                 padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
                 children: [
                   Text(
-                    'Select date',
+                    'Sélectionner la date',
                     style: Theme.of(ctx).textTheme.titleMedium,
                   ),
                   const SizedBox(height: 8),
@@ -170,12 +178,12 @@ class TransactionListPage extends ConsumerWidget {
                           Navigator.pop(ctx);
                         },
                         icon: const Icon(Icons.today),
-                        label: const Text('This period'),
+                        label: const Text('Cette période'),
                       ),
                       const Spacer(),
                       TextButton(
                         onPressed: () => Navigator.pop(ctx),
-                        child: const Text('Cancel'),
+                        child: const Text('Annuler'),
                       ),
                       const SizedBox(width: 8),
                       FilledButton(
@@ -185,7 +193,7 @@ class TransactionListPage extends ConsumerWidget {
                               .setAnchor(temp);
                           Navigator.pop(ctx);
                         },
-                        child: const Text('Apply'),
+                        child: const Text('Appliquer'),
                       ),
                     ],
                   ),
@@ -206,7 +214,6 @@ class TransactionListPage extends ConsumerWidget {
       widthFraction: 0.86,
       heightFraction: 0.96,
     );
-
     if (ok == true) {
       await ref.read(transactionsProvider.notifier).load();
       await ref.read(balanceProvider.notifier).load();
