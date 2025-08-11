@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 class TransactionSummaryCard extends StatelessWidget {
   final String periodLabel;
@@ -102,40 +103,9 @@ class TransactionSummaryCard extends StatelessWidget {
               ],
             ),
             const SizedBox(height: 10),
-            Row(
-              children: [
-                Expanded(
-                  child: FilledButton.icon(
-                    onPressed: onAddExpense,
-                    icon: const Icon(Icons.remove_circle_outline),
-                    label: const Text('Add expense'),
-                    style: FilledButton.styleFrom(
-                      backgroundColor: Colors.redAccent.withOpacity(0.12),
-                      foregroundColor: Colors.red.shade700,
-                      padding: const EdgeInsets.symmetric(vertical: 12),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                    ),
-                  ),
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: FilledButton.icon(
-                    onPressed: onAddIncome,
-                    icon: const Icon(Icons.add_circle_outline),
-                    label: const Text('Add income'),
-                    style: FilledButton.styleFrom(
-                      backgroundColor: Colors.greenAccent.withOpacity(0.12),
-                      foregroundColor: Colors.green.shade800,
-                      padding: const EdgeInsets.symmetric(vertical: 12),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                    ),
-                  ),
-                ),
-              ],
+            _ActionButtonsRow(
+              onAddExpense: onAddExpense,
+              onAddIncome: onAddIncome,
             ),
           ],
         ),
@@ -159,6 +129,111 @@ class TransactionSummaryCard extends StatelessWidget {
           style: TextStyle(color: color, fontWeight: FontWeight.w700),
         ),
       ],
+    );
+  }
+}
+
+/// Responsive & polished buttons with better feedback, contrast and spacing.
+class _ActionButtonsRow extends StatelessWidget {
+  final VoidCallback? onAddExpense;
+  final VoidCallback? onAddIncome;
+
+  const _ActionButtonsRow({
+    required this.onAddExpense,
+    required this.onAddIncome,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return LayoutBuilder(
+      builder: (ctx, c) {
+        final isNarrow = c.maxWidth < 360;
+        final children = <Widget>[
+          _ActionButton(
+            label: 'Add expense',
+            icon: Icons.remove_circle_outline,
+            tone: Colors.red,
+            onPressed: onAddExpense,
+          ),
+          SizedBox(width: isNarrow ? 0 : 12, height: isNarrow ? 12 : 0),
+          _ActionButton(
+            label: 'Add income',
+            icon: Icons.add_circle_outline,
+            tone: Colors.green,
+            onPressed: onAddIncome,
+          ),
+        ];
+        return isNarrow ? Column(children: children) : Row(children: children);
+      },
+    );
+  }
+}
+
+class _ActionButton extends StatelessWidget {
+  final String label;
+  final IconData icon;
+  final MaterialColor tone; // Use MaterialColor to access shades
+  final VoidCallback? onPressed;
+
+  const _ActionButton({
+    required this.label,
+    required this.icon,
+    required this.tone,
+    required this.onPressed,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final bg = (isDark ? tone.shade200 : tone.shade100).withOpacity(0.22);
+    final fg = isDark ? tone.shade200 : tone.shade700;
+
+    return Expanded(
+      child: Tooltip(
+        message: label,
+        waitDuration: const Duration(milliseconds: 400),
+        child: FilledButton.icon(
+          onPressed: onPressed == null
+              ? null
+              : () {
+                  HapticFeedback.selectionClick();
+                  onPressed!.call();
+                },
+          icon: Icon(icon, size: 20),
+          label: Text(
+            label,
+            style: const TextStyle(fontWeight: FontWeight.w600),
+          ),
+          style:
+              FilledButton.styleFrom(
+                padding: const EdgeInsets.symmetric(vertical: 14),
+                backgroundColor: bg,
+                foregroundColor: fg,
+                disabledForegroundColor: fg.withOpacity(0.38),
+                disabledBackgroundColor: bg.withOpacity(0.5),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12),
+                ),
+              ).merge(
+                ButtonStyle(
+                  overlayColor: MaterialStateProperty.resolveWith((states) {
+                    if (states.contains(MaterialState.pressed)) {
+                      return fg.withOpacity(0.08);
+                    }
+                    if (states.contains(MaterialState.hovered) ||
+                        states.contains(MaterialState.focused)) {
+                      return fg.withOpacity(0.06);
+                    }
+                    return null;
+                  }),
+                  elevation: MaterialStateProperty.resolveWith(
+                    (states) => states.contains(MaterialState.pressed) ? 1 : 0,
+                  ),
+                  animationDuration: const Duration(milliseconds: 120),
+                ),
+              ),
+        ),
+      ),
     );
   }
 }
