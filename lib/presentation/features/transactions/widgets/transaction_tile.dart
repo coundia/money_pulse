@@ -3,7 +3,7 @@ import 'package:intl/intl.dart';
 import 'package:money_pulse/domain/transactions/entities/transaction_entry.dart';
 import 'package:money_pulse/presentation/features/transactions/transaction_form_sheet.dart';
 import 'package:money_pulse/presentation/widgets/right_drawer.dart';
-import 'transaction_view_sheet.dart';
+import 'transaction_detail_view.dart';
 
 class TransactionTile extends StatelessWidget {
   final TransactionEntry entry;
@@ -52,18 +52,18 @@ class TransactionTile extends StatelessWidget {
         onTap: () async {
           final ok = await showRightDrawer<bool>(
             context,
-            child: TransactionFormSheet(entry: entry),
+            child: TransactionDetailView(entry: entry),
             widthFraction: 0.86,
             heightFraction: 0.96,
           );
           if (ok == true) await onUpdated();
         },
-        onLongPress: () => _showContextMenu(context),
+        onLongPress: () => _openContextMenu(context),
       ),
     );
   }
 
-  Future<void> _showContextMenu(BuildContext context) async {
+  Future<void> _openContextMenu(BuildContext context) async {
     await showModalBottomSheet<void>(
       context: context,
       showDragHandle: true,
@@ -82,7 +82,7 @@ class TransactionTile extends StatelessWidget {
                   Navigator.pop(ctx);
                   await showRightDrawer<void>(
                     context,
-                    child: TransactionViewSheet(entry: entry),
+                    child: TransactionDetailView(entry: entry),
                     widthFraction: 0.86,
                     heightFraction: 0.96,
                   );
@@ -143,9 +143,7 @@ class TransactionTile extends StatelessWidget {
                       );
                     },
                   );
-                  if (ok == true) {
-                    await onDeleted();
-                  }
+                  if (ok == true) await onDeleted();
                 },
               ),
               const SizedBox(height: 8),
