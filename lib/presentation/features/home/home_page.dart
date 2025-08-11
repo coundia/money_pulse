@@ -14,6 +14,7 @@ import 'package:money_pulse/presentation/features/transactions/search/txn_search
 import 'package:money_pulse/presentation/features/transactions/transaction_form_sheet.dart';
 import 'package:money_pulse/presentation/features/transactions/controllers/transaction_list_controller.dart';
 import 'package:money_pulse/presentation/features/transactions/models/transaction_filters.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import '../transactions/pages/transaction_list_page.dart';
 
 class HomePage extends ConsumerStatefulWidget {
@@ -30,8 +31,11 @@ class _HomePageState extends ConsumerState<HomePage> {
   void initState() {
     super.initState();
     Future.microtask(() async {
+      // Load base data
       await ref.read(transactionsProvider.notifier).load();
       await ref.read(categoriesProvider.notifier).load();
+
+      await ref.read(ensureSelectedAccountProvider.future);
     });
   }
 
@@ -77,8 +81,14 @@ class _HomePageState extends ConsumerState<HomePage> {
         ),
       ),
     );
+
     if (picked != null) {
       ref.read(selectedAccountIdProvider.notifier).state = picked.id;
+
+      // ✅ persister le dernier compte choisi
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString(kLastAccountIdKey, picked.id);
+
       await ref.read(balanceProvider.notifier).load();
       await ref.read(transactionsProvider.notifier).load();
       if (mounted) setState(() {});

@@ -14,16 +14,52 @@ class TxnSearchDelegate extends SearchDelegate<TransactionEntry?> {
   TxnSearchDelegate(this.items)
     : _filter = ValueNotifier<TxnFilterState>(_todayFilter());
 
+  // ------------------ Quick date helpers ------------------
+  static DateTime _strip(DateTime d) => DateTime(d.year, d.month, d.day);
+
   static TxnFilterState _todayFilter() {
-    final now = DateTime.now();
-    final d = DateTime(now.year, now.month, now.day);
+    final d = _strip(DateTime.now());
     return TxnFilterState(from: d, to: d);
   }
 
-  // Pipeline de filtres pour la LISTE affichée
+  static (DateTime from, DateTime to) _thisMonthRange() {
+    final now = DateTime.now();
+    final from = DateTime(now.year, now.month, 1);
+    final to = DateTime(now.year, now.month + 1, 0); // last day of month
+    return (from, to);
+  }
+
+  static (DateTime from, DateTime to) _thisYearRange() {
+    final now = DateTime.now();
+    final from = DateTime(now.year, 1, 1);
+    final to = DateTime(now.year, 12, 31);
+    return (from, to);
+  }
+
+  bool _isSameDay(DateTime a, DateTime b) =>
+      a.year == b.year && a.month == b.month && a.day == b.day;
+
+  bool _isTodayRange(TxnFilterState f) {
+    if (f.from == null || f.to == null) return false;
+    final t = _strip(DateTime.now());
+    return _isSameDay(f.from!, t) && _isSameDay(f.to!, t);
+  }
+
+  bool _isThisMonthRange(TxnFilterState f) {
+    if (f.from == null || f.to == null) return false;
+    final (mFrom, mTo) = _thisMonthRange();
+    return _isSameDay(f.from!, mFrom) && _isSameDay(f.to!, mTo);
+  }
+
+  bool _isThisYearRange(TxnFilterState f) {
+    if (f.from == null || f.to == null) return false;
+    final (yFrom, yTo) = _thisYearRange();
+    return _isSameDay(f.from!, yFrom) && _isSameDay(f.to!, yTo);
+  }
+
+  // ------------------ Filtering pipeline ------------------
   List<TransactionEntry> _applyFilters(String q, TxnFilterState f) {
     final query = q.trim().toLowerCase();
-
     Iterable<TransactionEntry> it = items;
 
     // Type
@@ -52,7 +88,7 @@ class TxnSearchDelegate extends SearchDelegate<TransactionEntry?> {
     if (f.minCents != null) it = it.where((e) => e.amount >= f.minCents!);
     if (f.maxCents != null) it = it.where((e) => e.amount <= f.maxCents!);
 
-    // Query texte
+    // Text
     if (query.isNotEmpty) {
       it = it.where((e) {
         final text = '${e.code ?? ''} ${e.description ?? ''}'.toLowerCase();
@@ -60,7 +96,7 @@ class TxnSearchDelegate extends SearchDelegate<TransactionEntry?> {
       });
     }
 
-    // Tri
+    // Sort
     final list = it.toList();
     switch (f.sortBy) {
       case TxnSortBy.dateDesc:
@@ -79,7 +115,7 @@ class TxnSearchDelegate extends SearchDelegate<TransactionEntry?> {
     return list;
   }
 
-  // Calcul NET (toujours CREDIT − DEBIT) en ignorant le filtre "type"
+  // Netto (toujours CREDIT − DEBIT) en ignorant le filtre "type"
   int _computeNetCents(String q, TxnFilterState f) {
     final base = _applyFilters(q, f.copyWith(type: TxnTypeFilter.all));
     final credit = base
@@ -93,8 +129,7 @@ class TxnSearchDelegate extends SearchDelegate<TransactionEntry?> {
 
   String _formatWhen(DateTime d) => DateFormat.yMMMd().add_Hm().format(d);
   String _amount(int cents, {bool withSign = true, required bool debit}) {
-    final sign = "";
-    //withSign ? (debit ? '-' : '+') : '';
+    final sign = ""; // you chose no sign in UI
     return '$sign${cents ~/ 100}';
   }
 
@@ -121,10 +156,9 @@ class TxnSearchDelegate extends SearchDelegate<TransactionEntry?> {
     return TextSpan(children: spans);
   }
 
-  // ⬇️ Label lisible de la plage de dates sélectionnée (affiché dans la barre)
+  // Label lisible de la plage
   String _rangeLabel(TxnFilterState f) {
-    DateTime? from = f.from;
-    DateTime? to = f.to;
+    final from = f.from, to = f.to;
     if (from == null && to == null) return 'Any date';
 
     final sameDay = (from != null && to != null)
@@ -132,7 +166,7 @@ class TxnSearchDelegate extends SearchDelegate<TransactionEntry?> {
         : false;
 
     if (sameDay) {
-      final isToday = _isSameDay(from!, DateTime.now());
+      final isToday = _isSameDay(from!, _strip(DateTime.now()));
       return isToday ? 'Today' : DateFormat.yMMMd().format(from);
     }
 
@@ -147,14 +181,8 @@ class TxnSearchDelegate extends SearchDelegate<TransactionEntry?> {
     return 'Until ${DateFormat.yMMMd().format(to!)}';
   }
 
-  bool _isSameDay(DateTime a, DateTime b) =>
-      a.year == b.year && a.month == b.month && a.day == b.day;
-
-  DateTime _strip(DateTime d) => DateTime(d.year, d.month, d.day);
-
   @override
   Widget buildSuggestions(BuildContext context) => _buildBody(context);
-
   @override
   Widget buildResults(BuildContext context) => _buildBody(context);
 
@@ -169,7 +197,7 @@ class TxnSearchDelegate extends SearchDelegate<TransactionEntry?> {
 
         return Column(
           children: [
-            // ====== Barre d’actions rapides (avec date sélectionnée) ======
+            // ====== Quick actions (always show Today / This month / This year) ======
             Padding(
               padding: const EdgeInsets.fromLTRB(12, 8, 12, 4),
               child: Wrap(
@@ -177,6 +205,7 @@ class TxnSearchDelegate extends SearchDelegate<TransactionEntry?> {
                 runSpacing: 8,
                 crossAxisAlignment: WrapCrossAlignment.center,
                 children: [
+                  // Type
                   ChoiceChip(
                     label: const Text('All'),
                     selected: f.type == TxnTypeFilter.all,
@@ -202,7 +231,38 @@ class TxnSearchDelegate extends SearchDelegate<TransactionEntry?> {
                     },
                   ),
 
-                  // ⬇️ Chip Date visible (tap = 1 jour, long-press = plage)
+                  const SizedBox(width: 8),
+
+                  // ⬇️ Quick dates: Today / This month / This year
+                  FilterChip(
+                    avatar: const Icon(Icons.today, size: 18),
+                    label: const Text('Today'),
+                    selected: _isTodayRange(f),
+                    onSelected: (_) {
+                      final d = _strip(DateTime.now());
+                      _filter.value = f.copyWith(from: d, to: d);
+                    },
+                  ),
+                  FilterChip(
+                    avatar: const Icon(Icons.calendar_view_month, size: 18),
+                    label: const Text('This month'),
+                    selected: _isThisMonthRange(f),
+                    onSelected: (_) {
+                      final (from, to) = _thisMonthRange();
+                      _filter.value = f.copyWith(from: from, to: to);
+                    },
+                  ),
+                  FilterChip(
+                    avatar: const Icon(Icons.calendar_month, size: 18),
+                    label: const Text('This year'),
+                    selected: _isThisYearRange(f),
+                    onSelected: (_) {
+                      final (from, to) = _thisYearRange();
+                      _filter.value = f.copyWith(from: from, to: to);
+                    },
+                  ),
+
+                  // Tap chip to pick a single day; long-press for a range
                   GestureDetector(
                     onTap: () async {
                       final picked = await showDatePicker(
@@ -212,11 +272,7 @@ class TxnSearchDelegate extends SearchDelegate<TransactionEntry?> {
                         lastDate: DateTime(2100),
                       );
                       if (picked != null) {
-                        final d = DateTime(
-                          picked.year,
-                          picked.month,
-                          picked.day,
-                        );
+                        final d = _strip(picked);
                         _filter.value = f.copyWith(from: d, to: d);
                       }
                     },
@@ -232,16 +288,8 @@ class TxnSearchDelegate extends SearchDelegate<TransactionEntry?> {
                       );
                       if (range != null) {
                         _filter.value = f.copyWith(
-                          from: DateTime(
-                            range.start.year,
-                            range.start.month,
-                            range.start.day,
-                          ),
-                          to: DateTime(
-                            range.end.year,
-                            range.end.month,
-                            range.end.day,
-                          ),
+                          from: _strip(range.start),
+                          to: _strip(range.end),
                         );
                       }
                     },
@@ -252,7 +300,9 @@ class TxnSearchDelegate extends SearchDelegate<TransactionEntry?> {
                     ),
                   ),
 
-                  const SizedBox(width: 12),
+                  const SizedBox(width: 8),
+
+                  // Sort
                   FilterChip(
                     label: Text(switch (f.sortBy) {
                       TxnSortBy.dateDesc => 'Date ↓',
@@ -271,18 +321,12 @@ class TxnSearchDelegate extends SearchDelegate<TransactionEntry?> {
                       _filter.value = f.copyWith(sortBy: order[f.sortBy]);
                     },
                   ),
-                  const SizedBox(width: 12),
 
-                  if (!f.isEmpty)
-                    TextButton.icon(
-                      onPressed: () => _filter.value = _todayFilter(),
-                      icon: const Icon(Icons.today),
-                      label: const Text('Today'),
-                    ),
-                  const SizedBox(width: 8),
+                  // Stats
                   Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
+                      const SizedBox(width: 8),
                       Text(
                         '${list.length} result${list.length == 1 ? '' : 's'}',
                         style: theme.textTheme.bodySmall,
@@ -308,7 +352,7 @@ class TxnSearchDelegate extends SearchDelegate<TransactionEntry?> {
             ),
             const Divider(height: 1),
 
-            // ====== Résultats ======
+            // ====== Results ======
             Expanded(
               child: list.isEmpty
                   ? _EmptyState(

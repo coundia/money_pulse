@@ -16,11 +16,8 @@ class QuickAddTransactionUseCase {
     String? description,
     String? categoryId,
     DateTime? dateTransaction,
+    required String accountId,
   }) async {
-    final acc = await accRepo.findDefault();
-    if (acc == null) {
-      throw Exception('No default account');
-    }
     final now = DateTime.now();
     final entry = TransactionEntry(
       id: const Uuid().v4(),
@@ -35,7 +32,7 @@ class QuickAddTransactionUseCase {
       status: null,
       entityName: null,
       entityId: null,
-      accountId: acc.id,
+      accountId: accountId,
       categoryId: categoryId,
       createdAt: now,
       updatedAt: now,

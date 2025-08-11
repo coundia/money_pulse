@@ -5,6 +5,8 @@ import 'package:money_pulse/presentation/app/providers.dart';
 import 'package:money_pulse/domain/categories/repositories/category_repository.dart';
 import 'package:money_pulse/domain/categories/entities/category.dart';
 
+import '../../app/account_selection.dart';
+
 class TransactionQuickAddSheet extends ConsumerStatefulWidget {
   const TransactionQuickAddSheet({super.key});
 
@@ -156,10 +158,23 @@ class _TransactionQuickAddSheetState
               FilledButton.icon(
                 onPressed: () async {
                   if (!formKey.currentState!.validate()) return;
+
+                  // ✅ get currently selected account
+                  final accountId = ref.read(selectedAccountIdProvider);
+                  if (accountId == null || accountId.isEmpty) {
+                    if (!mounted) return;
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(content: Text('Select an account first')),
+                    );
+                    return;
+                  }
+
                   final cents = _toCents(amountCtrl.text);
+
                   await ref
                       .read(quickAddTransactionUseCaseProvider)
                       .execute(
+                        accountId: accountId, // ✅ pass the selected account
                         amountCents: cents,
                         isDebit: isDebit,
                         description: descCtrl.text.trim().isEmpty
@@ -168,6 +183,7 @@ class _TransactionQuickAddSheetState
                         categoryId: categoryId,
                         dateTransaction: when,
                       );
+
                   if (mounted) Navigator.of(context).pop(true);
                 },
                 icon: const Icon(Icons.check),
