@@ -8,7 +8,8 @@ import '../../app/account_selection.dart';
 import 'providers/transaction_list_providers.dart';
 
 class TransactionQuickAddSheet extends ConsumerStatefulWidget {
-  const TransactionQuickAddSheet({super.key});
+  final bool initialIsDebit;
+  const TransactionQuickAddSheet({super.key, this.initialIsDebit = true});
 
   @override
   ConsumerState<TransactionQuickAddSheet> createState() =>
@@ -28,6 +29,7 @@ class _TransactionQuickAddSheetState
   @override
   void initState() {
     super.initState();
+    isDebit = widget.initialIsDebit;
     Future.microtask(() async {
       final repo = ref.read(categoryRepoProvider);
       categories = await repo.findAllActive();

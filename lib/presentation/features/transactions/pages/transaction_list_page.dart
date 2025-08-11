@@ -2,9 +2,11 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 import 'package:money_pulse/presentation/app/providers.dart';
+import 'package:money_pulse/presentation/widgets/right_drawer.dart';
 import '../../reports/report_page.dart';
 import '../controllers/transaction_list_controller.dart';
 import '../providers/transaction_list_providers.dart';
+import '../transaction_quick_add_sheet.dart';
 import '../utils/transaction_grouping.dart';
 import '../widgets/day_header.dart';
 import '../widgets/transaction_tile.dart';
@@ -163,8 +165,19 @@ class TransactionListPage extends ConsumerWidget {
   }
 
   Future<void> _onAdd(BuildContext context, WidgetRef ref, String type) async {
-    final label = type == 'DEBIT' ? 'Add expense' : 'Add income';
-    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(label)));
-    // Branche ici ton TransactionQuickAddSheet/TransactionFormSheet si disponible.
+    final isDebit = type == 'DEBIT';
+    final ok = await showRightDrawer<bool>(
+      context,
+      child: TransactionQuickAddSheet(initialIsDebit: isDebit),
+      widthFraction: 0.86,
+      heightFraction: 0.96,
+    );
+
+    // Le sheet rafraîchit déjà les providers; on invalide au cas où.
+    if (ok == true) {
+      await ref.read(transactionsProvider.notifier).load();
+      await ref.read(balanceProvider.notifier).load();
+      ref.invalidate(transactionListItemsProvider);
+    }
   }
 }
