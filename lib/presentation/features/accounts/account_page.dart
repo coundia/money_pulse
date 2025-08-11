@@ -1,7 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:uuid/uuid.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+import 'package:intl/intl.dart';
 import 'package:money_pulse/presentation/app/providers.dart';
+import 'package:money_pulse/presentation/app/account_selection.dart';
 import 'package:money_pulse/domain/accounts/entities/account.dart';
 import 'package:money_pulse/domain/accounts/repositories/account_repository.dart';
 import 'package:money_pulse/presentation/widgets/right_drawer.dart';
@@ -17,6 +20,12 @@ class _AccountPageState extends ConsumerState<AccountPage> {
   late final AccountRepository _repo = ref.read(accountRepoProvider);
 
   Future<List<Account>> _load() => _repo.findAllActive();
+
+  String? _t(String? s) {
+    if (s == null) return null;
+    final v = s.trim();
+    return v.isEmpty ? null : v;
+  }
 
   Future<void> _addOrEdit({Account? existing}) async {
     final result = await showRightDrawer<_AccountFormResult>(
@@ -36,14 +45,10 @@ class _AccountPageState extends ConsumerState<AccountPage> {
         balancePrev: 0,
         balanceBlocked: 0,
         code: result.code,
-        description: result.description?.trim().isEmpty == true
-            ? null
-            : result.description!.trim(),
+        description: _t(result.description),
         status: null,
-        currency: result.currency?.trim().isEmpty == true
-            ? null
-            : result.currency!.trim(),
-        isDefault: true,
+        currency: _t(result.currency),
+        isDefault: false,
         createdAt: now,
         updatedAt: now,
         deletedAt: null,
@@ -55,12 +60,9 @@ class _AccountPageState extends ConsumerState<AccountPage> {
     } else {
       final updated = existing.copyWith(
         code: result.code,
-        description: result.description?.trim().isEmpty == true
-            ? null
-            : result.description!.trim(),
-        currency: result.currency?.trim().isEmpty == true
-            ? null
-            : result.currency!.trim(),
+        description: _t(result.description),
+        currency: _t(result.currency),
+        updatedAt: DateTime.now(),
       );
       await _repo.update(updated);
     }
@@ -73,6 +75,10 @@ class _AccountPageState extends ConsumerState<AccountPage> {
     } catch (_) {
       await _repo.update(acc.copyWith(isDefault: true));
     }
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString(kLastAccountIdKey, acc.id);
+    ref.read(selectedAccountIdProvider.notifier).state = acc.id;
+
     if (mounted) setState(() {});
     if (!mounted) return;
     ScaffoldMessenger.of(
@@ -90,6 +96,69 @@ class _AccountPageState extends ConsumerState<AccountPage> {
     if (v is bool) return v;
     if (v is num) return v != 0;
     return false;
+  }
+
+  String _fmtDate(DateTime? d) =>
+      d == null ? '-' : DateFormat.yMMMd().add_Hm().format(d);
+
+  Future<void> _view(Account a) async {
+    await showDialog<void>(
+      context: context,
+      builder: (_) => AlertDialog(
+        title: const Text('Account details'),
+        content: SingleChildScrollView(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              _kv('Code', a.code ?? '-'),
+              _kv('Description', a.description ?? '-'),
+              _kv('Currency', a.currency ?? '-'),
+              const SizedBox(height: 8),
+              _kv('Balance', '${a.balance}'),
+              _kv('Previous balance', '${a.balancePrev}'),
+              _kv('Blocked balance', '${a.balanceBlocked}'),
+              const SizedBox(height: 8),
+              _kv('Default', a.isDefault ? 'Yes' : 'No'),
+              _kv('Status', a.status ?? '-'),
+              _kv('Remote ID', a.remoteId ?? '-'),
+              const SizedBox(height: 8),
+              _kv('Created at', _fmtDate(a.createdAt)),
+              _kv('Updated at', _fmtDate(a.updatedAt)),
+              _kv('Deleted at', _fmtDate(a.deletedAt)),
+              _kv('Sync at', _fmtDate(a.syncAt)),
+              _kv('Version', '${a.version}'),
+              const SizedBox(height: 8),
+              const Text('ID', style: TextStyle(fontWeight: FontWeight.w600)),
+              const SizedBox(height: 4),
+              SelectableText(a.id),
+            ],
+          ),
+        ),
+        actions: [
+          FilledButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Close'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _kv(String k, String v) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 6),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          SizedBox(
+            width: 140,
+            child: Text(k, style: const TextStyle(fontWeight: FontWeight.w600)),
+          ),
+          const SizedBox(width: 6),
+          Expanded(child: Text(v)),
+        ],
+      ),
+    );
   }
 
   @override
@@ -117,13 +186,23 @@ class _AccountPageState extends ConsumerState<AccountPage> {
                       itemBuilder: (_, i) {
                         final a = items[i];
                         final isDefault = _isDefault(a);
+                        final code = (a.code ?? '').trim();
+                        final two = code.isEmpty
+                            ? '?'
+                            : (code.length >= 2 ? code.substring(0, 2) : code)
+                                  .toUpperCase();
                         return ListTile(
-                          leading: CircleAvatar(child: Text(a.code ?? '?')),
+                          leading: CircleAvatar(child: Text(two)),
                           title: Text(a.code ?? 'NA'),
-                          subtitle: Text(a.description ?? a.currency ?? ''),
+                          subtitle: Text(
+                            '${NumberFormat("#").format(a.balance / 100)} ${a.currency ?? ''}',
+                          ),
                           trailing: PopupMenuButton<String>(
                             onSelected: (v) {
                               switch (v) {
+                                case 'view':
+                                  _view(a);
+                                  break;
                                 case 'default':
                                   _setDefault(a);
                                   break;
@@ -136,6 +215,13 @@ class _AccountPageState extends ConsumerState<AccountPage> {
                               }
                             },
                             itemBuilder: (_) => [
+                              const PopupMenuItem(
+                                value: 'view',
+                                child: ListTile(
+                                  leading: Icon(Icons.info_outline),
+                                  title: Text('View'),
+                                ),
+                              ),
                               if (!isDefault)
                                 const PopupMenuItem(
                                   value: 'default',
@@ -160,7 +246,7 @@ class _AccountPageState extends ConsumerState<AccountPage> {
                               ),
                             ],
                           ),
-                          onTap: () => _addOrEdit(existing: a),
+                          onTap: () => _view(a),
                           selected: isDefault,
                           selectedTileColor: Theme.of(
                             context,

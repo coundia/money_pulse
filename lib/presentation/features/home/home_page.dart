@@ -48,36 +48,56 @@ class _HomePageState extends ConsumerState<HomePage> {
     );
     if (ok == true) {
       await ref.read(transactionsProvider.notifier).load();
-      setState(() {});
+      await ref.read(balanceProvider.notifier).load();
+      if (mounted) setState(() {});
     }
   }
 
   Future<void> _showAccountPicker() async {
-    final accounts = await ref.read(accountRepoProvider).findAllActive();
     if (!mounted) return;
+
     final picked = await showModalBottomSheet<Account>(
       context: context,
       builder: (_) => SafeArea(
-        child: ListView.separated(
-          padding: const EdgeInsets.all(8),
-          itemBuilder: (c, i) {
-            final a = accounts[i];
-            return ListTile(
-              leading: const Icon(Icons.account_balance_wallet),
-              title: Text(a.code ?? ''),
-              subtitle: MoneyText(
-                amountCents: a.balance,
-                currency: 'XOF',
-                style: Theme.of(context).textTheme.titleLarge,
-              ),
-              trailing: (ref.read(selectedAccountIdProvider) ?? '') == a.id
-                  ? const Icon(Icons.check)
-                  : null,
-              onTap: () => Navigator.pop(c, a),
+        child: FutureBuilder<List<Account>>(
+          // Ensure balances are recalculated, then fetch fresh accounts
+          future: ref
+              .read(balanceProvider.notifier)
+              .load()
+              .then((_) => ref.read(accountRepoProvider).findAllActive()),
+          builder: (c, snap) {
+            if (snap.connectionState == ConnectionState.waiting) {
+              return const Center(
+                child: Padding(
+                  padding: EdgeInsets.all(16),
+                  child: CircularProgressIndicator(),
+                ),
+              );
+            }
+            final accounts = snap.data ?? const <Account>[];
+            return ListView.separated(
+              padding: const EdgeInsets.all(8),
+              itemBuilder: (c, i) {
+                final a = accounts[i];
+                return ListTile(
+                  leading: const Icon(Icons.account_balance_wallet),
+                  title: Text(a.code ?? ''),
+                  subtitle: MoneyText(
+                    amountCents: a.balance,
+                    currency:
+                        a.currency ?? 'XOF', // use account currency if set
+                    style: Theme.of(context).textTheme.titleLarge,
+                  ),
+                  trailing: (ref.read(selectedAccountIdProvider) ?? '') == a.id
+                      ? const Icon(Icons.check)
+                      : null,
+                  onTap: () => Navigator.pop(c, a),
+                );
+              },
+              separatorBuilder: (_, __) => const Divider(height: 1),
+              itemCount: accounts.length,
             );
           },
-          separatorBuilder: (_, __) => const Divider(height: 1),
-          itemCount: accounts.length,
         ),
       ),
     );
@@ -85,12 +105,13 @@ class _HomePageState extends ConsumerState<HomePage> {
     if (picked != null) {
       ref.read(selectedAccountIdProvider.notifier).state = picked.id;
 
-      // ✅ persister le dernier compte choisi
       final prefs = await SharedPreferences.getInstance();
       await prefs.setString(kLastAccountIdKey, picked.id);
 
+      // keep everything in sync
       await ref.read(balanceProvider.notifier).load();
       await ref.read(transactionsProvider.notifier).load();
+
       if (mounted) setState(() {});
     }
   }
