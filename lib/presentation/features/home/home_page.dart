@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:intl/intl.dart';
 
 import 'package:money_pulse/presentation/app/providers.dart';
 import 'package:money_pulse/presentation/app/account_selection.dart';
@@ -18,14 +17,20 @@ import 'package:money_pulse/presentation/features/transactions/search/txn_search
 import 'package:money_pulse/domain/accounts/entities/account.dart';
 import 'package:money_pulse/domain/transactions/entities/transaction_entry.dart';
 
-// + NEW: manage pages
+// Manage pages
 import 'package:money_pulse/presentation/features/accounts/account_page.dart';
 import 'package:money_pulse/presentation/features/categories/category_list_page.dart';
 
-// Relative (feature) imports
+// Feature-internal
 import '../transactions/controllers/transaction_list_controller.dart';
-import '../transactions/models/transaction_filters.dart';
-import '../transactions/providers/transaction_list_providers.dart';
+import '../transactions/providers/transaction_list_providers.dart'
+    show transactionListItemsProvider;
+
+// NEW: extracted widgets
+
+import 'widgets/account_picker_sheet.dart';
+import 'widgets/period_picker_sheet.dart';
+import 'widgets/share_account_dialog.dart';
 
 class HomePage extends ConsumerStatefulWidget {
   const HomePage({super.key});
@@ -67,49 +72,16 @@ class _HomePageState extends ConsumerState<HomePage> {
 
   Future<void> _showAccountPicker() async {
     if (!mounted) return;
-    final picked = await showModalBottomSheet<Account>(
+
+    final picked = await showAccountPickerSheet(
       context: context,
-      builder: (_) => SafeArea(
-        child: FutureBuilder<List<Account>>(
-          future: ref
-              .read(balanceProvider.notifier)
-              .load()
-              .then((_) => ref.read(accountRepoProvider).findAllActive()),
-          builder: (c, snap) {
-            if (snap.connectionState == ConnectionState.waiting) {
-              return const Center(
-                child: Padding(
-                  padding: EdgeInsets.all(16),
-                  child: CircularProgressIndicator(),
-                ),
-              );
-            }
-            final accounts = snap.data ?? const <Account>[];
-            return ListView.separated(
-              padding: const EdgeInsets.all(8),
-              itemBuilder: (c, i) {
-                final a = accounts[i];
-                return ListTile(
-                  leading: const Icon(Icons.account_balance_wallet),
-                  title: Text(a.code ?? ''),
-                  subtitle: MoneyText(
-                    amountCents: a.balance,
-                    currency: a.currency ?? 'XOF',
-                    style: Theme.of(context).textTheme.titleLarge,
-                  ),
-                  trailing: (ref.read(selectedAccountIdProvider) ?? '') == a.id
-                      ? const Icon(Icons.check)
-                      : null,
-                  onTap: () => Navigator.pop(c, a),
-                );
-              },
-              separatorBuilder: (_, __) => const Divider(height: 1),
-              itemCount: accounts.length,
-            );
-          },
-        ),
-      ),
+      accountsFuture: ref
+          .read(balanceProvider.notifier)
+          .load()
+          .then((_) => ref.read(accountRepoProvider).findAllActive()),
+      selectedAccountId: ref.read(selectedAccountIdProvider),
     );
+
     if (picked != null) {
       ref.read(selectedAccountIdProvider.notifier).state = picked.id;
       final prefs = await SharedPreferences.getInstance();
@@ -123,47 +95,10 @@ class _HomePageState extends ConsumerState<HomePage> {
   }
 
   Future<void> _showPeriodSheet() async {
-    final current = ref.read(transactionListStateProvider);
-    final sel = await showModalBottomSheet<Period>(
+    final state = ref.read(transactionListStateProvider);
+    final sel = await showPeriodPickerSheet(
       context: context,
-      builder: (context) => SafeArea(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            const SizedBox(height: 8),
-            const Text(
-              'View period',
-              style: TextStyle(fontWeight: FontWeight.w600),
-            ),
-            const SizedBox(height: 8),
-            ListTile(
-              leading: const Icon(Icons.view_week),
-              title: const Text('Weekly'),
-              onTap: () => Navigator.pop(context, Period.weekly),
-              trailing: current.period == Period.weekly
-                  ? const Icon(Icons.check)
-                  : null,
-            ),
-            ListTile(
-              leading: const Icon(Icons.calendar_month),
-              title: const Text('Monthly'),
-              onTap: () => Navigator.pop(context, Period.monthly),
-              trailing: current.period == Period.monthly
-                  ? const Icon(Icons.check)
-                  : null,
-            ),
-            ListTile(
-              leading: const Icon(Icons.event),
-              title: const Text('Yearly'),
-              onTap: () => Navigator.pop(context, Period.yearly),
-              trailing: current.period == Period.yearly
-                  ? const Icon(Icons.check)
-                  : null,
-            ),
-            const SizedBox(height: 8),
-          ],
-        ),
-      ),
+      current: state.period,
     );
     if (sel != null) {
       ref.read(transactionListStateProvider.notifier).setPeriod(sel);
@@ -173,41 +108,7 @@ class _HomePageState extends ConsumerState<HomePage> {
   }
 
   Future<void> _showShareDialog(Account acc) async {
-    await showDialog<void>(
-      context: context,
-      builder: (_) => AlertDialog(
-        title: const Text('Share account'),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text('Code: ${acc.code}'),
-            const SizedBox(height: 6),
-            SelectableText('ID: ${acc.id}'),
-          ],
-        ),
-        actions: [
-          TextButton(
-            onPressed: () async {
-              await Clipboard.setData(
-                ClipboardData(text: 'Account ${acc.code} (${acc.id})'),
-              );
-              if (mounted) Navigator.pop(context);
-              if (mounted) {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(content: Text('Copied to clipboard')),
-                );
-              }
-            },
-            child: const Text('Copy'),
-          ),
-          FilledButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('Close'),
-          ),
-        ],
-      ),
-    );
+    await showShareAccountDialog(context: context, acc: acc);
   }
 
   int get _navSelectedIndex => pageIdx == 0 ? 0 : 2;
@@ -341,7 +242,7 @@ class _HomePageState extends ConsumerState<HomePage> {
                     );
                     break;
 
-                  // NEW: manage categories / accounts
+                  // Manage categories / accounts
                   case 'manageCategories':
                     if (!mounted) break;
                     await Navigator.of(context).push(
