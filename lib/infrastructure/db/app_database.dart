@@ -6,16 +6,18 @@ import 'package:sqflite/sqflite.dart';
 class AppDatabase {
   AppDatabase._();
   static final AppDatabase I = AppDatabase._();
+
+  static const _dbFile = 'money_pulse.db';
+
   Database? _db;
 
-  Future<void> init() async {
+  Future<void> init({int version = 1}) async {
     if (_db != null) return;
-    final base = await getDatabasesPath();
-    final path = p.join(base, 'money_pulse.db');
+    final path = await _resolvePath();
     _db = await openDatabase(
       path,
-      version: 1,
-      onCreate: (db, version) async {
+      version: version,
+      onCreate: (db, _) async {
         await _applySchema(db);
       },
     );
@@ -40,9 +42,42 @@ class AppDatabase {
   }
 
   Future<T> tx<T>(Future<T> Function(Transaction) action) async {
-    return await db.transaction<T>((txn) async {
-      return await action(txn);
-    });
+    return await db.transaction<T>((txn) async => await action(txn));
+  }
+
+  Future<void> recreate({int version = 1}) async {
+    final path = await _resolvePath();
+    if (_db != null) {
+      await _db!.close();
+      _db = null;
+    }
+    await deleteDatabase(path);
+    _db = await openDatabase(
+      path,
+      version: version,
+      onCreate: (db, _) async {
+        await _applySchema(db);
+      },
+    );
+  }
+
+  Future<void> deleteOnly() async {
+    final path = await _resolvePath();
+    if (_db != null) {
+      await _db!.close();
+      _db = null;
+    }
+    await deleteDatabase(path);
+  }
+
+  Future<bool> exists() async {
+    final path = await _resolvePath();
+    return databaseExists(path);
+  }
+
+  Future<String> _resolvePath() async {
+    final base = await getDatabasesPath();
+    return p.join(base, _dbFile);
   }
 
   Future<void> _applySchema(Database db) async {

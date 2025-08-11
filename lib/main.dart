@@ -1,31 +1,41 @@
+import 'dart:async';
+import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 import 'package:intl/date_symbol_data_local.dart';
+import 'package:sqflite/sqflite.dart';
 import 'package:money_pulse/infrastructure/db/app_database.dart';
 import 'package:money_pulse/presentation/app/app.dart';
 import 'package:money_pulse/presentation/app/providers.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  Intl.defaultLocale = 'fr_FR';
+  FlutterError.onError = (details) {
+    Zone.current.handleUncaughtError(
+      details.exception,
+      details.stack ?? StackTrace.empty,
+    );
+  };
   await Future.wait([
     initializeDateFormatting('fr'),
     initializeDateFormatting('fr_FR'),
   ]);
+  Intl.defaultLocale = 'fr_FR';
   await AppDatabase.I.init();
-  runApp(const ProviderScope(child: Bootstrap()));
+  runZonedGuarded(() {
+    runApp(const ProviderScope(child: Bootstrap()));
+  }, (error, stack) {});
 }
 
 class Bootstrap extends ConsumerStatefulWidget {
   const Bootstrap({super.key});
-
   @override
   ConsumerState<Bootstrap> createState() => _BootstrapState();
 }
 
 class _BootstrapState extends ConsumerState<Bootstrap> {
-  late final Future<void> _future;
+  late Future<void> _future;
 
   @override
   void initState() {
@@ -34,8 +44,32 @@ class _BootstrapState extends ConsumerState<Bootstrap> {
   }
 
   Future<void> _init() async {
-    await ref.read(ensureDefaultAccountUseCaseProvider).execute();
-    await ref.read(seedDefaultCategoriesUseCaseProvider).execute();
+    try {
+      await ref.read(ensureDefaultAccountUseCaseProvider).execute();
+    } on DatabaseException catch (e) {
+      final msg = e.toString();
+      if (!msg.contains('UNIQUE constraint failed')) {
+        rethrow;
+      }
+    } catch (_) {}
+    try {
+      await ref.read(seedDefaultCategoriesUseCaseProvider).execute();
+    } on DatabaseException catch (e) {
+      final msg = e.toString();
+      if (!msg.contains('UNIQUE constraint failed')) {
+        rethrow;
+      }
+    } catch (_) {}
+  }
+
+  Future<void> _retry() async {
+    setState(() => _future = _init());
+  }
+
+  Future<void> _resetDbAndRetry() async {
+    await AppDatabase.I.recreate(version: 1);
+    if (!mounted) return;
+    await _retry();
   }
 
   @override
@@ -44,19 +78,92 @@ class _BootstrapState extends ConsumerState<Bootstrap> {
       future: _future,
       builder: (_, snap) {
         if (snap.connectionState != ConnectionState.done) {
-          return const MaterialApp(
+          return MaterialApp(
             debugShowCheckedModeBanner: false,
-            home: Scaffold(body: Center(child: CircularProgressIndicator())),
+            localizationsDelegates: const [
+              DefaultMaterialLocalizations.delegate,
+              DefaultWidgetsLocalizations.delegate,
+              DefaultCupertinoLocalizations.delegate,
+            ],
+            supportedLocales: const [Locale('fr'), Locale('fr', 'FR')],
+            home: const Scaffold(
+              body: Center(child: CircularProgressIndicator()),
+            ),
           );
         }
         if (snap.hasError) {
           return MaterialApp(
             debugShowCheckedModeBanner: false,
-            home: Scaffold(body: Center(child: Text('Erreur: ${snap.error}'))),
+            localizationsDelegates: const [
+              DefaultMaterialLocalizations.delegate,
+              DefaultWidgetsLocalizations.delegate,
+              DefaultCupertinoLocalizations.delegate,
+            ],
+            supportedLocales: const [Locale('fr'), Locale('fr', 'FR')],
+            home: _BootstrapErrorScreen(
+              error: snap.error!,
+              onRetry: _retry,
+              onResetDb: _resetDbAndRetry,
+            ),
           );
         }
         return const AppRoot();
       },
+    );
+  }
+}
+
+class _BootstrapErrorScreen extends StatelessWidget {
+  final Object error;
+  final VoidCallback onRetry;
+  final Future<void> Function() onResetDb;
+  const _BootstrapErrorScreen({
+    required this.error,
+    required this.onRetry,
+    required this.onResetDb,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      body: Center(
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 520),
+          child: Padding(
+            padding: const EdgeInsets.all(24),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const Icon(Icons.error_outline, size: 64),
+                const SizedBox(height: 12),
+                const Text(
+                  'Impossible de démarrer',
+                  style: TextStyle(fontSize: 20, fontWeight: FontWeight.w600),
+                ),
+                const SizedBox(height: 8),
+                Text('$error', textAlign: TextAlign.center),
+                const SizedBox(height: 16),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    FilledButton.icon(
+                      onPressed: onRetry,
+                      icon: const Icon(Icons.refresh),
+                      label: const Text('Réessayer'),
+                    ),
+                    const SizedBox(width: 12),
+                    OutlinedButton.icon(
+                      onPressed: onResetDb,
+                      icon: const Icon(Icons.delete_forever),
+                      label: const Text('Réinitialiser la base'),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
     );
   }
 }

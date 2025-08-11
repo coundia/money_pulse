@@ -1,9 +1,8 @@
-
-PRAGMA foreign_keys = ON;
+PRAGMA foreign_keys = OFF;
 
 CREATE TABLE account (
   id TEXT PRIMARY KEY,
-  remoteId TEXT UNIQUE,
+  remoteId TEXT,
   balance INTEGER DEFAULT 0,
   balance_prev INTEGER DEFAULT 0,
   balance_blocked INTEGER DEFAULT 0,
@@ -11,55 +10,56 @@ CREATE TABLE account (
   description TEXT,
   status TEXT,
   currency TEXT,
-  isDefault INTEGER DEFAULT 0 NOT NULL,
-  createdAt TEXT DEFAULT (datetime('now')) NOT NULL,
-  updatedAt TEXT DEFAULT (datetime('now')) NOT NULL,
+  isDefault INTEGER DEFAULT 0,
+  createdAt TEXT DEFAULT (datetime('now')),
+  updatedAt TEXT DEFAULT (datetime('now')),
   deletedAt TEXT,
   syncAt TEXT,
-  version INTEGER DEFAULT 0 NOT NULL,
-  isDirty INTEGER DEFAULT 1 NOT NULL
+  version INTEGER DEFAULT 0,
+  isDirty INTEGER DEFAULT 1
 );
 
-CREATE UNIQUE INDEX uq_account_code_active ON account(code) WHERE deletedAt IS NULL;
+CREATE INDEX idx_account_code ON account(code);
 CREATE INDEX idx_account_dirty ON account(isDirty);
 CREATE INDEX idx_account_deleted ON account(deletedAt);
 
 CREATE TABLE category (
   id TEXT PRIMARY KEY,
-  remoteId TEXT UNIQUE,
+  remoteId TEXT,
   code TEXT,
   description TEXT,
-  createdAt TEXT DEFAULT (datetime('now')) NOT NULL,
-  updatedAt TEXT DEFAULT (datetime('now')) NOT NULL,
+  typeEntry TEXT DEFAULT 'DEBIT' CHECK(typeEntry IN ('DEBIT','CREDIT')),
+  createdAt TEXT DEFAULT (datetime('now')),
+  updatedAt TEXT DEFAULT (datetime('now')),
   deletedAt TEXT,
   syncAt TEXT,
-  version INTEGER DEFAULT 0 NOT NULL,
-  isDirty INTEGER DEFAULT 1 NOT NULL
+  version INTEGER DEFAULT 0,
+  isDirty INTEGER DEFAULT 1
 );
 
-CREATE UNIQUE INDEX uq_category_code_active ON category(code) WHERE deletedAt IS NULL;
+CREATE INDEX idx_category_code ON category(code);
 CREATE INDEX idx_category_dirty ON category(isDirty);
 CREATE INDEX idx_category_deleted ON category(deletedAt);
 
 CREATE TABLE transaction_entry (
   id TEXT PRIMARY KEY,
-  remoteId TEXT UNIQUE,
+  remoteId TEXT,
   code TEXT,
   description TEXT,
-  amount INTEGER DEFAULT 0 NOT NULL CHECK(amount >= 0),
-  typeEntry TEXT DEFAULT 'DEBIT' NOT NULL CHECK(typeEntry IN ('DEBIT','CREDIT')),
-  dateTransaction TEXT NOT NULL,
+  amount INTEGER DEFAULT 0,
+  typeEntry TEXT DEFAULT 'DEBIT',
+  dateTransaction TEXT,
   status TEXT,
   entityName TEXT,
   entityId TEXT,
-  accountId TEXT NOT NULL REFERENCES account(id) ON DELETE RESTRICT,
-  categoryId TEXT REFERENCES category(id) ON DELETE SET NULL,
-  createdAt TEXT DEFAULT (datetime('now')) NOT NULL,
-  updatedAt TEXT DEFAULT (datetime('now')) NOT NULL,
+  accountId TEXT,
+  categoryId TEXT,
+  createdAt TEXT DEFAULT (datetime('now')),
+  updatedAt TEXT DEFAULT (datetime('now')),
   deletedAt TEXT,
   syncAt TEXT,
-  version INTEGER DEFAULT 0 NOT NULL,
-  isDirty INTEGER DEFAULT 1 NOT NULL
+  version INTEGER DEFAULT 0,
+  isDirty INTEGER DEFAULT 1
 );
 
 CREATE INDEX idx_txn_date ON transaction_entry(dateTransaction);
@@ -72,9 +72,9 @@ CREATE TABLE change_log (
   id TEXT PRIMARY KEY,
   entityTable TEXT NOT NULL,
   entityId TEXT NOT NULL,
-  operation TEXT NOT NULL CHECK(operation IN ('INSERT','UPDATE','DELETE')),
+  operation TEXT,
   payload TEXT,
-  status TEXT NOT NULL DEFAULT 'PENDING' CHECK(status IN ('PENDING','SENT','ACK','FAILED')),
+  status TEXT,
   attempts INTEGER NOT NULL DEFAULT 0,
   error TEXT,
   createdAt TEXT DEFAULT (datetime('now')) NOT NULL,
@@ -85,6 +85,7 @@ CREATE TABLE change_log (
 
 CREATE INDEX idx_changelog_status ON change_log(status);
 CREATE INDEX idx_changelog_entity ON change_log(entityTable, entityId);
+ 
 
 CREATE TABLE sync_state (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
