@@ -2,8 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 import 'package:money_pulse/domain/categories/entities/category.dart';
-import 'package:money_pulse/presentation/app/providers.dart';
 import 'package:money_pulse/domain/transactions/entities/transaction_entry.dart';
+import 'package:money_pulse/presentation/app/providers.dart';
 
 class TransactionFormSheet extends ConsumerStatefulWidget {
   final TransactionEntry entry;
@@ -28,13 +28,15 @@ class _TransactionFormSheetState extends ConsumerState<TransactionFormSheet> {
     super.initState();
     final e = widget.entry;
     isDebit = e.typeEntry == 'DEBIT';
-    amountCtrl.text = (e.amount / 100).toStringAsFixed(0);
+    amountCtrl.text = (e.amount / 100).toStringAsFixed(2);
     descCtrl.text = e.description ?? '';
     categoryId = e.categoryId;
     when = e.dateTransaction;
     Future.microtask(() async {
-      categories = await ref.read(categoryRepoProvider).findAllActive();
-      setState(() {});
+      final repo = ref.read(categoryRepoProvider);
+      final cats = await repo.findAllActive();
+      if (!mounted) return;
+      setState(() => categories = cats);
     });
   }
 
@@ -54,6 +56,11 @@ class _TransactionFormSheetState extends ConsumerState<TransactionFormSheet> {
   @override
   Widget build(BuildContext context) {
     final insets = MediaQuery.of(context).viewInsets.bottom;
+    final typeLabel = isDebit ? 'Expense' : 'Income';
+    final typeColor = isDebit
+        ? Theme.of(context).colorScheme.error
+        : Theme.of(context).colorScheme.primary;
+
     return Padding(
       padding: EdgeInsets.only(bottom: insets),
       child: Form(
@@ -63,15 +70,59 @@ class _TransactionFormSheetState extends ConsumerState<TransactionFormSheet> {
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              SegmentedButton<bool>(
-                segments: const [
-                  ButtonSegment(value: true, label: Text('Expense')),
-                  ButtonSegment(value: false, label: Text('Income')),
+              // Header
+              Row(
+                children: [
+                  Icon(
+                    isDebit
+                        ? Icons.remove_circle_outline
+                        : Icons.add_circle_outline,
+                    color: typeColor,
+                  ),
+                  const SizedBox(width: 8),
+                  Text(
+                    'Edit Transaction',
+                    style: Theme.of(context).textTheme.titleLarge,
+                  ),
+                  const Spacer(),
+                  IconButton(
+                    icon: const Icon(Icons.close),
+                    onPressed: () => Navigator.of(context).pop(),
+                  ),
                 ],
-                selected: {isDebit},
-                onSelectionChanged: (s) => setState(() => isDebit = s.first),
               ),
-              const SizedBox(height: 12),
+              const SizedBox(height: 4),
+              Container(
+                height: 4,
+                width: 36,
+                decoration: BoxDecoration(
+                  color: Theme.of(
+                    context,
+                  ).colorScheme.onSurface.withOpacity(0.2),
+                  borderRadius: BorderRadius.circular(999),
+                ),
+              ),
+              const SizedBox(height: 16),
+
+              // Type indicator (read-only)
+              ListTile(
+                contentPadding: EdgeInsets.zero,
+                leading: Icon(
+                  isDebit ? Icons.arrow_downward : Icons.arrow_upward,
+                  color: typeColor,
+                ),
+                title: Text(
+                  typeLabel,
+                  style: TextStyle(
+                    color: typeColor,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+                subtitle: const Text('Transaction type'),
+              ),
+              const Divider(height: 24),
+
+              // Amount
               TextFormField(
                 controller: amountCtrl,
                 keyboardType: const TextInputType.numberWithOptions(
@@ -82,16 +133,27 @@ class _TransactionFormSheetState extends ConsumerState<TransactionFormSheet> {
                 decoration: const InputDecoration(
                   border: OutlineInputBorder(),
                   labelText: 'Amount',
+                  prefixText: '',
                 ),
                 validator: (v) =>
                     (v == null || v.trim().isEmpty) ? 'Required' : null,
               ),
               const SizedBox(height: 12),
+
+              // Category
               DropdownButtonFormField<String>(
                 value: categoryId,
                 items: categories
+                    .where(
+                      (c) => c.typeEntry == widget.entry.typeEntry,
+                    ) // Filter to match entry type
                     .map(
-                      (c) => DropdownMenuItem(value: c.id, child: Text(c.code)),
+                      (c) => DropdownMenuItem(
+                        value: c.id,
+                        child: Text(
+                          '${c.code}${c.description != null ? ' — ${c.description}' : ''}',
+                        ),
+                      ),
                     )
                     .toList(),
                 onChanged: (v) => setState(() => categoryId = v),
@@ -101,6 +163,8 @@ class _TransactionFormSheetState extends ConsumerState<TransactionFormSheet> {
                 ),
               ),
               const SizedBox(height: 12),
+
+              // Description
               TextFormField(
                 controller: descCtrl,
                 decoration: const InputDecoration(
@@ -109,6 +173,8 @@ class _TransactionFormSheetState extends ConsumerState<TransactionFormSheet> {
                 ),
               ),
               const SizedBox(height: 12),
+
+              // Date
               ListTile(
                 contentPadding: EdgeInsets.zero,
                 title: const Text('Date'),
@@ -124,25 +190,29 @@ class _TransactionFormSheetState extends ConsumerState<TransactionFormSheet> {
                   if (picked != null) setState(() => when = picked);
                 },
               ),
-              const SizedBox(height: 16),
-              FilledButton.icon(
-                onPressed: () async {
-                  if (!formKey.currentState!.validate()) return;
-                  final cents = _toCents(amountCtrl.text);
-                  final updated = widget.entry.copyWith(
-                    amount: cents,
-                    typeEntry: isDebit ? 'DEBIT' : 'CREDIT',
-                    description: descCtrl.text.trim().isEmpty
-                        ? null
-                        : descCtrl.text.trim(),
-                    categoryId: categoryId,
-                    dateTransaction: when,
-                  );
-                  await ref.read(transactionRepoProvider).update(updated);
-                  if (mounted) Navigator.of(context).pop(true);
-                },
-                icon: const Icon(Icons.check),
-                label: const Text('Update'),
+              const SizedBox(height: 20),
+
+              // Update button
+              SizedBox(
+                width: double.infinity,
+                child: FilledButton.icon(
+                  onPressed: () async {
+                    if (!formKey.currentState!.validate()) return;
+                    final cents = _toCents(amountCtrl.text);
+                    final updated = widget.entry.copyWith(
+                      amount: cents,
+                      description: descCtrl.text.trim().isEmpty
+                          ? null
+                          : descCtrl.text.trim(),
+                      categoryId: categoryId,
+                      dateTransaction: when,
+                    );
+                    await ref.read(transactionRepoProvider).update(updated);
+                    if (mounted) Navigator.of(context).pop(true);
+                  },
+                  icon: const Icon(Icons.check),
+                  label: const Text('Update Transaction'),
+                ),
               ),
             ],
           ),

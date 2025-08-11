@@ -3,6 +3,7 @@ import 'package:money_pulse/domain/transactions/entities/transaction_entry.dart'
 import 'package:money_pulse/presentation/features/transactions/transaction_form_sheet.dart';
 import 'package:money_pulse/presentation/shared/formatters.dart';
 import 'package:money_pulse/presentation/widgets/right_drawer.dart';
+import '../transaction_quick_add_sheet.dart';
 import 'transaction_detail_view.dart';
 
 class TransactionTile extends StatelessWidget {

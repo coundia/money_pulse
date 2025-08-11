@@ -4,7 +4,6 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:money_pulse/presentation/app/providers.dart';
 import 'package:money_pulse/presentation/shared/formatters.dart';
 import 'package:money_pulse/domain/categories/entities/category.dart';
-import 'package:money_pulse/domain/categories/repositories/category_repository.dart';
 
 import '../../app/account_selection.dart';
 import 'providers/transaction_list_providers.dart';
@@ -43,13 +42,8 @@ class _TransactionQuickAddSheetState
       if (!mounted) return;
       setState(() {
         _allCategories = cats;
-        // Pré-sélection : première catégorie du type courant (si dispo)
-        final firstMatch = _filteredCategories().isNotEmpty
-            ? _filteredCategories().first
-            : null;
-        _selectedCategory = firstMatch;
-        categoryId = firstMatch?.id;
-        _categoryCtrl.text = firstMatch?.code ?? '';
+        // Pas de présélection automatique : on laisse vide
+        _clearCategory();
       });
     });
   }
@@ -60,6 +54,41 @@ class _TransactionQuickAddSheetState
     descCtrl.dispose();
     _categoryCtrl.dispose();
     super.dispose();
+  }
+
+  // --- Helpers UI ---
+
+  void _safeSnack(String message) {
+    if (!mounted) return;
+
+    final scaffoldState = context.findAncestorStateOfType<ScaffoldState>();
+    final messenger = ScaffoldMessenger.maybeOf(context);
+
+    if (scaffoldState != null && messenger != null && messenger.mounted) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) return;
+        messenger.showSnackBar(SnackBar(content: Text(message)));
+      });
+      return;
+    }
+
+    // ✅ Utiliser un nom explicite pour le contexte du builder
+    showDialog<void>(
+      context: context,
+      useRootNavigator: true,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Information'),
+        content: Text(message),
+        actions: [
+          TextButton(
+            // ✅ Utiliser dialogContext ici, pas `_`
+            onPressed: () =>
+                Navigator.of(dialogContext, rootNavigator: true).maybePop(),
+            child: const Text('OK'),
+          ),
+        ],
+      ),
+    );
   }
 
   // Convert "123,45" / "123.45" -> cents
@@ -84,18 +113,12 @@ class _TransactionQuickAddSheetState
         .toList();
   }
 
+  // (Conservé si un jour tu réactives un switch de type)
   void _onTypeChanged(bool newIsDebit) {
     if (isDebit == newIsDebit) return;
     setState(() {
       isDebit = newIsDebit;
-      _clearCategory(); // 🔹 Always clear on type change
-      // Suggest first category of this type
-      final first = _filteredCategories().isNotEmpty
-          ? _filteredCategories().first
-          : null;
-      if (first != null) {
-        _setCategory(first);
-      }
+      _clearCategory();
     });
   }
 
@@ -114,6 +137,15 @@ class _TransactionQuickAddSheetState
   @override
   Widget build(BuildContext context) {
     final insets = MediaQuery.of(context).viewInsets.bottom;
+
+    final label = isDebit ? 'Dépense' : 'Revenu';
+    final icon = isDebit
+        ? Icons.remove_circle_outline
+        : Icons.add_circle_outline;
+    final color = isDebit
+        ? Theme.of(context).colorScheme.error
+        : Theme.of(context).colorScheme.primary;
+
     return Padding(
       padding: EdgeInsets.only(bottom: insets),
       child: Form(
@@ -152,14 +184,24 @@ class _TransactionQuickAddSheetState
               ),
               const SizedBox(height: 12),
 
-              // Type: dépense / revenu
-              SegmentedButton<bool>(
-                segments: const [
-                  ButtonSegment(value: true, label: Text('Dépense')),
-                  ButtonSegment(value: false, label: Text('Revenu')),
+              // Type: dépense / revenu (lecture seule)
+              Row(
+                children: [
+                  Icon(icon, color: color),
+                  const SizedBox(width: 8),
+                  const Text(
+                    "Type d'écriture",
+                    style: TextStyle(fontWeight: FontWeight.w600),
+                  ),
+                  const Spacer(),
+                  Chip(
+                    label: Text(label),
+                    avatar: Icon(
+                      isDebit ? Icons.arrow_downward : Icons.arrow_upward,
+                      size: 18,
+                    ),
+                  ),
                 ],
-                selected: {isDebit},
-                onSelectionChanged: (s) => _onTypeChanged(s.first),
               ),
 
               const SizedBox(height: 12),
@@ -188,13 +230,8 @@ class _TransactionQuickAddSheetState
                 controller: _categoryCtrl,
                 initialSelected: _selectedCategory,
                 optionsBuilder: (text) => _filteredCategories(query: text),
-                onSelected: (c) {
-                  setState(() {
-                    _selectedCategory = c;
-                    categoryId = c.id;
-                    _categoryCtrl.text = c.code;
-                  });
-                },
+                onSelected: (c) => setState(() => _setCategory(c)),
+                onClear: () => setState(() => _clearCategory()),
                 labelText: 'Catégorie',
                 emptyHint: isDebit
                     ? 'Aucune catégorie Débit'
@@ -241,22 +278,14 @@ class _TransactionQuickAddSheetState
                   final accountId = ref.read(selectedAccountIdProvider);
                   if (accountId == null || accountId.isEmpty) {
                     if (!mounted) return;
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(
-                        content: Text('Sélectionnez d’abord un compte'),
-                      ),
-                    );
+                    _safeSnack('Sélectionnez d’abord un compte');
                     return;
                   }
 
                   if (categoryId == null || categoryId!.isEmpty) {
                     if (!mounted) return;
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(
-                        content: Text('Sélectionnez une catégorie'),
-                      ),
-                    );
-                    return;
+                    // _safeSnack('Sélectionnez une catégorie');
+                    //return;
                   }
 
                   final cents = _toCents(amountCtrl.text);
@@ -298,6 +327,7 @@ class _CategoryAutocomplete extends StatelessWidget {
   final Category? initialSelected;
   final List<Category> Function(String query) optionsBuilder;
   final void Function(Category) onSelected;
+  final VoidCallback onClear; // callback clear
   final String labelText;
   final String emptyHint;
 
@@ -306,6 +336,7 @@ class _CategoryAutocomplete extends StatelessWidget {
     required this.initialSelected,
     required this.optionsBuilder,
     required this.onSelected,
+    required this.onClear,
     required this.labelText,
     required this.emptyHint,
   });
@@ -322,40 +353,40 @@ class _CategoryAutocomplete extends StatelessWidget {
           ((c.description?.isNotEmpty ?? false) ? ' — ${c.description}' : ''),
       fieldViewBuilder:
           (context, textEditingController, focusNode, onFieldSubmitted) {
-            // Lier notre controller pour garder la saisie + maj externe
+            // Lier notre controller initial une fois
             if (controller.text.isNotEmpty &&
                 textEditingController.text.isEmpty) {
               textEditingController.text = controller.text;
             }
-            return TextFormField(
-              controller: textEditingController,
-              focusNode: focusNode,
-              decoration: InputDecoration(
-                border: const OutlineInputBorder(),
-                labelText: labelText,
-                suffixIcon: controller.text.isNotEmpty
-                    ? IconButton(
-                        tooltip: 'Effacer',
-                        icon: const Icon(Icons.clear),
-                        onPressed: () {
-                          controller.clear();
-                          if (context
-                                  .findAncestorStateOfType<
-                                    _TransactionQuickAddSheetState
-                                  >() !=
-                              null) {
-                            context
-                                .findAncestorStateOfType<
-                                  _TransactionQuickAddSheetState
-                                >()!
-                                ._clearCategory();
-                          }
-                        },
-                      )
-                    : null,
-              ),
-              onChanged: (v) {
-                controller.value = textEditingController.value;
+
+            // Afficher/masquer l’icône clear selon le texte
+            return ValueListenableBuilder<TextEditingValue>(
+              valueListenable: textEditingController,
+              builder: (context, value, _) {
+                return TextFormField(
+                  controller: textEditingController,
+                  focusNode: focusNode,
+                  decoration: InputDecoration(
+                    border: const OutlineInputBorder(),
+                    labelText: labelText,
+                    suffixIcon: value.text.isNotEmpty
+                        ? IconButton(
+                            tooltip: 'Effacer',
+                            icon: const Icon(Icons.clear),
+                            onPressed: () {
+                              // Efface le champ ET la sélection parent
+                              textEditingController.clear();
+                              controller.clear();
+                              onClear();
+                            },
+                          )
+                        : null,
+                  ),
+                  onChanged: (v) {
+                    // garder les deux en phase
+                    controller.value = textEditingController.value;
+                  },
+                );
               },
             );
           },
@@ -399,9 +430,7 @@ class _CategoryAutocomplete extends StatelessWidget {
                             c.typeEntry == Category.debit ? 'Débit' : 'Crédit',
                             style: const TextStyle(fontSize: 12),
                           ),
-                          onTap: () {
-                            onSelectedCb(c);
-                          },
+                          onTap: () => onSelectedCb(c),
                         );
                       },
                     ),
@@ -411,12 +440,7 @@ class _CategoryAutocomplete extends StatelessWidget {
       },
       onSelected: (c) {
         controller.text = c.code;
-        if (context.findAncestorStateOfType<_TransactionQuickAddSheetState>() !=
-            null) {
-          context
-              .findAncestorStateOfType<_TransactionQuickAddSheetState>()!
-              ._setCategory(c);
-        }
+        onSelected(c);
       },
     );
   }
