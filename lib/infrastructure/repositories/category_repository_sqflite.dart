@@ -14,9 +14,6 @@ class CategoryRepositorySqflite implements CategoryRepository {
 
   @override
   Future<Category> create(Category category) async {
-    debugPrint(
-      '🔍 [CategoryRepositorySqflite.create] typeEntry=${category.typeEntry}',
-    );
     final c = category.copyWith(
       updatedAt: DateTime.now(),
       version: 0,
@@ -43,9 +40,6 @@ class CategoryRepositorySqflite implements CategoryRepository {
 
   @override
   Future<void> update(Category category) async {
-    debugPrint(
-      '🔍 [CategoryRepositorySqflite.update] typeEntry=${category.typeEntry}',
-    );
     final c = category.copyWith(
       updatedAt: DateTime.now(),
       version: category.version + 1,

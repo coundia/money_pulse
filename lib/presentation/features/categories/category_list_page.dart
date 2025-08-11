@@ -62,9 +62,6 @@ class _CategoryListPageState extends ConsumerState<CategoryListPage> {
     );
     if (!mounted || result == null) return;
 
-    // Log UI result
-    debugPrint('📤 [CategoryListPage] result.typeEntry=${result.typeEntry}');
-
     if (existing == null) {
       final now = DateTime.now();
       final cat = Category(
@@ -81,7 +78,6 @@ class _CategoryListPageState extends ConsumerState<CategoryListPage> {
         isDirty: true,
       );
 
-      debugPrint('📦 [CategoryListPage] create.typeEntry=${cat.typeEntry}');
       await _repo.create(cat);
     } else {
       final updated = existing.copyWith(
@@ -91,9 +87,6 @@ class _CategoryListPageState extends ConsumerState<CategoryListPage> {
         updatedAt: DateTime.now(),
       );
 
-      debugPrint(
-        '🛠️ [CategoryListPage] update.typeEntry=${updated.typeEntry}',
-      );
       await _repo.update(updated);
     }
     if (mounted) setState(() {});

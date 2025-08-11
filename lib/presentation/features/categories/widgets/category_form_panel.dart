@@ -49,7 +49,6 @@ class _CategoryFormPanelState extends State<CategoryFormPanel> {
       description: _descCtrl.text.trim().isEmpty ? null : _descCtrl.text.trim(),
       typeEntry: _typeEntry.toUpperCase(),
     );
-    debugPrint('📤 [CategoryFormPanel] typeEntry=${result.typeEntry}');
     if (!mounted) return;
     Navigator.of(context).pop(result);
   }
@@ -114,7 +113,6 @@ class _CategoryFormPanelState extends State<CategoryFormPanel> {
                   selected: _typeEntry == Category.debit,
                   onSelected: (_) {
                     setState(() => _typeEntry = Category.debit);
-                    debugPrint('🟢 [CategoryFormPanel] select typeEntry=DEBIT');
                   },
                 ),
                 ChoiceChip(
@@ -122,9 +120,6 @@ class _CategoryFormPanelState extends State<CategoryFormPanel> {
                   selected: _typeEntry == Category.credit,
                   onSelected: (_) {
                     setState(() => _typeEntry = Category.credit);
-                    debugPrint(
-                      '🟢 [CategoryFormPanel] select typeEntry=CREDIT',
-                    );
                   },
                 ),
               ],
