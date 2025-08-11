@@ -14,9 +14,11 @@ class ReportPage extends ConsumerStatefulWidget {
 }
 
 class _ReportPageState extends ConsumerState<ReportPage> {
-  bool isDebit = true; // true = Dépenses, false = Revenus
+  /// true = Dépenses, false = Revenus (pour le camembert uniquement)
+  bool isDebit = true;
   ReportRange range = ReportRange.thisMonth();
 
+  // ----- Catégories (camembert) -----
   Future<List<Map<String, Object?>>> _loadCategories() async {
     final acc = await ref.read(accountRepoProvider).findDefault();
     if (acc == null) return <Map<String, Object?>>[];
@@ -30,18 +32,33 @@ class _ReportPageState extends ConsumerState<ReportPage> {
         );
   }
 
-  Future<List<Map<String, Object?>>> _loadDailySeries() async {
+  // ----- Série journalière (2 séries: DEBIT & CREDIT) -----
+  Future<
+    ({List<Map<String, Object?>> credit, List<Map<String, Object?>> debit})
+  >
+  _loadDailySeriesBoth() async {
     final acc = await ref.read(accountRepoProvider).findDefault();
-    if (acc == null) return <Map<String, Object?>>[];
-    // Approximation: on demande N jours de série selon la plage choisie.
-    final days = (range.to.difference(range.from).inDays).clamp(1, 365);
-    return ref
+    if (acc == null) {
+      return (
+        credit: <Map<String, Object?>>[],
+        debit: <Map<String, Object?>>[],
+      );
+    }
+
+    // clamp renvoie num -> cast en int
+    final int days =
+        (range.to.difference(range.from).inDays).clamp(1, 365) as int;
+
+    final List<Map<String, Object?>> debit = await ref
         .read(reportRepoProvider)
-        .dailyTotals(
-          acc.id,
-          typeEntry: isDebit ? 'DEBIT' : 'CREDIT',
-          days: days,
-        );
+        .dailyTotals(acc.id, typeEntry: 'DEBIT', days: days);
+
+    final List<Map<String, Object?>> credit = await ref
+        .read(reportRepoProvider)
+        .dailyTotals(acc.id, typeEntry: 'CREDIT', days: days);
+
+    // IMPORTANT: l’ordre doit correspondre au type du record
+    return (credit: credit, debit: debit);
   }
 
   List<Color> _palette(BuildContext context) {
@@ -86,9 +103,8 @@ class _ReportPageState extends ConsumerState<ReportPage> {
       case ReportRangeKind.thisWeek:
         return 'Cette semaine';
       case ReportRangeKind.thisMonth:
-        // Exemple lisible : « septembre 2025 »
         final d = DateTime(r.from.year, r.from.month, 1);
-        // On recycle dateFull puis on simplifie (utile si ton Formatters localise déjà).
+        // Affiche « mois année » (ex: septembre 2025)
         return Formatters.dateFull(d).split(' ').sublist(1).join(' ');
       case ReportRangeKind.thisYear:
         return 'Cette année';
@@ -101,21 +117,23 @@ class _ReportPageState extends ConsumerState<ReportPage> {
     }
   }
 
-  // Helpers robustes pour parser la série
+  // ---- Helpers parse série ----
+  static DateTime _strip(DateTime d) => DateTime(d.year, d.month, d.day);
+
   DateTime _parseDay(Map<String, Object?> row) {
     final v = row['date'] ?? row['day'] ?? row['d'];
-    if (v is DateTime) return v;
+    if (v is DateTime) return _strip(v);
     if (v is String) {
       try {
-        return DateTime.parse(v);
+        return _strip(DateTime.parse(v));
       } catch (_) {}
     }
     if (v is int) {
       try {
-        return DateTime.fromMillisecondsSinceEpoch(v);
+        return _strip(DateTime.fromMillisecondsSinceEpoch(v));
       } catch (_) {}
     }
-    return DateTime.now();
+    return _strip(DateTime.now());
   }
 
   int _parseTotal(Map<String, Object?> row) {
@@ -127,7 +145,9 @@ class _ReportPageState extends ConsumerState<ReportPage> {
 
   @override
   Widget build(BuildContext context) {
-    ref.watch(transactionsProvider); // pour rafraîchir après changements
+    // pour rafraîchir après changements
+    ref.watch(transactionsProvider);
+
     final titleLabel = isDebit ? 'Dépenses' : 'Revenus';
     final rangeLabel = _rangeLabel(range);
 
@@ -231,6 +251,7 @@ class _ReportPageState extends ConsumerState<ReportPage> {
                           ),
                         ),
                         const SizedBox(height: 6),
+                        // Ce toggle ne concerne que le camembert
                         SegmentedButton<bool>(
                           segments: const [
                             ButtonSegment(value: true, label: Text('Dépenses')),
@@ -293,19 +314,29 @@ class _ReportPageState extends ConsumerState<ReportPage> {
 
                 const SizedBox(height: 16),
 
-                // ====== Courbe (journalière) ======
-                FutureBuilder<List<Map<String, Object?>>>(
-                  future: _loadDailySeries(),
+                // ====== Courbe (Débit + Crédit) ======
+                FutureBuilder<
+                  ({
+                    List<Map<String, Object?>> credit,
+                    List<Map<String, Object?>> debit,
+                  })
+                >(
+                  future: _loadDailySeriesBoth(),
                   builder: (context, seriesSnap) {
-                    final series =
-                        seriesSnap.data ?? const <Map<String, Object?>>[];
+                    final List<Map<String, Object?>> debitRows =
+                        seriesSnap.data?.debit ??
+                        const <Map<String, Object?>>[];
+                    final List<Map<String, Object?>> creditRows =
+                        seriesSnap.data?.credit ??
+                        const <Map<String, Object?>>[];
+
                     if (seriesSnap.connectionState == ConnectionState.waiting) {
                       return const SizedBox(
                         height: 220,
                         child: Center(child: CircularProgressIndicator()),
                       );
                     }
-                    if (series.isEmpty) {
+                    if (debitRows.isEmpty && creditRows.isEmpty) {
                       return const SizedBox(
                         height: 120,
                         child: Center(
@@ -316,29 +347,71 @@ class _ReportPageState extends ConsumerState<ReportPage> {
                       );
                     }
 
-                    // Prépare les spots & labels
-                    final sorted = [...series]
-                      ..sort((a, b) => _parseDay(a).compareTo(_parseDay(b)));
-                    final labels = <DateTime>[];
-                    final spots = <FlSpot>[];
-                    for (var i = 0; i < sorted.length; i++) {
-                      labels.add(_parseDay(sorted[i]));
-                      spots.add(
-                        FlSpot(
-                          i.toDouble(),
-                          (_parseTotal(sorted[i])).toDouble() / 100.0,
-                        ),
-                      );
+                    // Échelle X : chaque jour de [from, to)
+                    final start = _strip(range.from);
+                    final end = _strip(range.to);
+                    final int dayCount =
+                        (end.difference(start).inDays).clamp(1, 365) as int;
+                    final labels = List<DateTime>.generate(
+                      dayCount,
+                      (i) => start.add(Duration(days: i)),
+                    );
+
+                    // Indexation par jour
+                    final debitMap = <DateTime, int>{};
+                    for (final r in debitRows) {
+                      final d = _parseDay(r);
+                      debitMap[d] = (debitMap[d] ?? 0) + _parseTotal(r);
+                    }
+                    final creditMap = <DateTime, int>{};
+                    for (final r in creditRows) {
+                      final d = _parseDay(r);
+                      creditMap[d] = (creditMap[d] ?? 0) + _parseTotal(r);
                     }
 
-                    final maxY = (spots.isEmpty
-                        ? 0.0
-                        : spots
-                              .map((e) => e.y)
-                              .reduce((a, b) => a > b ? a : b));
-                    final interval = labels.length <= 7
-                        ? 1
-                        : (labels.length / 7).ceil();
+                    // Spots
+                    final debitSpots = <FlSpot>[];
+                    final creditSpots = <FlSpot>[];
+                    for (var i = 0; i < labels.length; i++) {
+                      final d = labels[i];
+                      final dv = (debitMap[d] ?? 0) / 100.0;
+                      final cv = (creditMap[d] ?? 0) / 100.0;
+                      debitSpots.add(FlSpot(i.toDouble(), dv));
+                      creditSpots.add(FlSpot(i.toDouble(), cv));
+                    }
+
+                    // Couleurs
+                    final cs = Theme.of(context).colorScheme;
+                    final debitColor = cs.error; // rouge
+                    final creditColor = cs.primary;
+
+                    final maxY = [
+                      ...debitSpots.map((e) => e.y),
+                      ...creditSpots.map((e) => e.y),
+                      0.0,
+                    ].reduce((a, b) => a > b ? a : b);
+
+                    final rawInterval = maxY == 0 ? 1.0 : maxY / 4.0;
+                    final double gridInterval = rawInterval < 0.25
+                        ? 0.25
+                        : rawInterval;
+
+                    // Légende
+                    Widget legendDot(Color c, String t) => Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Container(
+                          width: 10,
+                          height: 10,
+                          decoration: BoxDecoration(
+                            color: c,
+                            shape: BoxShape.circle,
+                          ),
+                        ),
+                        const SizedBox(width: 6),
+                        Text(t),
+                      ],
+                    );
 
                     return Card(
                       elevation: 0,
@@ -350,9 +423,23 @@ class _ReportPageState extends ConsumerState<ReportPage> {
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            Text(
-                              'Courbe quotidienne',
-                              style: Theme.of(context).textTheme.titleMedium,
+                            Row(
+                              children: [
+                                Text(
+                                  'Courbe quotidienne',
+                                  style: Theme.of(
+                                    context,
+                                  ).textTheme.titleMedium,
+                                ),
+                                const Spacer(),
+                                Wrap(
+                                  spacing: 16,
+                                  children: [
+                                    legendDot(debitColor, 'Dépenses'),
+                                    legendDot(creditColor, 'Revenus'),
+                                  ],
+                                ),
+                              ],
                             ),
                             const SizedBox(height: 6),
                             SizedBox(
@@ -360,7 +447,7 @@ class _ReportPageState extends ConsumerState<ReportPage> {
                               child: LineChart(
                                 LineChartData(
                                   minX: 0,
-                                  maxX: (spots.length - 1).toDouble(),
+                                  maxX: (labels.length - 1).toDouble(),
                                   minY: 0,
                                   maxY: (maxY == 0) ? 1 : maxY * 1.2,
                                   lineTouchData: LineTouchData(
@@ -374,8 +461,11 @@ class _ReportPageState extends ConsumerState<ReportPage> {
                                         );
                                         final day = labels[idx];
                                         final cents = (e.y * 100).round();
+                                        final seriesName = (e.barIndex == 0)
+                                            ? 'Dépenses'
+                                            : 'Revenus';
                                         return LineTooltipItem(
-                                          '${Formatters.dateFull(day)}\n${Formatters.amountFromCents(cents)} XOF',
+                                          '${Formatters.dateFull(day)}\n$seriesName: ${Formatters.amountFromCents(cents)} XOF',
                                           const TextStyle(
                                             fontWeight: FontWeight.w600,
                                           ),
@@ -385,10 +475,7 @@ class _ReportPageState extends ConsumerState<ReportPage> {
                                   ),
                                   gridData: FlGridData(
                                     show: true,
-                                    horizontalInterval:
-                                        (maxY == 0 ? 1 : maxY / 4)
-                                            .clamp(1, maxY)
-                                            .toDouble(),
+                                    horizontalInterval: gridInterval,
                                   ),
                                   titlesData: FlTitlesData(
                                     rightTitles: const AxisTitles(
@@ -421,13 +508,18 @@ class _ReportPageState extends ConsumerState<ReportPage> {
                                     bottomTitles: AxisTitles(
                                       sideTitles: SideTitles(
                                         showTitles: true,
-                                        interval: interval.toDouble(),
+                                        interval:
+                                            (labels.length <= 7
+                                                    ? 1
+                                                    : (labels.length / 7)
+                                                          .ceil())
+                                                .toDouble(),
                                         getTitlesWidget: (v, meta) {
                                           final i = v.toInt();
-                                          if (i < 0 || i >= labels.length)
+                                          if (i < 0 || i >= labels.length) {
                                             return const SizedBox.shrink();
+                                          }
                                           final d = labels[i];
-                                          // Etiquette courte JJ/MM
                                           final short =
                                               '${d.day.toString().padLeft(2, '0')}/${d.month.toString().padLeft(2, '0')}';
                                           return Padding(
@@ -447,10 +539,20 @@ class _ReportPageState extends ConsumerState<ReportPage> {
                                   ),
                                   borderData: FlBorderData(show: false),
                                   lineBarsData: [
+                                    // index 0 -> Dépenses
                                     LineChartBarData(
-                                      spots: spots,
+                                      spots: debitSpots,
                                       isCurved: true,
                                       barWidth: 3,
+                                      color: debitColor,
+                                      dotData: const FlDotData(show: false),
+                                    ),
+                                    // index 1 -> Revenus
+                                    LineChartBarData(
+                                      spots: creditSpots,
+                                      isCurved: true,
+                                      barWidth: 3,
+                                      color: creditColor,
                                       dotData: const FlDotData(show: false),
                                     ),
                                   ],
@@ -521,12 +623,11 @@ class _ReportPageState extends ConsumerState<ReportPage> {
                 ],
 
                 const SizedBox(height: 8),
-                if (rows.isNotEmpty)
-                  Text(
-                    'Mis à jour ${Formatters.dateFull(DateTime.now())}',
-                    textAlign: TextAlign.center,
-                    style: Theme.of(context).textTheme.bodySmall,
-                  ),
+                Text(
+                  'Mis à jour ${Formatters.dateFull(DateTime.now())}',
+                  textAlign: TextAlign.center,
+                  style: Theme.of(context).textTheme.bodySmall,
+                ),
               ],
             ),
           );
