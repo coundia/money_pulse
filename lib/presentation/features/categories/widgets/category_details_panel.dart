@@ -16,6 +16,7 @@ class CategoryDetailsPanel extends StatelessWidget {
     final text =
         'Catégorie: ${c.code}'
         '\nDescription: ${c.description ?? '—'}'
+        '\nType: ${c.typeEntry ?? '—'}'
         '\nID distant: ${c.remoteId ?? '—'}'
         '\nCréée le: ${_fmtDate(c.createdAt)}'
         '\nMis à jour le: ${_fmtDate(c.updatedAt)}'
@@ -81,6 +82,7 @@ class CategoryDetailsPanel extends StatelessWidget {
         children: [
           _kv('Code', c.code),
           _kv('Description', c.description ?? '—'),
+          _kv('Type', c.typeEntry ?? '—'),
           const SizedBox(height: 8),
           _kv('ID distant', c.remoteId ?? '—'),
           const Divider(height: 24),

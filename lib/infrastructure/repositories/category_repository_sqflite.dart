@@ -1,5 +1,7 @@
+import 'package:flutter/material.dart';
 import 'package:uuid/uuid.dart';
 import 'package:sqflite/sqflite.dart';
+
 import 'package:money_pulse/infrastructure/db/app_database.dart';
 import 'package:money_pulse/domain/categories/entities/category.dart';
 import 'package:money_pulse/domain/categories/repositories/category_repository.dart';
@@ -12,10 +14,14 @@ class CategoryRepositorySqflite implements CategoryRepository {
 
   @override
   Future<Category> create(Category category) async {
+    debugPrint(
+      '🔍 [CategoryRepositorySqflite.create] typeEntry=${category.typeEntry}',
+    );
     final c = category.copyWith(
       updatedAt: DateTime.now(),
       version: 0,
       isDirty: true,
+      typeEntry: category.typeEntry.toUpperCase(),
     );
     await _db.tx((txn) async {
       await txn.insert(
@@ -25,8 +31,10 @@ class CategoryRepositorySqflite implements CategoryRepository {
       );
       final idLog = const Uuid().v4();
       await txn.rawInsert(
-        'INSERT INTO change_log(id, entityTable, entityId, operation, payload, status, createdAt, updatedAt) VALUES(?,?,?,?,?,?,?,?) '
-        'ON CONFLICT(entityTable, entityId, status) DO UPDATE SET operation=excluded.operation, updatedAt=excluded.updatedAt, payload=excluded.payload',
+        'INSERT INTO change_log(id, entityTable, entityId, operation, payload, status, createdAt, updatedAt) '
+        'VALUES(?,?,?,?,?,?,?,?) '
+        'ON CONFLICT(entityTable, entityId, status) DO UPDATE '
+        'SET operation=excluded.operation, updatedAt=excluded.updatedAt, payload=excluded.payload',
         [idLog, 'category', c.id, 'INSERT', null, 'PENDING', _now(), _now()],
       );
     });
@@ -35,10 +43,14 @@ class CategoryRepositorySqflite implements CategoryRepository {
 
   @override
   Future<void> update(Category category) async {
+    debugPrint(
+      '🔍 [CategoryRepositorySqflite.update] typeEntry=${category.typeEntry}',
+    );
     final c = category.copyWith(
       updatedAt: DateTime.now(),
       version: category.version + 1,
       isDirty: true,
+      typeEntry: category.typeEntry.toUpperCase(),
     );
     await _db.tx((txn) async {
       await txn.update(
@@ -50,8 +62,10 @@ class CategoryRepositorySqflite implements CategoryRepository {
       );
       final idLog = const Uuid().v4();
       await txn.rawInsert(
-        'INSERT INTO change_log(id, entityTable, entityId, operation, payload, status, createdAt, updatedAt) VALUES(?,?,?,?,?,?,?,?) '
-        'ON CONFLICT(entityTable, entityId, status) DO UPDATE SET operation=excluded.operation, updatedAt=excluded.updatedAt, payload=excluded.payload',
+        'INSERT INTO change_log(id, entityTable, entityId, operation, payload, status, createdAt, updatedAt) '
+        'VALUES(?,?,?,?,?,?,?,?) '
+        'ON CONFLICT(entityTable, entityId, status) DO UPDATE '
+        'SET operation=excluded.operation, updatedAt=excluded.updatedAt, payload=excluded.payload',
         [idLog, 'category', c.id, 'UPDATE', null, 'PENDING', _now(), _now()],
       );
     });
@@ -101,8 +115,10 @@ class CategoryRepositorySqflite implements CategoryRepository {
       );
       final idLog = const Uuid().v4();
       await txn.rawInsert(
-        'INSERT INTO change_log(id, entityTable, entityId, operation, payload, status, createdAt, updatedAt) VALUES(?,?,?,?,?,?,?,?) '
-        'ON CONFLICT(entityTable, entityId, status) DO UPDATE SET operation=excluded.operation, updatedAt=excluded.updatedAt, payload=excluded.payload',
+        'INSERT INTO change_log(id, entityTable, entityId, operation, payload, status, createdAt, updatedAt) '
+        'VALUES(?,?,?,?,?,?,?,?) '
+        'ON CONFLICT(entityTable, entityId, status) DO UPDATE '
+        'SET operation=excluded.operation, updatedAt=excluded.updatedAt, payload=excluded.payload',
         [idLog, 'category', id, 'DELETE', null, 'PENDING', now, now],
       );
     });

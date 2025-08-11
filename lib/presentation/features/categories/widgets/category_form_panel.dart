@@ -4,7 +4,12 @@ import 'package:money_pulse/domain/categories/entities/category.dart';
 class CategoryFormResult {
   final String code;
   final String? description;
-  const CategoryFormResult({required this.code, this.description});
+  final String typeEntry; // 'DEBIT' | 'CREDIT'
+  const CategoryFormResult({
+    required this.code,
+    this.description,
+    required this.typeEntry,
+  });
 }
 
 class CategoryFormPanel extends StatefulWidget {
@@ -24,6 +29,12 @@ class _CategoryFormPanelState extends State<CategoryFormPanel> {
     text: widget.existing?.description ?? '',
   );
 
+  late String _typeEntry =
+      (widget.existing?.typeEntry == Category.credit ||
+          widget.existing?.typeEntry == Category.debit)
+      ? widget.existing!.typeEntry
+      : Category.debit;
+
   @override
   void dispose() {
     _codeCtrl.dispose();
@@ -36,7 +47,9 @@ class _CategoryFormPanelState extends State<CategoryFormPanel> {
     final result = CategoryFormResult(
       code: _codeCtrl.text.trim(),
       description: _descCtrl.text.trim().isEmpty ? null : _descCtrl.text.trim(),
+      typeEntry: _typeEntry.toUpperCase(),
     );
+    debugPrint('📤 [CategoryFormPanel] typeEntry=${result.typeEntry}');
     if (!mounted) return;
     Navigator.of(context).pop(result);
   }
@@ -44,6 +57,7 @@ class _CategoryFormPanelState extends State<CategoryFormPanel> {
   @override
   Widget build(BuildContext context) {
     final isEdit = widget.existing != null;
+
     return Scaffold(
       appBar: AppBar(
         leading: IconButton(
@@ -84,8 +98,41 @@ class _CategoryFormPanelState extends State<CategoryFormPanel> {
                 hintText: 'Optionnel',
                 border: OutlineInputBorder(),
               ),
-              textInputAction: TextInputAction.done,
-              onFieldSubmitted: (_) => _save(),
+              textInputAction: TextInputAction.next,
+            ),
+            const SizedBox(height: 20),
+            const Text(
+              "Type d'écriture",
+              style: TextStyle(fontWeight: FontWeight.w600),
+            ),
+            const SizedBox(height: 8),
+            Wrap(
+              spacing: 10,
+              children: [
+                ChoiceChip(
+                  label: const Text('Débit'),
+                  selected: _typeEntry == Category.debit,
+                  onSelected: (_) {
+                    setState(() => _typeEntry = Category.debit);
+                    debugPrint('🟢 [CategoryFormPanel] select typeEntry=DEBIT');
+                  },
+                ),
+                ChoiceChip(
+                  label: const Text('Crédit'),
+                  selected: _typeEntry == Category.credit,
+                  onSelected: (_) {
+                    setState(() => _typeEntry = Category.credit);
+                    debugPrint(
+                      '🟢 [CategoryFormPanel] select typeEntry=CREDIT',
+                    );
+                  },
+                ),
+              ],
+            ),
+            const SizedBox(height: 8),
+            const Text(
+              'Débit = dépense, Crédit = revenu',
+              style: TextStyle(fontSize: 12, color: Colors.black54),
             ),
           ],
         ),

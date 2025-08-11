@@ -10,11 +10,11 @@ import 'package:money_pulse/presentation/app/providers.dart';
 import 'package:money_pulse/domain/categories/entities/category.dart';
 import 'package:money_pulse/domain/categories/repositories/category_repository.dart';
 
-// Widgets internes (seront fournis dans les fichiers 2/4, 3/4, 4/4)
-import 'widgets/category_details_panel.dart';
+// Widgets internes
 import 'widgets/category_form_panel.dart';
 import 'widgets/category_tile.dart';
 import 'widgets/category_context_menu.dart';
+import 'widgets/category_details_panel.dart';
 
 class CategoryListPage extends ConsumerStatefulWidget {
   const CategoryListPage({super.key});
@@ -62,6 +62,9 @@ class _CategoryListPageState extends ConsumerState<CategoryListPage> {
     );
     if (!mounted || result == null) return;
 
+    // Log UI result
+    debugPrint('📤 [CategoryListPage] result.typeEntry=${result.typeEntry}');
+
     if (existing == null) {
       final now = DateTime.now();
       final cat = Category(
@@ -69,6 +72,7 @@ class _CategoryListPageState extends ConsumerState<CategoryListPage> {
         remoteId: null,
         code: result.code,
         description: _t(result.description),
+        typeEntry: result.typeEntry, // ✅ prend la valeur du formulaire
         createdAt: now,
         updatedAt: now,
         deletedAt: null,
@@ -76,12 +80,19 @@ class _CategoryListPageState extends ConsumerState<CategoryListPage> {
         version: 0,
         isDirty: true,
       );
+
+      debugPrint('📦 [CategoryListPage] create.typeEntry=${cat.typeEntry}');
       await _repo.create(cat);
     } else {
       final updated = existing.copyWith(
         code: result.code,
         description: _t(result.description),
+        typeEntry: result.typeEntry, // ✅ prend la valeur du formulaire
         updatedAt: DateTime.now(),
+      );
+
+      debugPrint(
+        '🛠️ [CategoryListPage] update.typeEntry=${updated.typeEntry}',
       );
       await _repo.update(updated);
     }
@@ -116,7 +127,12 @@ class _CategoryListPageState extends ConsumerState<CategoryListPage> {
     if (!mounted) return;
     final messenger = ScaffoldMessenger.maybeOf(context);
     final text =
-        'Catégorie: ${c.code}\nDescription: ${c.description ?? '—'}\nMis à jour: ${_fmtDate(c.updatedAt)}\nCréée le: ${_fmtDate(c.createdAt)}\nID: ${c.id}';
+        'Catégorie: ${c.code}\n'
+        'Description: ${c.description ?? '—'}\n'
+        'Type: ${c.typeEntry}\n'
+        'Mis à jour: ${_fmtDate(c.updatedAt)}\n'
+        'Créée le: ${_fmtDate(c.createdAt)}\n'
+        'ID: ${c.id}';
     await Clipboard.setData(ClipboardData(text: text));
     if (!mounted) return;
     messenger?.showSnackBar(
@@ -134,6 +150,7 @@ class _CategoryListPageState extends ConsumerState<CategoryListPage> {
               c.code,
               c.description ?? '',
               c.remoteId ?? '',
+              c.typeEntry, // ✅ recherche aussi par type
             ].join(' ').toLowerCase();
             return s.contains(q);
           }).toList();
@@ -144,6 +161,11 @@ class _CategoryListPageState extends ConsumerState<CategoryListPage> {
   }
 
   Widget _header(List<Category> items) {
+    final debitCount = items.where((e) => e.typeEntry == Category.debit).length;
+    final creditCount = items
+        .where((e) => e.typeEntry == Category.credit)
+        .length;
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -158,13 +180,21 @@ class _CategoryListPageState extends ConsumerState<CategoryListPage> {
               avatar: const Icon(Icons.category_outlined, size: 18),
               label: Text('Total: ${items.length}'),
             ),
+            Chip(
+              avatar: const Icon(Icons.remove_circle_outline, size: 18),
+              label: Text('Débit: $debitCount'),
+            ),
+            Chip(
+              avatar: const Icon(Icons.add_circle_outline, size: 18),
+              label: Text('Crédit: $creditCount'),
+            ),
           ],
         ),
         const SizedBox(height: 12),
         TextField(
           controller: _searchCtrl,
           decoration: InputDecoration(
-            hintText: 'Rechercher par code ou description',
+            hintText: 'Rechercher par code, description ou type',
             prefixIcon: const Icon(Icons.search),
             border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
             isDense: true,
@@ -218,7 +248,7 @@ class _CategoryListPageState extends ConsumerState<CategoryListPage> {
         position.dx,
         position.dy,
       ),
-      items: buildCategoryContextMenuItems(), // vient du fichier 4/4
+      items: buildCategoryContextMenuItems(),
     );
     if (!mounted) return;
     switch (action) {
@@ -263,19 +293,27 @@ class _CategoryListPageState extends ConsumerState<CategoryListPage> {
                           final c = filtered[i - 1];
                           final updatedText =
                               'Mis à jour ${_fmtDate(c.updatedAt)}';
+                          final subtitle = (c.description?.isNotEmpty == true)
+                              ? c.description!
+                              : updatedText;
+
                           return GestureDetector(
                             onLongPressStart: (d) =>
                                 _showContextMenu(d.globalPosition, c),
                             onSecondaryTapDown: (d) =>
                                 _showContextMenu(d.globalPosition, c),
                             child: CategoryTile(
-                              // vient du fichier 3/4
                               code: c.code,
-                              descriptionOrUpdatedText:
-                                  (c.description?.isNotEmpty == true)
-                                  ? c.description!
-                                  : updatedText,
-                              onTap: () => _view(c),
+                              descriptionOrUpdatedText: subtitle,
+                              onTap: () => _addOrEdit(existing: c),
+                              onMore: () {
+                                final box =
+                                    context.findRenderObject() as RenderBox?;
+                                final offset =
+                                    box?.localToGlobal(Offset.zero) ??
+                                    Offset.zero;
+                                _showContextMenu(offset, c);
+                              },
                             ),
                           );
                         },
