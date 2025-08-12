@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 import 'package:uuid/uuid.dart';
@@ -8,7 +9,13 @@ import 'package:money_pulse/domain/products/repositories/product_repository.dart
 import 'package:money_pulse/presentation/features/products/product_repo_provider.dart';
 
 import 'package:money_pulse/domain/categories/entities/category.dart';
-import 'package:money_pulse/presentation/app/providers.dart'; // for categoryRepoProvider
+import 'package:money_pulse/presentation/app/providers.dart'; // categoryRepoProvider
+import 'package:money_pulse/presentation/widgets/right_drawer.dart';
+
+import 'widgets/product_tile.dart';
+import 'widgets/product_form_panel.dart';
+import 'widgets/product_delete_panel.dart';
+import 'widgets/product_context_menu.dart';
 
 class ProductListPage extends ConsumerStatefulWidget {
   const ProductListPage({super.key});
@@ -44,19 +51,30 @@ class _ProductListPageState extends ConsumerState<ProductListPage> {
     return _repo.searchActive(_query, limit: 300);
   }
 
-  String _money(int cents) {
-    final v = cents / 100.0;
-    return NumberFormat.currency(symbol: '', decimalDigits: 0).format(v);
+  Future<void> _share(Product p) async {
+    final text = [
+      'Produit: ${p.name ?? p.code ?? '—'}',
+      if ((p.code ?? '').isNotEmpty) 'Code: ${p.code}',
+      if ((p.barcode ?? '').isNotEmpty) 'EAN: ${p.barcode}',
+      'Prix: ${(p.defaultPrice / 100).toStringAsFixed(0)}',
+      'ID: ${p.id}',
+    ].join('\n');
+    await Clipboard.setData(ClipboardData(text: text));
+    if (!mounted) return;
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(const SnackBar(content: Text('Détails copiés')));
   }
 
   Future<void> _addOrEdit({Product? existing}) async {
     final categories = await ref.read(categoryRepoProvider).findAllActive();
     if (!mounted) return;
 
-    final res = await showDialog<_ProductFormResult>(
-      context: context,
-      builder: (_) =>
-          _ProductDialog(existing: existing, categories: categories),
+    final res = await showRightDrawer<ProductFormResult?>(
+      context,
+      child: ProductFormPanel(existing: existing, categories: categories),
+      widthFraction: 0.92,
+      heightFraction: 0.96,
     );
     if (res == null) return;
 
@@ -65,13 +83,11 @@ class _ProductListPageState extends ConsumerState<ProductListPage> {
       final p = Product(
         id: const Uuid().v4(),
         remoteId: null,
-        code: res.code?.isEmpty == true ? null : res.code!.trim(),
-        name: res.name?.isEmpty == true ? null : res.name!.trim(),
-        description: res.description?.isEmpty == true
-            ? null
-            : res.description!.trim(),
-        barcode: res.barcode?.isEmpty == true ? null : res.barcode!.trim(),
-        unitId: null, // extend later if you add units
+        code: res.code,
+        name: res.name,
+        description: res.description,
+        barcode: res.barcode,
+        unitId: null,
         categoryId: res.categoryId,
         defaultPrice: res.priceCents,
         createdAt: now,
@@ -84,12 +100,10 @@ class _ProductListPageState extends ConsumerState<ProductListPage> {
       await _repo.create(p);
     } else {
       final updated = existing.copyWith(
-        code: res.code?.isEmpty == true ? null : res.code!.trim(),
-        name: res.name?.isEmpty == true ? null : res.name!.trim(),
-        description: res.description?.isEmpty == true
-            ? null
-            : res.description!.trim(),
-        barcode: res.barcode?.isEmpty == true ? null : res.barcode!.trim(),
+        code: res.code,
+        name: res.name,
+        description: res.description,
+        barcode: res.barcode,
         categoryId: res.categoryId,
         defaultPrice: res.priceCents,
       );
@@ -98,34 +112,18 @@ class _ProductListPageState extends ConsumerState<ProductListPage> {
     if (mounted) setState(() {});
   }
 
-  // 1) Safer confirm+delete that uses the dialog's own context
-  Future<void> _delete(Product p) async {
+  Future<void> _confirmDelete(Product p) async {
     if (!mounted) return;
-
-    final ok = await showDialog<bool>(
-      context: context,
-      builder: (dialogContext) => AlertDialog(
-        title: const Text('Supprimer le produit ?'),
-        content: Text(
-          '« ${p.name ?? p.code ?? 'Produit'} » sera déplacé dans la corbeille.',
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(dialogContext).pop(false),
-            child: const Text('Annuler'),
-          ),
-          FilledButton(
-            onPressed: () => Navigator.of(dialogContext).pop(true),
-            child: const Text('Supprimer'),
-          ),
-        ],
-      ),
+    final ok = await showRightDrawer<bool>(
+      context,
+      child: ProductDeletePanel(product: p),
+      widthFraction: 0.86,
+      heightFraction: 0.6,
     );
-
     if (ok == true) {
       await _repo.softDelete(p.id);
       if (!mounted) return;
-      setState(() {}); // reload list
+      setState(() {});
     }
   }
 
@@ -160,60 +158,34 @@ class _ProductListPageState extends ConsumerState<ProductListPage> {
                         if ((p.barcode ?? '').isNotEmpty) 'EAN: ${p.barcode}',
                         if ((p.description ?? '').isNotEmpty) p.description!,
                       ].join('  •  ');
-                      return ListTile(
-                        leading: CircleAvatar(
-                          child: Text(
-                            (p.name?.isNotEmpty == true
-                                    ? p.name!.characters.first
-                                    : (p.code ?? '?'))
-                                .toUpperCase(),
-                          ),
-                        ),
-                        title: Text(
-                          title,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                        subtitle: sub.isEmpty ? null : Text(sub),
-                        trailing: Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Text(_money(p.defaultPrice)),
-                            // 2) In the ListTile trailing PopupMenuButton, make onSelected async and call _delete
-                            PopupMenuButton<String>(
-                              onSelected: (v) async {
-                                switch (v) {
-                                  case 'edit':
-                                    await _addOrEdit(existing: p);
-                                    break;
-                                  case 'delete':
-                                    // ensure menu route fully closes before opening dialog
-                                    await Future.delayed(Duration.zero);
-                                    if (!mounted) return;
-                                    await _delete(p);
-                                    break;
-                                }
-                              },
-                              itemBuilder: (_) => const [
-                                PopupMenuItem(
-                                  value: 'edit',
-                                  child: ListTile(
-                                    leading: Icon(Icons.edit_outlined),
-                                    title: Text('Modifier'),
-                                  ),
-                                ),
-                                PopupMenuItem(
-                                  value: 'delete',
-                                  child: ListTile(
-                                    leading: Icon(Icons.delete_outline),
-                                    title: Text('Supprimer'),
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ],
-                        ),
+
+                      return ProductTile(
+                        title: title,
+                        subtitle: sub.isEmpty ? null : sub,
+                        priceCents: p.defaultPrice,
                         onTap: () => _addOrEdit(existing: p),
+                        onMenuAction: (action) async {
+                          await Future.delayed(
+                            Duration.zero,
+                          ); // close menu first
+                          if (!mounted) return;
+                          switch (action) {
+                            case ProductContextMenu.edit:
+                              await _addOrEdit(existing: p);
+                              break;
+                            case ProductContextMenu.delete:
+                              await _confirmDelete(p);
+                              break;
+                            case ProductContextMenu.share:
+                              await _share(p);
+                              break;
+                            case ProductContextMenu.view:
+                              await _addOrEdit(
+                                existing: p,
+                              ); // reuse editor as viewer
+                              break;
+                          }
+                        },
                       );
                     },
                   ),
@@ -298,184 +270,6 @@ class _ProductListPageState extends ConsumerState<ProductListPage> {
           ],
         ),
       ),
-    );
-  }
-}
-
-/* ------------------------------ Form dialog ------------------------------ */
-
-class _ProductFormResult {
-  final String? code;
-  final String? name;
-  final String? description;
-  final String? barcode;
-  final String? categoryId;
-  final int priceCents;
-  const _ProductFormResult({
-    this.code,
-    this.name,
-    this.description,
-    this.barcode,
-    this.categoryId,
-    required this.priceCents,
-  });
-}
-
-class _ProductDialog extends StatefulWidget {
-  final Product? existing;
-  final List<Category> categories;
-  const _ProductDialog({this.existing, required this.categories});
-
-  @override
-  State<_ProductDialog> createState() => _ProductDialogState();
-}
-
-class _ProductDialogState extends State<_ProductDialog> {
-  final _formKey = GlobalKey<FormState>();
-  late final TextEditingController _code = TextEditingController(
-    text: widget.existing?.code ?? '',
-  );
-  late final TextEditingController _name = TextEditingController(
-    text: widget.existing?.name ?? '',
-  );
-  late final TextEditingController _desc = TextEditingController(
-    text: widget.existing?.description ?? '',
-  );
-  late final TextEditingController _barcode = TextEditingController(
-    text: widget.existing?.barcode ?? '',
-  );
-  late final TextEditingController _price = TextEditingController(
-    text: widget.existing == null
-        ? ''
-        : ((widget.existing!.defaultPrice) / 100).toStringAsFixed(0),
-  );
-  String? _categoryId;
-
-  @override
-  void initState() {
-    super.initState();
-    _categoryId =
-        widget.existing?.categoryId ??
-        (widget.categories.isNotEmpty ? widget.categories.first.id : null);
-  }
-
-  @override
-  void dispose() {
-    _code.dispose();
-    _name.dispose();
-    _desc.dispose();
-    _barcode.dispose();
-    _price.dispose();
-    super.dispose();
-  }
-
-  int _toCents(String v) {
-    final s = v.replaceAll(',', '.').replaceAll(' ', '');
-    final d = double.tryParse(s) ?? 0;
-    return (d * 100).round();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final isEdit = widget.existing != null;
-    return AlertDialog(
-      title: Text(isEdit ? 'Modifier le produit' : 'Nouveau produit'),
-      content: Form(
-        key: _formKey,
-        child: SizedBox(
-          width: 420,
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              TextFormField(
-                controller: _name,
-                decoration: const InputDecoration(
-                  labelText: 'Nom',
-                  border: OutlineInputBorder(),
-                ),
-                validator: (v) =>
-                    (v == null || v.trim().isEmpty) ? 'Requis' : null,
-                autofocus: true,
-              ),
-              const SizedBox(height: 10),
-              TextFormField(
-                controller: _code,
-                decoration: const InputDecoration(
-                  labelText: 'Code (SKU)',
-                  border: OutlineInputBorder(),
-                ),
-              ),
-              const SizedBox(height: 10),
-              TextFormField(
-                controller: _barcode,
-                decoration: const InputDecoration(
-                  labelText: 'Code barre (EAN/UPC)',
-                  border: OutlineInputBorder(),
-                ),
-              ),
-              const SizedBox(height: 10),
-              DropdownButtonFormField<String>(
-                value: _categoryId,
-                items: widget.categories
-                    .map(
-                      (c) => DropdownMenuItem(value: c.id, child: Text(c.code)),
-                    )
-                    .toList(),
-                onChanged: (v) => setState(() => _categoryId = v),
-                decoration: const InputDecoration(
-                  labelText: 'Catégorie',
-                  border: OutlineInputBorder(),
-                ),
-              ),
-              const SizedBox(height: 10),
-              TextFormField(
-                controller: _price,
-                keyboardType: const TextInputType.numberWithOptions(
-                  decimal: true,
-                ),
-                decoration: const InputDecoration(
-                  labelText: 'Prix par défaut (ex: 1500)',
-                  border: OutlineInputBorder(),
-                ),
-                validator: (v) =>
-                    (v == null || v.trim().isEmpty) ? 'Requis' : null,
-              ),
-              const SizedBox(height: 10),
-              TextFormField(
-                controller: _desc,
-                maxLines: 2,
-                decoration: const InputDecoration(
-                  labelText: 'Description',
-                  border: OutlineInputBorder(),
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
-      actions: [
-        TextButton(
-          onPressed: () => Navigator.pop(context),
-          child: const Text('Annuler'),
-        ),
-        FilledButton(
-          onPressed: () {
-            if (!_formKey.currentState!.validate()) return;
-            Navigator.pop(
-              context,
-              _ProductFormResult(
-                code: _code.text.trim(),
-                name: _name.text.trim(),
-                description: _desc.text.trim(),
-                barcode: _barcode.text.trim(),
-                categoryId: _categoryId,
-                priceCents: _toCents(_price.text),
-              ),
-            );
-          },
-          child: Text(isEdit ? 'Enregistrer' : 'Ajouter'),
-        ),
-      ],
     );
   }
 }

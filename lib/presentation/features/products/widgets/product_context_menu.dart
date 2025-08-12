@@ -1,0 +1,47 @@
+import 'package:flutter/material.dart';
+
+abstract class ProductContextMenu {
+  static const String view = 'view';
+  static const String edit = 'edit';
+  static const String delete = 'delete';
+  static const String share = 'share';
+}
+
+List<PopupMenuEntry<String>> buildProductContextMenuItems({
+  bool includeView = true,
+  bool includeShare = true,
+}) {
+  return [
+    if (includeView)
+      const PopupMenuItem(
+        value: ProductContextMenu.view,
+        child: ListTile(
+          leading: Icon(Icons.visibility_outlined),
+          title: Text('Voir'),
+        ),
+      ),
+    const PopupMenuItem(
+      value: ProductContextMenu.edit,
+      child: ListTile(
+        leading: Icon(Icons.edit_outlined),
+        title: Text('Modifier'),
+      ),
+    ),
+    const PopupMenuItem(
+      value: ProductContextMenu.delete,
+      child: ListTile(
+        leading: Icon(Icons.delete_outline),
+        title: Text('Supprimer'),
+      ),
+    ),
+    if (includeShare) const PopupMenuDivider(),
+    if (includeShare)
+      const PopupMenuItem(
+        value: ProductContextMenu.share,
+        child: ListTile(
+          leading: Icon(Icons.ios_share),
+          title: Text('Partager'),
+        ),
+      ),
+  ];
+}

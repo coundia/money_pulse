@@ -25,3 +25,22 @@ abstract class AccountRepository {
  - just improve ui of list transaction , grouped it by day
 
  -  improve , traduit in fr, and formatte Amount an date ,   use import 'package:money_pulse/presentation/shared/formatters.dart';
+
+
+Create  for this table product :
+
+- product_list_page.dart: page orchestration (load/search/navigate + repo calls)
+- product_form_panel.dart: add/edit UI inside a right drawer
+- product_view_panel.dart:  UI inside a right drawer
+- product_delete_panel.dart: confirm delete inside a right drawer
+- product_tile.dart: reusable list tile
+- product_context_menu.dart: reusable menu model
+- use product_view_panel , add it menu context and use it when i click on a item
+- always use right_drawer.dart for popup
+- add provider  product_repo_provider.dart
+  <<
+  final productRepoProvider = Provider<ProductRepository>((ref) {
+    final db = ref.read(dbProvider);
+    return ProductRepositorySqflite(db);
+  });
+  >>
