@@ -23,6 +23,8 @@ dependencies:
   path: ^1.9.1
   fl_chart: ^1.0.0
   share_plus: ^11.0.0
+  printing: ^5.14.2
+  pdf: ^3.11.3
 
 dev_dependencies:
   flutter_test:

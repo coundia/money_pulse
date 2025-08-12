@@ -165,3 +165,88 @@ CREATE INDEX IF NOT EXISTS idx_item_unit ON transaction_item(unitId);
 CREATE INDEX IF NOT EXISTS idx_item_dirty ON transaction_item(isDirty);
 CREATE INDEX IF NOT EXISTS idx_item_deleted ON transaction_item(deletedAt);
  
+ -- Tables: company, customer
+-- Aligné avec le style existant (timestamps TEXT, version/isDirty, deletedAt pour soft-delete)
+PRAGMA foreign_keys = OFF;
+
+-- =========================
+-- COMPANY
+-- =========================
+CREATE TABLE IF NOT EXISTS company (
+  id TEXT PRIMARY KEY,
+  remoteId TEXT,
+  code TEXT NOT NULL,
+  name TEXT ,
+  description TEXT,
+  phone TEXT,
+  email TEXT,
+  website TEXT,
+  taxId TEXT,                     
+  currency TEXT,                 
+  addressLine1 TEXT,
+  addressLine2 TEXT,
+  city TEXT,
+  region TEXT,
+  country TEXT,
+  postalCode TEXT,
+  isDefault INTEGER DEFAULT 0,
+  createdAt TEXT DEFAULT (datetime('now')),
+  updatedAt TEXT DEFAULT (datetime('now')),
+  deletedAt TEXT,
+  syncAt TEXT,
+  version INTEGER DEFAULT 0,
+  isDirty INTEGER DEFAULT 1
+);
+
+CREATE UNIQUE INDEX IF NOT EXISTS uq_company_code_active
+  ON company(code) WHERE deletedAt IS NULL;
+
+CREATE INDEX IF NOT EXISTS idx_company_name ON company(name);
+CREATE INDEX IF NOT EXISTS idx_company_phone ON company(phone);
+CREATE INDEX IF NOT EXISTS idx_company_email ON company(email);
+CREATE INDEX IF NOT EXISTS idx_company_deleted ON company(deletedAt);
+CREATE INDEX IF NOT EXISTS idx_company_dirty ON company(isDirty);
+
+-- =========================
+-- CUSTOMER
+-- =========================
+CREATE TABLE IF NOT EXISTS customer (
+  id TEXT PRIMARY KEY,
+  remoteId TEXT,
+  code TEXT,                      
+  firstName TEXT,
+  lastName TEXT,
+  fullName TEXT,                 
+  phone TEXT,
+  email TEXT,
+  notes TEXT,
+  status TEXT,                   
+  companyId TEXT,                 
+  addressLine1 TEXT,
+  addressLine2 TEXT,
+  city TEXT,
+  region TEXT,
+  country TEXT,
+  postalCode TEXT,
+  createdAt TEXT DEFAULT (datetime('now')),
+  updatedAt TEXT DEFAULT (datetime('now')),
+  deletedAt TEXT,
+  syncAt TEXT,
+  version INTEGER DEFAULT 0,
+  isDirty INTEGER DEFAULT 1
+);
+
+CREATE UNIQUE INDEX IF NOT EXISTS uq_customer_code_active
+  ON customer(code) WHERE deletedAt IS NULL;
+
+CREATE  INDEX IF NOT EXISTS uq_customer_email_active
+  ON customer(email) WHERE email IS NOT NULL AND deletedAt IS NULL;
+
+CREATE  INDEX IF NOT EXISTS uq_customer_phone_active
+  ON customer(phone) WHERE phone IS NOT NULL AND deletedAt IS NULL;
+
+-- Index de recherche usuels
+CREATE INDEX IF NOT EXISTS idx_customer_fullname ON customer(fullName);
+CREATE INDEX IF NOT EXISTS idx_customer_company ON customer(companyId);
+CREATE INDEX IF NOT EXISTS idx_customer_deleted ON customer(deletedAt);
+CREATE INDEX IF NOT EXISTS idx_customer_dirty ON customer(isDirty);

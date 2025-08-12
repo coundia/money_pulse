@@ -26,8 +26,10 @@ abstract class AccountRepository {
 
  -  improve , traduit in fr, and formatte Amount an date ,   use import 'package:money_pulse/presentation/shared/formatters.dart';
 
+Oui 
+ entités Dart + repositories (DDD) pour Company et Customer, ainsi que les providers Riverpod ?
 
-Create  for this table product :
+Inspire toi de ceci
 
 - product_list_page.dart: page orchestration (load/search/navigate + repo calls)
 - product_form_panel.dart: add/edit UI inside a right drawer

@@ -23,7 +23,9 @@ import 'package:money_pulse/infrastructure/repositories/report_repository_sqflit
 
 import '../../application/usecases/checkout_cart_usecase.dart';
 import '../../domain/sync/repositories/change_log_repository.dart';
+import '../../domain/transactions/repositories/transaction_item_repository.dart';
 import '../../infrastructure/sync/change_log_sqlite_repository.dart';
+import '../../infrastructure/transactions/repositories/transaction_item_repository_impl.dart';
 
 final dbProvider = Provider<AppDatabase>((ref) => AppDatabase.I);
 
@@ -123,4 +125,9 @@ final checkoutCartUseCaseProvider = Provider<CheckoutCartUseCase>((ref) {
     ref.read(dbProvider),
     ref.read(accountRepoProvider),
   );
+});
+
+final transactionItemRepoProvider = Provider<TransactionItemRepository>((ref) {
+  final db = ref.read(dbProvider);
+  return TransactionItemRepositoryImpl(db);
 });
