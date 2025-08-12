@@ -5,6 +5,7 @@ import 'package:money_pulse/infrastructure/db/app_database.dart';
 import 'package:money_pulse/presentation/features/categories/category_list_page.dart';
 import 'package:money_pulse/presentation/features/accounts/account_page.dart';
 import 'package:money_pulse/presentation/features/sync/change_log_list_page.dart';
+import 'package:money_pulse/presentation/features/sync/sync_state_list_page.dart';
 import 'package:money_pulse/presentation/shared/formatters.dart';
 
 class SettingsPage extends ConsumerStatefulWidget {
@@ -96,6 +97,20 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
           Card(
             child: Column(
               children: [
+                ListTile(
+                  leading: const Icon(Icons.storage_rounded),
+                  title: const Text('État de synchronisation'),
+                  subtitle: const Text(
+                    'Dernière synchro et curseur par entité',
+                  ),
+                  trailing: const Icon(Icons.chevron_right),
+                  onTap: () => Navigator.of(context).push(
+                    MaterialPageRoute(
+                      builder: (_) => const SyncStateListPage(),
+                    ),
+                  ),
+                ),
+                const Divider(height: 1),
                 ListTile(
                   leading: const Icon(Icons.sync_alt),
                   title: const Text('Journal des changements'),
