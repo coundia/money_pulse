@@ -3,6 +3,11 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:money_pulse/presentation/shared/formatters.dart';
 import 'providers/customer_detail_providers.dart';
 
+// NEW: actions via right drawer
+import 'package:money_pulse/presentation/widgets/right_drawer.dart';
+import 'customer_form_panel.dart';
+import 'customer_delete_panel.dart';
+
 class CustomerViewPanel extends ConsumerWidget {
   final String customerId;
   const CustomerViewPanel({super.key, required this.customerId});
@@ -10,6 +15,38 @@ class CustomerViewPanel extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final async = ref.watch(customerByIdProvider(customerId));
+
+    Future<void> onEdit() async {
+      final c = await ref.read(customerByIdProvider(customerId).future);
+      if (c == null) return;
+      final ok = await showRightDrawer<bool>(
+        context,
+        child: CustomerFormPanel(initial: c),
+        widthFraction: 0.86,
+        heightFraction: 0.96,
+      );
+      if (ok == true) {
+        ref.invalidate(customerByIdProvider(customerId));
+        if (context.mounted) {
+          ScaffoldMessenger.of(
+            context,
+          ).showSnackBar(const SnackBar(content: Text('Client mis à jour')));
+        }
+      }
+    }
+
+    Future<void> onDelete() async {
+      final ok = await showRightDrawer<bool>(
+        context,
+        child: CustomerDeletePanel(customerId: customerId),
+        widthFraction: 0.86,
+        heightFraction: 0.6,
+      );
+      if (ok == true && context.mounted) {
+        // Renvoyer true au parent (liste) pour qu’il rafraîchisse et retirer l’item.
+        Navigator.of(context).pop(true);
+      }
+    }
 
     return Scaffold(
       appBar: AppBar(
@@ -19,6 +56,43 @@ class CustomerViewPanel extends ConsumerWidget {
           icon: const Icon(Icons.close),
           onPressed: () => Navigator.of(context).maybePop(),
         ),
+        // NEW: menu contextuel (Modifier / Supprimer)
+        actions: [
+          PopupMenuButton<String>(
+            onSelected: (v) {
+              switch (v) {
+                case 'edit':
+                  onEdit();
+                  break;
+                case 'delete':
+                  onDelete();
+                  break;
+              }
+            },
+            itemBuilder: (_) => const [
+              PopupMenuItem(
+                value: 'edit',
+                child: Row(
+                  children: [
+                    Icon(Icons.edit_outlined, size: 18),
+                    SizedBox(width: 8),
+                    Text('Modifier'),
+                  ],
+                ),
+              ),
+              PopupMenuItem(
+                value: 'delete',
+                child: Row(
+                  children: [
+                    Icon(Icons.delete_outline, size: 18),
+                    SizedBox(width: 8),
+                    Text('Supprimer'),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ],
       ),
       body: async.when(
         data: (c) {
@@ -75,6 +149,42 @@ class CustomerViewPanel extends ConsumerWidget {
         },
         loading: () => const Center(child: CircularProgressIndicator()),
         error: (e, _) => Center(child: Text('Erreur: $e')),
+      ),
+
+      // NEW: boutons en bas (un par ligne)
+      bottomNavigationBar: async.maybeWhen(
+        data: (c) {
+          if (c == null) return null;
+          return SafeArea(
+            top: false,
+            child: Padding(
+              padding: const EdgeInsets.all(12),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  SizedBox(
+                    width: double.infinity,
+                    child: FilledButton.icon(
+                      onPressed: onEdit,
+                      icon: const Icon(Icons.edit_outlined),
+                      label: const Text('Modifier'),
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  SizedBox(
+                    width: double.infinity,
+                    child: FilledButton.tonalIcon(
+                      onPressed: onDelete,
+                      icon: const Icon(Icons.delete_outline),
+                      label: const Text('Supprimer'),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          );
+        },
+        orElse: () => null,
       ),
     );
   }

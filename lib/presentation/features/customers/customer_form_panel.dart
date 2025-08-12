@@ -3,7 +3,6 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:uuid/uuid.dart';
 import 'package:money_pulse/domain/customer/entities/customer.dart';
 import 'package:money_pulse/domain/company/entities/company.dart';
-import 'package:money_pulse/presentation/app/providers.dart';
 
 import '../../../domain/company/repositories/company_repository.dart';
 import '../../app/providers/company_repo_provider.dart';
@@ -117,6 +116,13 @@ class _CustomerFormPanelState extends ConsumerState<CustomerFormPanel> {
           icon: const Icon(Icons.close),
           onPressed: () => Navigator.of(context).maybePop(),
         ),
+        actions: [
+          IconButton(
+            tooltip: isEdit ? 'Enregistrer' : 'Créer',
+            icon: const Icon(Icons.check),
+            onPressed: _save,
+          ),
+        ],
       ),
       body: FutureBuilder<List<Company>>(
         future: _loadCompanies(),
@@ -215,11 +221,7 @@ class _CustomerFormPanelState extends ConsumerState<CustomerFormPanel> {
                   ),
                 ),
                 const SizedBox(height: 12),
-                FilledButton.icon(
-                  onPressed: _save,
-                  icon: const Icon(Icons.check),
-                  label: Text(isEdit ? 'Enregistrer' : 'Créer'),
-                ),
+                // ⬇️ Bouton bas supprimé : l’action est maintenant dans l’AppBar
               ],
             ),
           );

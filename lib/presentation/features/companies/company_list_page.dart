@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:money_pulse/domain/company/entities/company.dart';
 import 'package:money_pulse/presentation/features/companies/company_form_panel.dart';
 import 'package:money_pulse/presentation/features/companies/providers/company_list_providers.dart';
 import 'package:money_pulse/presentation/features/companies/widgets/company_tile.dart';

@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:uuid/uuid.dart';
 import 'package:money_pulse/domain/company/entities/company.dart';
-import 'package:money_pulse/presentation/app/providers.dart';
 
 import '../../app/providers/company_repo_provider.dart';
 
@@ -120,6 +119,13 @@ class _CompanyFormPanelState extends ConsumerState<CompanyFormPanel> {
           icon: const Icon(Icons.close),
           onPressed: () => Navigator.of(context).maybePop(),
         ),
+        actions: [
+          IconButton(
+            tooltip: isEdit ? 'Enregistrer' : 'Créer',
+            icon: const Icon(Icons.check),
+            onPressed: _save,
+          ),
+        ],
       ),
       body: Form(
         key: _formKey,
@@ -240,12 +246,7 @@ class _CompanyFormPanelState extends ConsumerState<CompanyFormPanel> {
               title: const Text('Définir comme société par défaut'),
               dense: true,
             ),
-            const SizedBox(height: 12),
-            FilledButton.icon(
-              onPressed: _save,
-              icon: const Icon(Icons.check),
-              label: Text(isEdit ? 'Enregistrer' : 'Créer'),
-            ),
+            // ⬇️ Bouton bas supprimé (le bouton est dans l’AppBar)
           ],
         ),
       ),

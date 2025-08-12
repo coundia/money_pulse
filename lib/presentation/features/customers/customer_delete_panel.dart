@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:money_pulse/presentation/app/providers.dart';
 
 import '../../app/providers/customer_repo_provider.dart';
 
