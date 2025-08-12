@@ -6,6 +6,7 @@ import 'package:money_pulse/presentation/features/categories/category_list_page.
 import 'package:money_pulse/presentation/features/accounts/account_page.dart';
 import 'package:money_pulse/presentation/features/sync/change_log_list_page.dart';
 import 'package:money_pulse/presentation/features/sync/sync_state_list_page.dart';
+import 'package:money_pulse/presentation/features/units/unit_list_page.dart';
 import 'package:money_pulse/presentation/shared/formatters.dart';
 
 import '../products/product_list_page.dart';
@@ -103,6 +104,16 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
               context,
             ).push(MaterialPageRoute(builder: (_) => const ProductListPage())),
           ),
+          ListTile(
+            leading: const Icon(Icons.list),
+            title: const Text('Gérer les unités'),
+            subtitle: const Text('Créer, modifier, supprimer des unités'),
+
+            onTap: () => Navigator.of(
+              context,
+            ).push(MaterialPageRoute(builder: (_) => const UnitListPage())),
+          ),
+
           const Divider(height: 24),
           const _SectionHeader('Données'),
           Card(
