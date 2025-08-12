@@ -6,6 +6,8 @@ class ProductTile extends StatelessWidget {
   final String? subtitle;
   final int priceCents;
   final VoidCallback? onTap;
+
+  /// Called with one of: 'view' | 'edit' | 'delete' | 'share'
   final Future<void> Function(String action)? onMenuAction;
 
   const ProductTile({
@@ -44,6 +46,13 @@ class ProductTile extends StatelessWidget {
               onSelected: (v) async => onMenuAction!(v),
               itemBuilder: (_) => const [
                 PopupMenuItem(
+                  value: 'view',
+                  child: ListTile(
+                    leading: Icon(Icons.visibility_outlined),
+                    title: Text('Voir'),
+                  ),
+                ),
+                PopupMenuItem(
                   value: 'edit',
                   child: ListTile(
                     leading: Icon(Icons.edit_outlined),
@@ -55,6 +64,14 @@ class ProductTile extends StatelessWidget {
                   child: ListTile(
                     leading: Icon(Icons.delete_outline),
                     title: Text('Supprimer'),
+                  ),
+                ),
+                PopupMenuDivider(),
+                PopupMenuItem(
+                  value: 'share',
+                  child: ListTile(
+                    leading: Icon(Icons.ios_share),
+                    title: Text('Partager'),
                   ),
                 ),
               ],

@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:intl/intl.dart';
 import 'package:uuid/uuid.dart';
 
 import 'package:money_pulse/domain/products/entities/product.dart';
@@ -15,7 +14,7 @@ import 'package:money_pulse/presentation/widgets/right_drawer.dart';
 import 'widgets/product_tile.dart';
 import 'widgets/product_form_panel.dart';
 import 'widgets/product_delete_panel.dart';
-import 'widgets/product_context_menu.dart';
+import 'widgets/product_view_panel.dart'; // ✅ NEW
 
 class ProductListPage extends ConsumerStatefulWidget {
   const ProductListPage({super.key});
@@ -127,6 +126,35 @@ class _ProductListPageState extends ConsumerState<ProductListPage> {
     }
   }
 
+  Future<void> _view(Product p) async {
+    // optional: load category label for nicer display
+    String? catLabel;
+    if (p.categoryId != null) {
+      final cat = await ref.read(categoryRepoProvider).findById(p.categoryId!);
+      catLabel = cat?.code;
+    }
+
+    if (!mounted) return;
+    await showRightDrawer<void>(
+      context,
+      child: ProductViewPanel(
+        product: p,
+        categoryLabel: catLabel,
+        onEdit: () async {
+          Navigator.of(context).pop(); // close viewer
+          await _addOrEdit(existing: p);
+        },
+        onDelete: () async {
+          Navigator.of(context).pop(); // close viewer
+          await _confirmDelete(p);
+        },
+        onShare: () => _share(p),
+      ),
+      widthFraction: 0.92,
+      heightFraction: 0.96,
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return FutureBuilder<List<Product>>(
@@ -163,26 +191,24 @@ class _ProductListPageState extends ConsumerState<ProductListPage> {
                         title: title,
                         subtitle: sub.isEmpty ? null : sub,
                         priceCents: p.defaultPrice,
-                        onTap: () => _addOrEdit(existing: p),
+                        onTap: () => _view(p), // ✅ open the read-only drawer
                         onMenuAction: (action) async {
                           await Future.delayed(
                             Duration.zero,
                           ); // close menu first
                           if (!mounted) return;
                           switch (action) {
-                            case ProductContextMenu.edit:
+                            case 'view':
+                              await _view(p);
+                              break;
+                            case 'edit':
                               await _addOrEdit(existing: p);
                               break;
-                            case ProductContextMenu.delete:
+                            case 'delete':
                               await _confirmDelete(p);
                               break;
-                            case ProductContextMenu.share:
+                            case 'share':
                               await _share(p);
-                              break;
-                            case ProductContextMenu.view:
-                              await _addOrEdit(
-                                existing: p,
-                              ); // reuse editor as viewer
                               break;
                           }
                         },

@@ -55,20 +55,11 @@ class ProductViewPanel extends StatelessWidget {
         ),
         actions: [
           IconButton(
-            tooltip: 'Partager',
-            icon: const Icon(Icons.ios_share),
-            onPressed: onShare,
-          ),
-          IconButton(
             tooltip: 'Modifier',
             icon: const Icon(Icons.edit_outlined),
             onPressed: onEdit,
           ),
-          IconButton(
-            tooltip: 'Supprimer',
-            icon: const Icon(Icons.delete_outline),
-            onPressed: onDelete,
-          ),
+
           const SizedBox(width: 4),
         ],
       ),
