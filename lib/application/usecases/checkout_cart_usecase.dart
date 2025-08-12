@@ -1,17 +1,13 @@
 import 'package:uuid/uuid.dart';
-import 'package:sqflite/sqflite.dart'; // for ConflictAlgorithm (if you need it)
+import 'package:sqflite/sqflite.dart';
 import 'package:money_pulse/infrastructure/db/app_database.dart';
 import 'package:money_pulse/domain/accounts/repositories/account_repository.dart';
 
-/// Simple atomic checkout: creates one transaction_entry + many transaction_item,
-/// and updates account balance accordingly.
 class CheckoutCartUseCase {
   final AppDatabase db;
   final AccountRepository accountRepo;
   CheckoutCartUseCase(this.db, this.accountRepo);
 
-  /// [typeEntry] 'CREDIT' = sale (income), 'DEBIT' = purchase (expense)
-  /// [lines] : [{ 'productId': String?, 'label': String, 'quantity': int, 'unitPrice': int }]
   Future<String> execute({
     required String typeEntry,
     String? accountId,
@@ -39,7 +35,6 @@ class CheckoutCartUseCase {
       throw StateError('No default account found');
     }
 
-    // Defensive parsing of lines
     int _asInt(Object? v) => (v is int) ? v : int.tryParse('${v ?? 0}') ?? 0;
 
     final total = lines.fold<int>(0, (p, e) {
@@ -53,7 +48,6 @@ class CheckoutCartUseCase {
     final txId = const Uuid().v4();
 
     await db.tx((txn) async {
-      // 1) Insert transaction_entry
       await txn.insert('transaction_entry', {
         'id': txId,
         'remoteId': null,
@@ -75,7 +69,6 @@ class CheckoutCartUseCase {
         'isDirty': 1,
       });
 
-      // 2) Insert items
       for (final l in lines) {
         final itemId = const Uuid().v4();
         final qty = _asInt(l['quantity']);
@@ -99,7 +92,6 @@ class CheckoutCartUseCase {
         });
       }
 
-      // 3) Update account balance
       final newBalance = t == 'CREDIT'
           ? acc.balance + total
           : acc.balance - total;
@@ -115,7 +107,6 @@ class CheckoutCartUseCase {
         whereArgs: [acc.id],
       );
 
-      // 4) Upsert into change_log (single statement)
       final logId = const Uuid().v4();
       await txn.rawInsert(
         '''

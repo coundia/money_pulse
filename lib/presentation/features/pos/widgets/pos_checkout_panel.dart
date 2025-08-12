@@ -1,13 +1,11 @@
 import 'package:flutter/material.dart';
-import 'package:intl/intl.dart';
+import 'package:money_pulse/presentation/shared/formatters.dart';
 
-/// Lightweight view model for displaying a cart line in the checkout panel.
-/// (UI only — persistence is the caller’s responsibility)
 class PosCartLine {
   final String? productId;
-  final String label; // what the user sees (ex: name or code)
-  final int quantity; // units
-  final int unitPrice; // cents
+  final String label;
+  final int quantity;
+  final int unitPrice;
 
   const PosCartLine({
     this.productId,
@@ -18,8 +16,6 @@ class PosCartLine {
 
   int get lineTotal => quantity * unitPrice;
 
-  /// Optional: create from a map shaped like your use case lines
-  /// { 'productId': String?, 'label': String, 'quantity': int, 'unitPrice': int }
   factory PosCartLine.fromMap(Map<String, Object?> m) => PosCartLine(
     productId: m['productId'] as String?,
     label: (m['label'] as String?) ?? '—',
@@ -29,19 +25,10 @@ class PosCartLine {
 }
 
 class PosCheckoutPanel extends StatefulWidget {
-  /// Lines to display (snapshot). Typically built from your cart state.
   final List<PosCartLine> lines;
-
-  /// ‘CREDIT’ = sale / income (default), ‘DEBIT’ = purchase / expense
   final String initialTypeEntry;
-
-  /// Optional prefilled description
   final String? initialDescription;
-
-  /// Optional initial date (defaults to now)
   final DateTime? initialWhen;
-
-  /// Optional account label (purely informational)
   final String? accountLabel;
 
   const PosCheckoutPanel({
@@ -59,15 +46,15 @@ class PosCheckoutPanel extends StatefulWidget {
 
 class _PosCheckoutPanelState extends State<PosCheckoutPanel> {
   final _descCtrl = TextEditingController();
-  late String _typeEntry; // 'CREDIT' or 'DEBIT'
   late DateTime _when;
+  late String _typeEntry;
   bool _closing = false;
 
   @override
   void initState() {
     super.initState();
-    _typeEntry = (widget.initialTypeEntry == 'DEBIT') ? 'DEBIT' : 'CREDIT';
     _when = widget.initialWhen ?? DateTime.now();
+    _typeEntry = widget.initialTypeEntry == 'DEBIT' ? 'DEBIT' : 'CREDIT';
     _descCtrl.text = widget.initialDescription ?? '';
   }
 
@@ -78,26 +65,13 @@ class _PosCheckoutPanelState extends State<PosCheckoutPanel> {
   }
 
   Future<void> _safePop([dynamic result]) async {
-    if (_closing) return; // prevents double pop
+    if (_closing) return;
     _closing = true;
-    // let current frame settle (avoids !_debugLocked)
     await Future.delayed(Duration.zero);
     if (!mounted) return;
     final nav = Navigator.of(context);
-    if (nav.canPop()) {
-      nav.pop(result);
-    }
+    if (nav.canPop()) nav.pop(result);
   }
-
-  String _money(int cents) {
-    // Display in whole units without currency symbol (ex: "1 500")
-    final v = cents / 100.0;
-    return NumberFormat.decimalPattern().format(v);
-  }
-
-  int get _totalCents => widget.lines.fold(0, (p, e) => p + e.lineTotal);
-
-  Color get _accent => _typeEntry == 'CREDIT' ? Colors.green : Colors.red;
 
   Future<void> _pickDate() async {
     final picked = await showDatePicker(
@@ -107,9 +81,8 @@ class _PosCheckoutPanelState extends State<PosCheckoutPanel> {
       lastDate: DateTime(2100),
     );
     if (picked == null) return;
-    // keep current time-of-day
-    setState(
-      () => _when = DateTime(
+    setState(() {
+      _when = DateTime(
         picked.year,
         picked.month,
         picked.day,
@@ -118,14 +91,75 @@ class _PosCheckoutPanelState extends State<PosCheckoutPanel> {
         _when.second,
         _when.millisecond,
         _when.microsecond,
+      );
+    });
+  }
+
+  int get _totalCents => widget.lines.fold(0, (p, e) => p + e.lineTotal);
+  Color get _accent => _typeEntry == 'CREDIT' ? Colors.green : Colors.red;
+
+  Widget _dateChip(BuildContext context) {
+    return InkWell(
+      borderRadius: BorderRadius.circular(10),
+      onTap: _pickDate,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+        decoration: BoxDecoration(
+          border: Border.all(
+            color: Theme.of(context).colorScheme.outlineVariant,
+          ),
+          borderRadius: BorderRadius.circular(10),
+        ),
+        child: Row(
+          children: [
+            const Icon(Icons.calendar_month),
+            const SizedBox(width: 8),
+            Expanded(
+              child: Text(
+                Formatters.dateFull(_when),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _typeToggle(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+      decoration: BoxDecoration(
+        border: Border.all(color: Theme.of(context).colorScheme.outlineVariant),
+        borderRadius: BorderRadius.circular(10),
+      ),
+      child: FittedBox(
+        fit: BoxFit.scaleDown,
+        child: SegmentedButton<String>(
+          segments: const [
+            ButtonSegment(
+              value: 'DEBIT',
+              icon: Icon(Icons.south),
+              label: Text('Dépense'),
+            ),
+            ButtonSegment(
+              value: 'CREDIT',
+              icon: Icon(Icons.north),
+              label: Text('Vente'),
+            ),
+          ],
+          selected: {_typeEntry},
+          onSelectionChanged: (s) => setState(() => _typeEntry = s.first),
+          showSelectedIcon: false,
+        ),
       ),
     );
   }
 
   @override
   Widget build(BuildContext context) {
-    final total = _money(_totalCents);
-    final isSale = _typeEntry == 'CREDIT';
+    final total = Formatters.amountFromCents(_totalCents);
 
     return Scaffold(
       appBar: AppBar(
@@ -138,7 +172,6 @@ class _PosCheckoutPanelState extends State<PosCheckoutPanel> {
       ),
       body: Column(
         children: [
-          // Header: account + period + type (income/expense)
           Padding(
             padding: const EdgeInsets.fromLTRB(16, 14, 16, 8),
             child: Column(
@@ -156,66 +189,31 @@ class _PosCheckoutPanelState extends State<PosCheckoutPanel> {
                     ],
                   ),
                 const SizedBox(height: 10),
-                Row(
-                  children: [
-                    Expanded(
-                      child: InkWell(
-                        borderRadius: BorderRadius.circular(10),
-                        onTap: _pickDate,
-                        child: Container(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 12,
-                            vertical: 10,
-                          ),
-                          decoration: BoxDecoration(
-                            border: Border.all(
-                              color: Theme.of(
-                                context,
-                              ).colorScheme.outlineVariant,
-                            ),
-                            borderRadius: BorderRadius.circular(10),
-                          ),
-                          child: Row(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              const Icon(Icons.calendar_month),
-                              const SizedBox(width: 8),
-                              Text(DateFormat.yMMMd().format(_when)),
-                            ],
-                          ),
-                        ),
-                      ),
-                    ),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: SegmentedButton<String>(
-                        segments: const [
-                          ButtonSegment(
-                            value: 'DEBIT',
-                            icon: Icon(Icons.south),
-                            label: Text('Dépense'),
-                          ),
-                          ButtonSegment(
-                            value: 'CREDIT',
-                            icon: Icon(Icons.north),
-                            label: Text('Vente'),
-                          ),
+                LayoutBuilder(
+                  builder: (context, c) {
+                    final narrow = c.maxWidth < 420;
+                    if (narrow) {
+                      return Column(
+                        children: [
+                          _dateChip(context),
+                          const SizedBox(height: 8),
+                          _typeToggle(context),
                         ],
-                        selected: {_typeEntry},
-                        onSelectionChanged: (s) =>
-                            setState(() => _typeEntry = s.first),
-                        showSelectedIcon: false,
-                      ),
-                    ),
-                  ],
+                      );
+                    }
+                    return Row(
+                      children: [
+                        Expanded(child: _dateChip(context)),
+                        const SizedBox(width: 12),
+                        Expanded(child: _typeToggle(context)),
+                      ],
+                    );
+                  },
                 ),
               ],
             ),
           ),
-
           const Divider(height: 1),
-
-          // Lines
           Expanded(
             child: widget.lines.isEmpty
                 ? const Center(child: Text('Aucun article'))
@@ -232,7 +230,7 @@ class _PosCheckoutPanelState extends State<PosCheckoutPanel> {
                         leading: CircleAvatar(
                           backgroundColor: _accent.withOpacity(0.12),
                           child: Icon(
-                            isSale ? Icons.north : Icons.south,
+                            _typeEntry == 'CREDIT' ? Icons.north : Icons.south,
                             color: _accent,
                           ),
                         ),
@@ -242,10 +240,10 @@ class _PosCheckoutPanelState extends State<PosCheckoutPanel> {
                           overflow: TextOverflow.ellipsis,
                         ),
                         subtitle: Text(
-                          '${l.quantity} × ${_money(l.unitPrice)}',
+                          '${l.quantity} × ${Formatters.amountFromCents(l.unitPrice)}',
                         ),
                         trailing: Text(
-                          _money(l.lineTotal),
+                          Formatters.amountFromCents(l.lineTotal),
                           style: TextStyle(
                             color: _accent,
                             fontWeight: FontWeight.w700,
@@ -255,8 +253,6 @@ class _PosCheckoutPanelState extends State<PosCheckoutPanel> {
                     },
                   ),
           ),
-
-          // Note / Description
           Padding(
             padding: const EdgeInsets.fromLTRB(16, 0, 16, 10),
             child: TextField(
@@ -270,8 +266,6 @@ class _PosCheckoutPanelState extends State<PosCheckoutPanel> {
               maxLines: 3,
             ),
           ),
-
-          // Footer: total + actions
           Container(
             padding: const EdgeInsets.fromLTRB(16, 10, 16, 16),
             decoration: BoxDecoration(
@@ -316,11 +310,15 @@ class _PosCheckoutPanelState extends State<PosCheckoutPanel> {
                       Expanded(
                         child: FilledButton.icon(
                           onPressed: () {
-                            // Keep the contract simple: return true on confirm.
-                            // Caller has the cart lines; it can run the Checkout use case
-                            // with _typeEntry / _when / _descCtrl.text if needed
-                            // by storing them externally or using a scoped controller.
-                            _safePop(true);
+                            final payload = {
+                              'typeEntry': _typeEntry,
+                              'when': _when,
+                              'description': _descCtrl.text.trim().isEmpty
+                                  ? null
+                                  : _descCtrl.text.trim(),
+                              'categoryId': null,
+                            };
+                            _safePop(payload);
                           },
                           icon: const Icon(Icons.check),
                           label: const Text('Confirmer'),

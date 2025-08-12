@@ -59,6 +59,7 @@ final quickAddTransactionUseCaseProvider = Provider<QuickAddTransactionUseCase>(
     return QuickAddTransactionUseCase(
       ref.read(transactionRepoProvider),
       ref.read(accountRepoProvider),
+      ref.read(dbProvider), // ✅ pass DB so we can update balance inside a tx
     );
   },
 );
