@@ -6,11 +6,12 @@ Future<T?> showRightDrawer<T>(
   double widthFraction = 0.86,
   double heightFraction = 1.0,
   Duration duration = const Duration(milliseconds: 280),
+  bool barrierDismissible = true,
 }) {
   return showGeneralDialog<T>(
     context: context,
     barrierLabel: 'dismiss',
-    barrierDismissible: true,
+    barrierDismissible: barrierDismissible,
     barrierColor: Colors.black54,
     transitionDuration: duration,
     pageBuilder: (ctx, a1, a2) {

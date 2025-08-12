@@ -3,8 +3,26 @@ import 'package:money_pulse/presentation/features/pos/state/pos_cart.dart';
 import 'package:money_pulse/presentation/widgets/right_drawer.dart';
 import 'pos_checkout_panel.dart';
 
+/// Optional adapter if your PosCart items don’t expose productId.
+/// Adjust to your real PosCartItem type if needed.
+class _CartLineAdapter {
+  final String? productId;
+  final String label;
+  final int quantity;
+  final int unitPrice;
+  const _CartLineAdapter({
+    required this.label,
+    required this.quantity,
+    required this.unitPrice,
+    this.productId,
+  });
+}
+
 class PosCartPanel extends StatefulWidget {
   final PosCart cart;
+
+  /// Persist the sale/purchase after the user confirms in checkout.
+  /// typeEntry: 'CREDIT' (sale) or 'DEBIT' (purchase)
   final Future<void> Function(
     String typeEntry, {
     String? description,
@@ -12,6 +30,7 @@ class PosCartPanel extends StatefulWidget {
     DateTime? when,
   })
   onCheckout;
+
   const PosCartPanel({super.key, required this.cart, required this.onCheckout});
 
   @override
@@ -19,25 +38,112 @@ class PosCartPanel extends StatefulWidget {
 }
 
 class _PosCartPanelState extends State<PosCartPanel> {
+  bool _closing = false;
+
   String _money(int c) => (c ~/ 100).toString();
+
+  Future<void> _safePop([dynamic result]) async {
+    if (_closing) return;
+    _closing = true;
+    await Future.delayed(Duration.zero);
+    if (!mounted) return;
+    final nav = Navigator.of(context);
+    if (nav.canPop()) nav.pop(result);
+  }
 
   Future<void> _openCheckout() async {
     if (!mounted) return;
-    final res = await showRightDrawer<_CheckoutResult?>(
+
+    // Build checkout lines from the cart snapshot
+    final snapshot = widget.cart.snapshot(); // Map<String, PosCartItem>
+    final keys = snapshot.keys.toList();
+    final lines = keys.map((k) {
+      final it = snapshot[k]!;
+      // If your PosCartItem has productId, map it; otherwise keep null
+      final productId = it.productId; // adjust if different in your model
+      return PosCartLine(
+        productId: productId,
+        label: it.label,
+        quantity: it.quantity,
+        unitPrice: it.unitPrice,
+      );
+    }).toList();
+
+    // Open checkout. Your PosCheckoutPanel (from earlier) returns `true` on confirm.
+    // If you later upgrade it to return a payload (map/class), the adapter below will handle it.
+    final res = await showRightDrawer<dynamic>(
       context,
-      child: PosCheckoutPanel(totalCents: widget.cart.total),
+      child: PosCheckoutPanel(
+        lines: lines,
+        // You can pass initial values if you need:
+        // initialTypeEntry: 'CREDIT',
+        // initialDescription: null,
+        // initialWhen: DateTime.now(),
+        // accountLabel: 'Compte X',
+      ),
       widthFraction: 0.92,
       heightFraction: 0.96,
     );
-    if (!mounted || res == null) return;
-    await widget.onCheckout(
-      res.typeEntry,
-      description: res.description,
-      categoryId: res.categoryId,
-      when: res.when,
-    );
+
     if (!mounted) return;
-    Navigator.pop(context, true); // close cart panel
+
+    // Nothing confirmed
+    if (res == null || res == false) return;
+
+    // Try to adapt whatever the checkout returned:
+    // 1) If it returned a custom class with fields
+    String typeEntry = 'CREDIT';
+    String? description;
+    String? categoryId;
+    DateTime? when;
+
+    try {
+      // If your checkout returns a class with these getters:
+      // ignore: avoid_dynamic_calls
+      final te = (res as dynamic).typeEntry as String?;
+      // ignore: avoid_dynamic_calls
+      final desc = (res as dynamic).description as String?;
+      // ignore: avoid_dynamic_calls
+      final cat = (res as dynamic).categoryId as String?;
+      // ignore: avoid_dynamic_calls
+      final w = (res as dynamic).when as DateTime?;
+      if (te != null) typeEntry = te;
+      description = desc;
+      categoryId = cat;
+      when = w;
+    } catch (_) {
+      // 2) If a Map payload
+      if (res is Map) {
+        final te = res['typeEntry'] as String?;
+        final desc = res['description'] as String?;
+        final cat = res['categoryId'] as String?;
+        final w = res['when'];
+        if (te != null) typeEntry = te;
+        description = desc;
+        categoryId = cat;
+        if (w is DateTime) when = w;
+        if (w is String) {
+          try {
+            when = DateTime.tryParse(w);
+          } catch (_) {}
+        }
+      } else {
+        // 3) If it’s just `true`, keep sensible defaults
+        typeEntry = 'CREDIT';
+      }
+    }
+
+    // Persist via injected callback
+    await widget.onCheckout(
+      typeEntry,
+      description: description,
+      categoryId: categoryId,
+      when: when,
+    );
+
+    if (!mounted) return;
+    // Close the cart panel after successful checkout
+    await _safePop(true);
   }
 
   @override
@@ -51,7 +157,7 @@ class _PosCartPanelState extends State<PosCartPanel> {
         leading: IconButton(
           tooltip: 'Fermer',
           icon: const Icon(Icons.close),
-          onPressed: () => Navigator.pop(context),
+          onPressed: () => _safePop(false),
         ),
         actions: [
           TextButton.icon(
@@ -132,6 +238,7 @@ class _PosCartPanelState extends State<PosCartPanel> {
               },
             ),
       bottomNavigationBar: SafeArea(
+        top: false,
         child: Padding(
           padding: const EdgeInsets.all(12),
           child: FilledButton.icon(
@@ -143,18 +250,4 @@ class _PosCartPanelState extends State<PosCartPanel> {
       ),
     );
   }
-}
-
-/// Result returned by PosCheckoutPanel
-class _CheckoutResult {
-  final String typeEntry; // 'CREDIT' or 'DEBIT'
-  final String? description;
-  final String? categoryId;
-  final DateTime? when;
-  const _CheckoutResult({
-    required this.typeEntry,
-    this.description,
-    this.categoryId,
-    this.when,
-  });
 }

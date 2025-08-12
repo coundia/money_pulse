@@ -1,158 +1,339 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
-import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:money_pulse/presentation/app/providers.dart';
 
-class PosCheckoutPanel extends ConsumerStatefulWidget {
-  final int totalCents;
-  const PosCheckoutPanel({super.key, required this.totalCents});
+/// Lightweight view model for displaying a cart line in the checkout panel.
+/// (UI only — persistence is the caller’s responsibility)
+class PosCartLine {
+  final String? productId;
+  final String label; // what the user sees (ex: name or code)
+  final int quantity; // units
+  final int unitPrice; // cents
 
-  @override
-  ConsumerState<PosCheckoutPanel> createState() => _PosCheckoutPanelState();
+  const PosCartLine({
+    this.productId,
+    required this.label,
+    required this.quantity,
+    required this.unitPrice,
+  });
+
+  int get lineTotal => quantity * unitPrice;
+
+  /// Optional: create from a map shaped like your use case lines
+  /// { 'productId': String?, 'label': String, 'quantity': int, 'unitPrice': int }
+  factory PosCartLine.fromMap(Map<String, Object?> m) => PosCartLine(
+    productId: m['productId'] as String?,
+    label: (m['label'] as String?) ?? '—',
+    quantity: (m['quantity'] as int?) ?? 0,
+    unitPrice: (m['unitPrice'] as int?) ?? 0,
+  );
 }
 
-class _PosCheckoutPanelState extends ConsumerState<PosCheckoutPanel> {
-  bool isSale = true; // sale = CREDIT, purchase = DEBIT
-  DateTime when = DateTime.now();
-  String? categoryId;
-  final descCtrl = TextEditingController();
+class PosCheckoutPanel extends StatefulWidget {
+  /// Lines to display (snapshot). Typically built from your cart state.
+  final List<PosCartLine> lines;
+
+  /// ‘CREDIT’ = sale / income (default), ‘DEBIT’ = purchase / expense
+  final String initialTypeEntry;
+
+  /// Optional prefilled description
+  final String? initialDescription;
+
+  /// Optional initial date (defaults to now)
+  final DateTime? initialWhen;
+
+  /// Optional account label (purely informational)
+  final String? accountLabel;
+
+  const PosCheckoutPanel({
+    super.key,
+    required this.lines,
+    this.initialTypeEntry = 'CREDIT',
+    this.initialDescription,
+    this.initialWhen,
+    this.accountLabel,
+  });
+
+  @override
+  State<PosCheckoutPanel> createState() => _PosCheckoutPanelState();
+}
+
+class _PosCheckoutPanelState extends State<PosCheckoutPanel> {
+  final _descCtrl = TextEditingController();
+  late String _typeEntry; // 'CREDIT' or 'DEBIT'
+  late DateTime _when;
+  bool _closing = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _typeEntry = (widget.initialTypeEntry == 'DEBIT') ? 'DEBIT' : 'CREDIT';
+    _when = widget.initialWhen ?? DateTime.now();
+    _descCtrl.text = widget.initialDescription ?? '';
+  }
 
   @override
   void dispose() {
-    descCtrl.dispose();
+    _descCtrl.dispose();
     super.dispose();
   }
 
-  String _money(int c) => (c ~/ 100).toString();
+  Future<void> _safePop([dynamic result]) async {
+    if (_closing) return; // prevents double pop
+    _closing = true;
+    // let current frame settle (avoids !_debugLocked)
+    await Future.delayed(Duration.zero);
+    if (!mounted) return;
+    final nav = Navigator.of(context);
+    if (nav.canPop()) {
+      nav.pop(result);
+    }
+  }
+
+  String _money(int cents) {
+    // Display in whole units without currency symbol (ex: "1 500")
+    final v = cents / 100.0;
+    return NumberFormat.decimalPattern().format(v);
+  }
+
+  int get _totalCents => widget.lines.fold(0, (p, e) => p + e.lineTotal);
+
+  Color get _accent => _typeEntry == 'CREDIT' ? Colors.green : Colors.red;
+
+  Future<void> _pickDate() async {
+    final picked = await showDatePicker(
+      context: context,
+      initialDate: _when,
+      firstDate: DateTime(2000),
+      lastDate: DateTime(2100),
+    );
+    if (picked == null) return;
+    // keep current time-of-day
+    setState(
+      () => _when = DateTime(
+        picked.year,
+        picked.month,
+        picked.day,
+        _when.hour,
+        _when.minute,
+        _when.second,
+        _when.millisecond,
+        _when.microsecond,
+      ),
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
+    final total = _money(_totalCents);
+    final isSale = _typeEntry == 'CREDIT';
+
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Encaissement'),
         leading: IconButton(
           tooltip: 'Fermer',
           icon: const Icon(Icons.close),
-          onPressed: () => Navigator.pop(context),
+          onPressed: () => _safePop(false),
         ),
+        title: const Text('Validation du panier'),
       ),
-      body: ListView(
-        padding: const EdgeInsets.all(16),
+      body: Column(
         children: [
-          Row(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              SegmentedButton<bool>(
-                segments: const [
-                  ButtonSegment(value: true, label: Text('Vente (CREDIT)')),
-                  ButtonSegment(value: false, label: Text('Achat (DEBIT)')),
-                ],
-                selected: {isSale},
-                onSelectionChanged: (s) => setState(() => isSale = s.first),
-                showSelectedIcon: false,
-              ),
-            ],
-          ),
-          const SizedBox(height: 12),
-          ListTile(
-            contentPadding: EdgeInsets.zero,
-            title: const Text('Date'),
-            subtitle: Text(DateFormat.yMMMd().add_Hm().format(when)),
-            trailing: const Icon(Icons.calendar_today),
-            onTap: () async {
-              final d = await showDatePicker(
-                context: context,
-                initialDate: when,
-                firstDate: DateTime(2000),
-                lastDate: DateTime(2100),
-              );
-              if (d != null) {
-                final t = TimeOfDay.fromDateTime(when);
-                setState(
-                  () =>
-                      when = DateTime(d.year, d.month, d.day, t.hour, t.minute),
-                );
-              }
-            },
-          ),
-          const SizedBox(height: 8),
-          FutureBuilder(
-            future: ref.read(categoryRepoProvider).findAllActive(),
-            builder: (context, snap) {
-              final cats = snap.data ?? const [];
-              return DropdownButtonFormField<String>(
-                value: categoryId,
-                items: [
-                  const DropdownMenuItem(
-                    value: null,
-                    child: Text('Aucune catégorie'),
+          // Header: account + period + type (income/expense)
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 14, 16, 8),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                if ((widget.accountLabel ?? '').isNotEmpty)
+                  Row(
+                    children: [
+                      const Icon(Icons.account_balance_wallet, size: 18),
+                      const SizedBox(width: 6),
+                      Text(
+                        widget.accountLabel!,
+                        style: Theme.of(context).textTheme.bodyMedium,
+                      ),
+                    ],
                   ),
-                  ...cats.map(
-                    (c) => DropdownMenuItem(value: c.id, child: Text(c.code)),
-                  ),
-                ],
-                onChanged: (v) => setState(() => categoryId = v),
-                decoration: const InputDecoration(
-                  labelText: 'Catégorie (optionnel)',
-                  border: OutlineInputBorder(),
+                const SizedBox(height: 10),
+                Row(
+                  children: [
+                    Expanded(
+                      child: InkWell(
+                        borderRadius: BorderRadius.circular(10),
+                        onTap: _pickDate,
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 12,
+                            vertical: 10,
+                          ),
+                          decoration: BoxDecoration(
+                            border: Border.all(
+                              color: Theme.of(
+                                context,
+                              ).colorScheme.outlineVariant,
+                            ),
+                            borderRadius: BorderRadius.circular(10),
+                          ),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              const Icon(Icons.calendar_month),
+                              const SizedBox(width: 8),
+                              Text(DateFormat.yMMMd().format(_when)),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: SegmentedButton<String>(
+                        segments: const [
+                          ButtonSegment(
+                            value: 'DEBIT',
+                            icon: Icon(Icons.south),
+                            label: Text('Dépense'),
+                          ),
+                          ButtonSegment(
+                            value: 'CREDIT',
+                            icon: Icon(Icons.north),
+                            label: Text('Vente'),
+                          ),
+                        ],
+                        selected: {_typeEntry},
+                        onSelectionChanged: (s) =>
+                            setState(() => _typeEntry = s.first),
+                        showSelectedIcon: false,
+                      ),
+                    ),
+                  ],
                 ),
-              );
-            },
-          ),
-          const SizedBox(height: 12),
-          TextFormField(
-            controller: descCtrl,
-            decoration: const InputDecoration(
-              labelText: 'Description (optionnel)',
-              border: OutlineInputBorder(),
+              ],
             ),
-            maxLines: 2,
           ),
-          const SizedBox(height: 24),
-          Center(
-            child: Text(
-              'Total ${_money(widget.totalCents)}',
-              style: Theme.of(context).textTheme.headlineSmall,
+
+          const Divider(height: 1),
+
+          // Lines
+          Expanded(
+            child: widget.lines.isEmpty
+                ? const Center(child: Text('Aucun article'))
+                : ListView.separated(
+                    padding: const EdgeInsets.fromLTRB(12, 8, 12, 8),
+                    itemCount: widget.lines.length,
+                    separatorBuilder: (_, __) => const Divider(height: 1),
+                    itemBuilder: (_, i) {
+                      final l = widget.lines[i];
+                      return ListTile(
+                        contentPadding: const EdgeInsets.symmetric(
+                          horizontal: 8,
+                        ),
+                        leading: CircleAvatar(
+                          backgroundColor: _accent.withOpacity(0.12),
+                          child: Icon(
+                            isSale ? Icons.north : Icons.south,
+                            color: _accent,
+                          ),
+                        ),
+                        title: Text(
+                          l.label,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                        subtitle: Text(
+                          '${l.quantity} × ${_money(l.unitPrice)}',
+                        ),
+                        trailing: Text(
+                          _money(l.lineTotal),
+                          style: TextStyle(
+                            color: _accent,
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                      );
+                    },
+                  ),
+          ),
+
+          // Note / Description
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 0, 16, 10),
+            child: TextField(
+              controller: _descCtrl,
+              decoration: const InputDecoration(
+                labelText: 'Description (facultatif)',
+                border: OutlineInputBorder(),
+                isDense: true,
+              ),
+              minLines: 1,
+              maxLines: 3,
+            ),
+          ),
+
+          // Footer: total + actions
+          Container(
+            padding: const EdgeInsets.fromLTRB(16, 10, 16, 16),
+            decoration: BoxDecoration(
+              color: Theme.of(context).colorScheme.surfaceContainerHighest,
+              border: Border(
+                top: BorderSide(
+                  color: Theme.of(context).dividerColor,
+                  width: 0.6,
+                ),
+              ),
+            ),
+            child: SafeArea(
+              top: false,
+              child: Column(
+                children: [
+                  Row(
+                    children: [
+                      Text(
+                        'Total',
+                        style: Theme.of(context).textTheme.titleMedium,
+                      ),
+                      const Spacer(),
+                      Text(
+                        total,
+                        style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                          color: _accent,
+                          fontWeight: FontWeight.w800,
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 10),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: OutlinedButton(
+                          onPressed: () => _safePop(false),
+                          child: const Text('Annuler'),
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: FilledButton.icon(
+                          onPressed: () {
+                            // Keep the contract simple: return true on confirm.
+                            // Caller has the cart lines; it can run the Checkout use case
+                            // with _typeEntry / _when / _descCtrl.text if needed
+                            // by storing them externally or using a scoped controller.
+                            _safePop(true);
+                          },
+                          icon: const Icon(Icons.check),
+                          label: const Text('Confirmer'),
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
             ),
           ),
         ],
       ),
-      bottomNavigationBar: SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.all(12),
-          child: FilledButton.icon(
-            onPressed: () {
-              Navigator.pop(
-                context,
-                _CheckoutResult(
-                  typeEntry: isSale ? 'CREDIT' : 'DEBIT',
-                  description: descCtrl.text.trim().isEmpty
-                      ? null
-                      : descCtrl.text.trim(),
-                  categoryId: categoryId,
-                  when: when,
-                ),
-              );
-            },
-            icon: const Icon(Icons.check),
-            label: const Text('Confirmer'),
-          ),
-        ),
-      ),
     );
   }
-}
-
-/// tiny result class mirrored here so this file is standalone for import
-class _CheckoutResult {
-  final String typeEntry;
-  final String? description;
-  final String? categoryId;
-  final DateTime? when;
-  const _CheckoutResult({
-    required this.typeEntry,
-    this.description,
-    this.categoryId,
-    this.when,
-  });
 }
