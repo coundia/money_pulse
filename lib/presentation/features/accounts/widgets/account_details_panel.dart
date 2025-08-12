@@ -12,6 +12,7 @@ class AccountDetailsPanel extends ConsumerWidget {
   final VoidCallback? onMakeDefault;
   final VoidCallback? onDelete;
   final VoidCallback? onShare;
+  final bool confirmHere;
 
   const AccountDetailsPanel({
     super.key,
@@ -20,6 +21,7 @@ class AccountDetailsPanel extends ConsumerWidget {
     this.onMakeDefault,
     this.onDelete,
     this.onShare,
+    this.confirmHere = true,
   });
 
   String _fmtDate(DateTime? d) => d == null ? '—' : Formatters.dateFull(d);
@@ -191,7 +193,10 @@ class AccountDetailsPanel extends ConsumerWidget {
               width: double.infinity,
               child: FilledButton.icon(
                 onPressed: () async {
-                  final ok = await _confirmDelete(context);
+                  var ok = true;
+                  if (confirmHere) {
+                    ok = await _confirmDelete(context);
+                  }
                   if (!ok) return;
                   try {
                     final repo = ref.read(accountRepoProvider);

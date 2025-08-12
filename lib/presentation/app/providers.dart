@@ -21,6 +21,9 @@ import 'package:money_pulse/domain/transactions/entities/transaction_entry.dart'
 import 'package:money_pulse/domain/reports/repositories/report_repository.dart';
 import 'package:money_pulse/infrastructure/repositories/report_repository_sqflite.dart';
 
+import '../../domain/sync/repositories/change_log_repository.dart';
+import '../../infrastructure/sync/change_log_sqlite_repository.dart';
+
 final dbProvider = Provider<AppDatabase>((ref) => AppDatabase.I);
 
 final accountRepoProvider = Provider<AccountRepository>((ref) {
@@ -108,3 +111,7 @@ final categoriesProvider =
     StateNotifierProvider<CategoriesStateNotifier, List<Category>>((ref) {
       return CategoriesStateNotifier(ref.read(categoryRepoProvider));
     });
+
+final changeLogRepoProvider = Provider<ChangeLogRepository>((ref) {
+  return ChangeLogRepositorySqflite(ref.read(dbProvider));
+});
