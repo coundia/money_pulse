@@ -94,4 +94,74 @@ CREATE TABLE sync_state (
   lastCursor TEXT,
   updatedAt TEXT DEFAULT (datetime('now')) NOT NULL
 );
+  
+
+CREATE TABLE IF NOT EXISTS unit (
+  id TEXT PRIMARY KEY,
+  remoteId TEXT,
+  code TEXT NOT NULL,
+  name TEXT,
+  description TEXT,
+  createdAt TEXT DEFAULT (datetime('now')),
+  updatedAt TEXT DEFAULT (datetime('now')),
+  deletedAt TEXT,
+  syncAt TEXT,
+  version INTEGER DEFAULT 0,
+  isDirty INTEGER DEFAULT 1
+);
+
+CREATE UNIQUE INDEX IF NOT EXISTS uq_unit_code_active ON unit(code) WHERE deletedAt IS NULL;
+CREATE INDEX IF NOT EXISTS idx_unit_dirty ON unit(isDirty);
+CREATE INDEX IF NOT EXISTS idx_unit_deleted ON unit(deletedAt);
+ 
+
+CREATE TABLE IF NOT EXISTS product (
+  id TEXT PRIMARY KEY,
+  remoteId TEXT,
+  code TEXT,                   
+  name TEXT,                  
+  description TEXT,
+  barcode TEXT,              
+  unitId TEXT,                
+  categoryId TEXT,           
+  defaultPrice INTEGER DEFAULT 0, 
+  createdAt TEXT DEFAULT (datetime('now')),
+  updatedAt TEXT DEFAULT (datetime('now')),
+  deletedAt TEXT,
+  syncAt TEXT,
+  version INTEGER DEFAULT 0,
+  isDirty INTEGER DEFAULT 1
+);
+
+CREATE UNIQUE INDEX IF NOT EXISTS uq_product_code_active ON product(code) WHERE deletedAt IS NULL;
+CREATE INDEX IF NOT EXISTS idx_product_barcode ON product(barcode);
+CREATE INDEX IF NOT EXISTS idx_product_unit ON product(unitId);
+CREATE INDEX IF NOT EXISTS idx_product_category ON product(categoryId);
+CREATE INDEX IF NOT EXISTS idx_product_dirty ON product(isDirty);
+CREATE INDEX IF NOT EXISTS idx_product_deleted ON product(deletedAt);
+
+ 
+CREATE TABLE IF NOT EXISTS transaction_item (
+  id TEXT PRIMARY KEY,
+  transactionId TEXT NOT NULL,   
+  productId TEXT,                
+  label TEXT,                     
+  quantity INTEGER NOT NULL DEFAULT 1 CHECK(quantity >= 0),    
+  unitId TEXT,                   
+  unitPrice INTEGER NOT NULL DEFAULT 0 CHECK(unitPrice >= 0),  
+  total INTEGER NOT NULL DEFAULT 0 CHECK(total >= 0),       
+  notes TEXT,
+  createdAt TEXT DEFAULT (datetime('now')),
+  updatedAt TEXT DEFAULT (datetime('now')),
+  deletedAt TEXT,
+  syncAt TEXT,
+  version INTEGER DEFAULT 0,
+  isDirty INTEGER DEFAULT 1
+);
+
+CREATE INDEX IF NOT EXISTS idx_item_txn ON transaction_item(transactionId);
+CREATE INDEX IF NOT EXISTS idx_item_product ON transaction_item(productId);
+CREATE INDEX IF NOT EXISTS idx_item_unit ON transaction_item(unitId);
+CREATE INDEX IF NOT EXISTS idx_item_dirty ON transaction_item(isDirty);
+CREATE INDEX IF NOT EXISTS idx_item_deleted ON transaction_item(deletedAt);
  
