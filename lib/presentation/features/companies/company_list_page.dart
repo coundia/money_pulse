@@ -76,6 +76,7 @@ class CompanyListPage extends ConsumerWidget {
                     final c = rows[i];
                     return CompanyTile(
                       company: c,
+                      onActionDone: _refresh,
                       // Enrichir menu ici si besoin
                     );
                   },

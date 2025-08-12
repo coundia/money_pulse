@@ -16,6 +16,38 @@ class CompanyViewPanel extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final async = ref.watch(companyByIdProvider(companyId));
 
+    Future<void> onEdit() async {
+      final c = await ref.read(companyByIdProvider(companyId).future);
+      if (c == null) return;
+      final ok = await showRightDrawer<bool>(
+        context,
+        child: CompanyFormPanel(initial: c),
+        widthFraction: 0.86,
+        heightFraction: 0.96,
+      );
+      if (ok == true) {
+        ref.invalidate(companyByIdProvider(companyId));
+        if (context.mounted) {
+          ScaffoldMessenger.of(
+            context,
+          ).showSnackBar(const SnackBar(content: Text('Société mise à jour')));
+        }
+      }
+    }
+
+    Future<void> onDelete() async {
+      final ok = await showRightDrawer<bool>(
+        context,
+        child: CompanyDeletePanel(companyId: companyId),
+        widthFraction: 0.86,
+        heightFraction: 0.6,
+      );
+      if (ok == true && context.mounted) {
+        // Important: renvoyer true au parent (liste) pour qu’il rafraîchisse.
+        Navigator.of(context).pop(true);
+      }
+    }
+
     return Scaffold(
       appBar: AppBar(
         title: const Text('Détails société'),
@@ -24,6 +56,43 @@ class CompanyViewPanel extends ConsumerWidget {
           icon: const Icon(Icons.close),
           onPressed: () => Navigator.of(context).maybePop(),
         ),
+        // NEW: menu contextuel dans la vue
+        actions: [
+          PopupMenuButton<String>(
+            onSelected: (v) {
+              switch (v) {
+                case 'edit':
+                  onEdit();
+                  break;
+                case 'delete':
+                  onDelete();
+                  break;
+              }
+            },
+            itemBuilder: (_) => const [
+              PopupMenuItem(
+                value: 'edit',
+                child: Row(
+                  children: [
+                    Icon(Icons.edit_outlined, size: 18),
+                    SizedBox(width: 8),
+                    Text('Modifier'),
+                  ],
+                ),
+              ),
+              PopupMenuItem(
+                value: 'delete',
+                child: Row(
+                  children: [
+                    Icon(Icons.delete_outline, size: 18),
+                    SizedBox(width: 8),
+                    Text('Supprimer'),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ],
       ),
       body: async.when(
         data: (c) {
@@ -65,26 +134,6 @@ class CompanyViewPanel extends ConsumerWidget {
               _Info('Mis à jour', Formatters.dateFull(c.updatedAt)),
               const Divider(),
               _Info('Identifiant', c.id),
-              const SizedBox(height: 12),
-              // Actions inline (optionnel si tu préfères en bas)
-              // ListTile(
-              //   contentPadding: EdgeInsets.zero,
-              //   title: Row(
-              //     children: [
-              //       FilledButton.icon(
-              //         onPressed: () async { /* idem boutons bas */ },
-              //         icon: const Icon(Icons.edit_outlined),
-              //         label: const Text('Modifier'),
-              //       ),
-              //       const SizedBox(width: 8),
-              //       FilledButton.tonalIcon(
-              //         onPressed: () async { /* idem boutons bas */ },
-              //         icon: const Icon(Icons.delete_outline),
-              //         label: const Text('Supprimer'),
-              //       ),
-              //     ],
-              //   ),
-              // ),
             ],
           );
         },
@@ -92,43 +141,10 @@ class CompanyViewPanel extends ConsumerWidget {
         error: (e, _) => Center(child: Text('Erreur: $e')),
       ),
 
-      // Boutons d’action en bas, un par ligne (UX cohérente avec tes autres écrans)
+      // Boutons d’action en bas (un par ligne)
       bottomNavigationBar: async.maybeWhen(
         data: (c) {
           if (c == null) return null;
-
-          Future<void> onEdit() async {
-            final ok = await showRightDrawer<bool>(
-              context,
-              child: CompanyFormPanel(initial: c),
-              widthFraction: 0.86,
-              heightFraction: 0.96,
-            );
-            if (ok == true) {
-              // Recharger la vue
-              ref.invalidate(companyByIdProvider(companyId));
-              if (context.mounted) {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(content: Text('Société mise à jour')),
-                );
-              }
-            }
-          }
-
-          Future<void> onDelete() async {
-            final ok = await showRightDrawer<bool>(
-              context,
-              child: CompanyDeletePanel(companyId: companyId),
-              widthFraction: 0.86,
-              heightFraction: 0.6,
-            );
-            if (ok == true && context.mounted) {
-              // Fermer la vue après suppression pour revenir à la liste
-              Navigator.of(context).pop(true);
-              // (Le parent peut rafraîchir sa liste via le résultat)
-            }
-          }
-
           return SafeArea(
             top: false,
             child: Padding(
