@@ -4,6 +4,8 @@ import 'package:money_pulse/presentation/app/restart_app.dart';
 import 'package:money_pulse/infrastructure/db/app_database.dart';
 import 'package:money_pulse/presentation/features/categories/category_list_page.dart';
 import 'package:money_pulse/presentation/features/accounts/account_page.dart';
+import 'package:money_pulse/presentation/features/companies/company_list_page.dart';
+import 'package:money_pulse/presentation/features/customers/customer_list_page.dart';
 import 'package:money_pulse/presentation/features/sync/change_log_list_page.dart';
 import 'package:money_pulse/presentation/features/sync/sync_state_list_page.dart';
 
@@ -103,6 +105,26 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
             onTap: () => Navigator.of(
               context,
             ).push(MaterialPageRoute(builder: (_) => const ProductListPage())),
+          ),
+
+          ListTile(
+            leading: const Icon(Icons.list),
+            title: const Text('Gérer les clients'),
+            subtitle: const Text('Créer, modifier, supprimer des clients'),
+
+            onTap: () => Navigator.of(
+              context,
+            ).push(MaterialPageRoute(builder: (_) => const CustomerListPage())),
+          ),
+
+          ListTile(
+            leading: const Icon(Icons.list),
+            title: const Text('Gérer les entreprises'),
+            subtitle: const Text('Créer, modifier, supprimer des entreprises'),
+
+            onTap: () => Navigator.of(
+              context,
+            ).push(MaterialPageRoute(builder: (_) => const CompanyListPage())),
           ),
 
           const Divider(height: 24),

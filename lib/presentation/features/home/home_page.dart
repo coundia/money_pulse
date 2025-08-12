@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:money_pulse/presentation/features/customers/customer_list_page.dart';
 import 'package:money_pulse/presentation/features/pos/pos_page.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -248,6 +249,14 @@ class _HomePageState extends ConsumerState<HomePage> {
                       MaterialPageRoute(builder: (_) => const AccountPage()),
                     );
                     break;
+                  case 'clients':
+                    if (!mounted) break;
+                    await Navigator.of(context).push(
+                      MaterialPageRoute(
+                        builder: (_) => const CustomerListPage(),
+                      ),
+                    );
+                    break;
                 }
               },
               itemBuilder: (context) => const [
@@ -302,6 +311,14 @@ class _HomePageState extends ConsumerState<HomePage> {
                     title: Text('Comptes'),
                   ),
                 ),
+                PopupMenuItem(
+                  value: 'clients',
+                  child: ListTile(
+                    leading: Icon(Icons.account_balance_wallet_outlined),
+                    title: Text('Clients'),
+                  ),
+                ),
+
                 PopupMenuDivider(),
                 PopupMenuItem(
                   value: 'settings',
