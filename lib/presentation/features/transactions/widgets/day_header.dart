@@ -11,9 +11,9 @@ class DayHeader extends StatelessWidget {
     final today = DateTime(now.year, now.month, now.day);
     final yesterday = today.subtract(const Duration(days: 1));
     final dd = DateTime(d.year, d.month, d.day);
-    if (dd == today) return 'Today';
-    if (dd == yesterday) return 'Yesterday';
-    return DateFormat.EEEE().addPattern(', ').add_MMMd().format(d);
+    if (dd == today) return 'Aujourd’hui';
+    if (dd == yesterday) return 'Hier';
+    return DateFormat("EEEE d MMMM", "fr_FR").format(d);
   }
 
   @override

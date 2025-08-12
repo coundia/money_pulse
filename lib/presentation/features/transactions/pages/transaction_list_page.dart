@@ -4,6 +4,7 @@ import 'package:intl/intl.dart';
 import 'package:money_pulse/presentation/app/providers.dart';
 import 'package:money_pulse/presentation/widgets/right_drawer.dart';
 import 'package:money_pulse/domain/transactions/entities/transaction_entry.dart';
+import '../../../shared/widgets/french_date_picker_sheet.dart';
 import '../../reports/report_page.dart';
 import '../../settings/settings_page.dart';
 import '../controllers/transaction_list_controller.dart';
@@ -19,6 +20,15 @@ import '../search/txn_search_delegate.dart';
 class TransactionListPage extends ConsumerWidget {
   const TransactionListPage({super.key});
 
+  String _formatCurrency(int cents) {
+    final format = NumberFormat.currency(
+      locale: 'fr_FR',
+      symbol: 'XOF',
+      decimalDigits: 0,
+    );
+    return format.format(cents / 100);
+  }
+
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final state = ref.watch(transactionListStateProvider);
@@ -27,10 +37,11 @@ class TransactionListPage extends ConsumerWidget {
     return Scaffold(
       body: itemsAsync.when(
         loading: () => const Center(child: CircularProgressIndicator()),
-        error: (e, _) => Center(child: Text('$e')),
+        error: (e, _) => Center(child: Text('Erreur : $e')),
         data: (items) {
           final txns = items.cast<TransactionEntry>();
           final groups = groupByDay(txns);
+
           final exp = txns
               .where((e) => e.typeEntry == 'DEBIT')
               .fold<int>(0, (p, e) => p + e.amount);
@@ -63,8 +74,7 @@ class TransactionListPage extends ConsumerWidget {
               onAddExpense: () => _onAdd(context, ref, 'DEBIT'),
               onAddIncome: () => _onAdd(context, ref, 'CREDIT'),
             ),
-
-            const SizedBox(height: 8),
+            const SizedBox(height: 12),
             if (txns.isEmpty)
               const Padding(
                 padding: EdgeInsets.all(32.0),
@@ -75,6 +85,7 @@ class TransactionListPage extends ConsumerWidget {
             else ...[
               for (final g in groups) ...[
                 DayHeader(group: g),
+                const SizedBox(height: 4),
                 ...g.items.map(
                   (e) => TransactionTile(
                     entry: e,
@@ -126,7 +137,7 @@ class TransactionListPage extends ConsumerWidget {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(
-            'Sélectionné: ${result.description ?? result.code ?? result.id}',
+            'Sélectionné : ${result.description ?? result.code ?? result.id}',
           ),
         ),
       );
@@ -135,73 +146,15 @@ class TransactionListPage extends ConsumerWidget {
 
   Future<void> _openAnchorPicker(BuildContext context, WidgetRef ref) async {
     final state = ref.read(transactionListStateProvider);
-    DateTime temp = state.anchor;
 
-    await showModalBottomSheet<void>(
-      context: context,
-      isScrollControlled: true,
-      showDragHandle: true,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
-      ),
-      builder: (ctx) {
-        return DraggableScrollableSheet(
-          expand: false,
-          initialChildSize: 0.6,
-          minChildSize: 0.45,
-          maxChildSize: 0.95,
-          builder: (ctx, scrollController) {
-            return SafeArea(
-              child: ListView(
-                controller: scrollController,
-                padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
-                children: [
-                  Text(
-                    'Sélectionner la date',
-                    style: Theme.of(ctx).textTheme.titleMedium,
-                  ),
-                  const SizedBox(height: 8),
-                  CalendarDatePicker(
-                    initialDate: state.anchor,
-                    firstDate: DateTime(2000),
-                    lastDate: DateTime(2100),
-                    onDateChanged: (d) => temp = d,
-                  ),
-                  const SizedBox(height: 8),
-                  Row(
-                    children: [
-                      TextButton.icon(
-                        onPressed: () {
-                          ref
-                              .read(transactionListStateProvider.notifier)
-                              .resetToThisPeriod();
-                          Navigator.pop(ctx);
-                        },
-                        icon: const Icon(Icons.today),
-                        label: const Text('Cette période'),
-                      ),
-                      const Spacer(),
-                      TextButton(
-                        onPressed: () => Navigator.pop(ctx),
-                        child: const Text('Annuler'),
-                      ),
-                      const SizedBox(width: 8),
-                      FilledButton(
-                        onPressed: () {
-                          ref
-                              .read(transactionListStateProvider.notifier)
-                              .setAnchor(temp);
-                          Navigator.pop(ctx);
-                        },
-                        child: const Text('Appliquer'),
-                      ),
-                    ],
-                  ),
-                ],
-              ),
-            );
-          },
-        );
+    await showFrenchDatePickerSheet(
+      context,
+      initialDate: state.anchor,
+      onApply: (d) {
+        ref.read(transactionListStateProvider.notifier).setAnchor(d);
+      },
+      onThisPeriod: () {
+        ref.read(transactionListStateProvider.notifier).resetToThisPeriod();
       },
     );
   }

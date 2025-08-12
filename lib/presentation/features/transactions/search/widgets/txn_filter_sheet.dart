@@ -9,11 +9,12 @@ Future<TxnFilterState?> openTxnFilterSheet(
   TxnFilterState f,
 ) async {
   final theme = Theme.of(context);
+
   final fromCtrl = TextEditingController(
-    text: f.from == null ? '' : DateFormat.yMMMd().format(f.from!),
+    text: f.from == null ? '' : DateFormat.yMMMd('fr_FR').format(f.from!),
   );
   final toCtrl = TextEditingController(
-    text: f.to == null ? '' : DateFormat.yMMMd().format(f.to!),
+    text: f.to == null ? '' : DateFormat.yMMMd('fr_FR').format(f.to!),
   );
   final minCtrl = TextEditingController(
     text: f.minCents == null ? '' : (f.minCents! ~/ 100).toString(),
@@ -22,7 +23,7 @@ Future<TxnFilterState?> openTxnFilterSheet(
     text: f.maxCents == null ? '' : (f.maxCents! ~/ 100).toString(),
   );
 
-  // Local mutable state for the sheet
+  // État local de la sheet
   var type = f.type;
   var sortBy = f.sortBy;
   DateTime? from = f.from;
@@ -47,6 +48,7 @@ Future<TxnFilterState?> openTxnFilterSheet(
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
+                  // poignée
                   Container(
                     width: 36,
                     height: 4,
@@ -56,7 +58,7 @@ Future<TxnFilterState?> openTxnFilterSheet(
                     ),
                   ),
                   const SizedBox(height: 8),
-                  Text('Filters', style: theme.textTheme.titleMedium),
+                  Text('Filtres', style: theme.textTheme.titleMedium),
                   const SizedBox(height: 12),
 
                   // Type
@@ -70,22 +72,21 @@ Future<TxnFilterState?> openTxnFilterSheet(
                       ButtonSegment(
                         value: TxnTypeFilter.all,
                         icon: Icon(Icons.all_inclusive),
-                        label: Text('All'),
+                        label: Text('Tous'),
                       ),
                       ButtonSegment(
                         value: TxnTypeFilter.expense,
                         icon: Icon(Icons.south),
-                        label: Text('Expense'),
+                        label: Text('Dépense'),
                       ),
                       ButtonSegment(
                         value: TxnTypeFilter.income,
                         icon: Icon(Icons.north),
-                        label: Text('Income'),
+                        label: Text('Revenu'),
                       ),
                     ],
                     selected: {type},
-                    onSelectionChanged: (s) =>
-                        setState(() => type = s.first), // ✅ updates UI
+                    onSelectionChanged: (s) => setState(() => type = s.first),
                     showSelectedIcon: false,
                   ),
                   const SizedBox(height: 16),
@@ -94,7 +95,7 @@ Future<TxnFilterState?> openTxnFilterSheet(
                   Align(
                     alignment: Alignment.centerLeft,
                     child: Text(
-                      'Date range',
+                      'Plage de dates',
                       style: theme.textTheme.labelLarge,
                     ),
                   ),
@@ -106,7 +107,7 @@ Future<TxnFilterState?> openTxnFilterSheet(
                           controller: fromCtrl,
                           readOnly: true,
                           decoration: const InputDecoration(
-                            labelText: 'From',
+                            labelText: 'Du',
                             prefixIcon: Icon(Icons.event),
                           ),
                           onTap: () async {
@@ -115,13 +116,14 @@ Future<TxnFilterState?> openTxnFilterSheet(
                               initialDate: from ?? DateTime.now(),
                               firstDate: DateTime(2000),
                               lastDate: DateTime(2100),
+                              locale: const Locale('fr', 'FR'),
                             );
                             if (picked != null) {
                               setState(() {
                                 from = _strip(picked);
-                                fromCtrl.text = DateFormat.yMMMd().format(
-                                  from!,
-                                );
+                                fromCtrl.text = DateFormat.yMMMd(
+                                  'fr_FR',
+                                ).format(from!);
                               });
                             }
                           },
@@ -133,7 +135,7 @@ Future<TxnFilterState?> openTxnFilterSheet(
                           controller: toCtrl,
                           readOnly: true,
                           decoration: const InputDecoration(
-                            labelText: 'To',
+                            labelText: 'Au',
                             prefixIcon: Icon(Icons.event_available),
                           ),
                           onTap: () async {
@@ -142,18 +144,21 @@ Future<TxnFilterState?> openTxnFilterSheet(
                               initialDate: to ?? DateTime.now(),
                               firstDate: DateTime(2000),
                               lastDate: DateTime(2100),
+                              locale: const Locale('fr', 'FR'),
                             );
                             if (picked != null) {
                               setState(() {
                                 to = _strip(picked);
-                                toCtrl.text = DateFormat.yMMMd().format(to!);
+                                toCtrl.text = DateFormat.yMMMd(
+                                  'fr_FR',
+                                ).format(to!);
                               });
                             }
                           },
                         ),
                       ),
                       IconButton(
-                        tooltip: 'Clear',
+                        tooltip: 'Effacer',
                         onPressed: () {
                           setState(() {
                             from = null;
@@ -168,11 +173,11 @@ Future<TxnFilterState?> openTxnFilterSheet(
                   ),
                   const SizedBox(height: 16),
 
-                  // Amounts
+                  // Montants
                   Align(
                     alignment: Alignment.centerLeft,
                     child: Text(
-                      'Amount (XOF)',
+                      'Montant (XOF)',
                       style: theme.textTheme.labelLarge,
                     ),
                   ),
@@ -188,7 +193,7 @@ Future<TxnFilterState?> openTxnFilterSheet(
                           ],
                           decoration: const InputDecoration(
                             labelText: 'Min',
-                            prefixIcon: Icon(Icons.attach_money),
+                            prefixIcon: Icon(Icons.monetization_on_outlined),
                           ),
                         ),
                       ),
@@ -202,12 +207,12 @@ Future<TxnFilterState?> openTxnFilterSheet(
                           ],
                           decoration: const InputDecoration(
                             labelText: 'Max',
-                            prefixIcon: Icon(Icons.attach_money),
+                            prefixIcon: Icon(Icons.monetization_on_outlined),
                           ),
                         ),
                       ),
                       IconButton(
-                        tooltip: 'Clear',
+                        tooltip: 'Effacer',
                         onPressed: () {
                           setState(() {
                             minCtrl.clear();
@@ -220,10 +225,10 @@ Future<TxnFilterState?> openTxnFilterSheet(
                   ),
                   const SizedBox(height: 16),
 
-                  // Sort
+                  // Tri
                   Align(
                     alignment: Alignment.centerLeft,
-                    child: Text('Sort by', style: theme.textTheme.labelLarge),
+                    child: Text('Trier par', style: theme.textTheme.labelLarge),
                   ),
                   const SizedBox(height: 8),
                   SegmentedButton<TxnSortBy>(
@@ -240,28 +245,28 @@ Future<TxnFilterState?> openTxnFilterSheet(
                       ),
                       ButtonSegment(
                         value: TxnSortBy.amountDesc,
-                        label: Text('Amount ↓'),
+                        label: Text('Montant ↓'),
                         icon: Icon(Icons.trending_down),
                       ),
                       ButtonSegment(
                         value: TxnSortBy.amountAsc,
-                        label: Text('Amount ↑'),
+                        label: Text('Montant ↑'),
                         icon: Icon(Icons.trending_up),
                       ),
                     ],
                     selected: {sortBy},
-                    onSelectionChanged: (s) =>
-                        setState(() => sortBy = s.first), // ✅ updates UI
+                    onSelectionChanged: (s) => setState(() => sortBy = s.first),
                     showSelectedIcon: false,
                   ),
                   const SizedBox(height: 20),
 
+                  // Actions
                   Row(
                     children: [
                       TextButton(
                         onPressed: () =>
                             Navigator.pop(ctx, const TxnFilterState()),
-                        child: const Text('Reset'),
+                        child: const Text('Réinitialiser'),
                       ),
                       const Spacer(),
                       FilledButton(
@@ -287,7 +292,7 @@ Future<TxnFilterState?> openTxnFilterSheet(
                             ),
                           );
                         },
-                        child: const Text('Apply'),
+                        child: const Text('Appliquer'),
                       ),
                     ],
                   ),

@@ -9,6 +9,7 @@ import 'package:money_pulse/domain/accounts/entities/account.dart';
 import 'package:money_pulse/domain/accounts/repositories/account_repository.dart';
 import 'package:money_pulse/presentation/widgets/right_drawer.dart';
 import 'package:money_pulse/presentation/shared/formatters.dart';
+import 'widgets/account_details_panel.dart';
 import 'widgets/account_tile.dart';
 import 'widgets/account_context_menu.dart';
 
@@ -241,56 +242,17 @@ class _AccountPageState extends ConsumerState<AccountPage> {
 
   Future<void> _view(Account a) async {
     if (!mounted) return;
-    await showDialog<void>(
-      context: context,
-      builder: (dialogContext) => AlertDialog(
-        title: const Text('Détails du compte'),
-        content: SingleChildScrollView(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              _kv('Code', a.code ?? '—'),
-              _kv('Description', a.description ?? '—'),
-              _kv('Devise', a.currency ?? '—'),
-              const SizedBox(height: 8),
-              _kv('Solde', _fmtMoney(a.balance, a.currency)),
-              _kv('Solde précédent', _fmtMoney(a.balancePrev, a.currency)),
-              _kv('Solde bloqué', _fmtMoney(a.balanceBlocked, a.currency)),
-              const SizedBox(height: 8),
-              _kv('Par défaut', _isDefault(a) ? 'Oui' : 'Non'),
-              _kv('Statut', a.status ?? '—'),
-              _kv('ID distant', a.remoteId ?? '—'),
-              const SizedBox(height: 8),
-              _kv('Créé le', _fmtDate(a.createdAt)),
-              _kv('Mis à jour le', _fmtDate(a.updatedAt)),
-              _kv('Supprimé le', _fmtDate(a.deletedAt)),
-              _kv('Synchronisé le', _fmtDate(a.syncAt)),
-              _kv('Version', '${a.version}'),
-              const SizedBox(height: 8),
-              const Text('ID', style: TextStyle(fontWeight: FontWeight.w600)),
-              const SizedBox(height: 4),
-              SelectableText(a.id),
-            ],
-          ),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () {
-              Navigator.of(dialogContext).pop();
-              if (!mounted) return;
-              WidgetsBinding.instance.addPostFrameCallback((_) {
-                if (!mounted) return;
-                _addOrEdit(existing: a);
-              });
-            },
-            child: const Text('Modifier'),
-          ),
-          FilledButton(
-            onPressed: () => Navigator.of(dialogContext).pop(),
-            child: const Text('Fermer'),
-          ),
-        ],
+    await showRightDrawer<void>(
+      context,
+      child: AccountDetailsPanel(
+        account: a,
+        onEdit: () => _addOrEdit(existing: a),
+        onMakeDefault: () => _setDefault(a),
+        onDelete: () => _delete(a),
+        onShare: () => _share(a),
       ),
+      widthFraction: 0.86,
+      heightFraction: 0.96,
     );
   }
 

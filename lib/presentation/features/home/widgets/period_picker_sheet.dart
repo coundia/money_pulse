@@ -15,20 +15,17 @@ Future<Period?> showPeriodPickerSheet({
         mainAxisSize: MainAxisSize.min,
         children: [
           const SizedBox(height: 8),
-          const Text(
-            'View period',
-            style: TextStyle(fontWeight: FontWeight.w600),
-          ),
+          const Text('Période', style: TextStyle(fontWeight: FontWeight.w600)),
           const SizedBox(height: 8),
           ListTile(
             leading: const Icon(Icons.view_week),
-            title: const Text('Weekly'),
+            title: const Text('Semaine'),
             trailing: current == Period.weekly ? const Icon(Icons.check) : null,
             onTap: () => Navigator.pop(ctx, Period.weekly),
           ),
           ListTile(
             leading: const Icon(Icons.calendar_month),
-            title: const Text('Monthly'),
+            title: const Text('Mois'),
             trailing: current == Period.monthly
                 ? const Icon(Icons.check)
                 : null,
@@ -36,7 +33,7 @@ Future<Period?> showPeriodPickerSheet({
           ),
           ListTile(
             leading: const Icon(Icons.event),
-            title: const Text('Yearly'),
+            title: const Text('Année'),
             trailing: current == Period.yearly ? const Icon(Icons.check) : null,
             onTap: () => Navigator.pop(ctx, Period.yearly),
           ),

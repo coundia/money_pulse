@@ -7,7 +7,7 @@ class TxnSearchCta extends StatelessWidget {
   const TxnSearchCta({
     super.key,
     required this.onTap,
-    this.text = 'Search transactions',
+    this.text = 'Rechercher une transaction',
   });
 
   @override

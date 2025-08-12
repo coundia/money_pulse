@@ -298,7 +298,7 @@ class _CategoryListPageState extends ConsumerState<CategoryListPage> {
                             child: CategoryTile(
                               code: c.code,
                               descriptionOrUpdatedText: subtitle,
-                              onTap: () => _addOrEdit(existing: c),
+                              onTap: () => _view(c),
                               onMore: () {
                                 final box =
                                     context.findRenderObject() as RenderBox?;
