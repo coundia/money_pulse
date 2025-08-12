@@ -8,6 +8,8 @@ import 'package:money_pulse/presentation/features/sync/change_log_list_page.dart
 import 'package:money_pulse/presentation/features/sync/sync_state_list_page.dart';
 import 'package:money_pulse/presentation/shared/formatters.dart';
 
+import '../products/product_list_page.dart';
+
 class SettingsPage extends ConsumerStatefulWidget {
   const SettingsPage({super.key});
   @override
@@ -91,6 +93,15 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
             onTap: () => Navigator.of(
               context,
             ).push(MaterialPageRoute(builder: (_) => const AccountPage())),
+          ),
+          ListTile(
+            leading: const Icon(Icons.category_outlined),
+            title: const Text('Gérer les produits'),
+            subtitle: const Text('Créer, modifier, supprimer des produits'),
+            trailing: const Icon(Icons.shop),
+            onTap: () => Navigator.of(
+              context,
+            ).push(MaterialPageRoute(builder: (_) => const ProductListPage())),
           ),
           const Divider(height: 24),
           const _SectionHeader('Données'),
