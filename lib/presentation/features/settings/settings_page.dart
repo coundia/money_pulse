@@ -95,10 +95,10 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
             ).push(MaterialPageRoute(builder: (_) => const AccountPage())),
           ),
           ListTile(
-            leading: const Icon(Icons.category_outlined),
+            leading: const Icon(Icons.list),
             title: const Text('Gérer les produits'),
             subtitle: const Text('Créer, modifier, supprimer des produits'),
-            trailing: const Icon(Icons.shop),
+
             onTap: () => Navigator.of(
               context,
             ).push(MaterialPageRoute(builder: (_) => const ProductListPage())),
