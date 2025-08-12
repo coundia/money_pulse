@@ -21,6 +21,7 @@ import 'package:money_pulse/domain/transactions/entities/transaction_entry.dart'
 import 'package:money_pulse/domain/reports/repositories/report_repository.dart';
 import 'package:money_pulse/infrastructure/repositories/report_repository_sqflite.dart';
 
+import '../../application/usecases/checkout_cart_usecase.dart';
 import '../../domain/sync/repositories/change_log_repository.dart';
 import '../../infrastructure/sync/change_log_sqlite_repository.dart';
 
@@ -114,4 +115,11 @@ final categoriesProvider =
 
 final changeLogRepoProvider = Provider<ChangeLogRepository>((ref) {
   return ChangeLogRepositorySqflite(ref.read(dbProvider));
+});
+
+final checkoutCartUseCaseProvider = Provider<CheckoutCartUseCase>((ref) {
+  return CheckoutCartUseCase(
+    ref.read(dbProvider),
+    ref.read(accountRepoProvider),
+  );
 });

@@ -124,7 +124,7 @@ CREATE TABLE IF NOT EXISTS product (
   barcode TEXT,              
   unitId TEXT,                
   categoryId TEXT,           
-  defaultPrice INTEGER DEFAULT 0, 
+  defaultPrice INTEGER DEFAULT 0,
   createdAt TEXT DEFAULT (datetime('now')),
   updatedAt TEXT DEFAULT (datetime('now')),
   deletedAt TEXT,

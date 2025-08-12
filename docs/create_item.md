@@ -15,3 +15,8 @@ Create  for this table unit :
     return unitRepositorySqflite(db);
   });
   >>
+
+- create too :
+- lib/infrastructure/repositories/category_repository_sqflite.dart
+- lib/domain/units/repositories/unit_repository.dart
+- lib/domain/units/entities/unit.dart

@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:money_pulse/presentation/features/pos/pos_page.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'package:money_pulse/presentation/app/providers.dart';
@@ -315,7 +316,7 @@ class _HomePageState extends ConsumerState<HomePage> {
       ),
       body: IndexedStack(
         index: pageIdx,
-        children: const [TransactionListPage(), AccountPage()],
+        children: const [TransactionListPage(), PosPage()],
       ),
       bottomNavigationBar: NavigationBar(
         labelBehavior: NavigationDestinationLabelBehavior.onlyShowSelected,
