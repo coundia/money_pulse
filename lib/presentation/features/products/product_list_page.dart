@@ -179,14 +179,18 @@ class _ProductListPageState extends ConsumerState<ProductListPage> {
                           mainAxisSize: MainAxisSize.min,
                           children: [
                             Text(_money(p.defaultPrice)),
+                            // 2) In the ListTile trailing PopupMenuButton, make onSelected async and call _delete
                             PopupMenuButton<String>(
-                              onSelected: (v) {
+                              onSelected: (v) async {
                                 switch (v) {
                                   case 'edit':
-                                    _addOrEdit(existing: p);
+                                    await _addOrEdit(existing: p);
                                     break;
                                   case 'delete':
-                                    _delete(p);
+                                    // ensure menu route fully closes before opening dialog
+                                    await Future.delayed(Duration.zero);
+                                    if (!mounted) return;
+                                    await _delete(p);
                                     break;
                                 }
                               },
