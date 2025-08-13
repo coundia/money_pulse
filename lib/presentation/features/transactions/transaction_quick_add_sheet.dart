@@ -1,9 +1,10 @@
-// TransactionQuickAddSheet: quick add of a transaction with keyboard "Enter" submit and product picking via right drawer.
+// TransactionQuickAddSheet: quick add form using CheckoutCartUseCase to save with company/customer and product lines.
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import 'package:money_pulse/presentation/app/providers.dart';
+import 'package:money_pulse/presentation/app/providers.dart'
+    hide checkoutCartUseCaseProvider;
 import 'package:money_pulse/presentation/shared/formatters.dart';
 import 'package:money_pulse/domain/categories/entities/category.dart';
 import 'package:money_pulse/domain/company/entities/company.dart';
@@ -17,6 +18,7 @@ import '../../app/providers/customer_repo_provider.dart';
 import '../../widgets/right_drawer.dart';
 import '../products/product_picker_panel.dart';
 import 'providers/transaction_list_providers.dart';
+import '../../app/providers/checkout_cart_usecase_provider.dart';
 
 class TransactionQuickAddSheet extends ConsumerStatefulWidget {
   final bool initialIsDebit;
@@ -210,7 +212,8 @@ class _TransactionQuickAddSheetState
         if (e is Map) {
           final id = e['productId'] as String?;
           final label = (e['label'] as String?) ?? '';
-          final unit = (e['unitPriceCents'] as int?) ?? 0;
+          final unit =
+              (e['unitPriceCents'] as int?) ?? (e['unitPrice'] as int?) ?? 0;
           final qty = (e['quantity'] as int?) ?? 1;
           if (id != null) {
             parsed.add(
@@ -244,20 +247,42 @@ class _TransactionQuickAddSheetState
 
     final cents = _toCents(amountCtrl.text);
 
+    final lines = _items.isNotEmpty
+        ? _items
+              .map<Map<String, Object?>>(
+                (it) => {
+                  'productId': it.productId,
+                  'label': it.label,
+                  'quantity': it.quantity,
+                  'unitPrice': it.unitPriceCents,
+                },
+              )
+              .toList()
+        : <Map<String, Object?>>[
+            {
+              'productId': null,
+              'label': (descCtrl.text.trim().isEmpty
+                  ? (isDebit ? 'Dépense' : 'Revenu')
+                  : descCtrl.text.trim()),
+              'quantity': 1,
+              'unitPrice': cents,
+            },
+          ];
+
     try {
       await ref
-          .read(quickAddTransactionUseCaseProvider)
+          .read(checkoutCartUseCaseProvider)
           .execute(
+            typeEntry: isDebit ? 'DEBIT' : 'CREDIT',
             accountId: accountId,
-            amountCents: cents,
-            isDebit: isDebit,
+            categoryId: categoryId,
             description: descCtrl.text.trim().isEmpty
                 ? null
                 : descCtrl.text.trim(),
-            categoryId: categoryId,
-            dateTransaction: when,
             companyId: _companyId,
             customerId: _customerId,
+            when: when,
+            lines: lines,
           );
 
       await ref.read(transactionsProvider.notifier).load();
@@ -482,9 +507,7 @@ class _TransactionQuickAddSheetState
                               IconButton(
                                 tooltip: 'Vider',
                                 onPressed: () {
-                                  setState(() {
-                                    _items.clear();
-                                  });
+                                  setState(() => _items.clear());
                                   _syncAmountFromItems();
                                 },
                                 icon: const Icon(Icons.delete_sweep),
@@ -510,8 +533,7 @@ class _TransactionQuickAddSheetState
                               it.label.isEmpty ? 'Produit' : it.label,
                             ),
                             subtitle: Text(
-                              'Qté: ${it.quantity} • PU: '
-                              '${Formatters.amountFromCents(it.unitPriceCents)}',
+                              'Qté: ${it.quantity} • PU: ${Formatters.amountFromCents(it.unitPriceCents)}',
                             ),
                             trailing: Text(
                               Formatters.amountFromCents(lineTotal),

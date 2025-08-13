@@ -1,3 +1,4 @@
+// CheckoutCartUseCase: persist a transaction entry with optional company/customer and item lines, then update account balance.
 import 'package:uuid/uuid.dart';
 import 'package:sqflite/sqflite.dart';
 import 'package:money_pulse/infrastructure/db/app_database.dart';
@@ -13,6 +14,8 @@ class CheckoutCartUseCase {
     String? accountId,
     String? categoryId,
     String? description,
+    String? companyId,
+    String? customerId,
     DateTime? when,
     required List<Map<String, Object?>> lines,
   }) async {
@@ -61,6 +64,8 @@ class CheckoutCartUseCase {
         'entityId': null,
         'accountId': acc.id,
         'categoryId': categoryId,
+        'companyId': companyId,
+        'customerId': customerId,
         'createdAt': now.toIso8601String(),
         'updatedAt': now.toIso8601String(),
         'deletedAt': null,
