@@ -1,4 +1,4 @@
-// CheckoutCartUseCase: persist a transaction entry with optional company/customer and item lines, then update account balance.
+/// Use case that creates a transaction with items and updates stock levels per productVariant and company in the same SQL transaction.
 import 'package:uuid/uuid.dart';
 import 'package:sqflite/sqflite.dart';
 import 'package:money_pulse/infrastructure/db/app_database.dart';
@@ -10,14 +10,15 @@ class CheckoutCartUseCase {
   CheckoutCartUseCase(this.db, this.accountRepo);
 
   Future<String> execute({
-    required String typeEntry,
+    required String typeEntry, // 'CREDIT' (sale) or 'DEBIT' (purchase)
     String? accountId,
     String? categoryId,
     String? description,
     String? companyId,
     String? customerId,
     DateTime? when,
-    required List<Map<String, Object?>> lines,
+    required List<Map<String, Object?>>
+    lines, // {productId, label, quantity, unitPrice}
   }) async {
     final t = typeEntry.toUpperCase();
     if (t != 'CREDIT' && t != 'DEBIT') {
@@ -31,14 +32,14 @@ class CheckoutCartUseCase {
       throw ArgumentError('lines cannot be empty');
     }
 
+    int _asInt(Object? v) => (v is int) ? v : int.tryParse('${v ?? 0}') ?? 0;
+
     final acc = accountId != null
         ? await accountRepo.findById(accountId)
         : await accountRepo.findDefault();
     if (acc == null) {
       throw StateError('No default account found');
     }
-
-    int _asInt(Object? v) => (v is int) ? v : int.tryParse('${v ?? 0}') ?? 0;
 
     final total = lines.fold<int>(0, (p, e) {
       final q = _asInt(e['quantity']);
@@ -97,6 +98,14 @@ class CheckoutCartUseCase {
         });
       }
 
+      await _applyStockAdjustments(
+        txn: txn,
+        typeEntry: t,
+        lines: lines,
+        companyId: companyId,
+        nowIso: now.toIso8601String(),
+      );
+
       final newBalance = t == 'CREDIT'
           ? acc.balance + total
           : acc.balance - total;
@@ -112,7 +121,7 @@ class CheckoutCartUseCase {
         whereArgs: [acc.id],
       );
 
-      final logId = const Uuid().v4();
+      final idLog = const Uuid().v4();
       await txn.rawInsert(
         '''
         INSERT INTO change_log(
@@ -125,7 +134,7 @@ class CheckoutCartUseCase {
           updatedAt=excluded.updatedAt
       ''',
         [
-          logId,
+          idLog,
           'transaction_entry',
           txId,
           'INSERT',
@@ -141,5 +150,62 @@ class CheckoutCartUseCase {
     });
 
     return txId;
+  }
+
+  Future<void> _applyStockAdjustments({
+    required Transaction txn,
+    required String typeEntry,
+    required List<Map<String, Object?>> lines,
+    required String? companyId,
+    required String nowIso,
+  }) async {
+    String? company = companyId;
+    if (company == null || company.isEmpty) {
+      final def = await txn.rawQuery(
+        "SELECT id FROM company WHERE isDefault=1 AND deletedAt IS NULL LIMIT 1",
+      );
+      company = def.isEmpty ? null : (def.first['id'] as String?);
+    }
+    if (company == null || company.isEmpty) return;
+
+    final Map<int, int> totalsByVariant = {};
+    for (final l in lines) {
+      final pid = l['productId'];
+      final qty = (l['quantity'] is int)
+          ? l['quantity'] as int
+          : int.tryParse('${l['quantity'] ?? 0}') ?? 0;
+      final pvId = pid is int ? pid : int.tryParse('${pid ?? ''}');
+      if (pvId == null || qty == 0) continue;
+      totalsByVariant[pvId] =
+          (totalsByVariant[pvId] ?? 0) + (qty < 0 ? 0 : qty);
+    }
+    if (totalsByVariant.isEmpty) return;
+
+    final sign = typeEntry == 'DEBIT' ? 1 : -1;
+
+    for (final entry in totalsByVariant.entries) {
+      final pvId = entry.key;
+      final qty = entry.value * sign;
+
+      final exists = await txn.rawQuery(
+        "SELECT id FROM stock_level WHERE productVariantId=? AND companyId=? LIMIT 1",
+        [pvId, company],
+      );
+      if (exists.isEmpty) {
+        await txn.insert('stock_level', {
+          'productVariantId': pvId,
+          'companyId': company,
+          'stockOnHand': 0,
+          'stockAllocated': 0,
+          'createdAt': nowIso,
+          'updatedAt': nowIso,
+        }, conflictAlgorithm: ConflictAlgorithm.ignore);
+      }
+
+      await txn.rawUpdate(
+        "UPDATE stock_level SET stockOnHand = stockOnHand + ?, updatedAt=? WHERE productVariantId=? AND companyId=?",
+        [qty, nowIso, pvId, company],
+      );
+    }
   }
 }

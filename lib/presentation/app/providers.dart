@@ -56,16 +56,6 @@ final seedDefaultCategoriesUseCaseProvider =
       return SeedDefaultCategoriesUseCase(ref.read(categoryRepoProvider));
     });
 
-final quickAddTransactionUseCaseProvider = Provider<QuickAddTransactionUseCase>(
-  (ref) {
-    return QuickAddTransactionUseCase(
-      ref.read(transactionRepoProvider),
-      ref.read(accountRepoProvider),
-      ref.read(dbProvider), // ✅ pass DB so we can update balance inside a tx
-    );
-  },
-);
-
 class BalanceStateNotifier extends StateNotifier<int> {
   final AccountRepository repo;
   BalanceStateNotifier(this.repo) : super(0);

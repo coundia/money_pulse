@@ -1,3 +1,4 @@
+/// Repository that persists products and ensures a stock_level row is created per active company on creation.
 import 'package:sqflite/sqflite.dart';
 import 'package:uuid/uuid.dart';
 
@@ -23,6 +24,30 @@ class ProductRepositorySqflite implements ProductRepository {
 
   Product _from(Map<String, Object?> m) => Product.fromMap(m);
 
+  Future<void> _ensureStockLevels(Transaction txn, String productId) async {
+    final companies = await txn.rawQuery(
+      "SELECT id FROM company WHERE deletedAt IS NULL",
+    );
+    final now = _now();
+    for (final c in companies) {
+      final companyId = (c['id'] as String?) ?? '';
+      if (companyId.isEmpty) continue;
+      final exists = await txn.rawQuery(
+        "SELECT id FROM stock_level WHERE productVariantId=? AND companyId=? LIMIT 1",
+        [productId, companyId],
+      );
+      if (exists.isNotEmpty) continue;
+      await txn.insert('stock_level', {
+        'productVariantId': productId,
+        'companyId': companyId,
+        'stockOnHand': 0,
+        'stockAllocated': 0,
+        'createdAt': now,
+        'updatedAt': now,
+      }, conflictAlgorithm: ConflictAlgorithm.ignore);
+    }
+  }
+
   @override
   Future<Product> create(Product product) async {
     final p = _prepCreate(product);
@@ -32,6 +57,9 @@ class ProductRepositorySqflite implements ProductRepository {
         p.toMap(),
         conflictAlgorithm: ConflictAlgorithm.abort,
       );
+
+      await _ensureStockLevels(txn, p.id);
+
       final idLog = const Uuid().v4();
       await txn.rawInsert(
         'INSERT INTO change_log(id, entityTable, entityId, operation, payload, status, createdAt, updatedAt) '
