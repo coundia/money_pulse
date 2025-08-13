@@ -26,8 +26,8 @@ abstract class AccountRepository {
 
  -  improve , traduit in fr, and formatte Amount an date ,   use import 'package:money_pulse/presentation/shared/formatters.dart';
 
-Oui 
- entités Dart + repositories (DDD) pour Company et Customer, ainsi que les providers Riverpod ?
+ 
+ entités Dart + repositories (DDD) pour Company et Customer, ainsi que les providers Riverpod  
 
 Inspire toi de ceci
 

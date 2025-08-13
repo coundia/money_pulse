@@ -54,6 +54,8 @@ CREATE TABLE transaction_entry (
   entityId TEXT,
   accountId TEXT,
   categoryId TEXT,
+  companyId TEXT,    
+  customerId TEXT,     
   createdAt TEXT DEFAULT (datetime('now')),
   updatedAt TEXT DEFAULT (datetime('now')),
   deletedAt TEXT,
@@ -65,9 +67,11 @@ CREATE TABLE transaction_entry (
 CREATE INDEX idx_txn_date ON transaction_entry(dateTransaction);
 CREATE INDEX idx_txn_account ON transaction_entry(accountId);
 CREATE INDEX idx_txn_category ON transaction_entry(categoryId);
+CREATE INDEX IF NOT EXISTS idx_txn_company ON transaction_entry(companyId);   
+CREATE INDEX IF NOT EXISTS idx_txn_customer ON transaction_entry(customerId);  
 CREATE INDEX idx_txn_dirty ON transaction_entry(isDirty);
 CREATE INDEX idx_txn_deleted ON transaction_entry(deletedAt);
-
+ 
 CREATE TABLE change_log (
   id TEXT PRIMARY KEY,
   entityTable TEXT NOT NULL,

@@ -20,7 +20,9 @@ class QuickAddTransactionUseCase {
     String? description,
     String? categoryId,
     DateTime? dateTransaction,
-    String? accountId, // <- OPTIONAL: if null, uses default account
+    String? accountId, // optional: if null, uses default account
+    String? companyId, // ✅ optional
+    String? customerId, // ✅ optional
   }) async {
     final now = DateTime.now();
     final acc = accountId != null
@@ -45,6 +47,8 @@ class QuickAddTransactionUseCase {
       entityId: null,
       accountId: acc.id,
       categoryId: categoryId,
+      companyId: companyId, // ✅ persisted even if null
+      customerId: customerId, // ✅ persisted even if null
       createdAt: now,
       updatedAt: now,
       deletedAt: null,
@@ -54,12 +58,10 @@ class QuickAddTransactionUseCase {
     );
 
     await db.tx((txn) async {
-      // 1) Insert the transaction (via repository if it supports external txn)
-      await txRepo.create(
-        entry,
-      ); // ensure this does NOT change balance internally
+      // 1) Insert transaction
+      await txRepo.create(entry); // repo ne doit pas modifier le solde
 
-      // 2) Update account balance with correct sign
+      // 2) Update account balance
       final delta = isDebit ? -amountCents : amountCents;
       final newBalance = acc.balance + delta;
 
@@ -75,7 +77,7 @@ class QuickAddTransactionUseCase {
         whereArgs: [acc.id],
       );
 
-      // 3) Upsert change_log for the transaction (optional but recommended)
+      // 3) change_log
       final logId = const Uuid().v4();
       await txn.rawInsert(
         '''

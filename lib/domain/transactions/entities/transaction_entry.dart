@@ -11,6 +11,10 @@ class TransactionEntry {
   final String? entityId;
   final String accountId;
   final String? categoryId;
+
+  final String? companyId;
+  final String? customerId;
+
   final DateTime createdAt;
   final DateTime updatedAt;
   final DateTime? deletedAt;
@@ -31,6 +35,8 @@ class TransactionEntry {
     this.entityId,
     required this.accountId,
     this.categoryId,
+    this.companyId,
+    this.customerId,
     required this.createdAt,
     required this.updatedAt,
     this.deletedAt,
@@ -61,6 +67,10 @@ class TransactionEntry {
       entityId: m['entityId'] as String?,
       accountId: m['accountId'] as String,
       categoryId: m['categoryId'] as String?,
+
+      companyId: m['companyId'] as String?,
+      customerId: m['customerId'] as String?,
+
       createdAt: _parseDate(m['createdAt']) ?? DateTime.now(),
       updatedAt: _parseDate(m['updatedAt']) ?? DateTime.now(),
       deletedAt: _parseDate(m['deletedAt']),
@@ -85,6 +95,10 @@ class TransactionEntry {
       'entityId': entityId,
       'accountId': accountId,
       'categoryId': categoryId,
+
+      'companyId': companyId,
+      'customerId': customerId,
+
       'createdAt': f(createdAt),
       'updatedAt': f(updatedAt),
       'deletedAt': f(deletedAt),
@@ -107,6 +121,8 @@ class TransactionEntry {
     String? entityId,
     String? accountId,
     String? categoryId,
+    String? companyId,
+    String? customerId,
     DateTime? createdAt,
     DateTime? updatedAt,
     DateTime? deletedAt,
@@ -127,6 +143,10 @@ class TransactionEntry {
       entityId: entityId ?? this.entityId,
       accountId: accountId ?? this.accountId,
       categoryId: categoryId ?? this.categoryId,
+
+      companyId: companyId ?? this.companyId,
+      customerId: customerId ?? this.customerId,
+
       createdAt: createdAt ?? this.createdAt,
       updatedAt: updatedAt ?? this.updatedAt,
       deletedAt: deletedAt ?? this.deletedAt,

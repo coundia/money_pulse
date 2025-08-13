@@ -5,7 +5,18 @@ import 'package:money_pulse/presentation/app/providers.dart';
 import 'package:money_pulse/presentation/shared/formatters.dart';
 import 'package:money_pulse/domain/categories/entities/category.dart';
 
+// Parties (Société / Client)
+import 'package:money_pulse/domain/company/entities/company.dart';
+import 'package:money_pulse/domain/customer/entities/customer.dart';
+
+// Repos (interfaces pour les requêtes)
+import 'package:money_pulse/domain/company/repositories/company_repository.dart';
+import 'package:money_pulse/domain/customer/repositories/customer_repository.dart';
+
+// Providers concrets
 import '../../app/account_selection.dart';
+import '../../app/providers/company_repo_provider.dart';
+import '../../app/providers/customer_repo_provider.dart';
 import 'providers/transaction_list_providers.dart';
 
 class TransactionQuickAddSheet extends ConsumerStatefulWidget {
@@ -22,29 +33,59 @@ class _TransactionQuickAddSheetState
   final formKey = GlobalKey<FormState>();
   final amountCtrl = TextEditingController();
   final descCtrl = TextEditingController();
-  final TextEditingController _categoryCtrl = TextEditingController();
 
-  bool isDebit = true;
+  // Autocomplete catégorie
+  final TextEditingController _categoryCtrl = TextEditingController();
   String? categoryId;
   Category? _selectedCategory;
-
-  DateTime when = DateTime.now();
   List<Category> _allCategories = const [];
+
+  // Parties
+  String? _companyId;
+  String? _customerId;
+  List<Company> _companies = const [];
+  List<Customer> _customers = const [];
+
+  // Type (lecture seule ici)
+  bool isDebit = true;
+
+  // Date
+  DateTime when = DateTime.now();
 
   @override
   void initState() {
     super.initState();
     isDebit = widget.initialIsDebit;
-    // Charger les catégories
+
+    // Charger catégories + sociétés + (clients filtrés par société si sélectionnée)
     Future.microtask(() async {
-      final repo = ref.read(categoryRepoProvider);
-      final cats = await repo.findAllActive();
-      if (!mounted) return;
-      setState(() {
-        _allCategories = cats;
-        // Pas de présélection automatique : on laisse vide
-        _clearCategory();
-      });
+      try {
+        final catRepo = ref.read(categoryRepoProvider);
+        final coRepo = ref.read(companyRepoProvider);
+        final cuRepo = ref.read(customerRepoProvider);
+
+        final cats = await catRepo.findAllActive();
+        final cos = await coRepo.findAll(
+          const CompanyQuery(limit: 300, offset: 0),
+        );
+        final cus = await cuRepo.findAll(
+          CustomerQuery(
+            companyId: (_companyId ?? '').isEmpty ? null : _companyId,
+            limit: 300,
+            offset: 0,
+          ),
+        );
+
+        if (!mounted) return;
+        setState(() {
+          _allCategories = cats;
+          _companies = cos;
+          _customers = cus;
+          _clearCategory(); // pas de présélection -> évite l’ancienne régression
+        });
+      } catch (_) {
+        // soft fail (UI reste utilisable même si listes vides)
+      }
     });
   }
 
@@ -56,51 +97,45 @@ class _TransactionQuickAddSheetState
     super.dispose();
   }
 
-  // --- Helpers UI ---
+  // ---------- Helpers ----------
 
   void _safeSnack(String message) {
     if (!mounted) return;
-
-    final scaffoldState = context.findAncestorStateOfType<ScaffoldState>();
     final messenger = ScaffoldMessenger.maybeOf(context);
-
-    if (scaffoldState != null && messenger != null && messenger.mounted) {
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (!mounted) return;
-        messenger.showSnackBar(SnackBar(content: Text(message)));
-      });
-      return;
+    if (messenger != null) {
+      messenger.showSnackBar(SnackBar(content: Text(message)));
+    } else {
+      showDialog<void>(
+        context: context,
+        builder: (d) => AlertDialog(
+          title: const Text('Information'),
+          content: Text(message),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(d).maybePop(),
+              child: const Text('OK'),
+            ),
+          ],
+        ),
+      );
     }
-
-    // ✅ Utiliser un nom explicite pour le contexte du builder
-    showDialog<void>(
-      context: context,
-      useRootNavigator: true,
-      builder: (dialogContext) => AlertDialog(
-        title: const Text('Information'),
-        content: Text(message),
-        actions: [
-          TextButton(
-            // ✅ Utiliser dialogContext ici, pas `_`
-            onPressed: () =>
-                Navigator.of(dialogContext, rootNavigator: true).maybePop(),
-            child: const Text('OK'),
-          ),
-        ],
-      ),
-    );
   }
 
-  // Convert "123,45" / "123.45" -> cents
+  // Convert "1 500,75" / "1500.75" -> cents
   int _toCents(String v) {
-    final s = v.replaceAll(',', '.').replaceAll(' ', '');
+    final s = v.replaceAll(RegExp(r'\s'), '').replaceAll(',', '.');
     final d = double.tryParse(s) ?? 0;
     return (d * 100).round();
   }
 
-  // Filtrer par type en fonction de isDebit
+  String get _amountPreview =>
+      Formatters.amountFromCents(_toCents(amountCtrl.text));
+
+  // Filtre catégories par type + recherche
   List<Category> _filteredCategories({String query = ''}) {
-    final wanted = isDebit ? Category.debit : Category.credit;
+    final wanted = isDebit
+        ? 'DEBIT'
+        : 'CREDIT'; // évite la régression des constantes
     final base = _allCategories.where((c) => c.typeEntry == wanted);
     if (query.trim().isEmpty) return base.toList();
     final q = query.toLowerCase().trim();
@@ -111,15 +146,6 @@ class _TransactionQuickAddSheetState
               (c.description ?? '').toLowerCase().contains(q),
         )
         .toList();
-  }
-
-  // (Conservé si un jour tu réactives un switch de type)
-  void _onTypeChanged(bool newIsDebit) {
-    if (isDebit == newIsDebit) return;
-    setState(() {
-      isDebit = newIsDebit;
-      _clearCategory();
-    });
   }
 
   void _clearCategory() {
@@ -134,6 +160,91 @@ class _TransactionQuickAddSheetState
     _categoryCtrl.text = c.code;
   }
 
+  Future<void> _onSelectCompany(String? id) async {
+    setState(() {
+      _companyId = id;
+      _customerId = null;
+      _customers = const [];
+    });
+    try {
+      final cuRepo = ref.read(customerRepoProvider);
+      final list = await cuRepo.findAll(
+        CustomerQuery(
+          companyId: (id ?? '').isEmpty ? null : id,
+          limit: 300,
+          offset: 0,
+        ),
+      );
+      if (!mounted) return;
+      setState(() => _customers = list);
+    } catch (_) {
+      // ignore: soft fail
+    }
+  }
+
+  Future<void> _pickDate() async {
+    final picked = await showDatePicker(
+      context: context,
+      initialDate: when,
+      firstDate: DateTime(2000),
+      lastDate: DateTime(2100),
+    );
+    if (picked != null) {
+      setState(() {
+        when = DateTime(
+          picked.year,
+          picked.month,
+          picked.day,
+          when.hour,
+          when.minute,
+          when.second,
+          when.millisecond,
+          when.microsecond,
+        );
+      });
+    }
+  }
+
+  Future<void> _save() async {
+    if (!formKey.currentState!.validate()) return;
+
+    final accountId = ref.read(selectedAccountIdProvider);
+    if (accountId == null || accountId.isEmpty) {
+      _safeSnack('Sélectionnez d’abord un compte');
+      return;
+    }
+
+    final cents = _toCents(amountCtrl.text);
+
+    try {
+      // companyId / customerId peuvent rester null -> pas bloquant
+      await ref
+          .read(quickAddTransactionUseCaseProvider)
+          .execute(
+            accountId: accountId,
+            amountCents: cents,
+            isDebit: isDebit,
+            description: descCtrl.text.trim().isEmpty
+                ? null
+                : descCtrl.text.trim(),
+            categoryId: categoryId, // peut être null -> ok
+            dateTransaction: when,
+            // ⚠️ Assurez-vous que le UseCase accepte ces 2 paramètres.
+            companyId: _companyId,
+            customerId: _customerId,
+          );
+
+      await ref.read(transactionsProvider.notifier).load();
+      await ref.read(balanceProvider.notifier).load();
+      ref.invalidate(transactionListItemsProvider);
+      ref.invalidate(selectedAccountProvider);
+
+      if (mounted) Navigator.of(context).pop(true);
+    } catch (e) {
+      _safeSnack('Échec de l’enregistrement: $e');
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final insets = MediaQuery.of(context).viewInsets.bottom;
@@ -146,173 +257,196 @@ class _TransactionQuickAddSheetState
         ? Theme.of(context).colorScheme.error
         : Theme.of(context).colorScheme.primary;
 
-    return Padding(
-      padding: EdgeInsets.only(bottom: insets),
-      child: Form(
-        key: formKey,
-        child: SingleChildScrollView(
-          padding: const EdgeInsets.all(16),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              // Header
-              Row(
-                children: [
-                  const SizedBox(width: 8),
-                  Text(
-                    'Ajouter une transaction',
-                    style: Theme.of(context).textTheme.titleMedium,
-                  ),
-                  const Spacer(),
-                  IconButton(
-                    tooltip: 'Fermer',
-                    icon: const Icon(Icons.close),
-                    onPressed: () => Navigator.of(context).pop(false),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 4),
-              Container(
-                width: 36,
-                height: 4,
-                decoration: BoxDecoration(
-                  color: Theme.of(
-                    context,
-                  ).colorScheme.onSurface.withOpacity(0.2),
-                  borderRadius: BorderRadius.circular(999),
+    return Scaffold(
+      appBar: AppBar(
+        title: const Text('Ajouter une transaction'),
+        leading: IconButton(
+          tooltip: 'Fermer',
+          icon: const Icon(Icons.close),
+          onPressed: () => Navigator.of(context).pop(false),
+        ),
+        actions: [
+          IconButton(
+            tooltip: 'Enregistrer',
+            icon: const Icon(Icons.check),
+            onPressed: _save,
+          ),
+        ],
+      ),
+      body: Padding(
+        padding: EdgeInsets.only(bottom: insets),
+        child: Form(
+          key: formKey,
+          child: SingleChildScrollView(
+            padding: const EdgeInsets.all(16),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                // Type (lecture seule)
+                Row(
+                  children: [
+                    Icon(icon, color: color),
+                    const SizedBox(width: 8),
+                    const Text(
+                      "Type d'écriture",
+                      style: TextStyle(fontWeight: FontWeight.w600),
+                    ),
+                    const Spacer(),
+                    Chip(
+                      label: Text(label),
+                      avatar: Icon(
+                        isDebit ? Icons.arrow_downward : Icons.arrow_upward,
+                        size: 18,
+                      ),
+                    ),
+                  ],
                 ),
-              ),
-              const SizedBox(height: 12),
+                const SizedBox(height: 12),
 
-              // Type: dépense / revenu (lecture seule)
-              Row(
-                children: [
-                  Icon(icon, color: color),
-                  const SizedBox(width: 8),
-                  const Text(
-                    "Type d'écriture",
-                    style: TextStyle(fontWeight: FontWeight.w600),
+                // Montant
+                TextFormField(
+                  controller: amountCtrl,
+                  keyboardType: const TextInputType.numberWithOptions(
+                    decimal: true,
                   ),
-                  const Spacer(),
-                  Chip(
-                    label: Text(label),
-                    avatar: Icon(
-                      isDebit ? Icons.arrow_downward : Icons.arrow_upward,
-                      size: 18,
+                  textAlign: TextAlign.center,
+                  style: Theme.of(context).textTheme.headlineMedium,
+                  decoration: const InputDecoration(
+                    border: OutlineInputBorder(),
+                    labelText: 'Montant',
+                  ),
+                  validator: (v) =>
+                      (v == null || v.trim().isEmpty) ? 'Obligatoire' : null,
+                  autofocus: true,
+                  onChanged: (_) => setState(() {}),
+                ),
+                const SizedBox(height: 6),
+                Align(
+                  alignment: Alignment.centerRight,
+                  child: Text(
+                    'Aperçu: $_amountPreview',
+                    style: Theme.of(context).textTheme.bodySmall,
+                  ),
+                ),
+
+                const SizedBox(height: 12),
+
+                // Catégorie (Autocomplete + filtrage par type)
+                _CategoryAutocomplete(
+                  controller: _categoryCtrl,
+                  initialSelected: _selectedCategory,
+                  optionsBuilder: (text) => _filteredCategories(query: text),
+                  onSelected: (c) => setState(() => _setCategory(c)),
+                  onClear: () => setState(() => _clearCategory()),
+                  labelText: 'Catégorie',
+                  emptyHint: isDebit
+                      ? 'Aucune catégorie Débit'
+                      : 'Aucune catégorie Crédit',
+                ),
+
+                const SizedBox(height: 12),
+
+                // Tiers (Société & Client)
+                Card(
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 12,
+                      vertical: 12,
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        Text(
+                          'Tiers',
+                          style: Theme.of(context).textTheme.titleMedium,
+                        ),
+                        const SizedBox(height: 8),
+
+                        // IMPORTANT: typage <String?> pour accepter null
+                        DropdownButtonFormField<String?>(
+                          value: _companyId,
+                          isDense: true,
+                          items: [
+                            const DropdownMenuItem<String?>(
+                              value: null,
+                              child: Text('— Aucune société —'),
+                            ),
+                            ..._companies.map(
+                              (co) => DropdownMenuItem<String?>(
+                                value: co.id,
+                                child: Text(
+                                  '${co.name} (${co.code})',
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                              ),
+                            ),
+                          ],
+                          onChanged: (v) => _onSelectCompany(v),
+                          decoration: const InputDecoration(
+                            border: OutlineInputBorder(),
+                            labelText: 'Société',
+                            isDense: true,
+                          ),
+                        ),
+                        const SizedBox(height: 8),
+
+                        DropdownButtonFormField<String?>(
+                          value: _customerId,
+                          isDense: true,
+                          items: [
+                            const DropdownMenuItem<String?>(
+                              value: null,
+                              child: Text('— Aucun client —'),
+                            ),
+                            ..._customers.map(
+                              (cu) => DropdownMenuItem<String?>(
+                                value: cu.id,
+                                child: Text(
+                                  cu.fullName,
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                              ),
+                            ),
+                          ],
+                          onChanged: (v) => setState(() => _customerId = v),
+                          decoration: const InputDecoration(
+                            border: OutlineInputBorder(),
+                            labelText: 'Client',
+                            isDense: true,
+                          ),
+                        ),
+                      ],
                     ),
                   ),
-                ],
-              ),
-
-              const SizedBox(height: 12),
-
-              // Montant
-              TextFormField(
-                controller: amountCtrl,
-                keyboardType: const TextInputType.numberWithOptions(
-                  decimal: true,
                 ),
-                textAlign: TextAlign.center,
-                style: Theme.of(context).textTheme.headlineMedium,
-                decoration: const InputDecoration(
-                  border: OutlineInputBorder(),
-                  labelText: 'Montant',
+
+                const SizedBox(height: 12),
+
+                // Date
+                ListTile(
+                  contentPadding: EdgeInsets.zero,
+                  title: const Text('Date'),
+                  subtitle: Text(Formatters.dateFull(when)),
+                  trailing: const Icon(Icons.calendar_today),
+                  onTap: _pickDate,
                 ),
-                validator: (v) =>
-                    (v == null || v.trim().isEmpty) ? 'Obligatoire' : null,
-                autofocus: true,
-              ),
 
-              const SizedBox(height: 12),
+                const SizedBox(height: 12),
 
-              // Catégorie (Autocomplete + recherche + filtrage par type)
-              _CategoryAutocomplete(
-                controller: _categoryCtrl,
-                initialSelected: _selectedCategory,
-                optionsBuilder: (text) => _filteredCategories(query: text),
-                onSelected: (c) => setState(() => _setCategory(c)),
-                onClear: () => setState(() => _clearCategory()),
-                labelText: 'Catégorie',
-                emptyHint: isDebit
-                    ? 'Aucune catégorie Débit'
-                    : 'Aucune catégorie Crédit',
-              ),
-
-              const SizedBox(height: 12),
-
-              // Date
-              ListTile(
-                contentPadding: EdgeInsets.zero,
-                title: const Text('Date'),
-                subtitle: Text(Formatters.dateFull(when)),
-                trailing: const Icon(Icons.calendar_today),
-                onTap: () async {
-                  final picked = await showDatePicker(
-                    context: context,
-                    initialDate: when,
-                    firstDate: DateTime(2000),
-                    lastDate: DateTime(2100),
-                  );
-                  if (picked != null) setState(() => when = picked);
-                },
-              ),
-
-              const SizedBox(height: 12),
-
-              // Description
-              TextFormField(
-                controller: descCtrl,
-                decoration: const InputDecoration(
-                  border: OutlineInputBorder(),
-                  labelText: 'Description (optionnel)',
+                // Description
+                TextFormField(
+                  controller: descCtrl,
+                  decoration: const InputDecoration(
+                    border: OutlineInputBorder(),
+                    labelText: 'Description (optionnel)',
+                  ),
                 ),
-              ),
 
-              const SizedBox(height: 16),
-
-              // Enregistrer
-              FilledButton.icon(
-                onPressed: () async {
-                  if (!formKey.currentState!.validate()) return;
-
-                  final accountId = ref.read(selectedAccountIdProvider);
-                  if (accountId == null || accountId.isEmpty) {
-                    if (!mounted) return;
-                    _safeSnack('Sélectionnez d’abord un compte');
-                    return;
-                  }
-
-                  if (categoryId == null || categoryId!.isEmpty) {
-                    if (!mounted) return;
-                    // _safeSnack('Sélectionnez une catégorie');
-                    //return;
-                  }
-
-                  final cents = _toCents(amountCtrl.text);
-                  await ref
-                      .read(quickAddTransactionUseCaseProvider)
-                      .execute(
-                        accountId: accountId,
-                        amountCents: cents,
-                        isDebit: isDebit,
-                        description: descCtrl.text.trim().isEmpty
-                            ? null
-                            : descCtrl.text.trim(),
-                        categoryId: categoryId,
-                        dateTransaction: when,
-                      );
-
-                  await ref.read(transactionsProvider.notifier).load();
-                  await ref.read(balanceProvider.notifier).load();
-                  ref.invalidate(transactionListItemsProvider);
-                  ref.invalidate(selectedAccountProvider);
-
-                  if (mounted) Navigator.of(context).pop(true);
-                },
-                icon: const Icon(Icons.check),
-                label: const Text('Enregistrer'),
-              ),
-            ],
+                const SizedBox(height: 8),
+              ],
+            ),
           ),
         ),
       ),
@@ -427,7 +561,7 @@ class _CategoryAutocomplete extends StatelessWidget {
                               ? Text(c.description!)
                               : null,
                           trailing: Text(
-                            c.typeEntry == Category.debit ? 'Débit' : 'Crédit',
+                            c.typeEntry == 'DEBIT' ? 'Débit' : 'Crédit',
                             style: const TextStyle(fontSize: 12),
                           ),
                           onTap: () => onSelectedCb(c),
