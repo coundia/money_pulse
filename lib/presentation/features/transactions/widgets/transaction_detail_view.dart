@@ -1,3 +1,4 @@
+// TransactionDetailView: shows a transaction details with items, category, company and customer when present, plus share/receipt actions.
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -12,6 +13,8 @@ import 'package:money_pulse/presentation/features/transactions/transaction_form_
 import 'package:money_pulse/presentation/shared/formatters.dart';
 import 'package:money_pulse/presentation/widgets/right_drawer.dart';
 
+import '../../companies/providers/company_detail_providers.dart';
+import '../../customers/providers/customer_detail_providers.dart';
 import '../receipt/receipt_preview_page.dart';
 import '../receipt/receipt_controller.dart';
 import 'package:money_pulse/infrastructure/receipts/receipt_pdf_renderer.dart';
@@ -27,8 +30,16 @@ class TransactionDetailView extends ConsumerWidget {
     final sign = isDebit ? '-' : '+';
     final amount = Formatters.amountFromCents(entry.amount);
     final dateLabel = Formatters.dateFull(entry.dateTransaction);
+
     final catAsync = ref.watch(categoryByIdProvider(entry.categoryId));
     final itemsAsync = ref.watch(transactionItemsProvider(entry.id));
+
+    final companyAsync = entry.companyId == null
+        ? const AsyncValue.data(null)
+        : ref.watch(companyByIdProvider(entry.companyId!));
+    final customerAsync = entry.customerId == null
+        ? const AsyncValue.data(null)
+        : ref.watch(customerByIdProvider(entry.customerId!));
 
     return Scaffold(
       appBar: AppBar(
@@ -39,9 +50,12 @@ class TransactionDetailView extends ConsumerWidget {
             icon: const Icon(Icons.ios_share),
             onPressed: () async {
               final d = await ref.read(receiptDataProvider(entry.id).future);
+              final formatAmount = (int cents) =>
+                  Formatters.amountFromCents(cents);
+              final formatDate = (DateTime dt) => Formatters.dateFull(dt);
               final bytes = await ReceiptPdfRenderer(
-                amount: fmtAmount,
-                date: fmtDate,
+                amount: formatAmount,
+                date: formatDate,
               ).render(d);
               final dir = await getTemporaryDirectory();
               final path = '${dir.path}/recu_${entry.id}.pdf';
@@ -61,6 +75,7 @@ class TransactionDetailView extends ConsumerWidget {
           _InfoTile(title: 'Description', value: entry.description ?? '—'),
           _InfoTile(title: 'Code', value: entry.code ?? '—'),
           _InfoTile(title: 'Identifiant', value: entry.id),
+
           catAsync.when(
             data: (cat) => cat == null
                 ? const SizedBox.shrink()
@@ -71,6 +86,29 @@ class TransactionDetailView extends ConsumerWidget {
             loading: () => const SizedBox.shrink(),
             error: (_, __) => const SizedBox.shrink(),
           ),
+
+          companyAsync.when(
+            data: (co) => co == null
+                ? const SizedBox.shrink()
+                : _InfoTile(
+                    title: 'Société',
+                    value: _companyLabel(co.name, co.code),
+                  ),
+            loading: () => const SizedBox.shrink(),
+            error: (_, __) => const SizedBox.shrink(),
+          ),
+
+          customerAsync.when(
+            data: (cu) => cu == null
+                ? const SizedBox.shrink()
+                : _InfoTile(
+                    title: 'Client',
+                    value: _customerLabel(cu.fullName, cu.email, cu.phone),
+                  ),
+            loading: () => const SizedBox.shrink(),
+            error: (_, __) => const SizedBox.shrink(),
+          ),
+
           itemsAsync.when(
             data: (items) => items.isEmpty
                 ? const SizedBox.shrink()
@@ -200,6 +238,24 @@ class TransactionDetailView extends ConsumerWidget {
     if (d.isNotEmpty) return d;
     if (c.isNotEmpty) return c;
     return '—';
+  }
+
+  static String _companyLabel(String? name, String? code) {
+    final n = (name ?? '').trim();
+    final c = (code ?? '').trim();
+    if (n.isNotEmpty && c.isNotEmpty) return '$n ($c)';
+    if (n.isNotEmpty) return n;
+    if (c.isNotEmpty) return c;
+    return '—';
+  }
+
+  static String _customerLabel(String fullName, String? email, String? phone) {
+    final e = (email ?? '').trim();
+    final p = (phone ?? '').trim();
+    if (e.isNotEmpty && p.isNotEmpty) return '$fullName • $e • $p';
+    if (e.isNotEmpty) return '$fullName • $e';
+    if (p.isNotEmpty) return '$fullName • $p';
+    return fullName.isEmpty ? '—' : fullName;
   }
 }
 
