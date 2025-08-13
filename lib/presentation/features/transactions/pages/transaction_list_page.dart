@@ -159,5 +159,18 @@ class TransactionListPage extends ConsumerWidget {
     );
   }
 
-  Future<void> _onAdd(BuildContext context, WidgetRef ref, String type) async {}
+  Future<void> _onAdd(BuildContext context, WidgetRef ref, String type) async {
+    final isDebit = type == 'DEBIT';
+    final ok = await showRightDrawer<bool>(
+      context,
+      child: TransactionQuickAddSheet(initialIsDebit: isDebit),
+      widthFraction: 0.86,
+      heightFraction: 0.96,
+    );
+    if (ok == true) {
+      await ref.read(transactionsProvider.notifier).load();
+      await ref.read(balanceProvider.notifier).load();
+      ref.invalidate(transactionListItemsProvider);
+    }
+  }
 }

@@ -15,6 +15,7 @@ import '../../app/account_selection.dart';
 import '../../app/providers/company_repo_provider.dart';
 import '../../app/providers/customer_repo_provider.dart';
 import '../../widgets/right_drawer.dart';
+import '../products/product_picker_panel.dart';
 import 'providers/transaction_list_providers.dart';
 
 class TransactionQuickAddSheet extends ConsumerStatefulWidget {
@@ -200,7 +201,7 @@ class _TransactionQuickAddSheetState
   Future<void> _openProductPicker() async {
     final result = await showRightDrawer(
       context,
-      child: const _ProductPickerPanelPlaceholder(),
+      child: const ProductPickerPanel(),
     );
     if (!mounted) return;
     if (result is List) {
@@ -680,32 +681,6 @@ class _CategoryAutocomplete extends StatelessWidget {
         controller.text = c.code;
         onSelected(c);
       },
-    );
-  }
-}
-
-class _ProductPickerPanelPlaceholder extends StatelessWidget {
-  const _ProductPickerPanelPlaceholder();
-
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text('Sélectionner des produits'),
-        actions: [
-          TextButton(
-            onPressed: () =>
-                Navigator.of(context).pop(<Map<String, Object?>>[]),
-            child: const Text('Valider'),
-          ),
-        ],
-      ),
-      body: const Center(
-        child: Text(
-          'Placeholder sélecteur de produits.\nDemandez le fichier product_picker_panel.dart pour l’implémentation.',
-          textAlign: TextAlign.center,
-        ),
-      ),
     );
   }
 }
