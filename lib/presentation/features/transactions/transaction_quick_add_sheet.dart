@@ -1,22 +1,20 @@
+// TransactionQuickAddSheet: quick add of a transaction with keyboard "Enter" submit and product picking via right drawer.
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'package:money_pulse/presentation/app/providers.dart';
 import 'package:money_pulse/presentation/shared/formatters.dart';
 import 'package:money_pulse/domain/categories/entities/category.dart';
-
-// Parties (Société / Client)
 import 'package:money_pulse/domain/company/entities/company.dart';
 import 'package:money_pulse/domain/customer/entities/customer.dart';
-
-// Repos (interfaces pour les requêtes)
 import 'package:money_pulse/domain/company/repositories/company_repository.dart';
 import 'package:money_pulse/domain/customer/repositories/customer_repository.dart';
 
-// Providers concrets
 import '../../app/account_selection.dart';
 import '../../app/providers/company_repo_provider.dart';
 import '../../app/providers/customer_repo_provider.dart';
+import '../../widgets/right_drawer.dart';
 import 'providers/transaction_list_providers.dart';
 
 class TransactionQuickAddSheet extends ConsumerStatefulWidget {
@@ -34,30 +32,25 @@ class _TransactionQuickAddSheetState
   final amountCtrl = TextEditingController();
   final descCtrl = TextEditingController();
 
-  // Autocomplete catégorie
   final TextEditingController _categoryCtrl = TextEditingController();
   String? categoryId;
   Category? _selectedCategory;
   List<Category> _allCategories = const [];
 
-  // Parties
   String? _companyId;
   String? _customerId;
   List<Company> _companies = const [];
   List<Customer> _customers = const [];
 
-  // Type (lecture seule ici)
   bool isDebit = true;
-
-  // Date
   DateTime when = DateTime.now();
+
+  final List<_TxItem> _items = [];
 
   @override
   void initState() {
     super.initState();
     isDebit = widget.initialIsDebit;
-
-    // Charger catégories + sociétés + (clients filtrés par société si sélectionnée)
     Future.microtask(() async {
       try {
         final catRepo = ref.read(categoryRepoProvider);
@@ -81,11 +74,9 @@ class _TransactionQuickAddSheetState
           _allCategories = cats;
           _companies = cos;
           _customers = cus;
-          _clearCategory(); // pas de présélection -> évite l’ancienne régression
+          _clearCategory();
         });
-      } catch (_) {
-        // soft fail (UI reste utilisable même si listes vides)
-      }
+      } catch (_) {}
     });
   }
 
@@ -96,8 +87,6 @@ class _TransactionQuickAddSheetState
     _categoryCtrl.dispose();
     super.dispose();
   }
-
-  // ---------- Helpers ----------
 
   void _safeSnack(String message) {
     if (!mounted) return;
@@ -121,7 +110,6 @@ class _TransactionQuickAddSheetState
     }
   }
 
-  // Convert "1 500,75" / "1500.75" -> cents
   int _toCents(String v) {
     final s = v.replaceAll(RegExp(r'\s'), '').replaceAll(',', '.');
     final d = double.tryParse(s) ?? 0;
@@ -131,11 +119,8 @@ class _TransactionQuickAddSheetState
   String get _amountPreview =>
       Formatters.amountFromCents(_toCents(amountCtrl.text));
 
-  // Filtre catégories par type + recherche
   List<Category> _filteredCategories({String query = ''}) {
-    final wanted = isDebit
-        ? 'DEBIT'
-        : 'CREDIT'; // évite la régression des constantes
+    final wanted = isDebit ? 'DEBIT' : 'CREDIT';
     final base = _allCategories.where((c) => c.typeEntry == wanted);
     if (query.trim().isEmpty) return base.toList();
     final q = query.toLowerCase().trim();
@@ -177,9 +162,7 @@ class _TransactionQuickAddSheetState
       );
       if (!mounted) return;
       setState(() => _customers = list);
-    } catch (_) {
-      // ignore: soft fail
-    }
+    } catch (_) {}
   }
 
   Future<void> _pickDate() async {
@@ -205,6 +188,50 @@ class _TransactionQuickAddSheetState
     }
   }
 
+  int get _itemsTotalCents =>
+      _items.fold(0, (sum, it) => sum + (it.unitPriceCents * it.quantity));
+
+  void _syncAmountFromItems() {
+    final total = _itemsTotalCents;
+    amountCtrl.text = (total / 100).toStringAsFixed(2);
+    setState(() {});
+  }
+
+  Future<void> _openProductPicker() async {
+    final result = await showRightDrawer(
+      context,
+      child: const _ProductPickerPanelPlaceholder(),
+    );
+    if (!mounted) return;
+    if (result is List) {
+      final List<_TxItem> parsed = [];
+      for (final e in result) {
+        if (e is Map) {
+          final id = e['productId'] as String?;
+          final label = (e['label'] as String?) ?? '';
+          final unit = (e['unitPriceCents'] as int?) ?? 0;
+          final qty = (e['quantity'] as int?) ?? 1;
+          if (id != null) {
+            parsed.add(
+              _TxItem(
+                productId: id,
+                label: label,
+                unitPriceCents: unit,
+                quantity: qty,
+              ),
+            );
+          }
+        }
+      }
+      setState(() {
+        _items
+          ..clear()
+          ..addAll(parsed);
+      });
+      _syncAmountFromItems();
+    }
+  }
+
   Future<void> _save() async {
     if (!formKey.currentState!.validate()) return;
 
@@ -217,7 +244,6 @@ class _TransactionQuickAddSheetState
     final cents = _toCents(amountCtrl.text);
 
     try {
-      // companyId / customerId peuvent rester null -> pas bloquant
       await ref
           .read(quickAddTransactionUseCaseProvider)
           .execute(
@@ -227,9 +253,8 @@ class _TransactionQuickAddSheetState
             description: descCtrl.text.trim().isEmpty
                 ? null
                 : descCtrl.text.trim(),
-            categoryId: categoryId, // peut être null -> ok
+            categoryId: categoryId,
             dateTransaction: when,
-            // ⚠️ Assurez-vous que le UseCase accepte ces 2 paramètres.
             companyId: _companyId,
             customerId: _customerId,
           );
@@ -257,195 +282,265 @@ class _TransactionQuickAddSheetState
         ? Theme.of(context).colorScheme.error
         : Theme.of(context).colorScheme.primary;
 
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text('Ajouter une transaction'),
-        leading: IconButton(
-          tooltip: 'Fermer',
-          icon: const Icon(Icons.close),
-          onPressed: () => Navigator.of(context).pop(false),
-        ),
-        actions: [
-          IconButton(
-            tooltip: 'Enregistrer',
-            icon: const Icon(Icons.check),
-            onPressed: _save,
+    return Shortcuts(
+      shortcuts: <LogicalKeySet, Intent>{
+        LogicalKeySet(LogicalKeyboardKey.enter): const _SubmitFormIntent(),
+        LogicalKeySet(LogicalKeyboardKey.numpadEnter):
+            const _SubmitFormIntent(),
+      },
+      child: Actions(
+        actions: <Type, Action<Intent>>{
+          _SubmitFormIntent: CallbackAction<_SubmitFormIntent>(
+            onInvoke: (_) {
+              _save();
+              return null;
+            },
           ),
-        ],
-      ),
-      body: Padding(
-        padding: EdgeInsets.only(bottom: insets),
-        child: Form(
-          key: formKey,
-          child: SingleChildScrollView(
-            padding: const EdgeInsets.all(16),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                // Type (lecture seule)
-                Row(
+        },
+        child: Scaffold(
+          appBar: AppBar(
+            title: const Text('Ajouter une transaction'),
+            leading: IconButton(
+              tooltip: 'Fermer',
+              icon: const Icon(Icons.close),
+              onPressed: () => Navigator.of(context).pop(false),
+            ),
+            actions: [
+              IconButton(
+                tooltip: 'Enregistrer',
+                icon: const Icon(Icons.check),
+                onPressed: _save,
+              ),
+            ],
+          ),
+          body: Padding(
+            padding: EdgeInsets.only(bottom: insets),
+            child: Form(
+              key: formKey,
+              child: SingleChildScrollView(
+                padding: const EdgeInsets.all(16),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
                   children: [
-                    Icon(icon, color: color),
-                    const SizedBox(width: 8),
-                    const Text(
-                      "Type d'écriture",
-                      style: TextStyle(fontWeight: FontWeight.w600),
-                    ),
-                    const Spacer(),
-                    Chip(
-                      label: Text(label),
-                      avatar: Icon(
-                        isDebit ? Icons.arrow_downward : Icons.arrow_upward,
-                        size: 18,
-                      ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 12),
-
-                // Montant
-                TextFormField(
-                  controller: amountCtrl,
-                  keyboardType: const TextInputType.numberWithOptions(
-                    decimal: true,
-                  ),
-                  textAlign: TextAlign.center,
-                  style: Theme.of(context).textTheme.headlineMedium,
-                  decoration: const InputDecoration(
-                    border: OutlineInputBorder(),
-                    labelText: 'Montant',
-                  ),
-                  validator: (v) =>
-                      (v == null || v.trim().isEmpty) ? 'Obligatoire' : null,
-                  autofocus: true,
-                  onChanged: (_) => setState(() {}),
-                ),
-                const SizedBox(height: 6),
-                Align(
-                  alignment: Alignment.centerRight,
-                  child: Text(
-                    'Aperçu: $_amountPreview',
-                    style: Theme.of(context).textTheme.bodySmall,
-                  ),
-                ),
-
-                const SizedBox(height: 12),
-
-                // Catégorie (Autocomplete + filtrage par type)
-                _CategoryAutocomplete(
-                  controller: _categoryCtrl,
-                  initialSelected: _selectedCategory,
-                  optionsBuilder: (text) => _filteredCategories(query: text),
-                  onSelected: (c) => setState(() => _setCategory(c)),
-                  onClear: () => setState(() => _clearCategory()),
-                  labelText: 'Catégorie',
-                  emptyHint: isDebit
-                      ? 'Aucune catégorie Débit'
-                      : 'Aucune catégorie Crédit',
-                ),
-
-                const SizedBox(height: 12),
-
-                // Tiers (Société & Client)
-                Card(
-                  child: Padding(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 12,
-                      vertical: 12,
-                    ),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                    Row(
                       children: [
-                        Text(
-                          'Tiers',
-                          style: Theme.of(context).textTheme.titleMedium,
+                        Icon(icon, color: color),
+                        const SizedBox(width: 8),
+                        const Text(
+                          "Type d'écriture",
+                          style: TextStyle(fontWeight: FontWeight.w600),
                         ),
-                        const SizedBox(height: 8),
-
-                        // IMPORTANT: typage <String?> pour accepter null
-                        DropdownButtonFormField<String?>(
-                          value: _companyId,
-                          isDense: true,
-                          items: [
-                            const DropdownMenuItem<String?>(
-                              value: null,
-                              child: Text('— Aucune société —'),
-                            ),
-                            ..._companies.map(
-                              (co) => DropdownMenuItem<String?>(
-                                value: co.id,
-                                child: Text(
-                                  '${co.name} (${co.code})',
-                                  maxLines: 1,
-                                  overflow: TextOverflow.ellipsis,
-                                ),
-                              ),
-                            ),
-                          ],
-                          onChanged: (v) => _onSelectCompany(v),
-                          decoration: const InputDecoration(
-                            border: OutlineInputBorder(),
-                            labelText: 'Société',
-                            isDense: true,
-                          ),
-                        ),
-                        const SizedBox(height: 8),
-
-                        DropdownButtonFormField<String?>(
-                          value: _customerId,
-                          isDense: true,
-                          items: [
-                            const DropdownMenuItem<String?>(
-                              value: null,
-                              child: Text('— Aucun client —'),
-                            ),
-                            ..._customers.map(
-                              (cu) => DropdownMenuItem<String?>(
-                                value: cu.id,
-                                child: Text(
-                                  cu.fullName,
-                                  maxLines: 1,
-                                  overflow: TextOverflow.ellipsis,
-                                ),
-                              ),
-                            ),
-                          ],
-                          onChanged: (v) => setState(() => _customerId = v),
-                          decoration: const InputDecoration(
-                            border: OutlineInputBorder(),
-                            labelText: 'Client',
-                            isDense: true,
+                        const Spacer(),
+                        Chip(
+                          label: Text(label),
+                          avatar: Icon(
+                            isDebit ? Icons.arrow_downward : Icons.arrow_upward,
+                            size: 18,
                           ),
                         ),
                       ],
                     ),
-                  ),
+                    const SizedBox(height: 12),
+                    TextFormField(
+                      controller: amountCtrl,
+                      keyboardType: const TextInputType.numberWithOptions(
+                        decimal: true,
+                      ),
+                      textAlign: TextAlign.center,
+                      style: Theme.of(context).textTheme.headlineMedium,
+                      decoration: const InputDecoration(
+                        border: OutlineInputBorder(),
+                        labelText: 'Montant',
+                      ),
+                      validator: (v) => (v == null || v.trim().isEmpty)
+                          ? 'Obligatoire'
+                          : null,
+                      autofocus: true,
+                      onChanged: (_) => setState(() {}),
+                      textInputAction: TextInputAction.done,
+                      onFieldSubmitted: (_) => _save(),
+                    ),
+                    const SizedBox(height: 6),
+                    Align(
+                      alignment: Alignment.centerRight,
+                      child: Text(
+                        'Aperçu: $_amountPreview',
+                        style: Theme.of(context).textTheme.bodySmall,
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    _CategoryAutocomplete(
+                      controller: _categoryCtrl,
+                      initialSelected: _selectedCategory,
+                      optionsBuilder: (text) =>
+                          _filteredCategories(query: text),
+                      onSelected: (c) => setState(() => _setCategory(c)),
+                      onClear: () => setState(() => _clearCategory()),
+                      labelText: 'Catégorie',
+                      emptyHint: isDebit
+                          ? 'Aucune catégorie Débit'
+                          : 'Aucune catégorie Crédit',
+                    ),
+                    const SizedBox(height: 12),
+                    Card(
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 12,
+                          vertical: 12,
+                        ),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.stretch,
+                          children: [
+                            Text(
+                              'Tiers',
+                              style: Theme.of(context).textTheme.titleMedium,
+                            ),
+                            const SizedBox(height: 8),
+                            DropdownButtonFormField<String?>(
+                              value: _companyId,
+                              isDense: true,
+                              items: [
+                                const DropdownMenuItem<String?>(
+                                  value: null,
+                                  child: Text('— Aucune société —'),
+                                ),
+                                ..._companies.map(
+                                  (co) => DropdownMenuItem<String?>(
+                                    value: co.id,
+                                    child: Text(
+                                      '${co.name} (${co.code})',
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                    ),
+                                  ),
+                                ),
+                              ],
+                              onChanged: (v) => _onSelectCompany(v),
+                              decoration: const InputDecoration(
+                                border: OutlineInputBorder(),
+                                labelText: 'Société',
+                                isDense: true,
+                              ),
+                            ),
+                            const SizedBox(height: 8),
+                            DropdownButtonFormField<String?>(
+                              value: _customerId,
+                              isDense: true,
+                              items: [
+                                const DropdownMenuItem<String?>(
+                                  value: null,
+                                  child: Text('— Aucun client —'),
+                                ),
+                                ..._customers.map(
+                                  (cu) => DropdownMenuItem<String?>(
+                                    value: cu.id,
+                                    child: Text(
+                                      cu.fullName,
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                    ),
+                                  ),
+                                ),
+                              ],
+                              onChanged: (v) => setState(() => _customerId = v),
+                              decoration: const InputDecoration(
+                                border: OutlineInputBorder(),
+                                labelText: 'Client',
+                                isDense: true,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: OutlinedButton.icon(
+                            onPressed: _openProductPicker,
+                            icon: const Icon(Icons.add_shopping_cart),
+                            label: Text(
+                              _items.isEmpty
+                                  ? 'Ajouter des produits'
+                                  : 'Modifier les produits',
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        if (_items.isNotEmpty)
+                          Wrap(
+                            spacing: 6,
+                            children: [
+                              Chip(label: Text('${_items.length} produit(s)')),
+                              Chip(
+                                label: Text(
+                                  'Total: ${Formatters.amountFromCents(_itemsTotalCents)}',
+                                ),
+                              ),
+                              IconButton(
+                                tooltip: 'Vider',
+                                onPressed: () {
+                                  setState(() {
+                                    _items.clear();
+                                  });
+                                  _syncAmountFromItems();
+                                },
+                                icon: const Icon(Icons.delete_sweep),
+                              ),
+                            ],
+                          ),
+                      ],
+                    ),
+                    if (_items.isNotEmpty) const SizedBox(height: 8),
+                    if (_items.isNotEmpty)
+                      ListView.separated(
+                        shrinkWrap: true,
+                        physics: const NeverScrollableScrollPhysics(),
+                        itemCount: _items.length,
+                        separatorBuilder: (_, __) => const Divider(height: 1),
+                        itemBuilder: (_, i) {
+                          final it = _items[i];
+                          final lineTotal = it.unitPriceCents * it.quantity;
+                          return ListTile(
+                            dense: true,
+                            leading: const Icon(Icons.shopping_bag),
+                            title: Text(
+                              it.label.isEmpty ? 'Produit' : it.label,
+                            ),
+                            subtitle: Text(
+                              'Qté: ${it.quantity} • PU: '
+                              '${Formatters.amountFromCents(it.unitPriceCents)}',
+                            ),
+                            trailing: Text(
+                              Formatters.amountFromCents(lineTotal),
+                            ),
+                            onTap: _openProductPicker,
+                          );
+                        },
+                      ),
+                    const SizedBox(height: 12),
+                    ListTile(
+                      contentPadding: EdgeInsets.zero,
+                      title: const Text('Date'),
+                      subtitle: Text(Formatters.dateFull(when)),
+                      trailing: const Icon(Icons.calendar_today),
+                      onTap: _pickDate,
+                    ),
+                    const SizedBox(height: 12),
+                    TextFormField(
+                      controller: descCtrl,
+                      decoration: const InputDecoration(
+                        border: OutlineInputBorder(),
+                        labelText: 'Description (optionnel)',
+                      ),
+                      textInputAction: TextInputAction.done,
+                      onFieldSubmitted: (_) => _save(),
+                    ),
+                    const SizedBox(height: 8),
+                  ],
                 ),
-
-                const SizedBox(height: 12),
-
-                // Date
-                ListTile(
-                  contentPadding: EdgeInsets.zero,
-                  title: const Text('Date'),
-                  subtitle: Text(Formatters.dateFull(when)),
-                  trailing: const Icon(Icons.calendar_today),
-                  onTap: _pickDate,
-                ),
-
-                const SizedBox(height: 12),
-
-                // Description
-                TextFormField(
-                  controller: descCtrl,
-                  decoration: const InputDecoration(
-                    border: OutlineInputBorder(),
-                    labelText: 'Description (optionnel)',
-                  ),
-                ),
-
-                const SizedBox(height: 8),
-              ],
+              ),
             ),
           ),
         ),
@@ -454,18 +549,34 @@ class _TransactionQuickAddSheetState
   }
 }
 
-/// Autocomplete pour les catégories, avec UI matérielle.
-/// - `optionsBuilder(query)` retourne la liste filtrée (par type + recherche).
+class _TxItem {
+  final String productId;
+  final String label;
+  final int unitPriceCents;
+  final int quantity;
+  const _TxItem({
+    required this.productId,
+    required this.label,
+    required this.unitPriceCents,
+    required this.quantity,
+  });
+}
+
+class _SubmitFormIntent extends Intent {
+  const _SubmitFormIntent();
+}
+
 class _CategoryAutocomplete extends StatelessWidget {
   final TextEditingController controller;
   final Category? initialSelected;
   final List<Category> Function(String query) optionsBuilder;
   final void Function(Category) onSelected;
-  final VoidCallback onClear; // callback clear
+  final VoidCallback onClear;
   final String labelText;
   final String emptyHint;
 
   const _CategoryAutocomplete({
+    super.key,
     required this.controller,
     required this.initialSelected,
     required this.optionsBuilder,
@@ -487,13 +598,10 @@ class _CategoryAutocomplete extends StatelessWidget {
           ((c.description?.isNotEmpty ?? false) ? ' — ${c.description}' : ''),
       fieldViewBuilder:
           (context, textEditingController, focusNode, onFieldSubmitted) {
-            // Lier notre controller initial une fois
             if (controller.text.isNotEmpty &&
                 textEditingController.text.isEmpty) {
               textEditingController.text = controller.text;
             }
-
-            // Afficher/masquer l’icône clear selon le texte
             return ValueListenableBuilder<TextEditingValue>(
               valueListenable: textEditingController,
               builder: (context, value, _) {
@@ -508,7 +616,6 @@ class _CategoryAutocomplete extends StatelessWidget {
                             tooltip: 'Effacer',
                             icon: const Icon(Icons.clear),
                             onPressed: () {
-                              // Efface le champ ET la sélection parent
                               textEditingController.clear();
                               controller.clear();
                               onClear();
@@ -516,10 +623,7 @@ class _CategoryAutocomplete extends StatelessWidget {
                           )
                         : null,
                   ),
-                  onChanged: (v) {
-                    // garder les deux en phase
-                    controller.value = textEditingController.value;
-                  },
+                  textInputAction: TextInputAction.next,
                 );
               },
             );
@@ -576,6 +680,32 @@ class _CategoryAutocomplete extends StatelessWidget {
         controller.text = c.code;
         onSelected(c);
       },
+    );
+  }
+}
+
+class _ProductPickerPanelPlaceholder extends StatelessWidget {
+  const _ProductPickerPanelPlaceholder();
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(
+        title: const Text('Sélectionner des produits'),
+        actions: [
+          TextButton(
+            onPressed: () =>
+                Navigator.of(context).pop(<Map<String, Object?>>[]),
+            child: const Text('Valider'),
+          ),
+        ],
+      ),
+      body: const Center(
+        child: Text(
+          'Placeholder sélecteur de produits.\nDemandez le fichier product_picker_panel.dart pour l’implémentation.',
+          textAlign: TextAlign.center,
+        ),
+      ),
     );
   }
 }
