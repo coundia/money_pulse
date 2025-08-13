@@ -1,10 +1,9 @@
-// ProductPickerPanel: right-drawer to search, pick products, adjust quantity and unit price with enhanced UX and Enter-to-validate.
+// ProductPickerPanel: minimalist and responsive right-drawer to pick products with qty/price editing and Enter-to-validate.
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:money_pulse/presentation/shared/formatters.dart';
 import 'package:money_pulse/domain/products/entities/product.dart';
-
 import 'product_repo_provider.dart';
 
 class ProductPickerPanel extends ConsumerStatefulWidget {
@@ -18,6 +17,7 @@ class ProductPickerPanel extends ConsumerStatefulWidget {
 class _ProductPickerPanelState extends ConsumerState<ProductPickerPanel> {
   final searchCtrl = TextEditingController();
   final Map<String, _Line> _selected = {};
+  final Map<String, TextEditingController> _qtyCtrls = {};
   List<Product> _all = const [];
   bool _loading = false;
   bool _onlySelected = false;
@@ -40,7 +40,7 @@ class _ProductPickerPanelState extends ConsumerState<ProductPickerPanel> {
         for (final m in widget.initialLines) {
           final id = m['productId'] as String?;
           if (id == null) continue;
-          final p = items.where((e) => e.id == id).isNotEmpty
+          final p = items.any((e) => e.id == id)
               ? items.firstWhere((e) => e.id == id)
               : Product(
                   id: id,
@@ -48,14 +48,13 @@ class _ProductPickerPanelState extends ConsumerState<ProductPickerPanel> {
                   createdAt: DateTime.now(),
                   updatedAt: DateTime.now(),
                 );
-          _selected[id] = _Line(
-            product: p,
-            quantity: (m['quantity'] as int?) ?? 1,
-            unitPriceCents:
-                (m['unitPriceCents'] as int?) ??
-                (m['unitPrice'] as int?) ??
-                p.defaultPrice,
-          );
+          final q = (m['quantity'] as int?) ?? 1;
+          final up =
+              (m['unitPriceCents'] as int?) ??
+              (m['unitPrice'] as int?) ??
+              p.defaultPrice;
+          _selected[id] = _Line(product: p, quantity: q, unitPriceCents: up);
+          _ensureQtyCtrl(id, q);
         }
       });
     } catch (_) {
@@ -67,7 +66,22 @@ class _ProductPickerPanelState extends ConsumerState<ProductPickerPanel> {
   @override
   void dispose() {
     searchCtrl.dispose();
+    for (final c in _qtyCtrls.values) {
+      c.dispose();
+    }
     super.dispose();
+  }
+
+  TextEditingController _ensureQtyCtrl(String id, int initial) {
+    return _qtyCtrls.putIfAbsent(
+      id,
+      () => TextEditingController(text: initial.toString()),
+    );
+  }
+
+  void _disposeQtyCtrl(String id) {
+    final c = _qtyCtrls.remove(id);
+    c?.dispose();
   }
 
   List<Product> get _source {
@@ -108,21 +122,21 @@ class _ProductPickerPanelState extends ConsumerState<ProductPickerPanel> {
     return list;
   }
 
-  int get _totalCents => _selected.values.fold(
-    0,
-    (sum, l) => sum + (l.unitPriceCents * l.quantity),
-  );
+  int get _totalCents =>
+      _selected.values.fold(0, (s, l) => s + (l.unitPriceCents * l.quantity));
 
   void _toggle(Product p) {
     setState(() {
       if (_selected.containsKey(p.id)) {
         _selected.remove(p.id);
+        _disposeQtyCtrl(p.id);
       } else {
         _selected[p.id] = _Line(
           product: p,
           quantity: 1,
           unitPriceCents: p.defaultPrice,
         );
+        _ensureQtyCtrl(p.id, 1);
       }
     });
   }
@@ -133,8 +147,10 @@ class _ProductPickerPanelState extends ConsumerState<ProductPickerPanel> {
       final cur = _selected[p.id] ?? _Line(product: p);
       if (qty == 0) {
         _selected.remove(p.id);
+        _disposeQtyCtrl(p.id);
       } else {
         _selected[p.id] = cur.copyWith(quantity: qty);
+        _ensureQtyCtrl(p.id, qty).text = qty.toString();
       }
     });
   }
@@ -148,6 +164,7 @@ class _ProductPickerPanelState extends ConsumerState<ProductPickerPanel> {
           quantity: 1,
           unitPriceCents: p.defaultPrice,
         );
+        _ensureQtyCtrl(p.id, 1);
       });
     } else {
       _setQty(p, cur.quantity + 1);
@@ -164,10 +181,9 @@ class _ProductPickerPanelState extends ConsumerState<ProductPickerPanel> {
     if (cents < 0) cents = 0;
     setState(() {
       final cur = _selected[p.id] ?? _Line(product: p, quantity: 1);
-      _selected[p.id] = cur.copyWith(
-        unitPriceCents: cents,
-        quantity: cur.quantity == 0 ? 1 : cur.quantity,
-      );
+      final fixedQty = cur.quantity == 0 ? 1 : cur.quantity;
+      _selected[p.id] = cur.copyWith(unitPriceCents: cents, quantity: fixedQty);
+      _ensureQtyCtrl(p.id, fixedQty);
     });
   }
 
@@ -203,53 +219,6 @@ class _ProductPickerPanelState extends ConsumerState<ProductPickerPanel> {
     if (res != null) _setPrice(p, res);
   }
 
-  Future<void> _editQtyDialog(Product p) async {
-    final cur = _selected[p.id];
-    final init = cur?.quantity ?? 1;
-    final ctrl = TextEditingController(text: init.toString());
-    final res = await showDialog<int>(
-      context: context,
-      builder: (d) => AlertDialog(
-        title: const Text('Quantité'),
-        content: TextField(
-          controller: ctrl,
-          keyboardType: TextInputType.number,
-          inputFormatters: [FilteringTextInputFormatter.digitsOnly],
-          decoration: const InputDecoration(
-            labelText: 'Quantité',
-            hintText: '1',
-          ),
-          autofocus: true,
-          onSubmitted: (_) =>
-              Navigator.of(d).pop(int.tryParse(ctrl.text.trim()) ?? init),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(d).pop(),
-            child: const Text('Annuler'),
-          ),
-          FilledButton(
-            onPressed: () =>
-                Navigator.of(d).pop(int.tryParse(ctrl.text.trim()) ?? init),
-            child: const Text('Valider'),
-          ),
-        ],
-      ),
-    );
-    if (res != null) _setQty(p, res);
-  }
-
-  void _bulkApplyDefaultPrices() {
-    setState(() {
-      for (final id in _selected.keys.toList()) {
-        final line = _selected[id]!;
-        _selected[id] = line.copyWith(
-          unitPriceCents: line.product.defaultPrice,
-        );
-      }
-    });
-  }
-
   int _toCents(String v) {
     final s = v.replaceAll(RegExp(r'\s'), '').replaceAll(',', '.');
     final d = double.tryParse(s) ?? 0;
@@ -257,7 +226,12 @@ class _ProductPickerPanelState extends ConsumerState<ProductPickerPanel> {
   }
 
   void _clearAll() {
-    setState(() => _selected.clear());
+    setState(() {
+      _selected.clear();
+      for (final id in _qtyCtrls.keys.toList()) {
+        _disposeQtyCtrl(id);
+      }
+    });
   }
 
   void _submit() {
@@ -285,6 +259,13 @@ class _ProductPickerPanelState extends ConsumerState<ProductPickerPanel> {
   @override
   Widget build(BuildContext context) {
     final loading = _loading;
+    final width = MediaQuery.of(context).size.width;
+    final trailingMax = width < 340
+        ? 108.0
+        : width < 400
+        ? 136.0
+        : 168.0;
+
     return Shortcuts(
       shortcuts: <LogicalKeySet, Intent>{
         LogicalKeySet(LogicalKeyboardKey.enter): const _SubmitIntent(),
@@ -327,21 +308,11 @@ class _ProductPickerPanelState extends ConsumerState<ProductPickerPanel> {
                     Expanded(
                       child: TextField(
                         controller: searchCtrl,
-                        decoration: InputDecoration(
-                          labelText: 'Rechercher un produit',
-                          border: const OutlineInputBorder(),
+                        decoration: const InputDecoration(
+                          labelText: 'Rechercher',
+                          border: OutlineInputBorder(),
                           isDense: true,
-                          prefixIcon: const Icon(Icons.search),
-                          suffixIcon: searchCtrl.text.isEmpty
-                              ? null
-                              : IconButton(
-                                  tooltip: 'Effacer',
-                                  onPressed: () {
-                                    searchCtrl.clear();
-                                    setState(() {});
-                                  },
-                                  icon: const Icon(Icons.clear),
-                                ),
+                          prefixIcon: Icon(Icons.search),
                         ),
                         onChanged: (_) => setState(() {}),
                         textInputAction: TextInputAction.search,
@@ -351,20 +322,14 @@ class _ProductPickerPanelState extends ConsumerState<ProductPickerPanel> {
                     const SizedBox(width: 8),
                     PopupMenuButton<_SortBy>(
                       tooltip: 'Trier',
-                      icon: const Icon(Icons.sort),
+                      icon: const Icon(Icons.filter_list),
                       onSelected: (v) => setState(() => _sortBy = v),
                       itemBuilder: (c) => const [
-                        PopupMenuItem(
-                          value: _SortBy.name,
-                          child: Text('Tri: nom'),
-                        ),
-                        PopupMenuItem(
-                          value: _SortBy.code,
-                          child: Text('Tri: code'),
-                        ),
+                        PopupMenuItem(value: _SortBy.name, child: Text('Nom')),
+                        PopupMenuItem(value: _SortBy.code, child: Text('Code')),
                         PopupMenuItem(
                           value: _SortBy.price,
-                          child: Text('Tri: prix défaut'),
+                          child: Text('Prix défaut'),
                         ),
                       ],
                     ),
@@ -373,28 +338,22 @@ class _ProductPickerPanelState extends ConsumerState<ProductPickerPanel> {
               ),
               Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 12),
-                child: Row(
+                child: Wrap(
+                  spacing: 8,
+                  runSpacing: 8,
+                  crossAxisAlignment: WrapCrossAlignment.center,
                   children: [
                     FilterChip(
                       label: Text('Sélection: ${_selected.length}'),
                       selected: _onlySelected,
                       onSelected: (v) => setState(() => _onlySelected = v),
                     ),
-                    const SizedBox(width: 8),
                     InputChip(
-                      avatar: const Icon(Icons.summarize, size: 18),
+                      avatar: const Icon(Icons.payments, size: 18),
                       label: Text(
                         'Total: ${Formatters.amountFromCents(_totalCents)}',
                       ),
                       onPressed: _selected.isEmpty ? null : _submit,
-                    ),
-                    const Spacer(),
-                    TextButton.icon(
-                      onPressed: _selected.isEmpty
-                          ? null
-                          : _bulkApplyDefaultPrices,
-                      icon: const Icon(Icons.price_change),
-                      label: const Text('Prix par défaut'),
                     ),
                   ],
                 ),
@@ -414,16 +373,19 @@ class _ProductPickerPanelState extends ConsumerState<ProductPickerPanel> {
                           itemBuilder: (_, i) {
                             final p = _source[i];
                             final sel = _selected[p.id];
-                            final qty = sel?.quantity ?? 0;
+                            final qty = sel?.quantity ?? 1;
                             final unit = sel?.unitPriceCents ?? p.defaultPrice;
                             final lineTotal = unit * qty;
                             final selected = _selected.containsKey(p.id);
+                            final qtyCtrl = _ensureQtyCtrl(p.id, qty);
+
                             return ListTile(
                               contentPadding: const EdgeInsets.symmetric(
                                 horizontal: 12,
                                 vertical: 6,
                               ),
                               leading: Checkbox(
+                                visualDensity: VisualDensity.compact,
                                 value: selected,
                                 onChanged: (_) => _toggle(p),
                               ),
@@ -432,56 +394,28 @@ class _ProductPickerPanelState extends ConsumerState<ProductPickerPanel> {
                                 maxLines: 1,
                                 overflow: TextOverflow.ellipsis,
                               ),
-                              subtitle: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
+                              subtitle: Row(
                                 children: [
                                   Text(
-                                    (p.code?.isNotEmpty ?? false)
-                                        ? 'Code: ${p.code}'
-                                        : (p.barcode?.isNotEmpty ?? false)
-                                        ? 'Code-barres: ${p.barcode}'
-                                        : 'Sans code',
-                                    style: const TextStyle(fontSize: 12),
-                                  ),
-                                  const SizedBox(height: 4),
-                                  Row(
-                                    children: [
-                                      InkWell(
-                                        onTap: () => _editPriceDialog(p),
-                                        child: Chip(
-                                          label: Text(
-                                            unit == 0
-                                                ? 'Prix: —'
-                                                : 'Prix: ${Formatters.amountFromCents(unit)}',
-                                          ),
-                                          avatar: const Icon(
-                                            Icons.sell,
-                                            size: 16,
-                                          ),
-                                        ),
-                                      ),
-                                      const SizedBox(width: 8),
-                                      InkWell(
-                                        onTap: () => _editQtyDialog(p),
-                                        child: Chip(
-                                          label: Text('Qté: $qty'),
-                                          avatar: const Icon(
-                                            Icons.numbers,
-                                            size: 16,
-                                          ),
-                                        ),
-                                      ),
-                                    ],
+                                    lineTotal == 0
+                                        ? '—'
+                                        : Formatters.amountFromCents(lineTotal),
+                                    style: const TextStyle(
+                                      fontWeight: FontWeight.w600,
+                                    ),
                                   ),
                                 ],
                               ),
-                              trailing: SizedBox(
-                                width: 148,
+                              trailing: ConstrainedBox(
+                                constraints: BoxConstraints(
+                                  maxWidth: trailingMax,
+                                ),
                                 child: Row(
-                                  mainAxisAlignment: MainAxisAlignment.end,
+                                  mainAxisSize: MainAxisSize.min,
                                   children: [
                                     IconButton(
                                       tooltip: 'Réduire',
+                                      visualDensity: VisualDensity.compact,
                                       onPressed: selected
                                           ? () => _decQty(p)
                                           : null,
@@ -489,27 +423,46 @@ class _ProductPickerPanelState extends ConsumerState<ProductPickerPanel> {
                                         Icons.remove_circle_outline,
                                       ),
                                     ),
-                                    Text(
-                                      '$qty',
-                                      style: const TextStyle(
-                                        fontWeight: FontWeight.w600,
+                                    SizedBox(
+                                      width: 44,
+                                      child: TextField(
+                                        controller: qtyCtrl,
+                                        textAlign: TextAlign.center,
+                                        keyboardType: TextInputType.number,
+                                        inputFormatters: [
+                                          FilteringTextInputFormatter
+                                              .digitsOnly,
+                                        ],
+                                        decoration: const InputDecoration(
+                                          isDense: true,
+                                          border: OutlineInputBorder(),
+                                        ),
+                                        onChanged: (v) => _setQty(
+                                          p,
+                                          int.tryParse(v.trim()) ?? 0,
+                                        ),
+                                        onSubmitted: (_) => _submit(),
                                       ),
                                     ),
                                     IconButton(
                                       tooltip: 'Augmenter',
+                                      visualDensity: VisualDensity.compact,
                                       onPressed: () => _incQty(p),
                                       icon: const Icon(
                                         Icons.add_circle_outline,
                                       ),
+                                    ),
+                                    IconButton(
+                                      tooltip: 'Prix',
+                                      visualDensity: VisualDensity.compact,
+                                      onPressed: () => _editPriceDialog(p),
+                                      icon: const Icon(Icons.sell),
                                     ),
                                   ],
                                 ),
                               ),
                               onTap: () => _toggle(p),
                               selected: selected,
-                              selectedTileColor: Theme.of(
-                                context,
-                              ).colorScheme.surfaceContainerHighest,
                               dense: true,
                             );
                           },
@@ -517,22 +470,14 @@ class _ProductPickerPanelState extends ConsumerState<ProductPickerPanel> {
                 ),
               SafeArea(
                 top: false,
-                child: Container(
+                child: Padding(
                   padding: const EdgeInsets.fromLTRB(12, 8, 12, 12),
                   child: Row(
                     children: [
                       Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text('Sélection: ${_selected.length} article(s)'),
-                            Text(
-                              'Total: ${Formatters.amountFromCents(_totalCents)}',
-                              style: const TextStyle(
-                                fontWeight: FontWeight.bold,
-                              ),
-                            ),
-                          ],
+                        child: Text(
+                          'Total: ${Formatters.amountFromCents(_totalCents)}',
+                          style: const TextStyle(fontWeight: FontWeight.bold),
                         ),
                       ),
                       FilledButton.icon(
