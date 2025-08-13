@@ -1,18 +1,16 @@
+/// Read-only product view panel shown in a right drawer, augmented with per-company stock details and totals.
 import 'package:flutter/material.dart';
-import 'package:intl/intl.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'package:money_pulse/domain/products/entities/product.dart';
 import 'package:money_pulse/presentation/shared/formatters.dart';
 
-/// Panneau lecture seule pour afficher les détails d'un produit,
-/// destiné à être affiché dans un right drawer (voir `showRightDrawer`).
-class ProductViewPanel extends StatelessWidget {
+import 'package:money_pulse/domain/stock/repositories/stock_level_repository.dart';
+import 'package:money_pulse/presentation/features/stock/providers/stock_level_repo_provider.dart';
+
+class ProductViewPanel extends ConsumerWidget {
   final Product product;
-
-  /// Libellé lisible de la catégorie (ex: code ou nom). Optionnel.
   final String? categoryLabel;
-
-  /// Actions externes (la page parente gère la logique).
   final VoidCallback? onEdit;
   final VoidCallback? onDelete;
   final VoidCallback? onShare;
@@ -26,14 +24,10 @@ class ProductViewPanel extends StatelessWidget {
     this.onShare,
   });
 
-  String _money(int cents) {
-    final v = cents / 100.0;
-    // Pas de symbole ici; laissez l’AppBar/Balance gérer la devise
-    return NumberFormat.currency(symbol: '', decimalDigits: 0).format(v);
-  }
+  String _money(int cents) => Formatters.amountFromCents(cents);
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final title = (product.name?.isNotEmpty == true)
         ? product.name!
         : (product.code ?? 'Produit');
@@ -44,6 +38,12 @@ class ProductViewPanel extends StatelessWidget {
       if ((categoryLabel ?? '').isNotEmpty) 'Catégorie: $categoryLabel',
     ];
     final subtitle = subtitleParts.join('  •  ');
+
+    final q = (product.code?.trim().isNotEmpty ?? false)
+        ? product.code!.trim()
+        : (product.name?.trim() ?? '');
+
+    final asyncLevels = ref.watch(_stockSearchProvider(q));
 
     return Scaffold(
       appBar: AppBar(
@@ -59,14 +59,12 @@ class ProductViewPanel extends StatelessWidget {
             icon: const Icon(Icons.edit_outlined),
             onPressed: onEdit,
           ),
-
           const SizedBox(width: 4),
         ],
       ),
       body: ListView(
         padding: const EdgeInsets.all(16),
         children: [
-          // En-tête
           Row(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
@@ -109,7 +107,6 @@ class ProductViewPanel extends StatelessWidget {
 
           const SizedBox(height: 16),
 
-          // Chips info
           Wrap(
             spacing: 8,
             runSpacing: 8,
@@ -132,7 +129,6 @@ class ProductViewPanel extends StatelessWidget {
 
           const SizedBox(height: 16),
 
-          // Description
           if ((product.description ?? '').isNotEmpty) ...[
             Text('Description', style: Theme.of(context).textTheme.titleMedium),
             const SizedBox(height: 8),
@@ -140,7 +136,6 @@ class ProductViewPanel extends StatelessWidget {
             const SizedBox(height: 16),
           ],
 
-          // Détails techniques
           Text('Détails', style: Theme.of(context).textTheme.titleMedium),
           const SizedBox(height: 8),
           _KeyValueRow('Nom', product.name ?? '—'),
@@ -174,7 +169,105 @@ class ProductViewPanel extends StatelessWidget {
 
           const SizedBox(height: 24),
 
-          // Actions secondaires (optionnelles)
+          Text('Stock', style: Theme.of(context).textTheme.titleMedium),
+          const SizedBox(height: 8),
+          asyncLevels.when(
+            data: (rows) {
+              final filtered = rows.where((r) {
+                if ((product.code ?? '').isNotEmpty) {
+                  return r.productLabel.toLowerCase().contains(
+                    product.code!.toLowerCase(),
+                  );
+                }
+                if ((product.name ?? '').isNotEmpty) {
+                  return r.productLabel.toLowerCase().contains(
+                    product.name!.toLowerCase(),
+                  );
+                }
+                return true;
+              }).toList();
+
+              if (filtered.isEmpty) {
+                return _EmptyStockCard(
+                  hint: "Aucun niveau de stock trouvé pour ce produit.",
+                );
+              }
+
+              final totalOnHand = filtered.fold<int>(
+                0,
+                (p, e) => p + e.stockOnHand,
+              );
+              final totalAllocated = filtered.fold<int>(
+                0,
+                (p, e) => p + e.stockAllocated,
+              );
+
+              return Card(
+                child: Padding(
+                  padding: const EdgeInsets.all(12),
+                  child: Column(
+                    children: [
+                      _TotalsBar(
+                        onHand: totalOnHand,
+                        allocated: totalAllocated,
+                        updatedAt: filtered.first.updatedAt,
+                      ),
+                      const SizedBox(height: 8),
+                      LayoutBuilder(
+                        builder: (context, c) {
+                          final isWide = c.maxWidth > 520;
+                          return SingleChildScrollView(
+                            scrollDirection: Axis.horizontal,
+                            child: DataTable(
+                              headingRowHeight: 40,
+                              dataRowMinHeight: 40,
+                              dataRowMaxHeight: 48,
+                              columns: const [
+                                DataColumn(label: Text('Société')),
+                                DataColumn(label: Text('Stock dispo')),
+                                DataColumn(label: Text('Alloué')),
+                                DataColumn(label: Text('Mis à jour')),
+                              ],
+                              rows: filtered
+                                  .map(
+                                    (e) => DataRow(
+                                      cells: [
+                                        DataCell(
+                                          SizedBox(
+                                            width: isWide ? 280 : 180,
+                                            child: Text(
+                                              e.companyLabel,
+                                              overflow: TextOverflow.ellipsis,
+                                            ),
+                                          ),
+                                        ),
+                                        DataCell(Text('${e.stockOnHand}')),
+                                        DataCell(Text('${e.stockAllocated}')),
+                                        DataCell(
+                                          Text(
+                                            Formatters.dateFull(e.updatedAt),
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  )
+                                  .toList(),
+                            ),
+                          );
+                        },
+                      ),
+                    ],
+                  ),
+                ),
+              );
+            },
+            loading: () => const _LoadingCard(),
+            error: (err, stack) =>
+                _EmptyStockCard(hint: 'Impossible de charger le stock: $err'),
+          ),
+
+          const SizedBox(height: 24),
+
           Row(
             children: [
               Expanded(
@@ -211,7 +304,139 @@ class ProductViewPanel extends StatelessWidget {
   }
 }
 
-/* ============================ UI helpers ============================ */
+final _stockSearchProvider = FutureProvider.autoDispose
+    .family<List<StockLevelRow>, String>((ref, query) async {
+      final repo = ref.read(stockLevelRepoProvider);
+      return repo.search(query: query);
+    });
+
+class _TotalsBar extends StatelessWidget {
+  final int onHand;
+  final int allocated;
+  final DateTime updatedAt;
+  const _TotalsBar({
+    required this.onHand,
+    required this.allocated,
+    required this.updatedAt,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    return Row(
+      children: [
+        Expanded(
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+            decoration: BoxDecoration(
+              color: cs.surfaceContainerHighest,
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: Column(
+              children: [
+                const Text(
+                  'Total disponible',
+                  style: TextStyle(fontWeight: FontWeight.w600),
+                ),
+                const SizedBox(height: 4),
+                Text('$onHand'),
+              ],
+            ),
+          ),
+        ),
+        const SizedBox(width: 8),
+        Expanded(
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+            decoration: BoxDecoration(
+              color: cs.surfaceContainerHighest,
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: Column(
+              children: [
+                const Text(
+                  'Total alloué',
+                  style: TextStyle(fontWeight: FontWeight.w600),
+                ),
+                const SizedBox(height: 4),
+                Text('$allocated'),
+              ],
+            ),
+          ),
+        ),
+        const SizedBox(width: 8),
+        Expanded(
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+            decoration: BoxDecoration(
+              color: cs.surfaceContainerHighest,
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: Column(
+              children: [
+                const Text(
+                  'Dernière MAJ',
+                  style: TextStyle(fontWeight: FontWeight.w600),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  Formatters.dateFull(updatedAt),
+                  textAlign: TextAlign.center,
+                ),
+              ],
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _EmptyStockCard extends StatelessWidget {
+  final String hint;
+  const _EmptyStockCard({required this.hint});
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Row(
+          children: [
+            Icon(Icons.inventory_2_outlined, color: cs.primary),
+            const SizedBox(width: 12),
+            Expanded(child: Text(hint)),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _LoadingCard extends StatelessWidget {
+  const _LoadingCard();
+
+  @override
+  Widget build(BuildContext context) {
+    return Card(
+      child: SizedBox(
+        height: 96,
+        child: Center(
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: const [
+              SizedBox(width: 12),
+              CircularProgressIndicator(),
+              SizedBox(width: 12),
+              Text('Chargement du stock…'),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
 
 class _KeyValueRow extends StatelessWidget {
   final String k;

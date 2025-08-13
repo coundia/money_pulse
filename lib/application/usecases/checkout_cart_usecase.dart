@@ -1,4 +1,4 @@
-/// Use case that creates a transaction with items and updates stock levels per productVariant and company in the same SQL transaction.
+/// Use case that creates a transaction with items and properly updates stock levels per product (TEXT id) and company in the same SQL transaction, with change_log entries.
 import 'package:uuid/uuid.dart';
 import 'package:sqflite/sqflite.dart';
 import 'package:money_pulse/infrastructure/db/app_database.dart';
@@ -10,15 +10,14 @@ class CheckoutCartUseCase {
   CheckoutCartUseCase(this.db, this.accountRepo);
 
   Future<String> execute({
-    required String typeEntry, // 'CREDIT' (sale) or 'DEBIT' (purchase)
+    required String typeEntry,
     String? accountId,
     String? categoryId,
     String? description,
     String? companyId,
     String? customerId,
     DateTime? when,
-    required List<Map<String, Object?>>
-    lines, // {productId, label, quantity, unitPrice}
+    required List<Map<String, Object?>> lines,
   }) async {
     final t = typeEntry.toUpperCase();
     if (t != 'CREDIT' && t != 'DEBIT') {
@@ -132,7 +131,7 @@ class CheckoutCartUseCase {
           operation=excluded.operation,
           payload=excluded.payload,
           updatedAt=excluded.updatedAt
-      ''',
+        ''',
         [
           idLog,
           'transaction_entry',
@@ -168,16 +167,14 @@ class CheckoutCartUseCase {
     }
     if (company == null || company.isEmpty) return;
 
-    final Map<int, int> totalsByVariant = {};
+    final Map<String, int> totalsByVariant = {};
     for (final l in lines) {
-      final pid = l['productId'];
+      final pid = l['productId']?.toString();
       final qty = (l['quantity'] is int)
           ? l['quantity'] as int
           : int.tryParse('${l['quantity'] ?? 0}') ?? 0;
-      final pvId = pid is int ? pid : int.tryParse('${pid ?? ''}');
-      if (pvId == null || qty == 0) continue;
-      totalsByVariant[pvId] =
-          (totalsByVariant[pvId] ?? 0) + (qty < 0 ? 0 : qty);
+      if (pid == null || pid.isEmpty || qty <= 0) continue;
+      totalsByVariant[pid] = (totalsByVariant[pid] ?? 0) + qty;
     }
     if (totalsByVariant.isEmpty) return;
 
@@ -187,11 +184,12 @@ class CheckoutCartUseCase {
       final pvId = entry.key;
       final qty = entry.value * sign;
 
-      final exists = await txn.rawQuery(
+      final row = await txn.rawQuery(
         "SELECT id FROM stock_level WHERE productVariantId=? AND companyId=? LIMIT 1",
         [pvId, company],
       );
-      if (exists.isEmpty) {
+
+      if (row.isEmpty) {
         await txn.insert('stock_level', {
           'productVariantId': pvId,
           'companyId': company,
@@ -200,12 +198,62 @@ class CheckoutCartUseCase {
           'createdAt': nowIso,
           'updatedAt': nowIso,
         }, conflictAlgorithm: ConflictAlgorithm.ignore);
+        await _upsertChangeLog(
+          txn,
+          'stock_level',
+          '$pvId@$company',
+          'INSERT',
+          nowIso,
+        );
       }
 
       await txn.rawUpdate(
-        "UPDATE stock_level SET stockOnHand = stockOnHand + ?, updatedAt=? WHERE productVariantId=? AND companyId=?",
+        "UPDATE stock_level SET stockOnHand = COALESCE(stockOnHand,0) + ?, updatedAt=? WHERE productVariantId=? AND companyId=?",
         [qty, nowIso, pvId, company],
       );
+
+      await _upsertChangeLog(
+        txn,
+        'stock_level',
+        '$pvId@$company',
+        'UPDATE',
+        nowIso,
+      );
     }
+  }
+
+  Future<void> _upsertChangeLog(
+    Transaction txn,
+    String entityTable,
+    String entityId,
+    String operation,
+    String nowIso,
+  ) async {
+    final idLog = const Uuid().v4();
+    await txn.rawInsert(
+      '''
+      INSERT INTO change_log(
+        id, entityTable, entityId, operation, payload, status, attempts, error, createdAt, updatedAt, processedAt
+      )
+      VALUES(?,?,?,?,?,?,?,?,?,?,?)
+      ON CONFLICT(entityTable, entityId, status) DO UPDATE SET
+        operation=excluded.operation,
+        updatedAt=excluded.updatedAt,
+        payload=excluded.payload
+      ''',
+      [
+        idLog,
+        entityTable,
+        entityId,
+        operation,
+        null,
+        'PENDING',
+        0,
+        null,
+        nowIso,
+        nowIso,
+        null,
+      ],
+    );
   }
 }

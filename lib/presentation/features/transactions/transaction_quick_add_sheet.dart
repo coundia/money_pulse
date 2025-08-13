@@ -1,4 +1,3 @@
-// TransactionQuickAddSheet: quick add form using CheckoutCartUseCase to save with company/customer and product lines.
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -64,19 +63,28 @@ class _TransactionQuickAddSheetState
         final cos = await coRepo.findAll(
           const CompanyQuery(limit: 300, offset: 0),
         );
-        final cus = await cuRepo.findAll(
-          CustomerQuery(
-            companyId: (_companyId ?? '').isEmpty ? null : _companyId,
-            limit: 300,
-            offset: 0,
-          ),
-        );
+
+        Company? def = cos
+            .where((e) => e.isDefault == true)
+            .cast<Company?>()
+            .firstOrNull;
+        def ??= cos.isNotEmpty ? cos.first : null;
+
+        String? selectedCompanyId = def?.id;
+        List<Customer> cus = const [];
+        if (selectedCompanyId != null) {
+          cus = await cuRepo.findAll(
+            CustomerQuery(companyId: selectedCompanyId, limit: 300, offset: 0),
+          );
+        }
 
         if (!mounted) return;
         setState(() {
           _allCategories = cats;
           _companies = cos;
+          _companyId = selectedCompanyId;
           _customers = cus;
+          _customerId = null;
           _clearCategory();
         });
       } catch (_) {}
@@ -155,16 +163,28 @@ class _TransactionQuickAddSheetState
       _customers = const [];
     });
     try {
+      if (id == null || id.isEmpty) return;
       final cuRepo = ref.read(customerRepoProvider);
       final list = await cuRepo.findAll(
-        CustomerQuery(
-          companyId: (id ?? '').isEmpty ? null : id,
-          limit: 300,
-          offset: 0,
-        ),
+        CustomerQuery(companyId: id, limit: 300, offset: 0),
       );
       if (!mounted) return;
       setState(() => _customers = list);
+    } catch (_) {}
+  }
+
+  Future<void> _ensureDefaultCompanyIfMissing() async {
+    if (_companyId != null && _companyId!.isNotEmpty) return;
+    try {
+      final coRepo = ref.read(companyRepoProvider);
+      final cos = await coRepo.findAll(
+        const CompanyQuery(limit: 300, offset: 0),
+      );
+      final def =
+          cos.where((e) => e.isDefault == true).cast<Company?>().firstOrNull ??
+          (cos.isNotEmpty ? cos.first : null);
+      if (!mounted) return;
+      setState(() => _companyId = def?.id);
     } catch (_) {}
   }
 
@@ -238,6 +258,7 @@ class _TransactionQuickAddSheetState
 
   Future<void> _save() async {
     if (!formKey.currentState!.validate()) return;
+    await _ensureDefaultCompanyIfMissing();
 
     final accountId = ref.read(selectedAccountIdProvider);
     if (accountId == null || accountId.isEmpty) {
@@ -246,7 +267,6 @@ class _TransactionQuickAddSheetState
     }
 
     final cents = _toCents(amountCtrl.text);
-
     final lines = _items.isNotEmpty
         ? _items
               .map<Map<String, Object?>>(
@@ -475,6 +495,25 @@ class _TransactionQuickAddSheetState
                                 isDense: true,
                               ),
                             ),
+                            const SizedBox(height: 8),
+                            if (_items.isNotEmpty)
+                              Row(
+                                children: [
+                                  const Icon(
+                                    Icons.inventory_2_outlined,
+                                    size: 18,
+                                  ),
+                                  const SizedBox(width: 8),
+                                  Flexible(
+                                    child: Text(
+                                      isDebit
+                                          ? 'Le stock sera augmenté pour ${_items.length} produit(s) dans la société sélectionnée.'
+                                          : 'Le stock sera diminué pour ${_items.length} produit(s) dans la société sélectionnée.',
+                                      overflow: TextOverflow.ellipsis,
+                                    ),
+                                  ),
+                                ],
+                              ),
                           ],
                         ),
                       ),
