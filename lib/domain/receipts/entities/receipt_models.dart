@@ -1,3 +1,4 @@
+// Receipt models: printable data for receipts including company and customer info.
 class ReceiptLine {
   final String label;
   final int quantity;
@@ -26,6 +27,17 @@ class ReceiptData {
   final int total;
   final String? footerNote;
 
+  final String? companyName;
+  final String? companyCode;
+  final String? companyPhone;
+  final String? companyEmail;
+  final String? companyTaxId;
+  final String? companyAddress;
+
+  final String? customerName;
+  final String? customerPhone;
+  final String? customerEmail;
+
   const ReceiptData({
     required this.id,
     required this.title,
@@ -39,5 +51,14 @@ class ReceiptData {
     this.accountLabel,
     this.categoryLabel,
     this.footerNote,
+    this.companyName,
+    this.companyCode,
+    this.companyPhone,
+    this.companyEmail,
+    this.companyTaxId,
+    this.companyAddress,
+    this.customerName,
+    this.customerPhone,
+    this.customerEmail,
   });
 }

@@ -1,12 +1,11 @@
+// ReceiptPreviewPage: previews receipt with chips for date/type/total/company/customer and allows share/print/download.
 import 'dart:io';
-import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:share_plus/share_plus.dart';
 import 'package:printing/printing.dart';
-
 import 'package:money_pulse/domain/receipts/entities/receipt_models.dart';
 import 'package:money_pulse/infrastructure/receipts/receipt_text_formatter.dart';
 import 'package:money_pulse/infrastructure/receipts/receipt_pdf_renderer.dart';
@@ -15,7 +14,6 @@ import 'package:money_pulse/presentation/shared/formatters.dart';
 
 class ReceiptPreviewPage extends ConsumerWidget {
   final String transactionId;
-
   const ReceiptPreviewPage({super.key, required this.transactionId});
 
   @override
@@ -85,6 +83,8 @@ class ReceiptPreviewPage extends ConsumerWidget {
                 date: fmtDate(d.date),
                 type: d.typeEntry == 'CREDIT' ? 'Vente' : 'Dépense',
                 total: '${Formatters.amountFromCents(d.total)} ${d.currency}',
+                company: d.companyName ?? '—',
+                customer: d.customerName ?? '—',
                 accent: accent,
               ),
               const SizedBox(height: 12),
@@ -164,12 +164,16 @@ class _HeaderChips extends StatelessWidget {
   final String date;
   final String type;
   final String total;
+  final String company;
+  final String customer;
   final Color accent;
 
   const _HeaderChips({
     required this.date,
     required this.type,
     required this.total,
+    required this.company,
+    required this.customer,
     required this.accent,
   });
 
@@ -199,6 +203,18 @@ class _HeaderChips extends StatelessWidget {
           label: Text(total),
           backgroundColor: cs.surfaceContainerLow,
         ),
+        if (company.trim().isNotEmpty && company != '—')
+          Chip(
+            avatar: const Icon(Icons.business, size: 16),
+            label: Text(company),
+            backgroundColor: cs.surfaceContainerLow,
+          ),
+        if (customer.trim().isNotEmpty && customer != '—')
+          Chip(
+            avatar: const Icon(Icons.person, size: 16),
+            label: Text(customer),
+            backgroundColor: cs.surfaceContainerLow,
+          ),
       ],
     );
   }
@@ -207,7 +223,6 @@ class _HeaderChips extends StatelessWidget {
 class _ReceiptPreview extends StatefulWidget {
   final String text;
   final Color accent;
-
   const _ReceiptPreview({required this.text, required this.accent});
 
   @override

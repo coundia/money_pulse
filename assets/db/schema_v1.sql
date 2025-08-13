@@ -168,10 +168,7 @@ CREATE INDEX IF NOT EXISTS idx_item_product ON transaction_item(productId);
 CREATE INDEX IF NOT EXISTS idx_item_unit ON transaction_item(unitId);
 CREATE INDEX IF NOT EXISTS idx_item_dirty ON transaction_item(isDirty);
 CREATE INDEX IF NOT EXISTS idx_item_deleted ON transaction_item(deletedAt);
- 
- -- Tables: company, customer
--- Aligné avec le style existant (timestamps TEXT, version/isDirty, deletedAt pour soft-delete)
-PRAGMA foreign_keys = OFF;
+  
 
 -- =========================
 -- COMPANY
@@ -254,3 +251,26 @@ CREATE INDEX IF NOT EXISTS idx_customer_fullname ON customer(fullName);
 CREATE INDEX IF NOT EXISTS idx_customer_company ON customer(companyId);
 CREATE INDEX IF NOT EXISTS idx_customer_deleted ON customer(deletedAt);
 CREATE INDEX IF NOT EXISTS idx_customer_dirty ON customer(isDirty);
+
+
+CREATE TABLE stock_level
+(
+    createdAt        TEXT DEFAULT (datetime('now')) NOT NULL,
+    updatedAt        TEXT DEFAULT (datetime('now')) NOT NULL,
+    stockOnHand      INTEGER                        NOT NULL,
+    stockAllocated   INTEGER                        NOT NULL,
+    id               INTEGER                        NOT NULL PRIMARY KEY AUTOINCREMENT,
+    productVariantId INTEGER                        NOT NULL
+        REFERENCES product_variant(id) ON DELETE CASCADE,
+    companyId        TEXT                           NOT NULL
+        REFERENCES company(id) ON DELETE CASCADE
+);
+ 
+CREATE  INDEX IF NOT EXISTS IDX_stocklevel_prod_company
+    ON stock_level (productVariantId, companyId);
+
+CREATE INDEX IF NOT EXISTS IDX_stocklevel_company
+    ON stock_level (companyId);
+
+CREATE INDEX IF NOT EXISTS IDX_stocklevel_product
+    ON stock_level (productVariantId);

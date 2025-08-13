@@ -1,7 +1,7 @@
+// ReceiptPdfRenderer: builds a 58mm-style PDF receipt including company and customer info.
 import 'dart:typed_data';
 import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
-
 import 'package:money_pulse/domain/receipts/entities/receipt_models.dart';
 import 'package:printing/printing.dart';
 
@@ -32,23 +32,80 @@ class ReceiptPdfRenderer {
     );
 
     pw.Widget rowLR(String l, String r, {bool strong = false}) {
+      final s = strong ? style.copyWith(fontWeight: pw.FontWeight.bold) : style;
       return pw.Row(
         mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
         children: [
-          pw.Text(
-            l,
-            style: strong
-                ? style.copyWith(fontWeight: pw.FontWeight.bold)
-                : style,
-          ),
-          pw.Text(
-            r,
-            style: strong
-                ? style.copyWith(fontWeight: pw.FontWeight.bold)
-                : style,
-          ),
+          pw.Text(l, style: s),
+          pw.Text(r, style: s),
         ],
       );
+    }
+
+    pw.Widget headerBlock() {
+      final title = (d.storeName ?? 'Reçu').toUpperCase();
+      final sub = <String>[];
+      if ((d.companyCode ?? '').trim().isNotEmpty)
+        sub.add('Code: ${d.companyCode}');
+      if ((d.companyTaxId ?? '').trim().isNotEmpty)
+        sub.add('N° Fiscal: ${d.companyTaxId}');
+      return pw.Column(
+        crossAxisAlignment: pw.CrossAxisAlignment.stretch,
+        children: [
+          pw.SizedBox(height: 4),
+          pw.Text(
+            title,
+            style: style.copyWith(fontWeight: pw.FontWeight.bold),
+            textAlign: pw.TextAlign.center,
+          ),
+          if ((d.accountLabel ?? '').isNotEmpty)
+            pw.Text(
+              d.accountLabel!,
+              style: style,
+              textAlign: pw.TextAlign.center,
+            ),
+          if (sub.isNotEmpty)
+            pw.Text(
+              sub.join(' • '),
+              style: style,
+              textAlign: pw.TextAlign.center,
+            ),
+          if ((d.companyAddress ?? '').trim().isNotEmpty)
+            pw.Text(
+              d.companyAddress!,
+              style: style,
+              textAlign: pw.TextAlign.center,
+            ),
+          if ((d.companyPhone ?? '').trim().isNotEmpty ||
+              (d.companyEmail ?? '').trim().isNotEmpty)
+            pw.Text(
+              [
+                d.companyPhone,
+                d.companyEmail,
+              ].where((e) => (e ?? '').trim().isNotEmpty).join(' • '),
+              style: style,
+              textAlign: pw.TextAlign.center,
+            ),
+        ],
+      );
+    }
+
+    pw.Widget partyBlock() {
+      final left = <pw.Widget>[
+        rowLR('Date', date(d.date)),
+        rowLR('Type', d.typeEntry == 'CREDIT' ? 'Vente' : 'Dépense'),
+        if ((d.categoryLabel ?? '').isNotEmpty)
+          rowLR('Catégorie', d.categoryLabel!),
+      ];
+      final right = <pw.Widget>[
+        if ((d.customerName ?? '').trim().isNotEmpty)
+          rowLR('Client', d.customerName!),
+        if ((d.customerPhone ?? '').trim().isNotEmpty)
+          rowLR('Téléphone', d.customerPhone!),
+        if ((d.customerEmail ?? '').trim().isNotEmpty)
+          rowLR('Email', d.customerEmail!),
+      ];
+      return pw.Column(children: [...left, ...right]);
     }
 
     pw.Widget lines() {
@@ -102,25 +159,10 @@ class ReceiptPdfRenderer {
           return pw.Column(
             crossAxisAlignment: pw.CrossAxisAlignment.stretch,
             children: [
-              pw.SizedBox(height: 4),
-              pw.Text(
-                (d.storeName ?? 'Reçu').toUpperCase(),
-                style: style.copyWith(fontWeight: pw.FontWeight.bold),
-                textAlign: pw.TextAlign.center,
-              ),
-              if ((d.accountLabel ?? '').isNotEmpty)
-                pw.Text(
-                  d.accountLabel!,
-                  style: style,
-                  textAlign: pw.TextAlign.center,
-                ),
-              pw.Text(d.title, style: style, textAlign: pw.TextAlign.center),
+              headerBlock(),
               pw.SizedBox(height: 6),
               hr(),
-              rowLR('Date', date(d.date)),
-              rowLR('Type', d.typeEntry == 'CREDIT' ? 'Vente' : 'Dépense'),
-              if ((d.categoryLabel ?? '').isNotEmpty)
-                rowLR('Catégorie', d.categoryLabel!),
+              partyBlock(),
               hr(),
               lines(),
               hr(),

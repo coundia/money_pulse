@@ -1,7 +1,10 @@
+// Receipt controller: builds ReceiptData for a transaction including company and customer info.
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:money_pulse/domain/receipts/entities/receipt_models.dart';
 import 'package:money_pulse/presentation/app/providers.dart';
 import 'package:money_pulse/presentation/shared/formatters.dart';
+import 'package:money_pulse/presentation/app/providers/company_repo_provider.dart';
+import 'package:money_pulse/presentation/app/providers/customer_repo_provider.dart';
 
 final receiptDataProvider = FutureProvider.family<ReceiptData, String>((
   ref,
@@ -11,9 +14,13 @@ final receiptDataProvider = FutureProvider.family<ReceiptData, String>((
   final itemRepo = ref.read(transactionItemRepoProvider);
   final catRepo = ref.read(categoryRepoProvider);
   final accRepo = ref.read(accountRepoProvider);
+  final coRepo = ref.read(companyRepoProvider);
+  final cuRepo = ref.read(customerRepoProvider);
 
   final entry = await txnRepo.findById(txnId);
-  if (entry == null) throw StateError('Transaction introuvable');
+  if (entry == null) {
+    throw StateError('Transaction introuvable');
+  }
 
   final items = await itemRepo.findByTransaction(txnId);
   final cat = entry.categoryId == null
@@ -22,6 +29,17 @@ final receiptDataProvider = FutureProvider.family<ReceiptData, String>((
   final acc = entry.accountId == null
       ? null
       : await accRepo.findById(entry.accountId!);
+  final co = entry.companyId == null
+      ? null
+      : await coRepo.findById(entry.companyId!);
+  final cu = entry.customerId == null
+      ? null
+      : await cuRepo.findById(entry.customerId!);
+
+  String joinParts(Iterable<String?> parts) => parts
+      .where((e) => (e ?? '').trim().isNotEmpty)
+      .map((e) => e!.trim())
+      .join(', ');
 
   final lines = items
       .map(
@@ -37,10 +55,19 @@ final receiptDataProvider = FutureProvider.family<ReceiptData, String>((
   final subtotal = lines.fold<int>(0, (p, e) => p + e.total);
   final total = entry.amount;
 
+  final companyAddress = co == null
+      ? null
+      : joinParts([
+          co.addressLine1,
+          co.addressLine2,
+          joinParts([co.postalCode, co.city]),
+          joinParts([co.region, co.country]),
+        ]);
+
   return ReceiptData(
     id: entry.id,
     title: entry.typeEntry == 'CREDIT' ? 'Reçu de vente' : 'Reçu de dépense',
-    storeName: null,
+    storeName: co?.name,
     accountLabel: (acc?.description ?? acc?.code) ?? 'Compte',
     categoryLabel: cat == null
         ? null
@@ -52,6 +79,15 @@ final receiptDataProvider = FutureProvider.family<ReceiptData, String>((
     subtotal: subtotal,
     total: total,
     footerNote: 'À bientôt',
+    companyName: co?.name,
+    companyCode: co?.code,
+    companyPhone: co?.phone,
+    companyEmail: co?.email,
+    companyTaxId: co?.taxId,
+    companyAddress: companyAddress,
+    customerName: cu?.fullName,
+    customerPhone: cu?.phone,
+    customerEmail: cu?.email,
   );
 });
 
