@@ -1,5 +1,7 @@
-/// Sqflite repository for StockLevel with TEXT productVariantId and label lookups.
+/// Sqflite repository for StockLevel with TEXT productVariantId, label lookups,
+/// change_log entries and automatic stock_movement insertions on update/create.
 import 'package:sqflite/sqflite.dart';
+import 'package:uuid/uuid.dart';
 import '../../../infrastructure/db/app_database.dart';
 import '../../../domain/stock/entities/stock_level.dart';
 import '../../../domain/stock/repositories/stock_level_repository.dart';
@@ -8,8 +10,60 @@ class StockLevelRepositorySqflite implements StockLevelRepository {
   final AppDatabase app;
   late final Database db;
 
-  StockLevelRepositorySqflite(this.app) {
-    db = app.db;
+  StockLevelRepositorySqflite(this.app) : db = app.db;
+
+  String _nowIso() => DateTime.now().toIso8601String();
+
+  Future<void> _upsertChangeLog(
+    Transaction txn, {
+    required String table,
+    required String entityId,
+    required String op,
+    String? payload,
+  }) async {
+    final idLog = const Uuid().v4();
+    final now = _nowIso();
+    await txn.rawInsert(
+      '''
+      INSERT INTO change_log(
+        id, entityTable, entityId, operation, payload, status, attempts, error, createdAt, updatedAt, processedAt
+      )
+      VALUES(?,?,?,?,?,'PENDING',0,NULL,?, ?, NULL)
+      ON CONFLICT(entityTable, entityId, status) DO UPDATE SET
+        operation=excluded.operation,
+        payload=excluded.payload,
+        updatedAt=excluded.updatedAt
+      ''',
+      [idLog, table, entityId, op, payload, now, now],
+    );
+  }
+
+  Future<void> _ensureLevelRow(
+    Transaction txn, {
+    required String productVariantId,
+    required String companyId,
+    required String nowIso,
+  }) async {
+    final exists = await txn.rawQuery(
+      'SELECT id FROM stock_level WHERE productVariantId=? AND companyId=? LIMIT 1',
+      [productVariantId, companyId],
+    );
+    if (exists.isEmpty) {
+      await txn.insert('stock_level', {
+        'productVariantId': productVariantId,
+        'companyId': companyId,
+        'stockOnHand': 0,
+        'stockAllocated': 0,
+        'createdAt': nowIso,
+        'updatedAt': nowIso,
+      });
+      await _upsertChangeLog(
+        txn,
+        table: 'stock_level',
+        entityId: '$productVariantId@$companyId',
+        op: 'INSERT',
+      );
+    }
   }
 
   @override
@@ -79,37 +133,298 @@ class StockLevelRepositorySqflite implements StockLevelRepository {
 
   @override
   Future<int> create(StockLevel level) async {
-    final id = await db.insert('stock_level', {
-      'productVariantId': level.productVariantId,
-      'companyId': level.companyId,
-      'stockOnHand': level.stockOnHand,
-      'stockAllocated': level.stockAllocated,
-      'createdAt': level.createdAt.toIso8601String(),
-      'updatedAt': level.updatedAt.toIso8601String(),
-    }, conflictAlgorithm: ConflictAlgorithm.abort);
-    return id;
-  }
-
-  @override
-  Future<void> update(StockLevel level) async {
-    await db.update(
-      'stock_level',
-      {
+    final now = _nowIso();
+    return await db.transaction<int>((txn) async {
+      final id = await txn.insert('stock_level', {
         'productVariantId': level.productVariantId,
         'companyId': level.companyId,
         'stockOnHand': level.stockOnHand,
         'stockAllocated': level.stockAllocated,
-        'updatedAt': DateTime.now().toIso8601String(),
-      },
-      where: 'id = ?',
-      whereArgs: [level.id],
-      conflictAlgorithm: ConflictAlgorithm.abort,
-    );
+        'createdAt': now,
+        'updatedAt': now,
+      }, conflictAlgorithm: ConflictAlgorithm.abort);
+
+      if (level.stockOnHand != 0) {
+        await txn.insert('stock_movement', {
+          'type_stock_movement': 'ADJUST',
+          'quantity': level.stockOnHand.abs(),
+          'companyId': level.companyId,
+          'productVariantId': level.productVariantId,
+          'orderLineId': null,
+          'discriminator': 'INIT',
+          'createdAt': now,
+          'updatedAt': now,
+        });
+        await _upsertChangeLog(
+          txn,
+          table: 'stock_movement',
+          entityId: 'ADJ_${level.productVariantId}_${level.companyId}_$now',
+          op: 'INSERT',
+        );
+      }
+      if (level.stockAllocated != 0) {
+        final t = level.stockAllocated > 0 ? 'ALLOCATE' : 'RELEASE';
+        await txn.insert('stock_movement', {
+          'type_stock_movement': t,
+          'quantity': level.stockAllocated.abs(),
+          'companyId': level.companyId,
+          'productVariantId': level.productVariantId,
+          'orderLineId': null,
+          'discriminator': 'INIT',
+          'createdAt': now,
+          'updatedAt': now,
+        });
+        await _upsertChangeLog(
+          txn,
+          table: 'stock_movement',
+          entityId: '${t}_${level.productVariantId}_${level.companyId}_$now',
+          op: 'INSERT',
+        );
+      }
+
+      await _upsertChangeLog(
+        txn,
+        table: 'stock_level',
+        entityId: '$id',
+        op: 'INSERT',
+      );
+      return id;
+    });
+  }
+
+  @override
+  Future<void> update(StockLevel level) async {
+    final now = _nowIso();
+    await db.transaction((txn) async {
+      final prevRows = await txn.query(
+        'stock_level',
+        columns: [
+          'productVariantId',
+          'companyId',
+          'stockOnHand',
+          'stockAllocated',
+        ],
+        where: 'id = ?',
+        whereArgs: [level.id],
+        limit: 1,
+      );
+      String prevPv = level.productVariantId;
+      String prevCo = level.companyId;
+      int prevOn = 0;
+      int prevAl = 0;
+      if (prevRows.isNotEmpty) {
+        final m = prevRows.first;
+        prevPv = (m['productVariantId'] as String?) ?? prevPv;
+        prevCo = (m['companyId'] as String?) ?? prevCo;
+        prevOn = (m['stockOnHand'] as int?) ?? 0;
+        prevAl = (m['stockAllocated'] as int?) ?? 0;
+      }
+
+      await txn.update(
+        'stock_level',
+        {
+          'productVariantId': level.productVariantId,
+          'companyId': level.companyId,
+          'stockOnHand': level.stockOnHand,
+          'stockAllocated': level.stockAllocated,
+          'updatedAt': now,
+        },
+        where: 'id = ?',
+        whereArgs: [level.id],
+        conflictAlgorithm: ConflictAlgorithm.abort,
+      );
+
+      final dOn = level.stockOnHand - prevOn;
+      if (dOn != 0) {
+        await txn.insert('stock_movement', {
+          'type_stock_movement': 'ADJUST',
+          'quantity': dOn.abs(),
+          'companyId': level.companyId,
+          'productVariantId': level.productVariantId,
+          'orderLineId': null,
+          'discriminator': dOn > 0 ? 'FORM_INC' : 'FORM_DEC',
+          'createdAt': now,
+          'updatedAt': now,
+        });
+        await _upsertChangeLog(
+          txn,
+          table: 'stock_movement',
+          entityId: 'ADJ_${level.productVariantId}_${level.companyId}_$now',
+          op: 'INSERT',
+        );
+      }
+
+      final dAl = level.stockAllocated - prevAl;
+      if (dAl != 0) {
+        final t = dAl > 0 ? 'ALLOCATE' : 'RELEASE';
+        await txn.insert('stock_movement', {
+          'type_stock_movement': t,
+          'quantity': dAl.abs(),
+          'companyId': level.companyId,
+          'productVariantId': level.productVariantId,
+          'orderLineId': null,
+          'discriminator': 'FORM',
+          'createdAt': now,
+          'updatedAt': now,
+        });
+        await _upsertChangeLog(
+          txn,
+          table: 'stock_movement',
+          entityId: '${t}_${level.productVariantId}_${level.companyId}_$now',
+          op: 'INSERT',
+        );
+      }
+
+      await _upsertChangeLog(
+        txn,
+        table: 'stock_level',
+        entityId: '${level.id}',
+        op: 'UPDATE',
+      );
+    });
   }
 
   @override
   Future<void> delete(String id) async {
-    await db.delete('stock_level', where: 'id = ?', whereArgs: [int.parse(id)]);
+    await db.transaction((txn) async {
+      await txn.delete(
+        'stock_level',
+        where: 'id = ?',
+        whereArgs: [int.parse(id)],
+      );
+      await _upsertChangeLog(
+        txn,
+        table: 'stock_level',
+        entityId: id,
+        op: 'DELETE',
+      );
+    });
+  }
+
+  @override
+  Future<void> adjustOnHandBy({
+    required String productVariantId,
+    required String companyId,
+    required int delta,
+    String? orderLineId,
+    String? reason,
+  }) async {
+    if (delta == 0) return;
+    final now = _nowIso();
+    final disc = (reason != null && reason.trim().isNotEmpty)
+        ? reason.trim()
+        : (delta > 0 ? 'INC' : 'DEC');
+
+    await db.transaction((txn) async {
+      await _ensureLevelRow(
+        txn,
+        productVariantId: productVariantId,
+        companyId: companyId,
+        nowIso: now,
+      );
+
+      final curRow = await txn.rawQuery(
+        'SELECT stockOnHand FROM stock_level WHERE productVariantId=? AND companyId=? LIMIT 1',
+        [productVariantId, companyId],
+      );
+      final cur = (curRow.isEmpty
+          ? 0
+          : (curRow.first['stockOnHand'] as int? ?? 0));
+      final next = cur + delta;
+      final newVal = next < 0 ? 0 : next;
+
+      await txn.rawUpdate(
+        'UPDATE stock_level SET stockOnHand=?, updatedAt=? WHERE productVariantId=? AND companyId=?',
+        [newVal, now, productVariantId, companyId],
+      );
+
+      await txn.insert('stock_movement', {
+        'type_stock_movement': 'ADJUST',
+        'quantity': delta.abs(),
+        'companyId': companyId,
+        'productVariantId': productVariantId,
+        'orderLineId': orderLineId,
+        'discriminator': disc,
+        'createdAt': now,
+        'updatedAt': now,
+      });
+
+      await _upsertChangeLog(
+        txn,
+        table: 'stock_level',
+        entityId: now,
+        op: 'UPDATE',
+      );
+      await _upsertChangeLog(
+        txn,
+        table: 'stock_movement',
+        entityId: now,
+        op: 'INSERT',
+      );
+    });
+  }
+
+  @override
+  Future<void> adjustOnHandTo({
+    required String productVariantId,
+    required String companyId,
+    required int target,
+    String? orderLineId,
+    String? reason,
+  }) async {
+    final now = _nowIso();
+    await db.transaction((txn) async {
+      await _ensureLevelRow(
+        txn,
+        productVariantId: productVariantId,
+        companyId: companyId,
+        nowIso: now,
+      );
+
+      final curRow = await txn.rawQuery(
+        'SELECT stockOnHand FROM stock_level WHERE productVariantId=? AND companyId=? LIMIT 1',
+        [productVariantId, companyId],
+      );
+      final cur = (curRow.isEmpty
+          ? 0
+          : (curRow.first['stockOnHand'] as int? ?? 0));
+      final safeTarget = target < 0 ? 0 : target;
+      final delta = safeTarget - cur;
+      if (delta == 0) return;
+
+      await txn.rawUpdate(
+        'UPDATE stock_level SET stockOnHand=?, updatedAt=? WHERE productVariantId=? AND companyId=?',
+        [safeTarget, now, productVariantId, companyId],
+      );
+
+      final disc = (reason != null && reason.trim().isNotEmpty)
+          ? reason.trim()
+          : (delta > 0 ? 'INC' : 'DEC');
+
+      await txn.insert('stock_movement', {
+        'type_stock_movement': 'ADJUST',
+        'quantity': delta.abs(),
+        'companyId': companyId,
+        'productVariantId': productVariantId,
+        'orderLineId': orderLineId,
+        'discriminator': disc,
+        'createdAt': now,
+        'updatedAt': now,
+      });
+
+      await _upsertChangeLog(
+        txn,
+        table: 'stock_level',
+        entityId: now,
+        op: 'UPDATE',
+      );
+      await _upsertChangeLog(
+        txn,
+        table: 'stock_movement',
+        entityId: now,
+        op: 'INSERT',
+      );
+    });
   }
 
   @override

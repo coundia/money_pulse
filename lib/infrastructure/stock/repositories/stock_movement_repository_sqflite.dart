@@ -1,4 +1,4 @@
-/// Sqflite repository for StockMovement CRUD and list helpers.
+/// Sqflite repository for StockMovement CRUD and search, exposing unit price and total.
 import 'package:sqflite/sqflite.dart';
 import '../../../infrastructure/db/app_database.dart';
 import '../../../domain/stock/entities/stock_movement.dart';
@@ -18,35 +18,28 @@ class StockMovementRepositorySqflite implements StockMovementRepository {
       SELECT sm.id,
              sm.type_stock_movement AS type,
              sm.quantity,
+             sm.orderLineId,
              sm.createdAt,
-             COALESCE(p.name, p.code, sm.productVariantId) AS productLabel,
-             COALESCE(c.name, c.code, sm.companyId) AS companyLabel
+             COALESCE(p.name, p.code, sm.productVariantId)              AS productLabel,
+             COALESCE(c.name, c.code, sm.companyId)                     AS companyLabel,
+             COALESCE(ti.unitPrice, p.defaultPrice, 0)                  AS unitPriceCents,
+             sm.quantity * COALESCE(ti.unitPrice, p.defaultPrice, 0)    AS totalCents
       FROM stock_movement sm
-      LEFT JOIN product p ON p.id = sm.productVariantId
-      LEFT JOIN company c ON c.id = sm.companyId
+      LEFT JOIN product p           ON p.id = sm.productVariantId
+      LEFT JOIN company c           ON c.id = sm.companyId
+      LEFT JOIN transaction_item ti ON ti.id = sm.orderLineId
       WHERE (? = '' 
-         OR lower(COALESCE(p.name,'')) LIKE ?
-         OR lower(COALESCE(p.code,'')) LIKE ?
-         OR lower(COALESCE(c.name,'')) LIKE ?
-         OR lower(COALESCE(c.code,'')) LIKE ?
-         OR lower(COALESCE(sm.type_stock_movement,'')) LIKE ?)
+        OR lower(COALESCE(p.name,'')) LIKE ?
+        OR lower(COALESCE(p.code,'')) LIKE ?
+        OR lower(COALESCE(c.name,'')) LIKE ?
+        OR lower(COALESCE(c.code,'')) LIKE ?
+        OR lower(COALESCE(sm.type_stock_movement,'')) LIKE ?)
       ORDER BY datetime(sm.createdAt) DESC, sm.id DESC
       LIMIT 500
       ''',
       [q, like, like, like, like, like],
     );
-    return rows.map((m) {
-      return StockMovementRow(
-        id: (m['id'] as int).toString(),
-        productLabel: (m['productLabel'] as String?) ?? '',
-        companyLabel: (m['companyLabel'] as String?) ?? '',
-        type: (m['type'] as String?) ?? '',
-        quantity: (m['quantity'] as int?) ?? 0,
-        createdAt:
-            DateTime.tryParse((m['createdAt'] as String?) ?? '') ??
-            DateTime.now(),
-      );
-    }).toList();
+    return rows.map(_toRow).toList();
   }
 
   @override
@@ -59,6 +52,32 @@ class StockMovementRepositorySqflite implements StockMovementRepository {
     );
     if (rows.isEmpty) return null;
     return StockMovement.fromMap(rows.first);
+  }
+
+  @override
+  Future<StockMovementRow?> findRowById(String id) async {
+    final rows = await db.rawQuery(
+      '''
+      SELECT sm.id,
+             sm.type_stock_movement AS type,
+             sm.quantity,
+             sm.orderLineId,
+             sm.createdAt,
+             COALESCE(p.name, p.code, sm.productVariantId)              AS productLabel,
+             COALESCE(c.name, c.code, sm.companyId)                     AS companyLabel,
+             COALESCE(ti.unitPrice, p.defaultPrice, 0)                  AS unitPriceCents,
+             sm.quantity * COALESCE(ti.unitPrice, p.defaultPrice, 0)    AS totalCents
+      FROM stock_movement sm
+      LEFT JOIN product p           ON p.id = sm.productVariantId
+      LEFT JOIN company c           ON c.id = sm.companyId
+      LEFT JOIN transaction_item ti ON ti.id = sm.orderLineId
+      WHERE sm.id = ?
+      LIMIT 1
+      ''',
+      [int.parse(id)],
+    );
+    if (rows.isEmpty) return null;
+    return _toRow(rows.first);
   }
 
   @override
@@ -98,7 +117,7 @@ class StockMovementRepositorySqflite implements StockMovementRepository {
     final like = '%$q%';
     return db.rawQuery(
       '''
-      SELECT id, COALESCE(name, code, 'Produit') AS label
+      SELECT id, COALESCE(name, code, 'Produit') AS label, COALESCE(defaultPrice,0) AS defaultPrice
       FROM product
       WHERE deletedAt IS NULL
         AND (? = '' OR lower(COALESCE(name,'')) LIKE ? OR lower(COALESCE(code,'')) LIKE ?)
@@ -123,6 +142,22 @@ class StockMovementRepositorySqflite implements StockMovementRepository {
       LIMIT 200
       ''',
       [q, like, like],
+    );
+  }
+
+  StockMovementRow _toRow(Map<String, Object?> m) {
+    return StockMovementRow(
+      id: (m['id'] as int).toString(),
+      productLabel: (m['productLabel'] as String?) ?? '',
+      companyLabel: (m['companyLabel'] as String?) ?? '',
+      type: (m['type'] as String?) ?? '',
+      quantity: (m['quantity'] as int?) ?? 0,
+      unitPriceCents: (m['unitPriceCents'] as int?) ?? 0,
+      totalCents: (m['totalCents'] as int?) ?? 0,
+      createdAt:
+          DateTime.tryParse((m['createdAt'] as String?) ?? '') ??
+          DateTime.now(),
+      orderLineId: m['orderLineId'] as String?,
     );
   }
 }

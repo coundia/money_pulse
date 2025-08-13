@@ -1,5 +1,4 @@
-// Repository contract for StockLevel persistence and queries
-
+/// Repository contract for StockLevel CRUD, search and stock adjustments (with movement logs).
 import '../entities/stock_level.dart';
 
 class StockLevelRow {
@@ -26,6 +25,24 @@ abstract class StockLevelRepository {
   Future<int> create(StockLevel level);
   Future<void> update(StockLevel level);
   Future<void> delete(String id);
+
+  /// Increment/decrement stockOnHand and insert an ADJUST movement.
+  Future<void> adjustOnHandBy({
+    required String productVariantId,
+    required String companyId,
+    required int delta,
+    String? orderLineId,
+    String? reason, // stored in discriminator if provided
+  });
+
+  /// Set stockOnHand to a target value by computing delta, then ADJUST.
+  Future<void> adjustOnHandTo({
+    required String productVariantId,
+    required String companyId,
+    required int target,
+    String? orderLineId,
+    String? reason,
+  });
 
   Future<List<Map<String, Object?>>> listProductVariants({String query = ''});
   Future<List<Map<String, Object?>>> listCompanies({String query = ''});
