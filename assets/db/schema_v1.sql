@@ -261,7 +261,7 @@ CREATE TABLE stock_level
     stockAllocated   INTEGER                        NOT NULL,
     id               INTEGER                        NOT NULL PRIMARY KEY AUTOINCREMENT,
     productVariantId INTEGER                        NOT NULL
-        REFERENCES product_variant(id) ON DELETE CASCADE,
+        REFERENCES product(id) ON DELETE CASCADE,
     companyId        TEXT                           NOT NULL
         REFERENCES company(id) ON DELETE CASCADE
 );

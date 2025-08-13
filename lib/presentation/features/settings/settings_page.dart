@@ -6,6 +6,7 @@ import 'package:money_pulse/presentation/features/categories/category_list_page.
 import 'package:money_pulse/presentation/features/accounts/account_page.dart';
 import 'package:money_pulse/presentation/features/companies/company_list_page.dart';
 import 'package:money_pulse/presentation/features/customers/customer_list_page.dart';
+import 'package:money_pulse/presentation/features/stock/stock_level_list_page.dart';
 import 'package:money_pulse/presentation/features/sync/change_log_list_page.dart';
 import 'package:money_pulse/presentation/features/sync/sync_state_list_page.dart';
 
@@ -125,6 +126,16 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
             onTap: () => Navigator.of(
               context,
             ).push(MaterialPageRoute(builder: (_) => const CompanyListPage())),
+          ),
+
+          ListTile(
+            leading: const Icon(Icons.list),
+            title: const Text('Gérer le stock'),
+            subtitle: const Text('Inventaire'),
+
+            onTap: () => Navigator.of(context).push(
+              MaterialPageRoute(builder: (_) => const StockLevelListPage()),
+            ),
           ),
 
           const Divider(height: 24),

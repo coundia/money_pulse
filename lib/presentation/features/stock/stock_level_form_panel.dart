@@ -3,7 +3,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:intl/intl.dart';
 import 'providers/stock_level_repo_provider.dart';
 import 'package:money_pulse/domain/stock/entities/stock_level.dart';
 
@@ -31,6 +30,15 @@ class _StockLevelFormPanelState extends ConsumerState<StockLevelFormPanel> {
     _allocatedCtrl.text = '0';
     _onHandCtrl.text = '0';
     Future.microtask(_loadIfNeeded);
+  }
+
+  @override
+  void dispose() {
+    _pvCtrl.dispose();
+    _companyCtrl.dispose();
+    _onHandCtrl.dispose();
+    _allocatedCtrl.dispose();
+    super.dispose();
   }
 
   Future<void> _loadIfNeeded() async {
@@ -85,12 +93,14 @@ class _StockLevelFormPanelState extends ConsumerState<StockLevelFormPanel> {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
     return Shortcuts(
-      shortcuts: {},
+      shortcuts: <LogicalKeySet, Intent>{
+        LogicalKeySet(LogicalKeyboardKey.enter): const ActivateIntent(),
+        LogicalKeySet(LogicalKeyboardKey.numpadEnter): const ActivateIntent(),
+      },
       child: Actions(
         actions: <Type, Action<Intent>>{
-          Intent: CallbackAction<Intent>(
+          ActivateIntent: CallbackAction<ActivateIntent>(
             onInvoke: (_) {
               _submit();
               return null;
@@ -121,6 +131,9 @@ class _StockLevelFormPanelState extends ConsumerState<StockLevelFormPanel> {
                             TextFormField(
                               controller: _pvCtrl,
                               keyboardType: TextInputType.number,
+                              inputFormatters: [
+                                FilteringTextInputFormatter.digitsOnly,
+                              ],
                               textInputAction: TextInputAction.next,
                               decoration: const InputDecoration(
                                 labelText: 'ID produit (variant)',
@@ -144,6 +157,9 @@ class _StockLevelFormPanelState extends ConsumerState<StockLevelFormPanel> {
                             TextFormField(
                               controller: _onHandCtrl,
                               keyboardType: TextInputType.number,
+                              inputFormatters: [
+                                FilteringTextInputFormatter.digitsOnly,
+                              ],
                               textInputAction: TextInputAction.next,
                               decoration: const InputDecoration(
                                 labelText: 'Stock disponible',
@@ -156,6 +172,9 @@ class _StockLevelFormPanelState extends ConsumerState<StockLevelFormPanel> {
                             TextFormField(
                               controller: _allocatedCtrl,
                               keyboardType: TextInputType.number,
+                              inputFormatters: [
+                                FilteringTextInputFormatter.digitsOnly,
+                              ],
                               textInputAction: TextInputAction.done,
                               onFieldSubmitted: (_) => _submit(),
                               decoration: const InputDecoration(
@@ -194,10 +213,8 @@ class _StockLevelFormPanelState extends ConsumerState<StockLevelFormPanel> {
                               ],
                             ),
                             const SizedBox(height: 8),
-                            Text(
-                              'Appuyez sur Entrée pour valider',
-                              style: theme.textTheme.bodySmall,
-                              textAlign: TextAlign.center,
+                            const Center(
+                              child: Text('Appuyez sur Entrée pour valider'),
                             ),
                           ],
                         ),

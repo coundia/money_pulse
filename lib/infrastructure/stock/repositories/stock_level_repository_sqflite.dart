@@ -1,14 +1,17 @@
-// Sqflite implementation of StockLevelRepository
+// Sqflite StockLevelRepository wired through AppDatabase
 
 import 'package:sqflite/sqflite.dart';
-import 'package:intl/intl.dart';
 import '../../../infrastructure/db/app_database.dart';
 import '../../../domain/stock/entities/stock_level.dart';
 import '../../../domain/stock/repositories/stock_level_repository.dart';
 
 class StockLevelRepositorySqflite implements StockLevelRepository {
-  final Database db;
-  StockLevelRepositorySqflite(this.db);
+  final AppDatabase app;
+  late final Database db;
+
+  StockLevelRepositorySqflite(this.app) {
+    db = app.db;
+  }
 
   @override
   Future<List<StockLevelRow>> search({String query = ''}) async {
@@ -23,7 +26,7 @@ class StockLevelRepositorySqflite implements StockLevelRepository {
              COALESCE(pv.name, pv.code, 'Variant #'||sl.productVariantId) AS productLabel,
              COALESCE(c.name, c.code, sl.companyId) AS companyLabel
       FROM stock_level sl
-      LEFT JOIN product_variant pv ON pv.id = sl.productVariantId
+      LEFT JOIN product pv ON pv.id = sl.productVariantId
       LEFT JOIN company c ON c.id = sl.companyId
       WHERE (? = '' 
          OR pv.name LIKE ? OR pv.code LIKE ?
@@ -80,8 +83,8 @@ class StockLevelRepositorySqflite implements StockLevelRepository {
       'companyId': level.companyId,
       'stockOnHand': level.stockOnHand,
       'stockAllocated': level.stockAllocated,
-      'createdAt': DateFormat("yyyy-MM-dd HH:mm:ss").format(level.createdAt),
-      'updatedAt': DateFormat("yyyy-MM-dd HH:mm:ss").format(level.updatedAt),
+      'createdAt': level.createdAt.toIso8601String(),
+      'updatedAt': level.updatedAt.toIso8601String(),
     }, conflictAlgorithm: ConflictAlgorithm.abort);
     return id;
   }
@@ -95,7 +98,7 @@ class StockLevelRepositorySqflite implements StockLevelRepository {
         'companyId': level.companyId,
         'stockOnHand': level.stockOnHand,
         'stockAllocated': level.stockAllocated,
-        'updatedAt': DateFormat("yyyy-MM-dd HH:mm:ss").format(DateTime.now()),
+        'updatedAt': DateTime.now().toIso8601String(),
       },
       where: 'id = ?',
       whereArgs: [level.id],
@@ -117,9 +120,9 @@ class StockLevelRepositorySqflite implements StockLevelRepository {
     return db.rawQuery(
       '''
       SELECT id, COALESCE(name, code, 'Variant #'||id) AS label
-      FROM product_variant
+      FROM product
       WHERE (? = '' OR name LIKE ? OR code LIKE ?)
-      ORDER BY name NULLS LAST, code NULLS LAST, id DESC
+      ORDER BY (name IS NULL), name, (code IS NULL), code, id DESC
       LIMIT 200
     ''',
       [q, like, like],
@@ -135,7 +138,7 @@ class StockLevelRepositorySqflite implements StockLevelRepository {
       SELECT id, COALESCE(name, code, id) AS label
       FROM company
       WHERE deletedAt IS NULL AND (? = '' OR name LIKE ? OR code LIKE ?)
-      ORDER BY name NULLS LAST, code NULLS LAST, id DESC
+      ORDER BY (name IS NULL), name, (code IS NULL), code, id DESC
       LIMIT 200
     ''',
       [q, like, like],
