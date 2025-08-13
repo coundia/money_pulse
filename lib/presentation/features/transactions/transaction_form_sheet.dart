@@ -1,4 +1,4 @@
-// TransactionFormSheet: edit a transaction with amount, category, date, company and customer, with Enter-to-save and responsive UI.
+// TransactionFormSheet: edit a transaction with category, tiers and products picker; loads saved items on edit; responsive, Enter-to-save, no overflow.
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -8,10 +8,13 @@ import 'package:money_pulse/domain/customer/entities/customer.dart';
 import 'package:money_pulse/domain/transactions/entities/transaction_entry.dart';
 import 'package:money_pulse/presentation/app/providers.dart';
 import 'package:money_pulse/presentation/shared/formatters.dart';
+import 'package:money_pulse/presentation/features/transactions/providers/transaction_detail_providers.dart';
 import '../../../domain/company/repositories/company_repository.dart';
 import '../../../domain/customer/repositories/customer_repository.dart';
 import '../../app/providers/company_repo_provider.dart';
 import '../../app/providers/customer_repo_provider.dart';
+import '../products/product_picker_panel.dart';
+import '../../widgets/right_drawer.dart';
 
 class TransactionFormSheet extends ConsumerStatefulWidget {
   final TransactionEntry entry;
@@ -36,6 +39,8 @@ class _TransactionFormSheetState extends ConsumerState<TransactionFormSheet> {
   List<Company> companies = const [];
   List<Customer> customers = const [];
   List<Category> categories = const [];
+
+  final List<_TxItem> _items = [];
 
   @override
   void initState() {
@@ -72,7 +77,37 @@ class _TransactionFormSheetState extends ConsumerState<TransactionFormSheet> {
           customers = cus;
         });
       } catch (_) {}
+      await _loadExistingItems();
     });
+  }
+
+  Future<void> _loadExistingItems() async {
+    try {
+      final saved = await ref.read(
+        transactionItemsProvider(widget.entry.id).future,
+      );
+      if (!mounted) return;
+      setState(() {
+        _items
+          ..clear()
+          ..addAll(
+            saved
+                .where(
+                  (it) => it.productId != null,
+                ) // on ne charge que les lignes liées à des produits
+                .map(
+                  (it) => _TxItem(
+                    productId: it.productId!,
+                    label: (it.label ?? '').isEmpty ? 'Produit' : it.label!,
+                    unitPriceCents: it.unitPrice,
+                    quantity: it.quantity,
+                  ),
+                ),
+          );
+      });
+      // On ne force pas le montant à partir des articles à l'ouverture,
+      // mais si l’utilisateur rouvre le sélecteur produits, le montant se resynchronise automatiquement.
+    } catch (_) {}
   }
 
   @override
@@ -134,6 +169,61 @@ class _TransactionFormSheetState extends ConsumerState<TransactionFormSheet> {
     } catch (_) {}
   }
 
+  int get _itemsTotalCents =>
+      _items.fold(0, (sum, it) => sum + (it.unitPriceCents * it.quantity));
+
+  void _syncAmountFromItems() {
+    final total = _itemsTotalCents;
+    amountCtrl.text = (total / 100).toStringAsFixed(2);
+    setState(() {});
+  }
+
+  Future<void> _openProductPicker() async {
+    final initial = _items
+        .map(
+          (e) => {
+            'productId': e.productId,
+            'label': e.label,
+            'unitPriceCents': e.unitPriceCents,
+            'quantity': e.quantity,
+          },
+        )
+        .toList();
+    final result = await showRightDrawer(
+      context,
+      child: ProductPickerPanel(initialLines: initial),
+    );
+    if (!mounted) return;
+    if (result is List) {
+      final List<_TxItem> parsed = [];
+      for (final e in result) {
+        if (e is Map) {
+          final id = e['productId'] as String?;
+          final label = (e['label'] as String?) ?? '';
+          final unit =
+              (e['unitPriceCents'] as int?) ?? (e['unitPrice'] as int?) ?? 0;
+          final qty = (e['quantity'] as int?) ?? 1;
+          if (id != null) {
+            parsed.add(
+              _TxItem(
+                productId: id,
+                label: label,
+                unitPriceCents: unit,
+                quantity: qty,
+              ),
+            );
+          }
+        }
+      }
+      setState(() {
+        _items
+          ..clear()
+          ..addAll(parsed);
+      });
+      _syncAmountFromItems();
+    }
+  }
+
   Future<void> _save() async {
     if (!formKey.currentState!.validate()) return;
     final cents = _toCents(amountCtrl.text);
@@ -166,7 +256,6 @@ class _TransactionFormSheetState extends ConsumerState<TransactionFormSheet> {
     final typeLabel = isDebit ? 'Dépense' : 'Revenu';
 
     return Shortcuts(
-      // ❗️Fix: use non-const map and keep const intent instances
       shortcuts: <LogicalKeySet, Intent>{
         LogicalKeySet(LogicalKeyboardKey.enter): const _SubmitIntent(),
         LogicalKeySet(LogicalKeyboardKey.numpadEnter): const _SubmitIntent(),
@@ -201,6 +290,7 @@ class _TransactionFormSheetState extends ConsumerState<TransactionFormSheet> {
             autovalidateMode: AutovalidateMode.onUserInteraction,
             child: ListView(
               padding: const EdgeInsets.all(16),
+              keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
               children: [
                 ListTile(
                   contentPadding: EdgeInsets.zero,
@@ -262,33 +352,59 @@ class _TransactionFormSheetState extends ConsumerState<TransactionFormSheet> {
                   ),
                 ),
                 const SizedBox(height: 12),
-                DropdownButtonFormField<String?>(
-                  value: categoryId,
-                  items: <DropdownMenuItem<String?>>[
-                    const DropdownMenuItem<String?>(
-                      value: null,
-                      child: Text('— Aucune —'),
-                    ),
-                    ...categories
+
+                // Catégorie — corrige le "overflow by pixels" via isExpanded + selectedItemBuilder + ellipsis
+                Builder(
+                  builder: (context) {
+                    final filtered = categories
                         .where((c) => c.typeEntry == widget.entry.typeEntry)
-                        .map(
-                          (c) => DropdownMenuItem<String?>(
-                            value: c.id,
-                            child: Text(
-                              '${c.code}${(c.description ?? '').isNotEmpty ? ' — ${c.description}' : ''}',
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                            ),
+                        .toList();
+                    final items = <DropdownMenuItem<String?>>[
+                      const DropdownMenuItem<String?>(
+                        value: null,
+                        child: Text('— Aucune —'),
+                      ),
+                      ...filtered.map(
+                        (c) => DropdownMenuItem<String?>(
+                          value: c.id,
+                          child: Text(
+                            '${c.code}${(c.description ?? '').isNotEmpty ? ' — ${c.description}' : ''}',
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
                           ),
+                          // width-safe
                         ),
-                  ],
-                  onChanged: (v) => setState(() => categoryId = v),
-                  decoration: const InputDecoration(
-                    border: OutlineInputBorder(),
-                    labelText: 'Catégorie',
-                    isDense: true,
-                  ),
+                      ),
+                    ];
+                    return DropdownButtonFormField<String?>(
+                      value: categoryId,
+                      items: items,
+                      isDense: true,
+                      isExpanded: true,
+                      selectedItemBuilder: (ctx) => items
+                          .map(
+                            (e) => Align(
+                              alignment: Alignment.centerLeft,
+                              child: e.child is Text
+                                  ? Text(
+                                      (e.child as Text).data ?? '',
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                    )
+                                  : const SizedBox.shrink(),
+                            ),
+                          )
+                          .toList(),
+                      onChanged: (v) => setState(() => categoryId = v),
+                      decoration: const InputDecoration(
+                        border: OutlineInputBorder(),
+                        labelText: 'Catégorie',
+                        isDense: true,
+                      ),
+                    );
+                  },
                 ),
+
                 const SizedBox(height: 12),
                 Card(
                   child: Padding(
@@ -307,6 +423,7 @@ class _TransactionFormSheetState extends ConsumerState<TransactionFormSheet> {
                         DropdownButtonFormField<String?>(
                           value: companyId,
                           isDense: true,
+                          isExpanded: true,
                           items: <DropdownMenuItem<String?>>[
                             const DropdownMenuItem<String?>(
                               value: null,
@@ -323,6 +440,20 @@ class _TransactionFormSheetState extends ConsumerState<TransactionFormSheet> {
                               ),
                             ),
                           ],
+                          selectedItemBuilder: (ctx) => [
+                            const Text(
+                              '— Aucune société —',
+                              overflow: TextOverflow.ellipsis,
+                              maxLines: 1,
+                            ),
+                            ...companies.map(
+                              (co) => Text(
+                                '${co.name} (${co.code})',
+                                overflow: TextOverflow.ellipsis,
+                                maxLines: 1,
+                              ),
+                            ),
+                          ],
                           onChanged: (v) => _onSelectCompany(v),
                           decoration: const InputDecoration(
                             border: OutlineInputBorder(),
@@ -334,6 +465,7 @@ class _TransactionFormSheetState extends ConsumerState<TransactionFormSheet> {
                         DropdownButtonFormField<String?>(
                           value: customerId,
                           isDense: true,
+                          isExpanded: true,
                           items: <DropdownMenuItem<String?>>[
                             const DropdownMenuItem<String?>(
                               value: null,
@@ -350,6 +482,20 @@ class _TransactionFormSheetState extends ConsumerState<TransactionFormSheet> {
                               ),
                             ),
                           ],
+                          selectedItemBuilder: (ctx) => [
+                            const Text(
+                              '— Aucun client —',
+                              overflow: TextOverflow.ellipsis,
+                              maxLines: 1,
+                            ),
+                            ...customers.map(
+                              (cu) => Text(
+                                cu.fullName,
+                                overflow: TextOverflow.ellipsis,
+                                maxLines: 1,
+                              ),
+                            ),
+                          ],
                           onChanged: (v) => setState(() => customerId = v),
                           decoration: const InputDecoration(
                             border: OutlineInputBorder(),
@@ -361,6 +507,74 @@ class _TransactionFormSheetState extends ConsumerState<TransactionFormSheet> {
                     ),
                   ),
                 ),
+
+                const SizedBox(height: 12),
+                Row(
+                  children: [
+                    Expanded(
+                      child: OutlinedButton.icon(
+                        onPressed: _openProductPicker,
+                        icon: const Icon(Icons.add_shopping_cart),
+                        label: Text(
+                          _items.isEmpty
+                              ? 'Ajouter des produits'
+                              : 'Modifier les produits',
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    if (_items.isNotEmpty)
+                      Wrap(
+                        spacing: 6,
+                        runSpacing: 6,
+                        children: [
+                          Chip(label: Text('${_items.length} produit(s)')),
+                          InputChip(
+                            avatar: const Icon(Icons.payments, size: 18),
+                            label: Text(
+                              'Total: ${Formatters.amountFromCents(_itemsTotalCents)}',
+                            ),
+                            onPressed: _syncAmountFromItems,
+                          ),
+                          IconButton(
+                            tooltip: 'Vider',
+                            onPressed: () {
+                              setState(() => _items.clear());
+                              _syncAmountFromItems();
+                            },
+                            icon: const Icon(Icons.delete_sweep),
+                          ),
+                        ],
+                      ),
+                  ],
+                ),
+                if (_items.isNotEmpty) const SizedBox(height: 8),
+                if (_items.isNotEmpty)
+                  ListView.separated(
+                    shrinkWrap: true,
+                    physics: const NeverScrollableScrollPhysics(),
+                    itemCount: _items.length,
+                    separatorBuilder: (_, __) => const Divider(height: 1),
+                    itemBuilder: (_, i) {
+                      final it = _items[i];
+                      final lineTotal = it.unitPriceCents * it.quantity;
+                      return ListTile(
+                        dense: true,
+                        leading: const Icon(Icons.shopping_bag),
+                        title: Text(
+                          it.label.isEmpty ? 'Produit' : it.label,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                        subtitle: Text(
+                          'Qté: ${it.quantity} • PU: ${Formatters.amountFromCents(it.unitPriceCents)}',
+                        ),
+                        trailing: Text(Formatters.amountFromCents(lineTotal)),
+                        onTap: _openProductPicker,
+                      );
+                    },
+                  ),
+
                 const SizedBox(height: 12),
                 TextFormField(
                   controller: descCtrl,
@@ -393,4 +607,17 @@ class _TransactionFormSheetState extends ConsumerState<TransactionFormSheet> {
 
 class _SubmitIntent extends Intent {
   const _SubmitIntent();
+}
+
+class _TxItem {
+  final String productId;
+  final String label;
+  final int unitPriceCents;
+  final int quantity;
+  const _TxItem({
+    required this.productId,
+    required this.label,
+    required this.unitPriceCents,
+    required this.quantity,
+  });
 }

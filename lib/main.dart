@@ -1,3 +1,4 @@
+// Bootstraps the app, initializes locale and seeds default data (account, categories, company, customer).
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -9,6 +10,7 @@ import 'package:money_pulse/infrastructure/db/app_database.dart';
 import 'package:money_pulse/presentation/app/app.dart';
 import 'package:money_pulse/presentation/app/providers.dart';
 import 'package:money_pulse/presentation/app/restart_app.dart';
+import 'package:money_pulse/presentation/app/seed_bootstrap.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -53,8 +55,27 @@ class _BootstrapState extends ConsumerState<Bootstrap> {
         rethrow;
       }
     } catch (_) {}
+
     try {
       await ref.read(seedDefaultCategoriesUseCaseProvider).execute();
+    } on DatabaseException catch (e) {
+      final msg = e.toString();
+      if (!msg.contains('UNIQUE constraint failed')) {
+        rethrow;
+      }
+    } catch (_) {}
+
+    try {
+      await ref.read(seedDefaultCompanyUseCaseProvider).execute();
+    } on DatabaseException catch (e) {
+      final msg = e.toString();
+      if (!msg.contains('UNIQUE constraint failed')) {
+        rethrow;
+      }
+    } catch (_) {}
+
+    try {
+      await ref.read(seedDefaultCustomerUseCaseProvider).execute();
     } on DatabaseException catch (e) {
       final msg = e.toString();
       if (!msg.contains('UNIQUE constraint failed')) {
