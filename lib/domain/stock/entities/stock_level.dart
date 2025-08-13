@@ -1,8 +1,7 @@
-// StockLevel entity for stock quantities per product variant and company
-
+/// StockLevel entity storing per-product per-company stock figures.
 class StockLevel {
   final int? id;
-  final int productVariantId;
+  final String productVariantId;
   final String companyId;
   final int stockOnHand;
   final int stockAllocated;
@@ -21,7 +20,7 @@ class StockLevel {
 
   StockLevel copyWith({
     int? id,
-    int? productVariantId,
+    String? productVariantId,
     String? companyId,
     int? stockOnHand,
     int? stockAllocated,

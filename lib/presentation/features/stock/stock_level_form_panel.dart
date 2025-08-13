@@ -1,5 +1,4 @@
-// Right drawer panel to create or edit a StockLevel, with ENTER to submit
-
+/// Right drawer panel to create or edit a StockLevel with searchable pickers and ENTER submission.
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -19,17 +18,30 @@ class _StockLevelFormPanelState extends ConsumerState<StockLevelFormPanel> {
   final _formKey = GlobalKey<FormState>();
   final _pvCtrl = TextEditingController();
   final _companyCtrl = TextEditingController();
-  final _onHandCtrl = TextEditingController();
-  final _allocatedCtrl = TextEditingController();
+  final _onHandCtrl = TextEditingController(text: '0');
+  final _allocatedCtrl = TextEditingController(text: '0');
+
   bool _loading = false;
-  int? _pvId;
+  String? _pvId;
+  String? _companyId;
+
+  List<Map<String, Object?>> _pvOpts = const [];
+  List<Map<String, Object?>> _coOpts = const [];
 
   @override
   void initState() {
     super.initState();
-    _allocatedCtrl.text = '0';
-    _onHandCtrl.text = '0';
-    Future.microtask(_loadIfNeeded);
+    Future.microtask(() async {
+      final repo = ref.read(stockLevelRepoProvider);
+      final pv = await repo.listProductVariants(query: '');
+      final co = await repo.listCompanies(query: '');
+      if (!mounted) return;
+      setState(() {
+        _pvOpts = pv;
+        _coOpts = co;
+      });
+      await _loadIfNeeded();
+    });
   }
 
   @override
@@ -46,10 +58,19 @@ class _StockLevelFormPanelState extends ConsumerState<StockLevelFormPanel> {
     final repo = ref.read(stockLevelRepoProvider);
     final item = await repo.findById(widget.itemId!);
     if (!mounted || item == null) return;
+    final p = _pvOpts.firstWhere(
+      (e) => (e['id']?.toString() ?? '') == item.productVariantId,
+      orElse: () => {},
+    );
+    final c = _coOpts.firstWhere(
+      (e) => (e['id']?.toString() ?? '') == item.companyId,
+      orElse: () => {},
+    );
     setState(() {
       _pvId = item.productVariantId;
-      _pvCtrl.text = item.productVariantId.toString();
-      _companyCtrl.text = item.companyId;
+      _companyId = item.companyId;
+      _pvCtrl.text = (p['label'] as String?) ?? item.productVariantId;
+      _companyCtrl.text = (c['label'] as String?) ?? item.companyId;
       _onHandCtrl.text = item.stockOnHand.toString();
       _allocatedCtrl.text = item.stockAllocated.toString();
     });
@@ -57,13 +78,14 @@ class _StockLevelFormPanelState extends ConsumerState<StockLevelFormPanel> {
 
   Future<void> _submit() async {
     if (!_formKey.currentState!.validate()) return;
+    if (_pvId == null || _companyId == null) return;
     setState(() => _loading = true);
     final repo = ref.read(stockLevelRepoProvider);
     final now = DateTime.now();
     final entity = StockLevel(
       id: widget.itemId != null ? int.parse(widget.itemId!) : null,
-      productVariantId: int.parse(_pvCtrl.text.trim()),
-      companyId: _companyCtrl.text.trim(),
+      productVariantId: _pvId!,
+      companyId: _companyId!,
       stockOnHand: int.parse(_onHandCtrl.text.trim()),
       stockAllocated: int.parse(_allocatedCtrl.text.trim()),
       createdAt: now,
@@ -128,30 +150,45 @@ class _StockLevelFormPanelState extends ConsumerState<StockLevelFormPanel> {
                         key: _formKey,
                         child: ListView(
                           children: [
-                            TextFormField(
+                            _AutocompleteField(
                               controller: _pvCtrl,
-                              keyboardType: TextInputType.number,
-                              inputFormatters: [
-                                FilteringTextInputFormatter.digitsOnly,
-                              ],
-                              textInputAction: TextInputAction.next,
-                              decoration: const InputDecoration(
-                                labelText: 'ID produit (variant)',
-                                hintText: 'Entrez l’ID du variant produit',
-                                border: OutlineInputBorder(),
-                              ),
-                              validator: _intv,
+                              label: 'Produit',
+                              hint: 'Rechercher un produit…',
+                              options: _pvOpts,
+                              validator: (_) =>
+                                  (_pvId == null) ? 'Champ obligatoire' : null,
+                              onQuery: (q) async {
+                                final repo = ref.read(stockLevelRepoProvider);
+                                final list = await repo.listProductVariants(
+                                  query: q,
+                                );
+                                if (!mounted) return;
+                                setState(() => _pvOpts = list);
+                              },
+                              onSelected: (id, label) {
+                                _pvId = id;
+                                _pvCtrl.text = label;
+                              },
                             ),
                             const SizedBox(height: 12),
-                            TextFormField(
+                            _AutocompleteField(
                               controller: _companyCtrl,
-                              textInputAction: TextInputAction.next,
-                              decoration: const InputDecoration(
-                                labelText: 'ID entreprise',
-                                hintText: 'Entrez l’ID de l’entreprise',
-                                border: OutlineInputBorder(),
-                              ),
-                              validator: _req,
+                              label: 'Société',
+                              hint: 'Rechercher une société…',
+                              options: _coOpts,
+                              validator: (_) => (_companyId == null)
+                                  ? 'Champ obligatoire'
+                                  : null,
+                              onQuery: (q) async {
+                                final repo = ref.read(stockLevelRepoProvider);
+                                final list = await repo.listCompanies(query: q);
+                                if (!mounted) return;
+                                setState(() => _coOpts = list);
+                              },
+                              onSelected: (id, label) {
+                                _companyId = id;
+                                _companyCtrl.text = label;
+                              },
                             ),
                             const SizedBox(height: 12),
                             TextFormField(
@@ -227,6 +264,108 @@ class _StockLevelFormPanelState extends ConsumerState<StockLevelFormPanel> {
           ),
         ),
       ),
+    );
+  }
+}
+
+class _AutocompleteField extends StatelessWidget {
+  final TextEditingController controller;
+  final String label;
+  final String hint;
+  final List<Map<String, Object?>> options;
+  final String? Function(String?)? validator;
+  final Future<void> Function(String) onQuery;
+  final void Function(String id, String label) onSelected;
+
+  const _AutocompleteField({
+    super.key,
+    required this.controller,
+    required this.label,
+    required this.hint,
+    required this.options,
+    required this.validator,
+    required this.onQuery,
+    required this.onSelected,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Autocomplete<Map<String, Object?>>(
+      optionsBuilder: (text) {
+        final q = text.text.toLowerCase().trim();
+        if (q.isEmpty) return options;
+        return options.where(
+          (e) => ((e['label'] as String?) ?? '').toLowerCase().contains(q),
+        );
+      },
+      displayStringForOption: (e) => (e['label'] as String?) ?? '',
+      fieldViewBuilder: (ctx, textCtrl, focus, onSubmit) {
+        if (controller.text.isNotEmpty && textCtrl.text.isEmpty) {
+          textCtrl.text = controller.text;
+        }
+        return TextFormField(
+          controller: textCtrl,
+          focusNode: focus,
+          validator: validator,
+          onChanged: (v) => onQuery(v),
+          decoration: InputDecoration(
+            border: const OutlineInputBorder(),
+            labelText: label,
+            hintText: hint,
+            suffixIcon: textCtrl.text.isNotEmpty
+                ? IconButton(
+                    tooltip: 'Effacer',
+                    icon: const Icon(Icons.clear),
+                    onPressed: () {
+                      textCtrl.clear();
+                      controller.clear();
+                    },
+                  )
+                : null,
+          ),
+        );
+      },
+      optionsViewBuilder: (context, onSelect, opts) {
+        final list = opts.toList(growable: false);
+        return Align(
+          alignment: Alignment.topLeft,
+          child: Material(
+            elevation: 4,
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(maxHeight: 280, maxWidth: 520),
+              child: ListView.separated(
+                padding: EdgeInsets.zero,
+                itemCount: list.length,
+                separatorBuilder: (_, __) => const Divider(height: 1),
+                itemBuilder: (_, i) {
+                  final e = list[i];
+                  final label = (e['label'] as String?) ?? '';
+                  return ListTile(
+                    dense: true,
+                    leading: const Icon(Icons.list_alt),
+                    title: Text(
+                      label,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                    onTap: () {
+                      final id = (e['id']?.toString() ?? '');
+                      onSelected(id, label);
+                      Navigator.of(context).pop();
+                    },
+                  );
+                },
+              ),
+            ),
+          ),
+        );
+      },
+      onSelected: (e) {
+        final id = (e['id']?.toString() ?? '');
+        final label = (e['label'] as String?) ?? '';
+        controller.text = label;
+        onSelected(id, label);
+      },
     );
   }
 }

@@ -255,14 +255,14 @@ CREATE INDEX IF NOT EXISTS idx_customer_dirty ON customer(isDirty);
 
 CREATE TABLE stock_level
 (
-    createdAt        TEXT DEFAULT (datetime('now')) NOT NULL,
-    updatedAt        TEXT DEFAULT (datetime('now')) NOT NULL,
-    stockOnHand      INTEGER                        NOT NULL,
-    stockAllocated   INTEGER                        NOT NULL,
-    id               INTEGER                        NOT NULL PRIMARY KEY AUTOINCREMENT,
-    productVariantId INTEGER                        NOT NULL
+    createdAt        TEXT DEFAULT (datetime('now')) ,
+    updatedAt        TEXT DEFAULT (datetime('now')) ,
+    stockOnHand      INTEGER                        ,
+    stockAllocated   INTEGER                        ,
+    id               INTEGER                         PRIMARY KEY AUTOINCREMENT,
+    productVariantId TEXT                        
         REFERENCES product(id) ON DELETE CASCADE,
-    companyId        TEXT                           NOT NULL
+    companyId        TEXT                           
         REFERENCES company(id) ON DELETE CASCADE
 );
  
@@ -274,3 +274,23 @@ CREATE INDEX IF NOT EXISTS IDX_stocklevel_company
 
 CREATE INDEX IF NOT EXISTS IDX_stocklevel_product
     ON stock_level (productVariantId);
+
+
+CREATE TABLE IF NOT EXISTS stock_movement (
+  id                INTEGER PRIMARY KEY AUTOINCREMENT,
+  type_stock_movement TEXT ,
+  quantity          INTEGER  ,
+  companyId         TEXT  ,
+  productVariantId  TEXT ,
+  orderLineId       TEXT,
+  discriminator     TEXT,
+  createdAt         TEXT DEFAULT (datetime('now')),
+  updatedAt         TEXT DEFAULT (datetime('now'))
+
+);
+
+CREATE INDEX IF NOT EXISTS IDX_stockmove_company   ON stock_movement(companyId);
+CREATE INDEX IF NOT EXISTS IDX_stockmove_product   ON stock_movement(productVariantId);
+CREATE INDEX IF NOT EXISTS IDX_stockmove_orderline ON stock_movement(orderLineId);
+CREATE INDEX IF NOT EXISTS IDX_stockmove_type      ON stock_movement(type_stock_movement);
+CREATE INDEX IF NOT EXISTS IDX_stockmove_created   ON stock_movement(createdAt);

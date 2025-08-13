@@ -1,4 +1,4 @@
-/// Use case that creates a transaction with items and properly updates stock levels per product (TEXT id) and company in the same SQL transaction, with change_log entries.
+/// Use case that creates a transaction with items, updates stock levels, and inserts stock movement rows atomically with change_log entries.
 import 'package:uuid/uuid.dart';
 import 'package:sqflite/sqflite.dart';
 import 'package:money_pulse/infrastructure/db/app_database.dart';
@@ -31,7 +31,7 @@ class CheckoutCartUseCase {
       throw ArgumentError('lines cannot be empty');
     }
 
-    int _asInt(Object? v) => (v is int) ? v : int.tryParse('${v ?? 0}') ?? 0;
+    int asInt(Object? v) => (v is int) ? v : int.tryParse('${v ?? 0}') ?? 0;
 
     final acc = accountId != null
         ? await accountRepo.findById(accountId)
@@ -41,8 +41,8 @@ class CheckoutCartUseCase {
     }
 
     final total = lines.fold<int>(0, (p, e) {
-      final q = _asInt(e['quantity']);
-      final up = _asInt(e['unitPrice']);
+      final q = asInt(e['quantity']);
+      final up = asInt(e['unitPrice']);
       return p + (q < 0 ? 0 : q) * (up < 0 ? 0 : up);
     });
 
@@ -51,6 +51,8 @@ class CheckoutCartUseCase {
     final txId = const Uuid().v4();
 
     await db.tx((txn) async {
+      final resolvedCompany = await _resolveCompanyId(txn, companyId);
+
       await txn.insert('transaction_entry', {
         'id': txId,
         'remoteId': null,
@@ -76,16 +78,19 @@ class CheckoutCartUseCase {
 
       for (final l in lines) {
         final itemId = const Uuid().v4();
-        final qty = _asInt(l['quantity']);
-        final up = _asInt(l['unitPrice']);
-        final tot = (qty < 0 ? 0 : qty) * (up < 0 ? 0 : up);
+        final qty = asInt(l['quantity']);
+        final up = asInt(l['unitPrice']);
+        final safeQty = qty < 0 ? 0 : qty;
+        final safeUp = up < 0 ? 0 : up;
+        final tot = safeQty * safeUp;
+
         await txn.insert('transaction_item', {
           'id': itemId,
           'transactionId': txId,
           'productId': l['productId'],
           'label': (l['label'] ?? '').toString(),
-          'quantity': qty < 0 ? 0 : qty,
-          'unitPrice': up < 0 ? 0 : up,
+          'quantity': safeQty,
+          'unitPrice': safeUp,
           'total': tot,
           'notes': null,
           'createdAt': now.toIso8601String(),
@@ -95,13 +100,37 @@ class CheckoutCartUseCase {
           'version': 0,
           'isDirty': 1,
         });
+
+        final productIdStr = (l['productId']?.toString() ?? '');
+        if (productIdStr.isNotEmpty &&
+            safeQty > 0 &&
+            (resolvedCompany ?? '').isNotEmpty) {
+          final mvType = (t == 'DEBIT') ? 'IN' : 'OUT';
+          final movementId = await txn.insert('stock_movement', {
+            'type_stock_movement': mvType,
+            'quantity': safeQty,
+            'companyId': resolvedCompany,
+            'productVariantId': productIdStr,
+            'orderLineId': itemId,
+            'discriminator': 'TXN',
+            'createdAt': now.toIso8601String(),
+            'updatedAt': now.toIso8601String(),
+          });
+          await _upsertChangeLog(
+            txn,
+            'stock_movement',
+            '$movementId',
+            'INSERT',
+            now.toIso8601String(),
+          );
+        }
       }
 
       await _applyStockAdjustments(
         txn: txn,
         typeEntry: t,
         lines: lines,
-        companyId: companyId,
+        companyId: resolvedCompany,
         nowIso: now.toIso8601String(),
       );
 
@@ -160,12 +189,8 @@ class CheckoutCartUseCase {
   }) async {
     String? company = companyId;
     if (company == null || company.isEmpty) {
-      final def = await txn.rawQuery(
-        "SELECT id FROM company WHERE isDefault=1 AND deletedAt IS NULL LIMIT 1",
-      );
-      company = def.isEmpty ? null : (def.first['id'] as String?);
+      return;
     }
-    if (company == null || company.isEmpty) return;
 
     final Map<String, int> totalsByVariant = {};
     for (final l in lines) {
@@ -211,7 +236,6 @@ class CheckoutCartUseCase {
         "UPDATE stock_level SET stockOnHand = COALESCE(stockOnHand,0) + ?, updatedAt=? WHERE productVariantId=? AND companyId=?",
         [qty, nowIso, pvId, company],
       );
-
       await _upsertChangeLog(
         txn,
         'stock_level',
@@ -220,6 +244,14 @@ class CheckoutCartUseCase {
         nowIso,
       );
     }
+  }
+
+  Future<String?> _resolveCompanyId(Transaction txn, String? provided) async {
+    if (provided != null && provided.isNotEmpty) return provided;
+    final def = await txn.rawQuery(
+      "SELECT id FROM company WHERE isDefault=1 AND deletedAt IS NULL LIMIT 1",
+    );
+    return def.isEmpty ? null : (def.first['id'] as String?);
   }
 
   Future<void> _upsertChangeLog(

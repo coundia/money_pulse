@@ -1,5 +1,4 @@
-// Sqflite StockLevelRepository wired through AppDatabase
-
+/// Sqflite repository for StockLevel with TEXT productVariantId and label lookups.
 import 'package:sqflite/sqflite.dart';
 import '../../../infrastructure/db/app_database.dart';
 import '../../../domain/stock/entities/stock_level.dart';
@@ -15,7 +14,7 @@ class StockLevelRepositorySqflite implements StockLevelRepository {
 
   @override
   Future<List<StockLevelRow>> search({String query = ''}) async {
-    final q = query.trim();
+    final q = query.trim().toLowerCase();
     final like = '%$q%';
     final rows = await db.rawQuery(
       '''
@@ -23,17 +22,19 @@ class StockLevelRepositorySqflite implements StockLevelRepository {
              sl.stockOnHand,
              sl.stockAllocated,
              sl.updatedAt,
-             COALESCE(pv.name, pv.code, 'Variant #'||sl.productVariantId) AS productLabel,
+             COALESCE(p.name, p.code, 'Produit') AS productLabel,
              COALESCE(c.name, c.code, sl.companyId) AS companyLabel
       FROM stock_level sl
-      LEFT JOIN product pv ON pv.id = sl.productVariantId
+      LEFT JOIN product p ON p.id = sl.productVariantId
       LEFT JOIN company c ON c.id = sl.companyId
       WHERE (? = '' 
-         OR pv.name LIKE ? OR pv.code LIKE ?
-         OR c.name LIKE ? OR c.code LIKE ?)
-      ORDER BY sl.updatedAt DESC, sl.id DESC
+         OR lower(COALESCE(p.name,'')) LIKE ?
+         OR lower(COALESCE(p.code,'')) LIKE ?
+         OR lower(COALESCE(c.name,'')) LIKE ?
+         OR lower(COALESCE(c.code,'')) LIKE ?)
+      ORDER BY datetime(sl.updatedAt) DESC, sl.id DESC
       LIMIT 500
-    ''',
+      ''',
       [q, like, like, like, like],
     );
 
@@ -63,7 +64,7 @@ class StockLevelRepositorySqflite implements StockLevelRepository {
     final m = rows.first;
     return StockLevel(
       id: m['id'] as int?,
-      productVariantId: (m['productVariantId'] as int),
+      productVariantId: (m['productVariantId'] as String),
       companyId: (m['companyId'] as String),
       stockOnHand: (m['stockOnHand'] as int),
       stockAllocated: (m['stockAllocated'] as int),
@@ -115,32 +116,34 @@ class StockLevelRepositorySqflite implements StockLevelRepository {
   Future<List<Map<String, Object?>>> listProductVariants({
     String query = '',
   }) async {
-    final q = query.trim();
+    final q = query.trim().toLowerCase();
     final like = '%$q%';
     return db.rawQuery(
       '''
-      SELECT id, COALESCE(name, code, 'Variant #'||id) AS label
+      SELECT id, COALESCE(name, code, 'Produit') AS label
       FROM product
-      WHERE (? = '' OR name LIKE ? OR code LIKE ?)
-      ORDER BY (name IS NULL), name, (code IS NULL), code, id DESC
+      WHERE deletedAt IS NULL
+        AND (? = '' OR lower(COALESCE(name,'')) LIKE ? OR lower(COALESCE(code,'')) LIKE ?)
+      ORDER BY (name IS NULL), name COLLATE NOCASE, (code IS NULL), code COLLATE NOCASE, id DESC
       LIMIT 200
-    ''',
+      ''',
       [q, like, like],
     );
   }
 
   @override
   Future<List<Map<String, Object?>>> listCompanies({String query = ''}) async {
-    final q = query.trim();
+    final q = query.trim().toLowerCase();
     final like = '%$q%';
     return db.rawQuery(
       '''
       SELECT id, COALESCE(name, code, id) AS label
       FROM company
-      WHERE deletedAt IS NULL AND (? = '' OR name LIKE ? OR code LIKE ?)
-      ORDER BY (name IS NULL), name, (code IS NULL), code, id DESC
+      WHERE deletedAt IS NULL
+        AND (? = '' OR lower(COALESCE(name,'')) LIKE ? OR lower(COALESCE(code,'')) LIKE ?)
+      ORDER BY (name IS NULL), name COLLATE NOCASE, (code IS NULL), code COLLATE NOCASE, id DESC
       LIMIT 200
-    ''',
+      ''',
       [q, like, like],
     );
   }

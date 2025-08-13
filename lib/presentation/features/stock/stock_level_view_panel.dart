@@ -1,8 +1,7 @@
-// Right drawer panel to display StockLevel details
-
+/// Right drawer panel to display StockLevel details with resolved product/company labels.
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:intl/intl.dart';
+import 'package:money_pulse/presentation/shared/formatters.dart';
 import 'providers/stock_level_repo_provider.dart';
 import 'package:money_pulse/domain/stock/entities/stock_level.dart';
 import 'package:money_pulse/domain/stock/repositories/stock_level_repository.dart';
@@ -14,23 +13,22 @@ class StockLevelViewPanel extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final repo = ref.watch(stockLevelRepoProvider);
-    return FutureBuilder<StockLevel?>(
-      future: repo.findById(itemId),
+    return FutureBuilder<_ViewVm>(
+      future: _load(repo, itemId),
       builder: (context, snap) {
-        final theme = Theme.of(context);
         if (snap.connectionState != ConnectionState.done) {
           return const Scaffold(
             body: Center(child: CircularProgressIndicator()),
           );
         }
-        final item = snap.data;
-        if (item == null) {
+        final vm = snap.data;
+        if (vm == null || vm.item == null) {
           return Scaffold(
             appBar: AppBar(title: const Text('Détail stock')),
             body: const Center(child: Text('Introuvable')),
           );
         }
-        final nf = NumberFormat.decimalPattern();
+        final item = vm.item!;
         return Scaffold(
           appBar: AppBar(title: const Text('Détail stock')),
           body: SafeArea(
@@ -38,18 +36,18 @@ class StockLevelViewPanel extends ConsumerWidget {
               padding: const EdgeInsets.all(16),
               child: ListView(
                 children: [
-                  _kv('Produit (variant ID)', item.productVariantId.toString()),
-                  _kv('Entreprise', item.companyId),
-                  _kv('Stock disponible', nf.format(item.stockOnHand)),
-                  _kv('Stock alloué', nf.format(item.stockAllocated)),
+                  _kv('Produit', vm.productLabel ?? item.productVariantId),
+                  _kv('Société', vm.companyLabel ?? item.companyId),
                   _kv(
-                    'Créé le',
-                    DateFormat.yMMMMEEEEd().add_Hm().format(item.createdAt),
+                    'Stock disponible',
+                    Formatters.amountFromCents(item.stockOnHand * 100),
                   ),
                   _kv(
-                    'Mis à jour',
-                    DateFormat.yMMMMEEEEd().add_Hm().format(item.updatedAt),
+                    'Stock alloué',
+                    Formatters.amountFromCents(item.stockAllocated * 100),
                   ),
+                  _kv('Créé le', Formatters.dateFull(item.createdAt)),
+                  _kv('Mis à jour le', Formatters.dateFull(item.updatedAt)),
                 ],
               ),
             ),
@@ -57,6 +55,26 @@ class StockLevelViewPanel extends ConsumerWidget {
         );
       },
     );
+  }
+
+  Future<_ViewVm> _load(StockLevelRepository repo, String id) async {
+    final sl = await repo.findById(id);
+    if (sl == null) return const _ViewVm(null, null, null);
+    String? pLabel;
+    String? cLabel;
+    final prods = await repo.listProductVariants(query: '');
+    final comps = await repo.listCompanies(query: '');
+    final p = prods.firstWhere(
+      (e) => (e['id']?.toString() ?? '') == sl.productVariantId,
+      orElse: () => {},
+    );
+    final c = comps.firstWhere(
+      (e) => (e['id']?.toString() ?? '') == sl.companyId,
+      orElse: () => {},
+    );
+    pLabel = (p['label'] as String?) ?? pLabel;
+    cLabel = (c['label'] as String?) ?? cLabel;
+    return _ViewVm(sl, pLabel, cLabel);
   }
 
   Widget _kv(String k, String v) {
@@ -73,4 +91,11 @@ class StockLevelViewPanel extends ConsumerWidget {
       ),
     );
   }
+}
+
+class _ViewVm {
+  final StockLevel? item;
+  final String? productLabel;
+  final String? companyLabel;
+  const _ViewVm(this.item, this.productLabel, this.companyLabel);
 }

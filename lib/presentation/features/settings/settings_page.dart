@@ -7,6 +7,7 @@ import 'package:money_pulse/presentation/features/accounts/account_page.dart';
 import 'package:money_pulse/presentation/features/companies/company_list_page.dart';
 import 'package:money_pulse/presentation/features/customers/customer_list_page.dart';
 import 'package:money_pulse/presentation/features/stock/stock_level_list_page.dart';
+import 'package:money_pulse/presentation/features/stock_movement/stock_movement_list_page.dart';
 import 'package:money_pulse/presentation/features/sync/change_log_list_page.dart';
 import 'package:money_pulse/presentation/features/sync/sync_state_list_page.dart';
 
@@ -135,6 +136,16 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
 
             onTap: () => Navigator.of(context).push(
               MaterialPageRoute(builder: (_) => const StockLevelListPage()),
+            ),
+          ),
+
+          ListTile(
+            leading: const Icon(Icons.list),
+            title: const Text('Mouvements'),
+            subtitle: const Text('List'),
+
+            onTap: () => Navigator.of(context).push(
+              MaterialPageRoute(builder: (_) => const StockMovementListPage()),
             ),
           ),
 
