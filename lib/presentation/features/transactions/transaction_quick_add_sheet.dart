@@ -28,10 +28,10 @@ import 'widgets/category_autocomplete.dart';
 import 'widgets/date_row.dart';
 import 'widgets/items_section.dart';
 import 'widgets/party_section.dart';
-import 'widgets/type_toggle.dart';
+import 'widgets/type_header.dart';
 
 class TransactionQuickAddSheet extends ConsumerStatefulWidget {
-  final bool initialIsDebit;
+  final bool initialIsDebit; // fixed at construction time
   const TransactionQuickAddSheet({super.key, this.initialIsDebit = true});
 
   @override
@@ -41,36 +41,24 @@ class TransactionQuickAddSheet extends ConsumerStatefulWidget {
 
 class _TransactionQuickAddSheetState
     extends ConsumerState<TransactionQuickAddSheet> {
-  // Form + fields
   final _formKey = GlobalKey<FormState>();
   final _amountCtrl = TextEditingController();
   final _descCtrl = TextEditingController();
   final _categoryCtrl = TextEditingController();
 
-  // state
-  bool _isDebit = true;
+  late final bool _isDebit = widget.initialIsDebit; // FIXED — no toggle
   DateTime _when = DateTime.now();
 
-  // category
   Category? _selectedCategory;
   List<Category> _allCategories = const [];
 
-  // party
   String? _companyId;
   String? _customerId;
   List<Company> _companies = const [];
   List<Customer> _customers = const [];
 
-  // items
   final List<TxItem> _items = [];
-  bool _lockAmountToItems = true; // default when items exist
-
-  @override
-  void initState() {
-    super.initState();
-    _isDebit = widget.initialIsDebit;
-    _loadInitialData();
-  }
+  bool _lockAmountToItems = true;
 
   @override
   void dispose() {
@@ -78,6 +66,12 @@ class _TransactionQuickAddSheetState
     _descCtrl.dispose();
     _categoryCtrl.dispose();
     super.dispose();
+  }
+
+  @override
+  void initState() {
+    super.initState();
+    _loadInitialData();
   }
 
   Future<void> _loadInitialData() async {
@@ -115,9 +109,7 @@ class _TransactionQuickAddSheetState
         _customerId = null;
         _clearCategoryInternal();
       });
-    } catch (_) {
-      // keep UI usable
-    }
+    } catch (_) {}
   }
 
   void _snack(String message) {
@@ -328,6 +320,8 @@ class _TransactionQuickAddSheetState
   @override
   Widget build(BuildContext context) {
     final insets = MediaQuery.of(context).viewInsets.bottom;
+    final primaryLabel = _isDebit ? 'Ajouter dépense' : 'Ajouter revenu';
+    final title = _isDebit ? 'Ajouter une dépense' : 'Ajouter un revenu';
 
     return Shortcuts(
       shortcuts: <LogicalKeySet, Intent>{
@@ -345,7 +339,7 @@ class _TransactionQuickAddSheetState
         },
         child: Scaffold(
           appBar: AppBar(
-            title: const Text('Ajouter une transaction'),
+            title: Text(title),
             leading: IconButton(
               tooltip: 'Fermer',
               icon: const Icon(Icons.close),
@@ -353,7 +347,7 @@ class _TransactionQuickAddSheetState
             ),
             actions: [
               IconButton(
-                tooltip: 'Enregistrer',
+                tooltip: primaryLabel,
                 icon: const Icon(Icons.check),
                 onPressed: _save,
               ),
@@ -368,15 +362,7 @@ class _TransactionQuickAddSheetState
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    TypeToggle(
-                      isDebit: _isDebit,
-                      onChanged: (v) {
-                        setState(() {
-                          _isDebit = v;
-                          _clearCategoryInternal(); // avoid mismatch types
-                        });
-                      },
-                    ),
+                    TypeHeader(isDebit: _isDebit), // static header (no toggle)
                     const SizedBox(height: 12),
                     AmountField(
                       controller: _amountCtrl,
@@ -450,6 +436,7 @@ class _TransactionQuickAddSheetState
           bottomSheet: BottomBar(
             onCancel: () => Navigator.of(context).maybePop(false),
             onSave: _save,
+            primaryLabel: primaryLabel, // NEW label
           ),
         ),
       ),

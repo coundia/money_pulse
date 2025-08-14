@@ -3,10 +3,18 @@ import 'package:flutter/material.dart';
 class BottomBar extends StatelessWidget {
   final VoidCallback onCancel;
   final VoidCallback onSave;
-  const BottomBar({super.key, required this.onCancel, required this.onSave});
+  final String? primaryLabel; // NEW
+
+  const BottomBar({
+    super.key,
+    required this.onCancel,
+    required this.onSave,
+    this.primaryLabel,
+  });
 
   @override
   Widget build(BuildContext context) {
+    final label = primaryLabel ?? 'Enregistrer';
     return Container(
       padding: const EdgeInsets.fromLTRB(16, 10, 16, 16),
       decoration: BoxDecoration(
@@ -30,7 +38,7 @@ class BottomBar extends StatelessWidget {
               child: FilledButton.icon(
                 onPressed: onSave,
                 icon: const Icon(Icons.check),
-                label: const Text('Enregistrer'),
+                label: Text(label),
               ),
             ),
           ],
