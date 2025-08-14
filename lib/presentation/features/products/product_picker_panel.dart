@@ -1,4 +1,4 @@
-// Right-drawer to search/pick products with quantity/price editing, Enter-to-validate, quick access to list and new-product form.
+// Right-drawer to search/pick products with quantity/price editing, top actions row, Enter-to-validate, and quick access to list/new-product.
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -9,18 +9,11 @@ import 'package:money_pulse/presentation/shared/formatters.dart';
 import 'package:money_pulse/presentation/widgets/right_drawer.dart';
 
 import 'package:money_pulse/domain/products/entities/product.dart';
-import 'package:money_pulse/domain/products/repositories/product_repository.dart';
 import '../../app/providers.dart';
 import 'product_repo_provider.dart';
 
-import 'package:money_pulse/domain/categories/entities/category.dart';
-import 'package:money_pulse/domain/categories/repositories/category_repository.dart';
-import 'package:money_pulse/presentation/features/products/product_repo_provider.dart'
-    as prp
-    show productRepoProvider; // ensure local alias if name clashes
 import 'package:money_pulse/presentation/features/products/widgets/product_form_panel.dart';
 import 'package:money_pulse/presentation/features/products/product_list_page.dart';
-import 'package:money_pulse/presentation/features/products/product_repo_provider.dart';
 
 class ProductPickerPanel extends ConsumerStatefulWidget {
   final List<Map<String, Object?>> initialLines;
@@ -446,7 +439,7 @@ class _ProductPickerPanelState extends ConsumerState<ProductPickerPanel> {
                   crossAxisAlignment: WrapCrossAlignment.center,
                   children: [
                     ChoiceChip(
-                      label: Text('Tous'),
+                      label: const Text('Tous'),
                       selected: !_onlySelected,
                       onSelected: (v) => setState(() => _onlySelected = !v),
                     ),
@@ -455,17 +448,11 @@ class _ProductPickerPanelState extends ConsumerState<ProductPickerPanel> {
                       selected: _onlySelected,
                       onSelected: (v) => setState(() => _onlySelected = v),
                     ),
-                    InputChip(
-                      avatar: const Icon(Icons.payments, size: 18),
-                      label: Text(
-                        'Total: ${Formatters.amountFromCents(_totalCents)}',
-                      ),
-                      onPressed: _selected.isEmpty ? null : _submit,
-                    ),
                   ],
                 ),
               ),
-              const SizedBox(height: 8),
+
+              const SizedBox(height: 4),
               if (loading)
                 const Expanded(
                   child: Center(child: CircularProgressIndicator()),
@@ -579,45 +566,6 @@ class _ProductPickerPanelState extends ConsumerState<ProductPickerPanel> {
                           },
                         ),
                 ),
-              SafeArea(
-                top: false,
-                child: Container(
-                  padding: const EdgeInsets.fromLTRB(12, 8, 12, 12),
-                  decoration: BoxDecoration(
-                    color: Theme.of(context).colorScheme.surface,
-                    border: Border(
-                      top: BorderSide(color: Theme.of(context).dividerColor),
-                    ),
-                  ),
-                  child: Row(
-                    children: [
-                      Expanded(
-                        child: Text(
-                          'Total: ${Formatters.amountFromCents(_totalCents)}',
-                          style: const TextStyle(fontWeight: FontWeight.bold),
-                        ),
-                      ),
-                      OutlinedButton.icon(
-                        onPressed: _openProductList,
-                        icon: const Icon(Icons.view_list),
-                        label: const Text('Liste'),
-                      ),
-                      const SizedBox(width: 8),
-                      OutlinedButton.icon(
-                        onPressed: _createProduct,
-                        icon: const Icon(Icons.add),
-                        label: const Text('Nouveau'),
-                      ),
-                      const SizedBox(width: 8),
-                      FilledButton.icon(
-                        onPressed: _submit,
-                        icon: const Icon(Icons.check),
-                        label: const Text('Valider'),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
             ],
           ),
         ),
@@ -658,7 +606,7 @@ class _EmptyState extends StatelessWidget {
     return Center(
       child: Padding(
         padding: const EdgeInsets.all(24),
-        child: Row(
+        child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
             const Icon(Icons.inventory_2_outlined, size: 72),
