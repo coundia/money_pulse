@@ -1,3 +1,4 @@
+// lib/presentation/features/categories/category_form_panel.dart
 import 'package:flutter/material.dart';
 import 'package:money_pulse/domain/categories/entities/category.dart';
 
@@ -14,7 +15,11 @@ class CategoryFormResult {
 
 class CategoryFormPanel extends StatefulWidget {
   final Category? existing;
-  const CategoryFormPanel({super.key, this.existing});
+
+  /// If provided, the type is locked to this value ("DEBIT" or "CREDIT")
+  final String? forcedTypeEntry;
+
+  const CategoryFormPanel({super.key, this.existing, this.forcedTypeEntry});
 
   @override
   State<CategoryFormPanel> createState() => _CategoryFormPanelState();
@@ -29,11 +34,16 @@ class _CategoryFormPanelState extends State<CategoryFormPanel> {
     text: widget.existing?.description ?? '',
   );
 
-  late String _typeEntry =
-      (widget.existing?.typeEntry == Category.credit ||
-          widget.existing?.typeEntry == Category.debit)
-      ? widget.existing!.typeEntry
-      : Category.debit;
+  late String _typeEntry = () {
+    final t = widget.existing?.typeEntry;
+    if (t == Category.credit || t == Category.debit) return t!;
+    return widget.forcedTypeEntry == 'CREDIT'
+        ? Category.credit
+        : Category.debit;
+  }();
+
+  bool get _lockedType =>
+      (widget.forcedTypeEntry == 'DEBIT' || widget.forcedTypeEntry == 'CREDIT');
 
   @override
   void dispose() {
@@ -97,7 +107,8 @@ class _CategoryFormPanelState extends State<CategoryFormPanel> {
                 hintText: 'Optionnel',
                 border: OutlineInputBorder(),
               ),
-              textInputAction: TextInputAction.next,
+              textInputAction: TextInputAction.done,
+              onFieldSubmitted: (_) => _save(),
             ),
             const SizedBox(height: 20),
             const Text(
@@ -111,23 +122,27 @@ class _CategoryFormPanelState extends State<CategoryFormPanel> {
                 ChoiceChip(
                   label: const Text('Débit'),
                   selected: _typeEntry == Category.debit,
-                  onSelected: (_) {
-                    setState(() => _typeEntry = Category.debit);
-                  },
+                  onSelected: _lockedType
+                      ? null
+                      : (_) => setState(() => _typeEntry = Category.debit),
                 ),
                 ChoiceChip(
                   label: const Text('Crédit'),
                   selected: _typeEntry == Category.credit,
-                  onSelected: (_) {
-                    setState(() => _typeEntry = Category.credit);
-                  },
+                  onSelected: _lockedType
+                      ? null
+                      : (_) => setState(() => _typeEntry = Category.credit),
                 ),
               ],
             ),
             const SizedBox(height: 8),
-            const Text(
-              'Débit = dépense, Crédit = revenu',
-              style: TextStyle(fontSize: 12, color: Colors.black54),
+            Text(
+              _lockedType
+                  ? (_typeEntry == 'DEBIT'
+                        ? 'Type fixé: Débit (dépense)'
+                        : 'Type fixé: Crédit (revenu)')
+                  : 'Débit = dépense, Crédit = revenu',
+              style: const TextStyle(fontSize: 12, color: Colors.black54),
             ),
           ],
         ),

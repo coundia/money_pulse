@@ -502,7 +502,8 @@ class _TransactionQuickAddSheetState
                     CategoryAutocomplete(
                       controller: _categoryCtrl,
                       initialSelected: _selectedCategory,
-                      optionsBuilder: _filteredCategories,
+                      optionsBuilder:
+                          _filteredCategories, // already filtered by _isDebit
                       onSelected: (c) =>
                           setState(() => _setCategoryInternal(c)),
                       onClear: () => setState(() => _clearCategoryInternal()),
@@ -510,7 +511,9 @@ class _TransactionQuickAddSheetState
                       emptyHint: _isDebit
                           ? 'Aucune catégorie Débit'
                           : 'Aucune catégorie Crédit',
+                      typeEntry: _isDebit ? 'DEBIT' : 'CREDIT', // <<< NEW
                     ),
+
                     const SizedBox(height: 12),
                     PartySection(
                       companies: _companies,

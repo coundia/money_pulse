@@ -12,7 +12,8 @@ import '../../app/providers/customer_repo_provider.dart';
 
 class CustomerFormPanel extends ConsumerStatefulWidget {
   final Customer? initial;
-  const CustomerFormPanel({super.key, this.initial});
+  final String? initialCompanyId;
+  const CustomerFormPanel({super.key, this.initial, this.initialCompanyId});
 
   @override
   ConsumerState<CustomerFormPanel> createState() => _CustomerFormPanelState();
@@ -67,6 +68,10 @@ class _CustomerFormPanelState extends ConsumerState<CustomerFormPanel> {
       _notes.text = c.notes ?? '';
       _companyId = c.companyId;
     }
+
+    if (widget.initial == null && (widget.initialCompanyId ?? '').isNotEmpty) {
+      _companyId = widget.initialCompanyId;
+    }
   }
 
   @override
@@ -94,7 +99,26 @@ class _CustomerFormPanelState extends ConsumerState<CustomerFormPanel> {
 
   Future<List<Company>> _loadCompanies() async {
     final repo = ref.read(companyRepoProvider);
-    return repo.findAll(const CompanyQuery(limit: 200, offset: 0));
+    final companies = await repo.findAll(
+      const CompanyQuery(limit: 200, offset: 0),
+    );
+
+    // For NEW customer only, pick a default if nothing selected or invalid
+    if (mounted && widget.initial == null) {
+      if (_companyId == null || !_containsCompanyId(companies, _companyId)) {
+        Company? def;
+        try {
+          def = companies.firstWhere((c) => c.isDefault == true);
+        } catch (_) {
+          def = companies.isNotEmpty ? companies.first : null;
+        }
+        if (def != null) {
+          setState(() => _companyId = def!.id);
+        }
+      }
+    }
+
+    return companies;
   }
 
   String? _validateEmail(String? v) {
@@ -150,6 +174,14 @@ class _CustomerFormPanelState extends ConsumerState<CustomerFormPanel> {
     FocusScope.of(context).requestFocus(node);
   }
 
+  bool _containsCompanyId(List<Company> list, String? id) {
+    if (id == null || id.isEmpty) return false;
+    for (final c in list) {
+      if (c.id == id) return true;
+    }
+    return false;
+  }
+
   @override
   Widget build(BuildContext context) {
     final isEdit = widget.initial != null;
@@ -189,6 +221,11 @@ class _CustomerFormPanelState extends ConsumerState<CustomerFormPanel> {
             future: _loadCompanies(),
             builder: (context, snap) {
               final companies = snap.data ?? const <Company>[];
+              // Ensure the value exists in items, or use null
+              final safeCompanyId = _containsCompanyId(companies, _companyId)
+                  ? _companyId
+                  : null;
+
               if (snap.connectionState == ConnectionState.waiting) {
                 return const Center(child: CircularProgressIndicator());
               }
@@ -313,8 +350,11 @@ class _CustomerFormPanelState extends ConsumerState<CustomerFormPanel> {
 
                     // NOTE: remove Expanded – it breaks in ListView
                     DropdownButtonFormField<String?>(
+                      key: ValueKey(
+                        safeCompanyId,
+                      ), // forces rebuild if selection changes programmatically
                       focusNode: _fCompany,
-                      value: _companyId,
+                      value: safeCompanyId,
                       isDense: true,
                       decoration: const InputDecoration(
                         labelText: 'Société',
@@ -336,6 +376,7 @@ class _CustomerFormPanelState extends ConsumerState<CustomerFormPanel> {
                       ],
                       onChanged: (v) => setState(() => _companyId = v),
                     ),
+
                     const SizedBox(height: 16),
 
                     TextFormField(
