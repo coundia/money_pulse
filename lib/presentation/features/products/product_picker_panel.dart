@@ -1,10 +1,26 @@
-// ProductPickerPanel: minimalist and responsive right-drawer to pick products with qty/price editing and Enter-to-validate.
+// Right-drawer to search/pick products with quantity/price editing, Enter-to-validate, quick access to list and new-product form.
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:uuid/uuid.dart';
+
 import 'package:money_pulse/presentation/shared/formatters.dart';
+import 'package:money_pulse/presentation/widgets/right_drawer.dart';
+
 import 'package:money_pulse/domain/products/entities/product.dart';
+import 'package:money_pulse/domain/products/repositories/product_repository.dart';
+import '../../app/providers.dart';
 import 'product_repo_provider.dart';
+
+import 'package:money_pulse/domain/categories/entities/category.dart';
+import 'package:money_pulse/domain/categories/repositories/category_repository.dart';
+import 'package:money_pulse/presentation/features/products/product_repo_provider.dart'
+    as prp
+    show productRepoProvider; // ensure local alias if name clashes
+import 'package:money_pulse/presentation/features/products/widgets/product_form_panel.dart';
+import 'package:money_pulse/presentation/features/products/product_list_page.dart';
+import 'package:money_pulse/presentation/features/products/product_repo_provider.dart';
 
 class ProductPickerPanel extends ConsumerStatefulWidget {
   final List<Map<String, Object?>> initialLines;
@@ -21,7 +37,7 @@ class _ProductPickerPanelState extends ConsumerState<ProductPickerPanel> {
   List<Product> _all = const [];
   bool _loading = false;
   bool _onlySelected = false;
-  _SortBy _sortBy = _SortBy.name;
+  _SortBy _sortBy = _SortBy.updatedDesc;
 
   @override
   void initState() {
@@ -44,9 +60,25 @@ class _ProductPickerPanelState extends ConsumerState<ProductPickerPanel> {
               ? items.firstWhere((e) => e.id == id)
               : Product(
                   id: id,
+                  remoteId: null,
+                  code: null,
                   name: (m['label'] as String?) ?? 'Produit',
+                  description: null,
+                  barcode: null,
+                  unitId: null,
+                  categoryId: null,
+                  defaultPrice:
+                      (m['unitPriceCents'] as int?) ??
+                      (m['unitPrice'] as int?) ??
+                      0,
+                  purchasePrice: 0,
+                  statuses: 'ACTIVE',
                   createdAt: DateTime.now(),
                   updatedAt: DateTime.now(),
+                  deletedAt: null,
+                  syncAt: null,
+                  version: 0,
+                  isDirty: 1,
                 );
           final q = (m['quantity'] as int?) ?? 1;
           final up =
@@ -101,17 +133,13 @@ class _ProductPickerPanelState extends ConsumerState<ProductPickerPanel> {
     }
     final list = src.toList();
     switch (_sortBy) {
+      case _SortBy.updatedDesc:
+        list.sort((a, b) => b.updatedAt.compareTo(a.updatedAt));
+        break;
       case _SortBy.name:
         list.sort(
           (a, b) => (a.name ?? '').toLowerCase().compareTo(
             (b.name ?? '').toLowerCase(),
-          ),
-        );
-        break;
-      case _SortBy.code:
-        list.sort(
-          (a, b) => (a.code ?? '').toLowerCase().compareTo(
-            (b.code ?? '').toLowerCase(),
           ),
         );
         break;
@@ -256,15 +284,76 @@ class _ProductPickerPanelState extends ConsumerState<ProductPickerPanel> {
     Navigator.of(context).pop(list);
   }
 
+  Future<void> _openProductList() async {
+    if (!mounted) return;
+    await Navigator.of(
+      context,
+    ).push(MaterialPageRoute(builder: (_) => const ProductListPage()));
+    if (!mounted) return;
+    final repo = ref.read(productRepoProvider);
+    final refreshed = await repo.findAllActive();
+    setState(() => _all = refreshed);
+  }
+
+  Future<void> _createProduct() async {
+    final categories = await ref.read(categoryRepoProvider).findAllActive();
+    if (!mounted) return;
+    final res = await showRightDrawer<ProductFormResult?>(
+      context,
+      child: ProductFormPanel(existing: null, categories: categories),
+      widthFraction: 0.92,
+      heightFraction: 0.96,
+    );
+    if (res == null) return;
+
+    final now = DateTime.now();
+    final repo = ref.read(productRepoProvider);
+    final p = Product(
+      id: const Uuid().v4(),
+      remoteId: null,
+      code: res.code,
+      name: res.name,
+      description: res.description,
+      barcode: res.barcode,
+      unitId: null,
+      categoryId: res.categoryId,
+      defaultPrice: res.priceCents,
+      purchasePrice: res.purchasePriceCents,
+      statuses: res.status,
+      createdAt: now,
+      updatedAt: now,
+      deletedAt: null,
+      syncAt: null,
+      version: 0,
+      isDirty: 1,
+    );
+    await repo.create(p);
+    final items = await repo.findAllActive();
+    if (!mounted) return;
+    setState(() {
+      _all = items;
+      _selected[p.id] = _Line(
+        product: p,
+        quantity: 1,
+        unitPriceCents: p.defaultPrice,
+      );
+      _ensureQtyCtrl(p.id, 1);
+      _sortBy = _SortBy.updatedDesc;
+    });
+    ScaffoldMessenger.maybeOf(context)?.showSnackBar(
+      const SnackBar(content: Text('Produit ajouté et sélectionné')),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final loading = _loading;
     final width = MediaQuery.of(context).size.width;
-    final trailingMax = width < 340
-        ? 108.0
-        : width < 400
-        ? 136.0
-        : 168.0;
+    final trailingMax = width < 360
+        ? 120.0
+        : width < 420
+        ? 148.0
+        : 180.0;
 
     return Shortcuts(
       shortcuts: <LogicalKeySet, Intent>{
@@ -289,6 +378,16 @@ class _ProductPickerPanelState extends ConsumerState<ProductPickerPanel> {
               onPressed: () => Navigator.of(context).maybePop(),
             ),
             actions: [
+              IconButton(
+                tooltip: 'Liste des produits',
+                onPressed: _openProductList,
+                icon: const Icon(Icons.view_list),
+              ),
+              IconButton(
+                tooltip: 'Nouveau produit',
+                onPressed: _createProduct,
+                icon: const Icon(Icons.add),
+              ),
               TextButton(onPressed: _clearAll, child: const Text('Vider')),
               const SizedBox(width: 4),
               FilledButton.icon(
@@ -325,8 +424,11 @@ class _ProductPickerPanelState extends ConsumerState<ProductPickerPanel> {
                       icon: const Icon(Icons.filter_list),
                       onSelected: (v) => setState(() => _sortBy = v),
                       itemBuilder: (c) => const [
+                        PopupMenuItem(
+                          value: _SortBy.updatedDesc,
+                          child: Text('Dernière mise à jour'),
+                        ),
                         PopupMenuItem(value: _SortBy.name, child: Text('Nom')),
-                        PopupMenuItem(value: _SortBy.code, child: Text('Code')),
                         PopupMenuItem(
                           value: _SortBy.price,
                           child: Text('Prix défaut'),
@@ -343,7 +445,12 @@ class _ProductPickerPanelState extends ConsumerState<ProductPickerPanel> {
                   runSpacing: 8,
                   crossAxisAlignment: WrapCrossAlignment.center,
                   children: [
-                    FilterChip(
+                    ChoiceChip(
+                      label: Text('Tous'),
+                      selected: !_onlySelected,
+                      onSelected: (v) => setState(() => _onlySelected = !v),
+                    ),
+                    ChoiceChip(
                       label: Text('Sélection: ${_selected.length}'),
                       selected: _onlySelected,
                       onSelected: (v) => setState(() => _onlySelected = v),
@@ -366,7 +473,10 @@ class _ProductPickerPanelState extends ConsumerState<ProductPickerPanel> {
               else
                 Expanded(
                   child: _source.isEmpty
-                      ? const Center(child: Text('Aucun produit'))
+                      ? _EmptyState(
+                          onOpenList: _openProductList,
+                          onCreate: _createProduct,
+                        )
                       : ListView.separated(
                           itemCount: _source.length,
                           separatorBuilder: (_, __) => const Divider(height: 1),
@@ -424,7 +534,7 @@ class _ProductPickerPanelState extends ConsumerState<ProductPickerPanel> {
                                       ),
                                     ),
                                     SizedBox(
-                                      width: 44,
+                                      width: 48,
                                       child: TextField(
                                         controller: qtyCtrl,
                                         textAlign: TextAlign.center,
@@ -462,6 +572,7 @@ class _ProductPickerPanelState extends ConsumerState<ProductPickerPanel> {
                                 ),
                               ),
                               onTap: () => _toggle(p),
+                              onLongPress: () => _editPriceDialog(p),
                               selected: selected,
                               dense: true,
                             );
@@ -470,8 +581,14 @@ class _ProductPickerPanelState extends ConsumerState<ProductPickerPanel> {
                 ),
               SafeArea(
                 top: false,
-                child: Padding(
+                child: Container(
                   padding: const EdgeInsets.fromLTRB(12, 8, 12, 12),
+                  decoration: BoxDecoration(
+                    color: Theme.of(context).colorScheme.surface,
+                    border: Border(
+                      top: BorderSide(color: Theme.of(context).dividerColor),
+                    ),
+                  ),
                   child: Row(
                     children: [
                       Expanded(
@@ -480,6 +597,18 @@ class _ProductPickerPanelState extends ConsumerState<ProductPickerPanel> {
                           style: const TextStyle(fontWeight: FontWeight.bold),
                         ),
                       ),
+                      OutlinedButton.icon(
+                        onPressed: _openProductList,
+                        icon: const Icon(Icons.view_list),
+                        label: const Text('Liste'),
+                      ),
+                      const SizedBox(width: 8),
+                      OutlinedButton.icon(
+                        onPressed: _createProduct,
+                        icon: const Icon(Icons.add),
+                        label: const Text('Nouveau'),
+                      ),
+                      const SizedBox(width: 8),
                       FilledButton.icon(
                         onPressed: _submit,
                         icon: const Icon(Icons.check),
@@ -501,7 +630,7 @@ class _SubmitIntent extends Intent {
   const _SubmitIntent();
 }
 
-enum _SortBy { name, code, price }
+enum _SortBy { updatedDesc, name, price }
 
 class _Line {
   final Product product;
@@ -517,4 +646,49 @@ class _Line {
     quantity: quantity ?? this.quantity,
     unitPriceCents: unitPriceCents ?? this.unitPriceCents,
   );
+}
+
+class _EmptyState extends StatelessWidget {
+  final VoidCallback onOpenList;
+  final VoidCallback onCreate;
+  const _EmptyState({required this.onOpenList, required this.onCreate});
+
+  @override
+  Widget build(BuildContext context) {
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(24),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Icon(Icons.inventory_2_outlined, size: 72),
+            const SizedBox(height: 12),
+            const Text(
+              'Aucun produit',
+              style: TextStyle(fontSize: 18, fontWeight: FontWeight.w600),
+            ),
+            const SizedBox(height: 6),
+            const Text('Créez un produit ou ouvrez la liste.'),
+            const SizedBox(height: 16),
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: [
+                OutlinedButton.icon(
+                  onPressed: onOpenList,
+                  icon: const Icon(Icons.view_list),
+                  label: const Text('Liste des produits'),
+                ),
+                FilledButton.icon(
+                  onPressed: onCreate,
+                  icon: const Icon(Icons.add),
+                  label: const Text('Nouveau produit'),
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
 }
