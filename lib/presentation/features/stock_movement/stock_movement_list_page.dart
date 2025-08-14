@@ -1,15 +1,17 @@
-/// Read-only stock movements list with French UI and amounts (PU & Total),
-/// local filters (type/date/quantity), search, responsive grid/list,
-/// summary chips, and right-drawer view. Add-only; no edit/delete.
-
+// Read-only stock movements page using SRP components: summary, filter sheet, list items and right drawer view.
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:money_pulse/presentation/widgets/right_drawer.dart';
-import '../../shared/formatters.dart';
+
 import '../../../domain/stock/repositories/stock_movement_repository.dart';
-import 'stock_movement_view_panel.dart';
-import 'stock_movement_form_panel.dart';
+import '../../shared/formatters.dart';
+import '../../stock/movements/widgets/movement_filter_sheet.dart';
+import '../../stock/movements/widgets/movement_filters.dart';
+import '../../stock/movements/widgets/movement_item.dart';
+import '../../stock/movements/widgets/movement_summary_bar.dart';
 import 'providers/stock_movement_list_provider.dart';
+import 'stock_movement_form_panel.dart';
+import 'stock_movement_view_panel.dart';
 
 class StockMovementListPage extends ConsumerStatefulWidget {
   const StockMovementListPage({super.key});
@@ -21,10 +23,7 @@ class StockMovementListPage extends ConsumerStatefulWidget {
 
 class _StockMovementListPageState extends ConsumerState<StockMovementListPage> {
   final _searchCtrl = TextEditingController();
-
-  String _typeFilter = 'ALL';
-  DateTimeRange? _dateRange;
-  int _minQty = 0;
+  var _filters = const MovementFilters.initial();
 
   @override
   void dispose() {
@@ -60,104 +59,19 @@ class _StockMovementListPageState extends ConsumerState<StockMovementListPage> {
     setState(() {});
   }
 
-  void _pickRange() async {
-    final now = DateTime.now();
-    final initial =
-        _dateRange ??
-        DateTimeRange(
-          start: DateTime(now.year, now.month, now.day),
-          end: DateTime(now.year, now.month, now.day),
-        );
-    final picked = await showDateRangePicker(
+  void _openFilterSheet() async {
+    final result = await showModalBottomSheet<MovementFilters>(
       context: context,
-      firstDate: DateTime(2000),
-      lastDate: DateTime(2100),
-      initialDateRange: initial,
+      isScrollControlled: true,
+      builder: (c) => MovementFilterSheet(initial: _filters),
     );
-    if (picked != null) {
-      setState(() => _dateRange = picked);
+    if (result != null) {
+      setState(() => _filters = result);
     }
   }
 
-  void _clearFilters() {
-    setState(() {
-      _typeFilter = 'ALL';
-      _dateRange = null;
-      _minQty = 0;
-    });
-  }
-
-  List<StockMovementRow> _applyLocalFilters(List<StockMovementRow> base) {
-    var items = base;
-
-    if (_typeFilter != 'ALL') {
-      items = items.where((e) => e.type == _typeFilter).toList();
-    }
-    if (_dateRange != null) {
-      final start = DateTime(
-        _dateRange!.start.year,
-        _dateRange!.start.month,
-        _dateRange!.start.day,
-      );
-      final end = DateTime(
-        _dateRange!.end.year,
-        _dateRange!.end.month,
-        _dateRange!.end.day,
-        23,
-        59,
-        59,
-        999,
-      );
-      items = items
-          .where(
-            (e) =>
-                e.createdAt.isAfter(
-                  start.subtract(const Duration(milliseconds: 1)),
-                ) &&
-                e.createdAt.isBefore(end.add(const Duration(milliseconds: 1))),
-          )
-          .toList();
-    }
-    if (_minQty > 0) {
-      items = items.where((e) => e.quantity >= _minQty).toList();
-    }
-
-    return items;
-  }
-
-  Map<String, int> _countByType(List<StockMovementRow> items) {
-    final map = <String, int>{
-      'IN': 0,
-      'OUT': 0,
-      'ALLOCATE': 0,
-      'RELEASE': 0,
-      'ADJUST': 0,
-    };
-    for (final it in items) {
-      if (map.containsKey(it.type)) {
-        map[it.type] = (map[it.type] ?? 0) + 1;
-      }
-    }
-    return map;
-  }
-
-  Color _typeColor(BuildContext ctx, String type) {
-    final cs = Theme.of(ctx).colorScheme;
-    switch (type) {
-      case 'IN':
-        return cs.primary;
-      case 'OUT':
-        return cs.error;
-      case 'ALLOCATE':
-        return cs.tertiary;
-      case 'RELEASE':
-        return cs.secondary;
-      case 'ADJUST':
-        return cs.outline;
-      default:
-        return cs.onSurfaceVariant;
-    }
-  }
+  void _clearFilters() =>
+      setState(() => _filters = const MovementFilters.initial());
 
   @override
   Widget build(BuildContext context) {
@@ -169,11 +83,52 @@ class _StockMovementListPageState extends ConsumerState<StockMovementListPage> {
         title: const Text('Mouvements de stock'),
         actions: [
           IconButton(
+            tooltip: 'Filtres',
+            onPressed: _openFilterSheet,
+            icon: const Icon(Icons.filter_list),
+          ),
+          IconButton(
             tooltip: 'Actualiser',
             onPressed: () => ref.invalidate(stockMovementListProvider),
             icon: const Icon(Icons.refresh),
           ),
         ],
+        bottom: PreferredSize(
+          preferredSize: const Size.fromHeight(60),
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(12, 0, 12, 12),
+            child: Row(
+              children: [
+                Expanded(
+                  child: TextField(
+                    controller: _searchCtrl,
+                    textInputAction: TextInputAction.search,
+                    onSubmitted: (_) => _applySearch(),
+                    decoration: InputDecoration(
+                      hintText: 'Rechercher produit, société ou type…',
+                      prefixIcon: const Icon(Icons.search),
+                      suffixIcon: _searchCtrl.text.isEmpty
+                          ? null
+                          : IconButton(
+                              tooltip: 'Effacer',
+                              onPressed: _clearSearch,
+                              icon: const Icon(Icons.clear),
+                            ),
+                      border: const OutlineInputBorder(),
+                      isDense: true,
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                FilledButton.icon(
+                  onPressed: _applySearch,
+                  icon: const Icon(Icons.search),
+                  label: const Text('Rechercher'),
+                ),
+              ],
+            ),
+          ),
+        ),
       ),
       floatingActionButton: FloatingActionButton.extended(
         onPressed: _openForm,
@@ -185,208 +140,61 @@ class _StockMovementListPageState extends ConsumerState<StockMovementListPage> {
           padding: const EdgeInsets.all(12),
           child: Column(
             children: [
-              Row(
-                children: [
-                  Expanded(
-                    child: TextField(
-                      controller: _searchCtrl,
-                      textInputAction: TextInputAction.search,
-                      onSubmitted: (_) => _applySearch(),
-                      decoration: InputDecoration(
-                        hintText: 'Rechercher par produit, société ou type…',
-                        prefixIcon: const Icon(Icons.search),
-                        suffixIcon: _searchCtrl.text.isEmpty
-                            ? null
-                            : IconButton(
-                                tooltip: 'Effacer',
-                                onPressed: _clearSearch,
-                                icon: const Icon(Icons.clear),
-                              ),
-                        border: const OutlineInputBorder(),
-                      ),
-                    ),
-                  ),
-                  const SizedBox(width: 12),
-                  Tooltip(
-                    message: 'Rechercher',
-                    child: ElevatedButton.icon(
-                      onPressed: _applySearch,
-                      icon: const Icon(Icons.search),
-                      label: const Text('Rechercher'),
-                    ),
-                  ),
-                ],
+              asyncList.when(
+                data: (rows) => MovementSummaryBar(
+                  source: rows,
+                  filters: _filters,
+                  onClearFilters: _clearFilters,
+                ),
+                error: (_, __) => const SizedBox.shrink(),
+                loading: () => const SizedBox.shrink(),
               ),
               const SizedBox(height: 8),
-              _FiltersBar(
-                typeFilter: _typeFilter,
-                onTypeChanged: (t) => setState(() => _typeFilter = t),
-                dateRange: _dateRange,
-                onPickRange: _pickRange,
-                minQty: _minQty,
-                onMinQtyChanged: (v) => setState(() => _minQty = v),
-                onClear: _clearFilters,
-              ),
-              const SizedBox(height: 12),
               Expanded(
                 child: RefreshIndicator(
                   onRefresh: () async =>
                       ref.invalidate(stockMovementListProvider),
                   child: asyncList.when(
                     data: (itemsRaw) {
-                      final items = _applyLocalFilters(itemsRaw);
+                      final items = _filters.apply(itemsRaw);
                       if (items.isEmpty) {
-                        return Center(
-                          child: Text(
-                            'Aucun mouvement',
-                            style: theme.textTheme.bodyLarge,
-                          ),
-                        );
+                        return const _EmptyState();
                       }
-
-                      final counts = _countByType(items);
-                      final sumQty = items.fold<int>(
-                        0,
-                        (p, e) => p + e.quantity,
-                      );
-                      final sumTotalCents = items.fold<int>(
-                        0,
-                        (p, e) => p + e.totalCents,
-                      );
-                      const typeLabels = {
-                        'IN': 'Entrée',
-                        'OUT': 'Sortie',
-                        'ALLOCATE': 'Allocation',
-                        'RELEASE': 'Libération',
-                        'ADJUST': 'Ajustement',
-                      };
-
-                      return Column(
-                        children: [
-                          Align(
-                            alignment: Alignment.centerLeft,
-                            child: Wrap(
-                              spacing: 6,
-                              runSpacing: 6,
-                              children: [
-                                Chip(
-                                  avatar: const Icon(Icons.list_alt, size: 18),
-                                  label: Text('${items.length} élément(s)'),
-                                ),
-                                Chip(
-                                  avatar: const Icon(Icons.summarize, size: 18),
-                                  label: Text('Qté totale: $sumQty'),
-                                ),
-                                Chip(
-                                  avatar: const Icon(Icons.payments, size: 18),
-                                  label: Text(
-                                    'Montant total: ${Formatters.amountFromCents(sumTotalCents)}',
+                      return LayoutBuilder(
+                        builder: (context, c) {
+                          final isGrid = c.maxWidth >= 820;
+                          if (isGrid) {
+                            final cross = c.maxWidth ~/ 420;
+                            return GridView.builder(
+                              gridDelegate:
+                                  SliverGridDelegateWithFixedCrossAxisCount(
+                                    crossAxisCount: cross.clamp(2, 6),
+                                    childAspectRatio: 3.8,
+                                    mainAxisSpacing: 8,
+                                    crossAxisSpacing: 8,
                                   ),
-                                ),
-                                for (final t in [
-                                  'IN',
-                                  'OUT',
-                                  'ALLOCATE',
-                                  'RELEASE',
-                                  'ADJUST',
-                                ])
-                                  Chip(
-                                    avatar: Icon(
-                                      Icons.circle,
-                                      size: 12,
-                                      color: _typeColor(context, t),
-                                    ),
-                                    label: Text(
-                                      '${typeLabels[t]}: ${counts[t]}',
-                                    ),
-                                  ),
-                              ],
+                              itemCount: items.length,
+                              itemBuilder: (_, i) => MovementCard(
+                                row: items[i],
+                                onTap: () => _openView(items[i]),
+                              ),
+                            );
+                          }
+                          return ListView.separated(
+                            itemCount: items.length,
+                            separatorBuilder: (_, __) =>
+                                const Divider(height: 1),
+                            itemBuilder: (_, i) => MovementTile(
+                              row: items[i],
+                              onTap: () => _openView(items[i]),
                             ),
-                          ),
-                          const SizedBox(height: 8),
-                          Expanded(
-                            child: LayoutBuilder(
-                              builder: (context, c) {
-                                final isGrid = c.maxWidth >= 720;
-                                if (isGrid) {
-                                  final cross = c.maxWidth ~/ 380;
-                                  return GridView.builder(
-                                    gridDelegate:
-                                        SliverGridDelegateWithFixedCrossAxisCount(
-                                          crossAxisCount: cross.clamp(2, 6),
-                                          childAspectRatio: 3.6,
-                                          mainAxisSpacing: 8,
-                                          crossAxisSpacing: 8,
-                                        ),
-                                    itemCount: items.length,
-                                    itemBuilder: (_, i) {
-                                      final row = items[i];
-                                      return _MovementCard(
-                                        row: row,
-                                        onTap: () => _openView(row),
-                                        typeColor: _typeColor(
-                                          context,
-                                          row.type,
-                                        ),
-                                      );
-                                    },
-                                  );
-                                }
-                                return ListView.separated(
-                                  itemCount: items.length,
-                                  separatorBuilder: (_, __) =>
-                                      const Divider(height: 1),
-                                  itemBuilder: (_, i) {
-                                    final row = items[i];
-                                    return _MovementTile(
-                                      row: row,
-                                      onTap: () => _openView(row),
-                                      typeColor: _typeColor(context, row.type),
-                                    );
-                                  },
-                                );
-                              },
-                            ),
-                          ),
-                        ],
+                          );
+                        },
                       );
                     },
-                    error: (e, st) => ListView(
-                      padding: const EdgeInsets.all(16),
-                      children: [
-                        const SizedBox(height: 64),
-                        Icon(
-                          Icons.error_outline,
-                          size: 48,
-                          color: theme.colorScheme.error,
-                        ),
-                        const SizedBox(height: 12),
-                        Center(
-                          child: Text(
-                            'Erreur de chargement',
-                            style: theme.textTheme.titleMedium?.copyWith(
-                              color: theme.colorScheme.error,
-                            ),
-                          ),
-                        ),
-                        const SizedBox(height: 8),
-                        Center(
-                          child: Text(
-                            e.toString(),
-                            style: theme.textTheme.bodySmall,
-                            textAlign: TextAlign.center,
-                          ),
-                        ),
-                        const SizedBox(height: 16),
-                        Center(
-                          child: OutlinedButton.icon(
-                            onPressed: () =>
-                                ref.invalidate(stockMovementListProvider),
-                            icon: const Icon(Icons.refresh),
-                            label: const Text('Réessayer'),
-                          ),
-                        ),
-                      ],
+                    error: (e, st) => _ErrorState(
+                      message: e.toString(),
+                      onRetry: () => ref.invalidate(stockMovementListProvider),
                     ),
                     loading: () =>
                         const Center(child: CircularProgressIndicator()),
@@ -411,231 +219,64 @@ class _StockMovementListPageState extends ConsumerState<StockMovementListPage> {
   }
 }
 
-class _FiltersBar extends StatelessWidget {
-  final String typeFilter;
-  final ValueChanged<String> onTypeChanged;
-  final DateTimeRange? dateRange;
-  final VoidCallback onPickRange;
-  final int minQty;
-  final ValueChanged<int> onMinQtyChanged;
-  final VoidCallback onClear;
-
-  const _FiltersBar({
-    required this.typeFilter,
-    required this.onTypeChanged,
-    required this.dateRange,
-    required this.onPickRange,
-    required this.minQty,
-    required this.onMinQtyChanged,
-    required this.onClear,
-  });
+class _EmptyState extends StatelessWidget {
+  const _EmptyState();
 
   @override
   Widget build(BuildContext context) {
-    final chips = const ['ALL', 'IN', 'OUT', 'ALLOCATE', 'RELEASE', 'ADJUST'];
-    const labels = {
-      'ALL': 'Tous',
-      'IN': 'Entrée',
-      'OUT': 'Sortie',
-      'ALLOCATE': 'Allocation',
-      'RELEASE': 'Libération',
-      'ADJUST': 'Ajustement',
-    };
+    final t = Theme.of(context);
+    return Center(
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Icon(Icons.inbox_outlined, size: 48, color: t.colorScheme.outline),
+          const SizedBox(height: 8),
+          Text('Aucun mouvement', style: t.textTheme.titleMedium),
+        ],
+      ),
+    );
+  }
+}
 
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
+class _ErrorState extends StatelessWidget {
+  final String message;
+  final VoidCallback onRetry;
+  const _ErrorState({required this.message, required this.onRetry});
+
+  @override
+  Widget build(BuildContext context) {
+    final t = Theme.of(context);
+    return ListView(
+      padding: const EdgeInsets.all(16),
       children: [
-        SingleChildScrollView(
-          scrollDirection: Axis.horizontal,
-          child: Row(
-            children: [
-              const Text(
-                'Type : ',
-                style: TextStyle(fontWeight: FontWeight.w600),
-              ),
-              const SizedBox(width: 8),
-              Wrap(
-                spacing: 6,
-                children: chips
-                    .map(
-                      (t) => ChoiceChip(
-                        label: Text(labels[t] ?? t),
-                        selected: typeFilter == t,
-                        onSelected: (_) => onTypeChanged(t),
-                      ),
-                    )
-                    .toList(),
-              ),
-            ],
+        const SizedBox(height: 64),
+        Icon(Icons.error_outline, size: 48, color: t.colorScheme.error),
+        const SizedBox(height: 12),
+        Center(
+          child: Text(
+            'Erreur de chargement',
+            style: t.textTheme.titleMedium?.copyWith(
+              color: t.colorScheme.error,
+            ),
           ),
         ),
         const SizedBox(height: 8),
-        Wrap(
-          spacing: 8,
-          runSpacing: 8,
-          crossAxisAlignment: WrapCrossAlignment.center,
-          children: [
-            OutlinedButton.icon(
-              onPressed: onPickRange,
-              icon: const Icon(Icons.event),
-              label: Text(
-                dateRange == null
-                    ? 'Période : Toutes'
-                    : 'Période : ${_fmt(dateRange!.start)} → ${_fmt(dateRange!.end)}',
-              ),
-            ),
-            DropdownButton<int>(
-              value: minQty,
-              onChanged: (v) => onMinQtyChanged(v ?? 0),
-              items: const [
-                DropdownMenuItem(value: 0, child: Text('Qté min : 0')),
-                DropdownMenuItem(value: 1, child: Text('Qté min : 1')),
-                DropdownMenuItem(value: 5, child: Text('Qté min : 5')),
-                DropdownMenuItem(value: 10, child: Text('Qté min : 10')),
-                DropdownMenuItem(value: 50, child: Text('Qté min : 50')),
-              ],
-            ),
-            const Spacer(),
-            TextButton.icon(
-              onPressed: onClear,
-              icon: const Icon(Icons.filter_alt_off),
-              label: const Text('Réinitialiser'),
-            ),
-          ],
+        Center(
+          child: Text(
+            message,
+            style: t.textTheme.bodySmall,
+            textAlign: TextAlign.center,
+          ),
+        ),
+        const SizedBox(height: 16),
+        Center(
+          child: OutlinedButton.icon(
+            onPressed: onRetry,
+            icon: const Icon(Icons.refresh),
+            label: const Text('Réessayer'),
+          ),
         ),
       ],
-    );
-  }
-
-  static String _fmt(DateTime d) {
-    final y = d.year.toString().padLeft(4, '0');
-    final m = d.month.toString().padLeft(2, '0');
-    final da = d.day.toString().padLeft(2, '0');
-    return '$y-$m-$da';
-  }
-}
-
-class _MovementTile extends StatelessWidget {
-  final StockMovementRow row;
-  final VoidCallback onTap;
-  final Color typeColor;
-  const _MovementTile({
-    required this.row,
-    required this.onTap,
-    required this.typeColor,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
-    final pu = Formatters.amountFromCents(row.unitPriceCents);
-    final tot = Formatters.amountFromCents(row.totalCents);
-    return ListTile(
-      onTap: onTap,
-      leading: CircleAvatar(
-        backgroundColor: typeColor.withOpacity(0.12),
-        foregroundColor: typeColor,
-        child: Text(row.type.substring(0, 1)),
-      ),
-      title: Text(
-        '${row.productLabel} • ${row.companyLabel}',
-        maxLines: 1,
-        overflow: TextOverflow.ellipsis,
-      ),
-      subtitle: Text(
-        '${row.type} • Qté: ${row.quantity} • PU: $pu • Total: $tot • ${Formatters.dateFull(row.createdAt)}',
-      ),
-      trailing: Icon(Icons.chevron_right, color: cs.onSurfaceVariant),
-    );
-  }
-}
-
-class _MovementCard extends StatelessWidget {
-  final StockMovementRow row;
-  final VoidCallback onTap;
-  final Color typeColor;
-  const _MovementCard({
-    required this.row,
-    required this.onTap,
-    required this.typeColor,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
-    final pu = Formatters.amountFromCents(row.unitPriceCents);
-    final tot = Formatters.amountFromCents(row.totalCents);
-    return InkWell(
-      onTap: onTap,
-      borderRadius: BorderRadius.circular(14),
-      child: Container(
-        padding: const EdgeInsets.all(12),
-        decoration: BoxDecoration(
-          color: cs.surface,
-          borderRadius: BorderRadius.circular(14),
-          border: Border.all(color: cs.outlineVariant),
-        ),
-        child: Row(
-          children: [
-            CircleAvatar(
-              backgroundColor: typeColor.withOpacity(0.12),
-              foregroundColor: typeColor,
-              child: Text(row.type.substring(0, 1)),
-            ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    row.productLabel,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(fontWeight: FontWeight.w600),
-                  ),
-                  const SizedBox(height: 2),
-                  Text(
-                    row.companyLabel,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(fontSize: 12),
-                  ),
-                  const SizedBox(height: 6),
-                  Wrap(
-                    spacing: 6,
-                    runSpacing: 6,
-                    children: [
-                      Chip(
-                        label: Text(row.type),
-                        avatar: Icon(Icons.circle, size: 12, color: typeColor),
-                        visualDensity: VisualDensity.compact,
-                      ),
-                      Chip(
-                        label: Text('Qté: ${row.quantity}'),
-                        visualDensity: VisualDensity.compact,
-                      ),
-                      Chip(
-                        label: Text('PU: $pu'),
-                        visualDensity: VisualDensity.compact,
-                      ),
-                      Chip(
-                        label: Text('Total: $tot'),
-                        visualDensity: VisualDensity.compact,
-                      ),
-                      Chip(
-                        label: Text(Formatters.dateFull(row.createdAt)),
-                        visualDensity: VisualDensity.compact,
-                      ),
-                    ],
-                  ),
-                ],
-              ),
-            ),
-            const SizedBox(width: 8),
-            Icon(Icons.chevron_right, color: cs.onSurfaceVariant),
-          ],
-        ),
-      ),
     );
   }
 }

@@ -352,13 +352,13 @@ class StockLevelRepositorySqflite implements StockLevelRepository {
       await _upsertChangeLog(
         txn,
         table: 'stock_level',
-        entityId: now,
+        entityId: '$productVariantId@$companyId',
         op: 'UPDATE',
       );
       await _upsertChangeLog(
         txn,
         table: 'stock_movement',
-        entityId: now,
+        entityId: 'ADJ_${productVariantId}_${companyId}_$now',
         op: 'INSERT',
       );
     });
@@ -415,13 +415,13 @@ class StockLevelRepositorySqflite implements StockLevelRepository {
       await _upsertChangeLog(
         txn,
         table: 'stock_level',
-        entityId: now,
+        entityId: '$productVariantId@$companyId',
         op: 'UPDATE',
       );
       await _upsertChangeLog(
         txn,
         table: 'stock_movement',
-        entityId: now,
+        entityId: 'ADJ_${productVariantId}_${companyId}_$now',
         op: 'INSERT',
       );
     });
