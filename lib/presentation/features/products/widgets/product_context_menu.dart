@@ -1,4 +1,4 @@
-// lib/presentation/features/products/product_context_menu.dart
+// Reusable product context menu model and items, including Duplicate action.
 import 'package:flutter/material.dart';
 
 abstract class ProductContextMenu {
@@ -7,6 +7,7 @@ abstract class ProductContextMenu {
   static const String adjust = 'adjust';
   static const String delete = 'delete';
   static const String share = 'share';
+  static const String duplicate = 'duplicate';
 }
 
 List<PopupMenuEntry<String>> buildProductContextMenuItems({
@@ -27,6 +28,13 @@ List<PopupMenuEntry<String>> buildProductContextMenuItems({
       child: ListTile(
         leading: Icon(Icons.edit_outlined),
         title: Text('Modifier'),
+      ),
+    ),
+    const PopupMenuItem(
+      value: ProductContextMenu.duplicate,
+      child: ListTile(
+        leading: Icon(Icons.copy_all_outlined),
+        title: Text('Dupliquer'),
       ),
     ),
     const PopupMenuItem(

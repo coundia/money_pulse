@@ -1,5 +1,4 @@
-// Compact bottom sheet to pick an account, always showing a "Voir plus/Voir moins" row,
-// allowing balance adjust via right drawer, and a button to view all accounts.
+// Compact bottom sheet to pick an account, with adjust-balance via right drawer and quick access to the Accounts page.
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:money_pulse/domain/accounts/entities/account.dart';
@@ -8,6 +7,8 @@ import 'package:money_pulse/presentation/widgets/right_drawer.dart';
 import 'package:money_pulse/presentation/features/accounts/widgets/account_adjust_balance_panel.dart';
 import 'package:money_pulse/presentation/app/providers.dart';
 import 'package:money_pulse/presentation/features/accounts/account_page.dart';
+
+import '../../../app/account_selection.dart';
 
 Future<Account?> showAccountPickerSheet({
   required BuildContext context,
@@ -19,9 +20,6 @@ Future<Account?> showAccountPickerSheet({
     useSafeArea: true,
     isScrollControlled: false,
     builder: (ctx) {
-      bool showAll = false;
-      const initialCount = 6;
-
       return StatefulBuilder(
         builder: (ctx, setLocalState) {
           return FutureBuilder<List<Account>>(
@@ -65,8 +63,6 @@ Future<Account?> showAccountPickerSheet({
                 );
               }
 
-              final visible = showAll ? all : all.take(initialCount).toList();
-
               return ConstrainedBox(
                 constraints: BoxConstraints(
                   maxHeight: MediaQuery.sizeOf(context).height * 0.6,
@@ -83,7 +79,7 @@ Future<Account?> showAccountPickerSheet({
                       child: ListView.separated(
                         padding: const EdgeInsets.symmetric(horizontal: 8),
                         itemBuilder: (c, i) {
-                          final a = visible[i];
+                          final a = all[i];
                           final isSelected = (selectedAccountId ?? '') == a.id;
 
                           return ListTile(
@@ -139,6 +135,19 @@ Future<Account?> showAccountPickerSheet({
                                       );
                                       if (ix != -1) all[ix] = updated;
                                       setLocalState(() {});
+                                      try {
+                                        await container
+                                            .read(balanceProvider.notifier)
+                                            .load();
+                                      } catch (_) {}
+                                      try {
+                                        container.invalidate(
+                                          selectedAccountProvider,
+                                        );
+                                        container.invalidate(
+                                          accountRepoProvider,
+                                        );
+                                      } catch (_) {}
                                       if (context.mounted) {
                                         ScaffoldMessenger.of(
                                           context,
@@ -178,11 +187,10 @@ Future<Account?> showAccountPickerSheet({
                           );
                         },
                         separatorBuilder: (_, __) => const Divider(height: 1),
-                        itemCount: visible.length,
+                        itemCount: all.length,
                       ),
                     ),
                     const Divider(height: 1),
-                    // Row actions: Voir plus/moins + Voir tous les comptes
                     Padding(
                       padding: const EdgeInsets.fromLTRB(12, 6, 12, 12),
                       child: Row(

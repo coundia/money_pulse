@@ -1,15 +1,14 @@
+// Product list tile with context menu including Duplicate; shows stock badge and formatted price.
 import 'package:flutter/material.dart';
-import 'package:intl/intl.dart';
+import 'package:money_pulse/presentation/shared/formatters.dart';
+import 'product_context_menu.dart';
 
 class ProductTile extends StatelessWidget {
   final String title;
   final String? subtitle;
   final int priceCents;
-  final int? stockQty; // show stock on the list
+  final int? stockQty;
   final VoidCallback? onTap;
-
-  /// Actions via long-press:
-  /// 'view' | 'edit' | 'delete' | 'share' | 'adjust'
   final Future<void> Function(String action)? onMenuAction;
 
   const ProductTile({
@@ -22,11 +21,6 @@ class ProductTile extends StatelessWidget {
     this.onMenuAction,
   });
 
-  String _money(int cents) {
-    final v = cents / 100.0;
-    return NumberFormat.currency(symbol: '', decimalDigits: 0).format(v);
-  }
-
   Future<void> _showContextMenu(BuildContext context, Offset globalPos) async {
     if (onMenuAction == null) return;
     final overlay = Overlay.of(context).context.findRenderObject() as RenderBox;
@@ -38,44 +32,7 @@ class ProductTile extends StatelessWidget {
         overlay.size.width - globalPos.dx,
         overlay.size.height - globalPos.dy,
       ),
-      items: const [
-        PopupMenuItem(
-          value: 'view',
-          child: ListTile(
-            leading: Icon(Icons.visibility_outlined),
-            title: Text('Voir'),
-          ),
-        ),
-        PopupMenuItem(
-          value: 'edit',
-          child: ListTile(
-            leading: Icon(Icons.edit_outlined),
-            title: Text('Modifier'),
-          ),
-        ),
-        PopupMenuItem(
-          value: 'adjust',
-          child: ListTile(
-            leading: Icon(Icons.tune),
-            title: Text('Ajuster stock'),
-          ),
-        ),
-        PopupMenuItem(
-          value: 'delete',
-          child: ListTile(
-            leading: Icon(Icons.delete_outline),
-            title: Text('Supprimer'),
-          ),
-        ),
-        PopupMenuDivider(),
-        PopupMenuItem(
-          value: 'share',
-          child: ListTile(
-            leading: Icon(Icons.ios_share),
-            title: Text('Partager'),
-          ),
-        ),
-      ],
+      items: buildProductContextMenuItems(),
     );
     if (result != null) {
       await onMenuAction!(result);
@@ -84,7 +41,6 @@ class ProductTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // Always display a stock chip; default to 0 when null
     final qty = stockQty ?? 0;
     final positive = qty > 0;
 
@@ -121,11 +77,10 @@ class ProductTile extends StatelessWidget {
         subtitle: (subtitle == null || subtitle!.isEmpty)
             ? null
             : Text(subtitle!),
-        // Compact trailing to avoid overflow on small screens
         trailing: Wrap(
           spacing: 10,
           crossAxisAlignment: WrapCrossAlignment.center,
-          children: [stockChip, Text(_money(priceCents))],
+          children: [stockChip, Text(Formatters.amountFromCents(priceCents))],
         ),
       ),
     );
