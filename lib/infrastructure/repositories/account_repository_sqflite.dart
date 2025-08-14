@@ -1,3 +1,4 @@
+// Sqflite repository for accounts with change-log tracking and updatedAt-desc ordering.
 import 'package:uuid/uuid.dart';
 import 'package:sqflite/sqflite.dart';
 import 'package:money_pulse/infrastructure/db/app_database.dart';
@@ -102,7 +103,7 @@ class AccountRepositorySqflite implements AccountRepository {
     final rows = await _database.db.query(
       'account',
       where: 'deletedAt IS NULL',
-      orderBy: 'isDefault DESC, createdAt DESC',
+      orderBy: 'updatedAt DESC',
     );
     return rows.map(Account.fromMap).toList();
   }

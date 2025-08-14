@@ -1,3 +1,4 @@
+// Sqflite repository for categories with change-log tracking and updatedAt-desc ordering.
 import 'package:flutter/material.dart';
 import 'package:uuid/uuid.dart';
 import 'package:sqflite/sqflite.dart';
@@ -94,7 +95,7 @@ class CategoryRepositorySqflite implements CategoryRepository {
     final rows = await _db.db.query(
       'category',
       where: 'deletedAt IS NULL',
-      orderBy: 'code ASC',
+      orderBy: 'updatedAt DESC, code ASC',
     );
     return rows.map(Category.fromMap).toList();
   }

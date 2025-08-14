@@ -1,3 +1,4 @@
+// Sqflite-backed transaction repository; list queries are ordered by updatedAt DESC.
 import 'package:uuid/uuid.dart';
 import 'package:sqflite/sqflite.dart';
 import 'package:money_pulse/infrastructure/db/app_database.dart';
@@ -255,7 +256,7 @@ class TransactionRepositorySqflite implements TransactionRepository {
       'transaction_entry',
       where: 'accountId=? AND deletedAt IS NULL',
       whereArgs: [accountId],
-      orderBy: 'dateTransaction DESC, createdAt DESC',
+      orderBy: 'updatedAt DESC',
       limit: limit,
     );
     return rows.map(TransactionEntry.fromMap).toList();
@@ -281,7 +282,7 @@ class TransactionRepositorySqflite implements TransactionRepository {
       'transaction_entry',
       where: where.toString(),
       whereArgs: args,
-      orderBy: 'dateTransaction DESC, createdAt DESC',
+      orderBy: 'updatedAt DESC',
     );
     return rows.map(TransactionEntry.fromMap).toList();
   }
@@ -309,7 +310,7 @@ class TransactionRepositorySqflite implements TransactionRepository {
       'transaction_entry',
       where: where.toString(),
       whereArgs: args,
-      orderBy: 'dateTransaction DESC, createdAt DESC',
+      orderBy: 'updatedAt DESC',
     );
     return rows.map(TransactionEntry.fromMap).toList();
   }

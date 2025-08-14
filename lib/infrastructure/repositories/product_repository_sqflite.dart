@@ -1,9 +1,4 @@
-/// Repository that persists products and ensures a stock_level row is created
-/// per active company on creation. Includes robust normalization:
-/// - name fallback to "No name" if empty
-/// - trims strings and stores empty as NULL
-/// - purchasePrice falls back to defaultPrice when <= 0
-/// - clamps prices to >= 0
+// Sqflite product repository with normalization, stock_level ensuring, and updatedAt-desc ordering.
 import 'package:sqflite/sqflite.dart';
 import 'package:uuid/uuid.dart';
 
@@ -17,8 +12,6 @@ class ProductRepositorySqflite implements ProductRepository {
 
   String _now() => DateTime.now().toIso8601String();
 
-  // --- helpers ---------------------------------------------------------------
-
   String? _trimOrNull(String? s) {
     if (s == null) return null;
     final v = s.trim();
@@ -27,7 +20,6 @@ class ProductRepositorySqflite implements ProductRepository {
 
   int _nz(int? v) => (v == null || v < 0) ? 0 : v;
 
-  /// Ensure we always persist a sane Product row
   Product _normalize(Product p) {
     final nameTrimmed = _trimOrNull(p.name);
     final codeTrimmed = _trimOrNull(p.code);
@@ -41,7 +33,7 @@ class ProductRepositorySqflite implements ProductRepository {
     final purch = _nz(p.purchasePrice) <= 0 ? defPrice : _nz(p.purchasePrice);
 
     return p.copyWith(
-      name: nameTrimmed ?? 'No name', // ✅ fallback
+      name: nameTrimmed ?? 'No name',
       code: codeTrimmed,
       description: descTrimmed,
       barcode: barcodeTrimmed,
@@ -49,7 +41,7 @@ class ProductRepositorySqflite implements ProductRepository {
       categoryId: categoryIdTrimmed,
       statuses: statusesTrimmed,
       defaultPrice: defPrice,
-      purchasePrice: purch, // ✅ fallback to default
+      purchasePrice: purch,
     );
   }
 
@@ -98,8 +90,6 @@ class ProductRepositorySqflite implements ProductRepository {
     }
   }
 
-  // --- CRUD ------------------------------------------------------------------
-
   @override
   Future<Product> create(Product product) async {
     final p = _prepCreate(product);
@@ -109,9 +99,7 @@ class ProductRepositorySqflite implements ProductRepository {
         p.toMap(),
         conflictAlgorithm: ConflictAlgorithm.abort,
       );
-
       await _ensureStockLevels(txn, p.id);
-
       final idLog = const Uuid().v4();
       await txn.rawInsert(
         'INSERT INTO change_log(id, entityTable, entityId, operation, payload, status, createdAt, updatedAt) '
@@ -195,7 +183,7 @@ class ProductRepositorySqflite implements ProductRepository {
       'product',
       where: 'deletedAt IS NULL',
       orderBy:
-          'COALESCE(name, code) COLLATE NOCASE ASC, code COLLATE NOCASE ASC',
+          'updatedAt DESC, COALESCE(name, code) COLLATE NOCASE ASC, code COLLATE NOCASE ASC',
     );
     return rows.map(_from).toList();
   }
@@ -208,7 +196,7 @@ class ProductRepositorySqflite implements ProductRepository {
       SELECT * FROM product
       WHERE deletedAt IS NULL
         AND lower(coalesce(name,'') || ' ' || coalesce(code,'') || ' ' || coalesce(barcode,'') || ' ' || coalesce(statuses,'')) LIKE ?
-      ORDER BY COALESCE(name, code) COLLATE NOCASE ASC, code COLLATE NOCASE ASC
+      ORDER BY updatedAt DESC, COALESCE(name, code) COLLATE NOCASE ASC, code COLLATE NOCASE ASC
       LIMIT ?
       ''',
       [q, limit],

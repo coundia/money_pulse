@@ -1,12 +1,17 @@
-// Compact bottom sheet to pick an account, with adjust-balance via right drawer and quick access to the Accounts page.
+// Compact bottom sheet to pick an account, with adjust-balance via right drawer,
+// quick access to the Accounts page, and auto-creation of an adjustment transaction.
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:sqflite/sqflite.dart';
+import 'package:uuid/uuid.dart';
+
 import 'package:money_pulse/domain/accounts/entities/account.dart';
 import 'package:money_pulse/presentation/widgets/money_text.dart';
 import 'package:money_pulse/presentation/widgets/right_drawer.dart';
 import 'package:money_pulse/presentation/features/accounts/widgets/account_adjust_balance_panel.dart';
 import 'package:money_pulse/presentation/app/providers.dart';
 import 'package:money_pulse/presentation/features/accounts/account_page.dart';
+import 'package:money_pulse/infrastructure/db/app_database.dart';
 
 import '../../../app/account_selection.dart';
 
@@ -102,6 +107,8 @@ Future<Account?> showAccountPickerSheet({
                                   tooltip: 'Actions',
                                   onSelected: (value) async {
                                     if (value != 'adjust') return;
+
+                                    final before = a.balance;
                                     final result =
                                         await showRightDrawer<
                                           AccountAdjustBalanceResult
@@ -114,6 +121,7 @@ Future<Account?> showAccountPickerSheet({
                                           heightFraction: 0.96,
                                         );
                                     if (result == null) return;
+
                                     try {
                                       final container =
                                           ProviderScope.containerOf(
@@ -129,12 +137,27 @@ Future<Account?> showAccountPickerSheet({
                                         updatedAt: DateTime.now(),
                                         isDirty: true,
                                       );
+
+                                      // 1) Update account
                                       await repo.update(updated);
+
+                                      // 2) Insert adjustment transaction (delta)
+                                      await _insertAdjustmentTransaction(
+                                        container: container,
+                                        account: updated,
+                                        beforeBalanceCents: before,
+                                        afterBalanceCents:
+                                            result.newBalanceCents,
+                                        userNote: result.note,
+                                      );
+
+                                      // 3) Refresh UI states
                                       final ix = all.indexWhere(
                                         (x) => x.id == a.id,
                                       );
                                       if (ix != -1) all[ix] = updated;
                                       setLocalState(() {});
+
                                       try {
                                         await container
                                             .read(balanceProvider.notifier)
@@ -148,12 +171,15 @@ Future<Account?> showAccountPickerSheet({
                                           accountRepoProvider,
                                         );
                                       } catch (_) {}
+
                                       if (context.mounted) {
                                         ScaffoldMessenger.of(
                                           context,
                                         ).showSnackBar(
                                           const SnackBar(
-                                            content: Text('Solde ajusté'),
+                                            content: Text(
+                                              'Solde ajusté et transaction créée',
+                                            ),
                                           ),
                                         );
                                       }
@@ -223,4 +249,76 @@ Future<Account?> showAccountPickerSheet({
       );
     },
   );
+}
+
+/// Inserts an "adjustment" transaction row based on the delta between before/after balances.
+/// Uses a minimal, generic schema: amountCents is stored as absolute value and typeEntry is IN/OUT.
+Future<void> _insertAdjustmentTransaction({
+  required ProviderContainer container,
+  required Account account,
+  required int beforeBalanceCents,
+  required int afterBalanceCents,
+  String? userNote,
+}) async {
+  final delta = afterBalanceCents - beforeBalanceCents;
+  if (delta == 0) return;
+
+  final appDb = container.read(dbProvider) as AppDatabase;
+  final nowIso = DateTime.now().toIso8601String();
+  final idTx = const Uuid().v4();
+  final idLog = const Uuid().v4();
+
+  final typeEntry = delta > 0 ? 'CREDIT' : 'DEBIT';
+  final amountAbs = delta.abs();
+
+  final parts = <String>[
+    'Ajustement de solde',
+    '(avant: ${beforeBalanceCents / 100}, après: ${afterBalanceCents / 100})',
+  ];
+  if (userNote != null && userNote.trim().isNotEmpty) {
+    parts.add('— ${userNote.trim()}');
+  }
+  final description = parts.join(' ');
+
+  await appDb.tx((txn) async {
+    await txn.insert('transaction_entry', <String, Object?>{
+      'id': idTx,
+      'accountId': account.id,
+      'typeEntry': typeEntry,
+      'amount': amountAbs, // ✅ correspond au schéma
+      'description': description,
+      'dateTransaction': nowIso, // ✅ utile pour tri/affichage
+      'createdAt': nowIso,
+      'updatedAt': nowIso,
+      'version': 0,
+      'isDirty': 1,
+      'deletedAt': null,
+      'status': null,
+      'code': null,
+      'remoteId': null,
+      'entityName': null,
+      'entityId': null,
+      'categoryId': null,
+      'companyId': null,
+      'customerId': null,
+      'syncAt': null,
+    }, conflictAlgorithm: ConflictAlgorithm.abort);
+
+    await txn.rawInsert(
+      'INSERT INTO change_log(id, entityTable, entityId, operation, payload, status, createdAt, updatedAt) '
+      'VALUES(?,?,?,?,?,?,?,?) '
+      'ON CONFLICT(entityTable, entityId, status) DO UPDATE '
+      'SET operation=excluded.operation, updatedAt=excluded.updatedAt, payload=excluded.payload',
+      [
+        idLog,
+        'transaction_entry',
+        idTx,
+        'INSERT',
+        null,
+        'PENDING',
+        nowIso,
+        nowIso,
+      ],
+    );
+  });
 }
