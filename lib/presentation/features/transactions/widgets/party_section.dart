@@ -1,3 +1,4 @@
+// party_section.dart
 import 'package:flutter/material.dart';
 import 'package:money_pulse/domain/company/entities/company.dart';
 import 'package:money_pulse/domain/customer/entities/customer.dart';
@@ -9,8 +10,10 @@ class PartySection extends StatelessWidget {
   final String? customerId;
   final int itemsCount;
   final bool isDebit;
+
   final ValueChanged<String?> onCompanyChanged;
   final ValueChanged<String?> onCustomerChanged;
+  final VoidCallback onCreateCustomer;
 
   const PartySection({
     super.key,
@@ -22,15 +25,20 @@ class PartySection extends StatelessWidget {
     required this.isDebit,
     required this.onCompanyChanged,
     required this.onCustomerChanged,
+    required this.onCreateCustomer,
   });
 
   @override
   Widget build(BuildContext context) {
-    final flowText = itemsCount == 0
-        ? null
-        : (isDebit
-              ? 'Le stock sera augmenté pour $itemsCount produit(s) dans la société sélectionnée.'
-              : 'Le stock sera diminué pour $itemsCount produit(s) dans la société sélectionnée.');
+    final safeCompanyId =
+        (companyId != null && companies.any((c) => c.id == companyId))
+        ? companyId
+        : null;
+
+    final safeCustomerId =
+        (customerId != null && customers.any((c) => c.id == customerId))
+        ? customerId
+        : null;
 
     return Card(
       child: Padding(
@@ -41,7 +49,7 @@ class PartySection extends StatelessWidget {
             Text('Tiers', style: Theme.of(context).textTheme.titleMedium),
             const SizedBox(height: 8),
             DropdownButtonFormField<String?>(
-              value: companyId,
+              value: safeCompanyId, // SAFE
               isDense: true,
               items: [
                 const DropdownMenuItem<String?>(
@@ -67,44 +75,60 @@ class PartySection extends StatelessWidget {
               ),
             ),
             const SizedBox(height: 8),
-            DropdownButtonFormField<String?>(
-              value: customerId,
-              isDense: true,
-              items: [
-                const DropdownMenuItem<String?>(
-                  value: null,
-                  child: Text('— Aucun client —'),
-                ),
-                ...customers.map(
-                  (cu) => DropdownMenuItem<String?>(
-                    value: cu.id,
-                    child: Text(
-                      cu.fullName,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
+            Row(
+              children: [
+                Expanded(
+                  child: DropdownButtonFormField<String?>(
+                    value: safeCustomerId, // SAFE
+                    isDense: true,
+                    items: [
+                      const DropdownMenuItem<String?>(
+                        value: null,
+                        child: Text('— Aucun client —'),
+                      ),
+                      ...customers.map(
+                        (cu) => DropdownMenuItem<String?>(
+                          value: cu.id,
+                          child: Text(
+                            cu.fullName,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                      ),
+                    ],
+                    onChanged: onCustomerChanged,
+                    decoration: const InputDecoration(
+                      border: OutlineInputBorder(),
+                      labelText: 'Client',
+                      isDense: true,
                     ),
                   ),
                 ),
+                const SizedBox(width: 8),
+                OutlinedButton.icon(
+                  onPressed: onCreateCustomer,
+                  icon: const Icon(Icons.person_add_alt_1),
+                  label: const Text('Nouveau client'),
+                ),
               ],
-              onChanged: onCustomerChanged,
-              decoration: const InputDecoration(
-                border: OutlineInputBorder(),
-                labelText: 'Client',
-                isDense: true,
-              ),
             ),
-            if (flowText != null) ...[
-              const SizedBox(height: 8),
+            const SizedBox(height: 8),
+            if (itemsCount > 0)
               Row(
                 children: [
                   const Icon(Icons.inventory_2_outlined, size: 18),
                   const SizedBox(width: 8),
-                  Expanded(
-                    child: Text(flowText, overflow: TextOverflow.ellipsis),
+                  Flexible(
+                    child: Text(
+                      isDebit
+                          ? 'Le stock sera augmenté pour $itemsCount produit(s) dans la société sélectionnée.'
+                          : 'Le stock sera diminué pour $itemsCount produit(s) dans la société sélectionnée.',
+                      overflow: TextOverflow.ellipsis,
+                    ),
                   ),
                 ],
               ),
-            ],
           ],
         ),
       ),

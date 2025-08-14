@@ -17,6 +17,7 @@ import '../../app/account_selection.dart';
 import '../../app/providers/company_repo_provider.dart';
 import '../../app/providers/customer_repo_provider.dart';
 import '../../widgets/right_drawer.dart';
+import '../customers/customer_form_panel.dart';
 import '../products/product_picker_panel.dart';
 import '../products/product_repo_provider.dart';
 import '../products/widgets/product_form_panel.dart';
@@ -377,6 +378,65 @@ class _TransactionQuickAddSheetState
     }
   }
 
+  Future<void> _createCustomerAndSelect() async {
+    final created = await showRightDrawer<Customer?>(
+      context,
+      child: const CustomerFormPanel(),
+      widthFraction: 0.86,
+      heightFraction: 0.96,
+    );
+    if (created == null) return;
+
+    final targetCompanyId = created.companyId ?? _companyId;
+
+    // Update company first
+    setState(() {
+      _companyId = targetCompanyId;
+    });
+
+    try {
+      if (targetCompanyId != null && targetCompanyId.isNotEmpty) {
+        // Reload customers for that company
+        final cuRepo = ref.read(customerRepoProvider);
+        final list = await cuRepo.findAll(
+          CustomerQuery(companyId: targetCompanyId, limit: 300, offset: 0),
+        );
+        if (!mounted) return;
+        setState(() {
+          _customers = list;
+          // Only select if present; else leave null (avoid dropdown assertion)
+          _customerId = _customers.any((c) => c.id == created.id)
+              ? created.id
+              : null;
+        });
+      } else {
+        // No company context: append the created one to current list if missing
+        if (!mounted) return;
+        setState(() {
+          if (!_customers.any((c) => c.id == created.id)) {
+            _customers = [created, ..._customers];
+          }
+          _customerId = created.id; // now definitely present
+        });
+      }
+    } catch (_) {
+      if (!mounted) return;
+      // Fallback: make sure value is safe
+      setState(() {
+        if (!_customers.any((c) => c.id == created.id)) {
+          _customers = [created, ..._customers];
+        }
+        _customerId = created.id;
+      });
+    }
+
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Client créé et sélectionné')),
+      );
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final insets = MediaQuery.of(context).viewInsets.bottom;
@@ -461,6 +521,7 @@ class _TransactionQuickAddSheetState
                       isDebit: _isDebit,
                       onCompanyChanged: _onSelectCompany,
                       onCustomerChanged: (v) => setState(() => _customerId = v),
+                      onCreateCustomer: _createCustomerAndSelect,
                     ),
                     const SizedBox(height: 12),
                     ItemsSection(
