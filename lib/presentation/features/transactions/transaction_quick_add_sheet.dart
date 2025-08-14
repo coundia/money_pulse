@@ -378,50 +378,44 @@ class _TransactionQuickAddSheetState
     }
   }
 
-  Future<void> _createCustomerAndSelect() async {
+  Future<Customer?> _createCustomerAndSelect() async {
     final created = await showRightDrawer<Customer?>(
       context,
       child: const CustomerFormPanel(),
       widthFraction: 0.86,
       heightFraction: 0.96,
     );
-    if (created == null) return;
+    if (created == null) return null;
 
     final targetCompanyId = created.companyId ?? _companyId;
-
-    // Update company first
     setState(() {
       _companyId = targetCompanyId;
     });
 
     try {
       if (targetCompanyId != null && targetCompanyId.isNotEmpty) {
-        // Reload customers for that company
         final cuRepo = ref.read(customerRepoProvider);
         final list = await cuRepo.findAll(
           CustomerQuery(companyId: targetCompanyId, limit: 300, offset: 0),
         );
-        if (!mounted) return;
+        if (!mounted) return created;
         setState(() {
           _customers = list;
-          // Only select if present; else leave null (avoid dropdown assertion)
           _customerId = _customers.any((c) => c.id == created.id)
               ? created.id
               : null;
         });
       } else {
-        // No company context: append the created one to current list if missing
-        if (!mounted) return;
+        if (!mounted) return created;
         setState(() {
           if (!_customers.any((c) => c.id == created.id)) {
             _customers = [created, ..._customers];
           }
-          _customerId = created.id; // now definitely present
+          _customerId = created.id;
         });
       }
     } catch (_) {
-      if (!mounted) return;
-      // Fallback: make sure value is safe
+      if (!mounted) return created;
       setState(() {
         if (!_customers.any((c) => c.id == created.id)) {
           _customers = [created, ..._customers];
@@ -435,6 +429,8 @@ class _TransactionQuickAddSheetState
         const SnackBar(content: Text('Client créé et sélectionné')),
       );
     }
+
+    return created;
   }
 
   @override

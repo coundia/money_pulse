@@ -1,19 +1,27 @@
-// party_section.dart
 import 'package:flutter/material.dart';
 import 'package:money_pulse/domain/company/entities/company.dart';
 import 'package:money_pulse/domain/customer/entities/customer.dart';
+
+import 'customer_autocomplete.dart';
+
+typedef OnCompanyChanged = void Function(String? companyId);
+typedef OnCustomerChanged = void Function(String? customerId);
 
 class PartySection extends StatelessWidget {
   final List<Company> companies;
   final List<Customer> customers;
   final String? companyId;
   final String? customerId;
-  final int itemsCount;
-  final bool isDebit;
 
-  final ValueChanged<String?> onCompanyChanged;
-  final ValueChanged<String?> onCustomerChanged;
-  final VoidCallback onCreateCustomer;
+  final bool isDebit;
+  final int itemsCount;
+
+  final OnCompanyChanged onCompanyChanged;
+  final OnCustomerChanged onCustomerChanged;
+
+  /// Optional: override the create flow (e.g., open your own drawer).
+  /// If not provided, CustomerAutocomplete opens CustomerFormPanel by itself.
+  final Future<Customer?> Function()? onCreateCustomer;
 
   const PartySection({
     super.key,
@@ -25,22 +33,27 @@ class PartySection extends StatelessWidget {
     required this.isDebit,
     required this.onCompanyChanged,
     required this.onCustomerChanged,
-    required this.onCreateCustomer,
+    this.onCreateCustomer,
   });
 
   @override
   Widget build(BuildContext context) {
-    final safeCompanyId =
-        (companyId != null && companies.any((c) => c.id == companyId))
-        ? companyId
-        : null;
+    final selectedCompany = companies
+        .where((c) => c.id == companyId)
+        .cast<Company?>()
+        .firstOrNull;
+    final selectedCustomer = customers
+        .where((c) => c.id == customerId)
+        .cast<Customer?>()
+        .firstOrNull;
 
-    final safeCustomerId =
-        (customerId != null && customers.any((c) => c.id == customerId))
-        ? customerId
-        : null;
+    // Local controller for the customer field (kept in sync each build)
+    final customerCtrl = TextEditingController(
+      text: selectedCustomer?.fullName ?? '',
+    );
 
     return Card(
+      clipBehavior: Clip.antiAlias,
       child: Padding(
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
         child: Column(
@@ -48,8 +61,10 @@ class PartySection extends StatelessWidget {
           children: [
             Text('Tiers', style: Theme.of(context).textTheme.titleMedium),
             const SizedBox(height: 8),
+
+            // Company
             DropdownButtonFormField<String?>(
-              value: safeCompanyId, // SAFE
+              value: companyId,
               isDense: true,
               items: [
                 const DropdownMenuItem<String?>(
@@ -74,46 +89,44 @@ class PartySection extends StatelessWidget {
                 isDense: true,
               ),
             ),
+
             const SizedBox(height: 8),
-            Row(
-              children: [
-                Expanded(
-                  child: DropdownButtonFormField<String?>(
-                    value: safeCustomerId, // SAFE
-                    isDense: true,
-                    items: [
-                      const DropdownMenuItem<String?>(
-                        value: null,
-                        child: Text('— Aucun client —'),
-                      ),
-                      ...customers.map(
-                        (cu) => DropdownMenuItem<String?>(
-                          value: cu.id,
-                          child: Text(
-                            cu.fullName,
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                          ),
-                        ),
-                      ),
-                    ],
-                    onChanged: onCustomerChanged,
-                    decoration: const InputDecoration(
-                      border: OutlineInputBorder(),
-                      labelText: 'Client',
-                      isDense: true,
-                    ),
-                  ),
-                ),
-                const SizedBox(width: 8),
-                OutlinedButton.icon(
-                  onPressed: onCreateCustomer,
-                  icon: const Icon(Icons.person_add_alt_1),
-                  label: const Text('Nouveau client'),
-                ),
-              ],
+
+            // Customer (Autocomplete with inline "Create")
+            CustomerAutocomplete(
+              controller: customerCtrl,
+              initialSelected: selectedCustomer,
+              companyLabel: selectedCompany?.name,
+              onCreate: onCreateCustomer, // optional override
+              optionsBuilder: (query) {
+                final q = query.toLowerCase().trim();
+                final base = customers.where((c) {
+                  // keep in-company results first if company selected
+                  if ((companyId ?? '').isNotEmpty) {
+                    return c.companyId == companyId;
+                  }
+                  return true;
+                });
+                if (q.isEmpty) return base.toList();
+                return base.where((c) {
+                  final code = (c.code ?? '').toLowerCase();
+                  final full = c.fullName.toLowerCase();
+                  final phone = (c.phone ?? '').toLowerCase();
+                  final email = (c.email ?? '').toLowerCase();
+                  return full.contains(q) ||
+                      code.contains(q) ||
+                      phone.contains(q) ||
+                      email.contains(q);
+                }).toList();
+              },
+              onSelected: (c) => onCustomerChanged(c.id),
+              onClear: () => onCustomerChanged(null),
+              labelText: 'Client',
+              emptyHint: 'Aucun client dans cette société',
             ),
+
             const SizedBox(height: 8),
+
             if (itemsCount > 0)
               Row(
                 children: [
@@ -134,4 +147,9 @@ class PartySection extends StatelessWidget {
       ),
     );
   }
+}
+
+// tiny safe extension
+extension _FirstOrNull<E> on Iterable<E> {
+  E? get firstOrNull => isEmpty ? null : first;
 }
