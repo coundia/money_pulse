@@ -75,7 +75,7 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('Paramètres')),
+      appBar: AppBar(title: const Text('Profil')),
       body: ListView(
         children: [
           const _SectionHeader('Gestion'),

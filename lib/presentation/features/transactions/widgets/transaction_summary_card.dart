@@ -1,6 +1,11 @@
+// Orchestrates period header, summary metrics, and quick actions for transactions.
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:money_pulse/presentation/shared/formatters.dart';
+
+import 'summary_period_header.dart';
+import 'summary_metric_chip.dart';
+import 'summary_quick_actions.dart';
 
 class TransactionSummaryCard extends StatelessWidget {
   final String periodLabel;
@@ -32,11 +37,9 @@ class TransactionSummaryCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final expenseText = '−${Formatters.amountFromCents(expenseCents)}';
-    final incomeText = '+${Formatters.amountFromCents(incomeCents)}';
     final netIsPositive = netCents >= 0;
-    final netText =
-        '${netIsPositive ? '+' : '−'}${Formatters.amountFromCents(netCents.abs())}';
+    final netPrefix = netIsPositive ? '+' : '−';
+    final netAbs = netCents.abs();
 
     return Card(
       elevation: 0,
@@ -45,203 +48,77 @@ class TransactionSummaryCard extends StatelessWidget {
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
         child: Column(
           children: [
-            Row(
-              children: [
-                IconButton(
-                  tooltip: 'Précédent',
-                  icon: const Icon(Icons.chevron_left),
-                  onPressed: onPrev,
-                ),
-                Expanded(
-                  child: Center(
-                    child: AnimatedSwitcher(
-                      duration: const Duration(milliseconds: 200),
-                      transitionBuilder: (c, a) =>
-                          FadeTransition(opacity: a, child: c),
-                      child: InkWell(
-                        key: ValueKey(periodLabel),
-                        onTap: onTapPeriod,
-                        borderRadius: BorderRadius.circular(8),
-                        child: Padding(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 8,
-                            vertical: 6,
-                          ),
-                          child: Row(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              const Icon(Icons.calendar_month, size: 18),
-                              const SizedBox(width: 6),
-                              Text(
-                                periodLabel,
-                                style: Theme.of(context).textTheme.titleMedium,
-                              ),
-                            ],
-                          ),
-                        ),
-                      ),
-                    ),
-                  ),
-                ),
-                IconButton(
-                  tooltip: 'Suivant',
-                  icon: const Icon(Icons.chevron_right),
-                  onPressed: onNext,
-                ),
-              ],
+            SummaryPeriodHeader(
+              label: periodLabel,
+              onPrev: () {
+                HapticFeedback.selectionClick();
+                onPrev();
+              },
+              onNext: () {
+                HapticFeedback.selectionClick();
+                onNext();
+              },
+              onTapLabel: () {
+                HapticFeedback.selectionClick();
+                onTapPeriod();
+              },
             ),
             const SizedBox(height: 8),
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-              children: [
-                IconButton(
-                  tooltip: 'Paramètres',
-                  icon: const Icon(Icons.settings_outlined),
-                  onPressed: onOpenSettings,
-                ),
-                _summaryText(context, 'Dépenses', expenseText, Colors.red),
-                _summaryText(context, 'Revenus', incomeText, Colors.green),
-                _summaryText(
-                  context,
-                  'Net',
-                  netText,
-                  netIsPositive ? Colors.green : Colors.red,
-                ),
-                IconButton(
-                  tooltip: 'Rapport',
-                  icon: const Icon(Icons.pie_chart),
-                  onPressed: onOpenReport,
-                ),
-              ],
+            LayoutBuilder(
+              builder: (ctx, c) {
+                final isTight = c.maxWidth < 420;
+                return Wrap(
+                  alignment: isTight
+                      ? WrapAlignment.center
+                      : WrapAlignment.spaceBetween,
+                  crossAxisAlignment: WrapCrossAlignment.center,
+                  spacing: 10,
+                  runSpacing: 10,
+                  children: [
+                    IconButton(
+                      tooltip: 'Paramètres',
+                      icon: const Icon(Icons.settings_outlined),
+                      onPressed: onOpenSettings,
+                    ),
+                    SummaryMetricChip(
+                      label: 'Dépenses',
+                      valueText: '−${Formatters.amountFromCents(expenseCents)}',
+                      tone: Theme.of(context).colorScheme.error,
+                      semanticsValue:
+                          '${Formatters.amountFromCents(expenseCents)} négatif',
+                    ),
+                    SummaryMetricChip(
+                      label: 'Revenus',
+                      valueText: '+${Formatters.amountFromCents(incomeCents)}',
+                      tone: Theme.of(context).colorScheme.tertiary,
+                      semanticsValue:
+                          '${Formatters.amountFromCents(incomeCents)} positif',
+                    ),
+                    SummaryMetricChip(
+                      label: 'Net',
+                      valueText:
+                          '$netPrefix${Formatters.amountFromCents(netAbs)}',
+                      tone: netIsPositive
+                          ? Theme.of(context).colorScheme.tertiary
+                          : Theme.of(context).colorScheme.error,
+                      semanticsValue:
+                          '${Formatters.amountFromCents(netAbs)} ${netIsPositive ? 'positif' : 'négatif'}',
+                    ),
+                    IconButton(
+                      tooltip: 'Rapport',
+                      icon: const Icon(Icons.pie_chart),
+                      onPressed: onOpenReport,
+                    ),
+                  ],
+                );
+              },
             ),
             const SizedBox(height: 10),
-            _ActionButtonsRow(
+            SummaryQuickActions(
               onAddExpense: onAddExpense,
               onAddIncome: onAddIncome,
             ),
           ],
-        ),
-      ),
-    );
-  }
-
-  Widget _summaryText(
-    BuildContext context,
-    String label,
-    String value,
-    Color color,
-  ) {
-    return Column(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        Text(label, style: Theme.of(context).textTheme.bodySmall),
-        const SizedBox(height: 2),
-        Text(
-          value,
-          style: TextStyle(color: color, fontWeight: FontWeight.w700),
-        ),
-      ],
-    );
-  }
-}
-
-class _ActionButtonsRow extends StatelessWidget {
-  final VoidCallback? onAddExpense;
-  final VoidCallback? onAddIncome;
-
-  const _ActionButtonsRow({
-    required this.onAddExpense,
-    required this.onAddIncome,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return LayoutBuilder(
-      builder: (ctx, c) {
-        final isNarrow = c.maxWidth < 360;
-        final children = <Widget>[
-          _ActionButton(
-            label: 'Ajouter dépense',
-            icon: Icons.remove_circle_outline,
-            tone: Colors.red,
-            onPressed: onAddExpense,
-          ),
-          SizedBox(width: isNarrow ? 0 : 12, height: isNarrow ? 12 : 0),
-          _ActionButton(
-            label: 'Ajouter revenu',
-            icon: Icons.add_circle_outline,
-            tone: Colors.green,
-            onPressed: onAddIncome,
-          ),
-        ];
-        return isNarrow ? Column(children: children) : Row(children: children);
-      },
-    );
-  }
-}
-
-class _ActionButton extends StatelessWidget {
-  final String label;
-  final IconData icon;
-  final MaterialColor tone;
-  final VoidCallback? onPressed;
-
-  const _ActionButton({
-    required this.label,
-    required this.icon,
-    required this.tone,
-    required this.onPressed,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-    final bg = (isDark ? tone.shade200 : tone.shade100).withOpacity(0.22);
-    final fg = isDark ? tone.shade200 : tone.shade700;
-
-    return Expanded(
-      child: Tooltip(
-        message: label,
-        waitDuration: const Duration(milliseconds: 400),
-        child: FilledButton.icon(
-          onPressed: onPressed == null
-              ? null
-              : () {
-                  HapticFeedback.selectionClick();
-                  onPressed!.call();
-                },
-          icon: Icon(icon, size: 20),
-          label: Text(
-            label,
-            style: const TextStyle(fontWeight: FontWeight.w600),
-          ),
-          style:
-              FilledButton.styleFrom(
-                padding: const EdgeInsets.symmetric(vertical: 14),
-                backgroundColor: bg,
-                foregroundColor: fg,
-                disabledForegroundColor: fg.withOpacity(0.38),
-                disabledBackgroundColor: bg.withOpacity(0.5),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(12),
-                ),
-              ).merge(
-                ButtonStyle(
-                  overlayColor: MaterialStateProperty.resolveWith((states) {
-                    if (states.contains(MaterialState.pressed))
-                      return fg.withOpacity(0.08);
-                    if (states.contains(MaterialState.hovered) ||
-                        states.contains(MaterialState.focused)) {
-                      return fg.withOpacity(0.06);
-                    }
-                    return null;
-                  }),
-                  elevation: MaterialStateProperty.resolveWith(
-                    (states) => states.contains(MaterialState.pressed) ? 1 : 0,
-                  ),
-                  animationDuration: const Duration(milliseconds: 120),
-                ),
-              ),
         ),
       ),
     );

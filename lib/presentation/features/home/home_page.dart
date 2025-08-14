@@ -1,8 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:money_pulse/presentation/features/customers/customer_list_page.dart';
-import 'package:money_pulse/presentation/features/pos/pos_page.dart';
-import 'package:money_pulse/presentation/features/products/product_list_page.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'package:money_pulse/presentation/app/providers.dart';
@@ -16,11 +13,15 @@ import 'package:money_pulse/presentation/features/transactions/transaction_form_
 import 'package:money_pulse/presentation/features/transactions/pages/transaction_list_page.dart';
 import 'package:money_pulse/presentation/features/transactions/search/txn_search_delegate.dart';
 
-import 'package:money_pulse/domain/accounts/entities/account.dart';
-import 'package:money_pulse/domain/transactions/entities/transaction_entry.dart';
+import 'package:money_pulse/presentation/features/products/product_list_page.dart';
+import 'package:money_pulse/presentation/features/customers/customer_list_page.dart';
+import 'package:money_pulse/presentation/features/pos/pos_page.dart';
 
 import 'package:money_pulse/presentation/features/accounts/account_page.dart';
 import 'package:money_pulse/presentation/features/categories/category_list_page.dart';
+
+import 'package:money_pulse/domain/accounts/entities/account.dart';
+import 'package:money_pulse/domain/transactions/entities/transaction_entry.dart';
 
 import '../transactions/controllers/transaction_list_controller.dart';
 import '../transactions/providers/transaction_list_providers.dart'
@@ -29,7 +30,6 @@ import '../transactions/providers/transaction_list_providers.dart'
 import 'widgets/account_picker_sheet.dart';
 import 'widgets/period_picker_sheet.dart';
 import 'widgets/share_account_dialog.dart';
-
 import 'package:money_pulse/presentation/shared/formatters.dart';
 
 class HomePage extends ConsumerStatefulWidget {
@@ -45,6 +45,7 @@ class _HomePageState extends ConsumerState<HomePage> {
   @override
   void initState() {
     super.initState();
+    // Warm up data on launch
     Future.microtask(() async {
       await ref.read(transactionsProvider.notifier).load();
       await ref.read(categoriesProvider.notifier).load();
@@ -109,14 +110,10 @@ class _HomePageState extends ConsumerState<HomePage> {
     await showShareAccountDialog(context: context, acc: acc);
   }
 
-  int get _navSelectedIndex => pageIdx == 0 ? 0 : 2;
-
   void _onDestinationSelected(int v) {
-    if (v == 1) {
-      _openQuickAdd();
-      return;
-    }
-    setState(() => pageIdx = (v == 0) ? 0 : 1);
+    // Simple tab switcher
+    if (!mounted) return;
+    setState(() => pageIdx = v);
   }
 
   @override
@@ -258,7 +255,6 @@ class _HomePageState extends ConsumerState<HomePage> {
                       ),
                     );
                     break;
-
                   case 'produits':
                     if (!mounted) break;
                     await Navigator.of(context).push(
@@ -285,7 +281,6 @@ class _HomePageState extends ConsumerState<HomePage> {
                     title: Text('Sélectionner la période'),
                   ),
                 ),
-
                 PopupMenuItem(
                   value: 'sync',
                   child: ListTile(
@@ -322,7 +317,6 @@ class _HomePageState extends ConsumerState<HomePage> {
                     title: Text('Comptes'),
                   ),
                 ),
-
                 PopupMenuItem(
                   value: 'clients',
                   child: ListTile(
@@ -330,7 +324,6 @@ class _HomePageState extends ConsumerState<HomePage> {
                     title: Text('Clients'),
                   ),
                 ),
-
                 PopupMenuDivider(),
                 PopupMenuItem(
                   value: 'settings',
@@ -345,23 +338,27 @@ class _HomePageState extends ConsumerState<HomePage> {
       ),
       body: IndexedStack(
         index: pageIdx,
-        children: const [TransactionListPage(), PosPage()],
+        // Keep state of each tab
+        children: const [TransactionListPage(), PosPage(), SettingsPage()],
       ),
+      floatingActionButton: pageIdx == 0
+          ? FloatingActionButton.extended(
+              onPressed: _openQuickAdd,
+              icon: const Icon(Icons.add),
+              label: const Text('Ajouter'),
+            )
+          : null,
       bottomNavigationBar: NavigationBar(
         labelBehavior: NavigationDestinationLabelBehavior.onlyShowSelected,
-        selectedIndex: _navSelectedIndex,
+        selectedIndex: pageIdx, // <-- highlight current tab
         onDestinationSelected: _onDestinationSelected,
         destinations: const [
           NavigationDestination(
             icon: Icon(Icons.list_alt),
             label: 'Transactions',
           ),
-          NavigationDestination(
-            icon: Icon(Icons.add_circle, size: 36),
-            selectedIcon: Icon(Icons.add_circle, size: 36),
-            label: 'Ajouter',
-          ),
-          NavigationDestination(icon: Icon(Icons.person), label: 'Compte'),
+          NavigationDestination(icon: Icon(Icons.shopping_cart), label: 'POS'),
+          NavigationDestination(icon: Icon(Icons.person), label: 'Profil'),
         ],
       ),
     );
