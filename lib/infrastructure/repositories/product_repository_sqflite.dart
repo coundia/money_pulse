@@ -1,4 +1,9 @@
-/// Repository that persists products and ensures a stock_level row is created per active company on creation.
+/// Repository that persists products and ensures a stock_level row is created
+/// per active company on creation. Includes robust normalization:
+/// - name fallback to "No name" if empty
+/// - trims strings and stores empty as NULL
+/// - purchasePrice falls back to defaultPrice when <= 0
+/// - clamps prices to >= 0
 import 'package:sqflite/sqflite.dart';
 import 'package:uuid/uuid.dart';
 
@@ -12,15 +17,60 @@ class ProductRepositorySqflite implements ProductRepository {
 
   String _now() => DateTime.now().toIso8601String();
 
-  Product _prepCreate(Product p) => p.copyWith(
-    createdAt: DateTime.now(),
-    updatedAt: DateTime.now(),
-    version: 0,
-    isDirty: 1,
-  );
+  // --- helpers ---------------------------------------------------------------
 
-  Product _prepUpdate(Product p) =>
-      p.copyWith(updatedAt: DateTime.now(), version: p.version + 1, isDirty: 1);
+  String? _trimOrNull(String? s) {
+    if (s == null) return null;
+    final v = s.trim();
+    return v.isEmpty ? null : v;
+  }
+
+  int _nz(int? v) => (v == null || v < 0) ? 0 : v;
+
+  /// Ensure we always persist a sane Product row
+  Product _normalize(Product p) {
+    final nameTrimmed = _trimOrNull(p.name);
+    final codeTrimmed = _trimOrNull(p.code);
+    final descTrimmed = _trimOrNull(p.description);
+    final barcodeTrimmed = _trimOrNull(p.barcode);
+    final unitIdTrimmed = _trimOrNull(p.unitId);
+    final categoryIdTrimmed = _trimOrNull(p.categoryId);
+    final statusesTrimmed = _trimOrNull(p.statuses);
+
+    final defPrice = _nz(p.defaultPrice);
+    final purch = _nz(p.purchasePrice) <= 0 ? defPrice : _nz(p.purchasePrice);
+
+    return p.copyWith(
+      name: nameTrimmed ?? 'No name', // ✅ fallback
+      code: codeTrimmed,
+      description: descTrimmed,
+      barcode: barcodeTrimmed,
+      unitId: unitIdTrimmed,
+      categoryId: categoryIdTrimmed,
+      statuses: statusesTrimmed,
+      defaultPrice: defPrice,
+      purchasePrice: purch, // ✅ fallback to default
+    );
+  }
+
+  Product _prepCreate(Product p) {
+    final n = _normalize(p);
+    return n.copyWith(
+      createdAt: DateTime.now(),
+      updatedAt: DateTime.now(),
+      version: 0,
+      isDirty: 1,
+    );
+  }
+
+  Product _prepUpdate(Product p) {
+    final n = _normalize(p);
+    return n.copyWith(
+      updatedAt: DateTime.now(),
+      version: p.version + 1,
+      isDirty: 1,
+    );
+  }
 
   Product _from(Map<String, Object?> m) => Product.fromMap(m);
 
@@ -47,6 +97,8 @@ class ProductRepositorySqflite implements ProductRepository {
       }, conflictAlgorithm: ConflictAlgorithm.ignore);
     }
   }
+
+  // --- CRUD ------------------------------------------------------------------
 
   @override
   Future<Product> create(Product product) async {
@@ -142,7 +194,8 @@ class ProductRepositorySqflite implements ProductRepository {
     final rows = await _db.db.query(
       'product',
       where: 'deletedAt IS NULL',
-      orderBy: 'name COLLATE NOCASE ASC, code COLLATE NOCASE ASC',
+      orderBy:
+          'COALESCE(name, code) COLLATE NOCASE ASC, code COLLATE NOCASE ASC',
     );
     return rows.map(_from).toList();
   }
@@ -154,8 +207,8 @@ class ProductRepositorySqflite implements ProductRepository {
       '''
       SELECT * FROM product
       WHERE deletedAt IS NULL
-        AND lower(coalesce(name,'') || ' ' || coalesce(code,'') || ' ' || coalesce(barcode,'')) LIKE ?
-      ORDER BY name COLLATE NOCASE ASC, code COLLATE NOCASE ASC
+        AND lower(coalesce(name,'') || ' ' || coalesce(code,'') || ' ' || coalesce(barcode,'') || ' ' || coalesce(statuses,'')) LIKE ?
+      ORDER BY COALESCE(name, code) COLLATE NOCASE ASC, code COLLATE NOCASE ASC
       LIMIT ?
       ''',
       [q, limit],

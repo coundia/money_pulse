@@ -1,4 +1,4 @@
-// lib/presentation/features/products/widgets/product_view_panel.dart
+// Product detail right-drawer panel; shows selling price, purchase price, and single-string status.
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -40,11 +40,10 @@ class ProductViewPanel extends ConsumerWidget {
       if ((product.code ?? '').isNotEmpty) 'Code: ${product.code}',
       if ((product.barcode ?? '').isNotEmpty) 'EAN: ${product.barcode}',
       if ((categoryLabel ?? '').isNotEmpty) 'Catégorie: $categoryLabel',
+      if ((product.statuses ?? '').isNotEmpty) 'Statut: ${product.statuses}',
     ];
     final subtitle = subtitleParts.join('  •  ');
 
-    // Use a simple query to find related stock rows (server-side query) and
-    // filter locally to the current product for resilient matching.
     final q = (product.code?.trim().isNotEmpty ?? false)
         ? product.code!.trim()
         : (product.name?.trim() ?? '');
@@ -77,7 +76,6 @@ class ProductViewPanel extends ConsumerWidget {
       body: ListView(
         padding: const EdgeInsets.all(16),
         children: [
-          // ---------- En-tête
           Row(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
@@ -114,13 +112,20 @@ class ProductViewPanel extends ConsumerWidget {
                 ),
               ),
               const SizedBox(width: 8),
-              _PriceBadge(text: _money(product.defaultPrice)),
+              Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                children: [
+                  _PriceBadge(text: 'Vente: ${_money(product.defaultPrice)}'),
+                  if (product.purchasePrice > 0)
+                    _PriceBadge(text: "Coût: ${_money(product.purchasePrice)}"),
+                ],
+              ),
             ],
           ),
 
           const SizedBox(height: 16),
 
-          // ---------- Tags
           Wrap(
             spacing: 8,
             runSpacing: 8,
@@ -138,19 +143,22 @@ class ProductViewPanel extends ConsumerWidget {
                 text: 'Produit',
                 icon: Icons.inventory_2_outlined,
               ),
+              if ((product.statuses ?? '').isNotEmpty)
+                _ChipIcon(
+                  text: product.statuses ?? "-",
+                  icon: Icons.flag_outlined,
+                ),
             ],
           ),
 
           const SizedBox(height: 16),
 
-          // ---------- Description
           if ((product.description ?? '').isNotEmpty)
             _SectionCard(
               title: 'Description',
               child: Text(product.description!),
             ),
 
-          // ---------- Détails
           _SectionCard(
             title: 'Détails',
             child: Column(
@@ -162,7 +170,14 @@ class ProductViewPanel extends ConsumerWidget {
                   'Catégorie',
                   categoryLabel ?? product.categoryId ?? '—',
                 ),
-                _KeyValueRow('Prix par défaut', _money(product.defaultPrice)),
+                _KeyValueRow('Prix de vente', _money(product.defaultPrice)),
+                _KeyValueRow(
+                  "Prix d'achat",
+                  product.purchasePrice > 0
+                      ? _money(product.purchasePrice)
+                      : '—',
+                ),
+                _KeyValueRow('Statut', product.statuses ?? "-"),
                 _KeyValueRow('Version', '${product.version}'),
                 _KeyValueRow(
                   'Marqué à synchroniser',
@@ -172,7 +187,6 @@ class ProductViewPanel extends ConsumerWidget {
             ),
           ),
 
-          // ---------- Métadonnées
           _SectionCard(
             title: 'Métadonnées',
             child: Column(
@@ -200,7 +214,6 @@ class ProductViewPanel extends ConsumerWidget {
             ),
           ),
 
-          // ---------- Stock
           _SectionCard(
             title: 'Stock',
             trailing: (onAdjust != null)
@@ -212,7 +225,6 @@ class ProductViewPanel extends ConsumerWidget {
                 : null,
             child: asyncLevels.when(
               data: (rows) {
-                // Local filter to match current product
                 final filtered = rows.where((r) {
                   if ((product.code ?? '').isNotEmpty) {
                     return r.productLabel.toLowerCase().contains(
@@ -264,7 +276,6 @@ class ProductViewPanel extends ConsumerWidget {
 
           const SizedBox(height: 8),
 
-          // ---------- Actions
           Row(
             children: [
               if (onShare != null)
@@ -304,15 +315,11 @@ class ProductViewPanel extends ConsumerWidget {
   }
 }
 
-// ---------- Providers
-
 final _stockSearchProvider = FutureProvider.autoDispose
     .family<List<StockLevelRow>, String>((ref, query) async {
       final repo = ref.read(stockLevelRepoProvider);
       return repo.search(query: query);
     });
-
-// ---------- Private UI widgets
 
 class _SectionCard extends StatelessWidget {
   final String title;
@@ -368,7 +375,6 @@ class _ResponsiveStockListOrTable extends StatelessWidget {
   Widget build(BuildContext context) {
     final w = MediaQuery.sizeOf(context).width;
 
-    // On small drawers (phones / narrow tablet drawers): compact list with chips.
     if (w < 560) {
       return ListView.separated(
         shrinkWrap: true,
@@ -407,7 +413,6 @@ class _ResponsiveStockListOrTable extends StatelessWidget {
       );
     }
 
-    // On wider drawers: DataTable inside a horizontal scroller (prevents overflow).
     return SingleChildScrollView(
       scrollDirection: Axis.horizontal,
       child: DataTable(
@@ -477,7 +482,6 @@ class _TotalsBar extends StatelessWidget {
 
     return LayoutBuilder(
       builder: (context, c) {
-        // Stack vertically on very small widths
         if (c.maxWidth < 520) {
           return Column(
             children: [

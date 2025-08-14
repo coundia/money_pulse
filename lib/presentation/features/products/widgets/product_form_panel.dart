@@ -1,3 +1,4 @@
+// Product form panel; captures purchasePrice and a single String status.
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:money_pulse/domain/products/entities/product.dart';
@@ -5,12 +6,13 @@ import 'package:money_pulse/domain/categories/entities/category.dart';
 
 class ProductFormResult {
   final String? code;
-  final String name; // will be "No name" if left empty in the form
+  final String name;
   final String? description;
   final String? barcode;
   final String? categoryId;
-  final int priceCents; // prix de vente (obligatoire)
-  final int purchasePriceCents; // prix d'achat (optionnel; default 0)
+  final int priceCents;
+  final int purchasePriceCents;
+  final String status;
 
   const ProductFormResult({
     this.code,
@@ -19,7 +21,8 @@ class ProductFormResult {
     this.barcode,
     this.categoryId,
     required this.priceCents,
-    this.purchasePriceCents = 0, // ✅ keeps older call sites working
+    this.purchasePriceCents = 0,
+    this.status = 'ACTIVE',
   });
 }
 
@@ -47,21 +50,25 @@ class _ProductFormPanelState extends State<ProductFormPanel> {
   late final TextEditingController _barcode = TextEditingController(
     text: widget.existing?.barcode ?? '',
   );
-
-  /// Prix de vente (obligatoire)
   late final TextEditingController _priceSell = TextEditingController(
     text: widget.existing == null
         ? ''
         : _moneyFromCents(widget.existing!.defaultPrice),
   );
-
-  /// Prix d'achat / coût (optionnel). If your Product entity does not yet
-  /// carry a stored purchase price, leave this empty – it will resolve to 0.
   late final TextEditingController _priceBuy = TextEditingController(
-    text: '', // fill from existing if/when you add the field to Product
+    text: widget.existing == null
+        ? ''
+        : _moneyFromCents(widget.existing!.purchasePrice),
   );
 
   String? _categoryId;
+  String _status = 'ACTIVE';
+
+  static const List<(String, String)> _statusOptions = [
+    ('ACTIVE', 'Actif'),
+    ('PROMO', 'Promotion'),
+    ('ARCHIVED', 'Archivé'),
+  ];
 
   @override
   void initState() {
@@ -69,6 +76,7 @@ class _ProductFormPanelState extends State<ProductFormPanel> {
     _categoryId =
         widget.existing?.categoryId ??
         (widget.categories.isNotEmpty ? widget.categories.first.id : null);
+    _status = widget.existing?.statuses ?? "ACTIVE";
   }
 
   @override
@@ -82,16 +90,11 @@ class _ProductFormPanelState extends State<ProductFormPanel> {
     super.dispose();
   }
 
-  // --- helpers --------------------------------------------------------------
-
-  // Display helper (integer cents -> plain string, no symbol)
   String _moneyFromCents(int cents) {
     final v = cents / 100.0;
-    // No symbol, no decimals (to match your previous behavior)
     return NumberFormat.currency(symbol: '', decimalDigits: 0).format(v).trim();
   }
 
-  // Parse helper (string -> integer cents)
   int _toCents(String v) {
     final s = v.replaceAll(',', '.').replaceAll(' ', '');
     final d = double.tryParse(s) ?? 0;
@@ -99,27 +102,26 @@ class _ProductFormPanelState extends State<ProductFormPanel> {
     return cents < 0 ? 0 : cents;
   }
 
+  String? _required(String? v) =>
+      (v == null || v.trim().isEmpty) ? 'Requis' : null;
+
   void _submit() {
     if (!_formKey.currentState!.validate()) return;
-
     final nameValue = _name.text.trim().isEmpty ? 'No name' : _name.text.trim();
-
     final result = ProductFormResult(
       code: _code.text.trim().isEmpty ? null : _code.text.trim(),
-      name: nameValue, // ✅ fallback if empty
+      name: nameValue,
       description: _desc.text.trim().isEmpty ? null : _desc.text.trim(),
       barcode: _barcode.text.trim().isEmpty ? null : _barcode.text.trim(),
       categoryId: _categoryId,
-      priceCents: _toCents(_priceSell.text), // required
-      purchasePriceCents: _toCents(_priceBuy.text), // optional (0 if blank)
+      priceCents: _toCents(_priceSell.text),
+      purchasePriceCents: _priceBuy.text.trim().isEmpty
+          ? 0
+          : _toCents(_priceBuy.text),
+      status: _status,
     );
-
     Navigator.pop(context, result);
   }
-
-  // Simple required validator used only for selling price
-  String? _required(String? v) =>
-      (v == null || v.trim().isEmpty) ? 'Requis' : null;
 
   @override
   Widget build(BuildContext context) {
@@ -146,13 +148,13 @@ class _ProductFormPanelState extends State<ProductFormPanel> {
         child: ListView(
           padding: const EdgeInsets.all(16),
           children: [
-            // --- Prix (vente) obligatoire
             TextFormField(
               controller: _priceSell,
               keyboardType: const TextInputType.numberWithOptions(
                 decimal: true,
                 signed: false,
               ),
+              textInputAction: TextInputAction.next,
               decoration: const InputDecoration(
                 labelText: 'Prix de vente (ex: 1500)',
                 helperText: 'Obligatoire',
@@ -162,50 +164,48 @@ class _ProductFormPanelState extends State<ProductFormPanel> {
               autofocus: true,
             ),
             const SizedBox(height: 12),
-
-            // --- Prix d'achat optionnel
             TextFormField(
               controller: _priceBuy,
               keyboardType: const TextInputType.numberWithOptions(
                 decimal: true,
                 signed: false,
               ),
+              textInputAction: TextInputAction.next,
               decoration: const InputDecoration(
                 labelText: "Prix d'achat / coût (ex: 1200)",
-                helperText: "Optionnel — laissé vide = 0",
+                helperText: 'Optionnel',
                 border: OutlineInputBorder(),
               ),
             ),
             const SizedBox(height: 16),
-
-            // --- Informations générales (toutes optionnelles)
             TextFormField(
               controller: _name,
+              textInputAction: TextInputAction.next,
               decoration: const InputDecoration(
                 labelText: 'Nom (laisser vide = "No name")',
                 border: OutlineInputBorder(),
               ),
             ),
             const SizedBox(height: 12),
-
             TextFormField(
               controller: _code,
+              textInputAction: TextInputAction.next,
               decoration: const InputDecoration(
                 labelText: 'Code (SKU)',
                 border: OutlineInputBorder(),
               ),
             ),
             const SizedBox(height: 12),
-
             TextFormField(
               controller: _barcode,
+              textInputAction: TextInputAction.done,
+              onFieldSubmitted: (_) => _submit(),
               decoration: const InputDecoration(
                 labelText: 'Code barre (EAN/UPC)',
                 border: OutlineInputBorder(),
               ),
             ),
             const SizedBox(height: 12),
-
             DropdownButtonFormField<String>(
               value: _categoryId,
               items: widget.categories
@@ -220,7 +220,18 @@ class _ProductFormPanelState extends State<ProductFormPanel> {
               ),
             ),
             const SizedBox(height: 12),
-
+            DropdownButtonFormField<String>(
+              value: _status,
+              items: _statusOptions
+                  .map((e) => DropdownMenuItem(value: e.$1, child: Text(e.$2)))
+                  .toList(),
+              onChanged: (v) => setState(() => _status = v ?? 'ACTIVE'),
+              decoration: const InputDecoration(
+                labelText: 'Statut',
+                border: OutlineInputBorder(),
+              ),
+            ),
+            const SizedBox(height: 16),
             TextFormField(
               controller: _desc,
               maxLines: 3,
@@ -229,7 +240,6 @@ class _ProductFormPanelState extends State<ProductFormPanel> {
                 border: OutlineInputBorder(),
               ),
             ),
-
             const SizedBox(height: 10),
             Text(
               'Astuce : utilisez la recherche pour retrouver rapidement par nom, code ou EAN.',

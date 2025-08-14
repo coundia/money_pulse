@@ -1,3 +1,4 @@
+// Context menu for account items with optional header and safe actions.
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:money_pulse/presentation/shared/formatters.dart';
@@ -70,8 +71,8 @@ Future<void> showAccountContextMenu(
     const PopupMenuItem(
       value: 'share',
       child: ListTile(
-        leading: Icon(Icons.ios_share_outlined),
-        title: Text('Partager'),
+        leading: Icon(Icons.copy_all_outlined),
+        title: Text('Copier les détails'),
       ),
     ),
     const PopupMenuItem(
@@ -103,7 +104,7 @@ Future<void> showAccountContextMenu(
       onView();
       break;
     case 'default':
-      if (onMakeDefault != null) onMakeDefault();
+      onMakeDefault?.call();
       break;
     case 'edit':
       onEdit();

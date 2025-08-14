@@ -285,18 +285,12 @@ class _HomePageState extends ConsumerState<HomePage> {
                     title: Text('Sélectionner la période'),
                   ),
                 ),
-                PopupMenuItem(
-                  value: 'changeAccount',
-                  child: ListTile(
-                    leading: Icon(Icons.account_balance_wallet),
-                    title: Text('Changer de compte'),
-                  ),
-                ),
+
                 PopupMenuItem(
                   value: 'sync',
                   child: ListTile(
                     leading: Icon(Icons.sync),
-                    title: Text('Synchroniser les transactions'),
+                    title: Text('Synchroniser '),
                   ),
                 ),
                 PopupMenuItem(

@@ -1,31 +1,24 @@
+// Product list page; handles single String status and purchase price.
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:uuid/uuid.dart';
-
 import 'package:money_pulse/domain/products/entities/product.dart';
 import 'package:money_pulse/domain/products/repositories/product_repository.dart';
 import 'package:money_pulse/presentation/features/products/product_repo_provider.dart';
-
-import 'package:money_pulse/presentation/app/providers.dart'; // categoryRepoProvider
+import 'package:money_pulse/presentation/app/providers.dart';
 import 'package:money_pulse/presentation/widgets/right_drawer.dart';
-
 import 'widgets/product_tile.dart';
 import 'widgets/product_form_panel.dart';
 import 'widgets/product_delete_panel.dart';
 import 'widgets/product_view_panel.dart';
 import 'widgets/product_stock_adjust_panel.dart';
-
-// Filters UI
 import 'filters/product_filters.dart';
 import 'filters/filters_sheet.dart';
-
-// stock repo to compute per-product totals
 import '../stock/providers/stock_level_repo_provider.dart';
 
 class ProductListPage extends ConsumerStatefulWidget {
   const ProductListPage({super.key});
-
   @override
   ConsumerState<ProductListPage> createState() => _ProductListPageState();
 }
@@ -64,6 +57,9 @@ class _ProductListPageState extends ConsumerState<ProductListPage> {
       if ((p.code ?? '').isNotEmpty) 'Code: ${p.code}',
       if ((p.barcode ?? '').isNotEmpty) 'EAN: ${p.barcode}',
       'Prix: ${(p.defaultPrice / 100).toStringAsFixed(0)}',
+      if (p.purchasePrice > 0)
+        'Coût: ${(p.purchasePrice / 100).toStringAsFixed(0)}',
+      'Statut: ${p.statuses}',
       'ID: ${p.id}',
     ].join('\n');
     await Clipboard.setData(ClipboardData(text: text));
@@ -111,6 +107,8 @@ class _ProductListPageState extends ConsumerState<ProductListPage> {
         unitId: null,
         categoryId: res.categoryId,
         defaultPrice: res.priceCents,
+        purchasePrice: res.purchasePriceCents,
+        statuses: res.status,
         createdAt: now,
         updatedAt: now,
         deletedAt: null,
@@ -127,6 +125,10 @@ class _ProductListPageState extends ConsumerState<ProductListPage> {
         barcode: res.barcode,
         categoryId: res.categoryId,
         defaultPrice: res.priceCents,
+        purchasePrice: res.purchasePriceCents,
+        statuses: res.status,
+        updatedAt: now,
+        isDirty: 1,
       );
       await _repo.update(updated);
     }
@@ -155,7 +157,6 @@ class _ProductListPageState extends ConsumerState<ProductListPage> {
       catLabel = cat?.code;
     }
     if (!mounted) return;
-
     await showRightDrawer<void>(
       context,
       child: ProductViewPanel(
@@ -177,12 +178,9 @@ class _ProductListPageState extends ConsumerState<ProductListPage> {
     );
   }
 
-  /// Naive stock computation (sum stockOnHand - stockAllocated across companies)
-  /// using the existing search endpoint. Works with current repos without schema changes.
   Future<Map<String, int>> _computeStockMap(List<Product> items) async {
     final stockRepo = ref.read(stockLevelRepoProvider);
-    final map = <String, int>{}; // productId -> total (onHand - allocated)
-
+    final map = <String, int>{};
     for (final p in items) {
       final q = (p.code?.trim().isNotEmpty ?? false)
           ? p.code!.trim()
@@ -233,8 +231,8 @@ class _ProductListPageState extends ConsumerState<ProductListPage> {
         59,
         999,
       );
-      return (d.isAfter(start.subtract(const Duration(milliseconds: 1))) &&
-          d.isBefore(end.add(const Duration(milliseconds: 1))));
+      return d.isAfter(start.subtract(const Duration(milliseconds: 1))) &&
+          d.isBefore(end.add(const Duration(milliseconds: 1)));
     }
 
     bool matchPrice(Product p) {
@@ -248,7 +246,7 @@ class _ProductListPageState extends ConsumerState<ProductListPage> {
     bool matchStock(Product p) {
       final qty = stockByProduct?[p.id];
       if (f.stock == StockFilter.any) return true;
-      if (qty == null) return true; // pas de donnée => ne pas exclure
+      if (qty == null) return true;
       if (f.stock == StockFilter.inStock) return qty > 0;
       if (f.stock == StockFilter.outOfStock) return qty <= 0;
       return true;
@@ -284,8 +282,6 @@ class _ProductListPageState extends ConsumerState<ProductListPage> {
           future: _load(),
           builder: (context, snap) {
             final items = snap.data ?? const <Product>[];
-
-            // ✅ Always compute stock map so tiles can show stock
             final stockFuture = _computeStockMap(items);
 
             final body = switch (snap.connectionState) {
@@ -330,19 +326,23 @@ class _ProductListPageState extends ConsumerState<ProductListPage> {
                         final title = p.name?.isNotEmpty == true
                             ? p.name!
                             : (p.code ?? 'Produit');
-                        final sub = [
-                          if ((p.code ?? '').isNotEmpty) 'Code: ${p.code}',
-                          if ((p.barcode ?? '').isNotEmpty) 'EAN: ${p.barcode}',
-                          if ((p.description ?? '').isNotEmpty) p.description!,
-                        ].join('  •  ');
-
+                        final subParts = <String>[];
+                        if ((p.code ?? '').isNotEmpty)
+                          subParts.add('Code: ${p.code}');
+                        if ((p.barcode ?? '').isNotEmpty)
+                          subParts.add('EAN: ${p.barcode}');
+                        if ((p.description ?? '').isNotEmpty)
+                          subParts.add(p.description!);
+                        if (p.statuses != null)
+                          subParts.add('Statut: ${p.statuses}');
+                        final sub = subParts.join('  •  ');
                         final qty = stockMap[p.id] ?? 0;
 
                         return ProductTile(
                           title: title,
                           subtitle: sub.isEmpty ? null : sub,
                           priceCents: p.defaultPrice,
-                          stockQty: qty, // ✅ show stock
+                          stockQty: qty,
                           onTap: () => _view(p),
                           onMenuAction: (action) async {
                             await Future.delayed(Duration.zero);

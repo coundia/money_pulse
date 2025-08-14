@@ -7,7 +7,9 @@ class Product {
   final String? barcode;
   final String? unitId;
   final String? categoryId;
-  final int defaultPrice; // cents
+  final int defaultPrice; // cents (prix de vente)
+  final int purchasePrice;
+  final String? statuses;
   final DateTime createdAt;
   final DateTime updatedAt;
   final DateTime? deletedAt;
@@ -25,6 +27,9 @@ class Product {
     this.unitId,
     this.categoryId,
     this.defaultPrice = 0,
+    this.purchasePrice =
+        0, // default; repo will fallback to defaultPrice if needed
+    this.statuses,
     required this.createdAt,
     required this.updatedAt,
     this.deletedAt,
@@ -43,6 +48,8 @@ class Product {
     String? unitId,
     String? categoryId,
     int? defaultPrice,
+    int? purchasePrice,
+    String? statuses,
     DateTime? createdAt,
     DateTime? updatedAt,
     DateTime? deletedAt,
@@ -60,6 +67,8 @@ class Product {
       unitId: unitId ?? this.unitId,
       categoryId: categoryId ?? this.categoryId,
       defaultPrice: defaultPrice ?? this.defaultPrice,
+      purchasePrice: purchasePrice ?? this.purchasePrice,
+      statuses: statuses ?? this.statuses,
       createdAt: createdAt ?? this.createdAt,
       updatedAt: updatedAt ?? this.updatedAt,
       deletedAt: deletedAt ?? this.deletedAt,
@@ -86,6 +95,8 @@ class Product {
     unitId: m['unitId'] as String?,
     categoryId: m['categoryId'] as String?,
     defaultPrice: (m['defaultPrice'] as num?)?.toInt() ?? 0,
+    purchasePrice: (m['purchasePrice'] as num?)?.toInt() ?? 0,
+    statuses: m['statuses'] as String?,
     createdAt: _dt(m['createdAt']) ?? DateTime.now(),
     updatedAt: _dt(m['updatedAt']) ?? DateTime.now(),
     deletedAt: _dt(m['deletedAt']),
@@ -104,6 +115,8 @@ class Product {
     'unitId': unitId,
     'categoryId': categoryId,
     'defaultPrice': defaultPrice,
+    'purchasePrice': purchasePrice,
+    'statuses': statuses,
     'createdAt': createdAt.toIso8601String(),
     'updatedAt': updatedAt.toIso8601String(),
     'deletedAt': deletedAt?.toIso8601String(),

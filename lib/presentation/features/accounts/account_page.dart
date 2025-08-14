@@ -1,3 +1,4 @@
+// Accounts page with cleaner header/search and Enter-to-submit form in right drawer.
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -27,9 +28,9 @@ class _AccountPageState extends ConsumerState<AccountPage> {
   @override
   void initState() {
     super.initState();
-    _searchCtrl.addListener(() {
-      setState(() => _query = _searchCtrl.text.trim().toLowerCase());
-    });
+    _searchCtrl.addListener(
+      () => setState(() => _query = _searchCtrl.text.trim().toLowerCase()),
+    );
   }
 
   @override
@@ -220,23 +221,6 @@ class _AccountPageState extends ConsumerState<AccountPage> {
         ),
         const SizedBox(height: 12),
       ],
-    );
-  }
-
-  Widget _kv(String k, String v) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 6),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          SizedBox(
-            width: 140,
-            child: Text(k, style: const TextStyle(fontWeight: FontWeight.w600)),
-          ),
-          const SizedBox(width: 6),
-          Expanded(child: Text(v)),
-        ],
-      ),
     );
   }
 
@@ -459,38 +443,64 @@ class _AccountFormPanelState extends State<_AccountFormPanel> {
           ),
         ],
       ),
-      body: Form(
-        key: _formKey,
-        child: ListView(
-          padding: const EdgeInsets.all(16),
-          children: [
-            TextFormField(
-              controller: _code,
-              decoration: const InputDecoration(
-                labelText: 'Code',
-                border: OutlineInputBorder(),
-              ),
-              validator: (v) =>
-                  (v == null || v.trim().isEmpty) ? 'Obligatoire' : null,
-              autofocus: true,
+      body: Shortcuts(
+        shortcuts: {
+          LogicalKeySet(LogicalKeyboardKey.enter): const ActivateIntent(),
+          LogicalKeySet(LogicalKeyboardKey.numpadEnter): const ActivateIntent(),
+        },
+        child: Actions(
+          actions: {
+            ActivateIntent: CallbackAction<ActivateIntent>(
+              onInvoke: (_) {
+                _save();
+                return null;
+              },
             ),
-            const SizedBox(height: 10),
-            TextFormField(
-              controller: _desc,
-              decoration: const InputDecoration(
-                labelText: 'Description',
-                border: OutlineInputBorder(),
-              ),
+          },
+          child: Form(
+            key: _formKey,
+            child: ListView(
+              padding: const EdgeInsets.all(16),
+              children: [
+                TextFormField(
+                  controller: _code,
+                  decoration: const InputDecoration(
+                    labelText: 'Code',
+                    border: OutlineInputBorder(),
+                  ),
+                  validator: (v) =>
+                      (v == null || v.trim().isEmpty) ? 'Obligatoire' : null,
+                  autofocus: true,
+                  textInputAction: TextInputAction.next,
+                ),
+                const SizedBox(height: 10),
+                TextFormField(
+                  controller: _desc,
+                  decoration: const InputDecoration(
+                    labelText: 'Description',
+                    border: OutlineInputBorder(),
+                  ),
+                  textInputAction: TextInputAction.next,
+                ),
+                const SizedBox(height: 10),
+                TextFormField(
+                  controller: _curr,
+                  decoration: const InputDecoration(
+                    labelText: 'Devise (ex. XOF)',
+                    border: OutlineInputBorder(),
+                  ),
+                  textInputAction: TextInputAction.done,
+                  onFieldSubmitted: (_) => _save(),
+                ),
+                const SizedBox(height: 12),
+                FilledButton.icon(
+                  onPressed: _save,
+                  icon: const Icon(Icons.save),
+                  label: const Text('Enregistrer'),
+                ),
+              ],
             ),
-            const SizedBox(height: 10),
-            TextFormField(
-              controller: _curr,
-              decoration: const InputDecoration(
-                labelText: 'Devise (ex. XOF)',
-                border: OutlineInputBorder(),
-              ),
-            ),
-          ],
+          ),
         ),
       ),
     );
