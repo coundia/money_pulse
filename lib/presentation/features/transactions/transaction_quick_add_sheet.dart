@@ -28,6 +28,7 @@ import '../../app/providers/checkout_cart_usecase_provider.dart';
 import 'intents/submit_form_intent.dart' hide SubmitFormIntent;
 import 'models/tx_item.dart';
 import 'widgets/amount_field.dart';
+import 'widgets/amount_field_quickpad.dart';
 import 'widgets/bottom_bar.dart';
 import 'widgets/category_autocomplete.dart';
 import 'widgets/date_row.dart';
@@ -480,8 +481,9 @@ class _TransactionQuickAddSheetState
                   children: [
                     TypeHeader(isDebit: _isDebit), // static header (no toggle)
                     const SizedBox(height: 12),
-                    AmountField(
+                    AmountFieldQuickPad(
                       controller: _amountCtrl,
+                      quickUnits: const [2000, 5000, 10000, 20000, 50000],
                       lockToItems: _items.isNotEmpty && _lockAmountToItems,
                       onToggleLock: _items.isEmpty
                           ? null
@@ -492,7 +494,7 @@ class _TransactionQuickAddSheetState
                               });
                             },
                       onChanged: () => setState(() {}),
-                      preview: _amountPreview,
+                      // labelText: 'Montant', // optional
                     ),
                     const SizedBox(height: 12),
                     CategoryAutocomplete(
