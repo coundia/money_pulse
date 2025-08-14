@@ -25,7 +25,6 @@ import 'providers/transaction_list_providers.dart';
 import '../../app/providers/checkout_cart_usecase_provider.dart';
 
 // local pieces
-import 'intents/submit_form_intent.dart' hide SubmitFormIntent;
 import 'models/tx_item.dart';
 
 import 'widgets/amount_field_quickpad.dart';
@@ -542,7 +541,19 @@ class _TransactionQuickAddSheetState
                     const SizedBox(height: 12),
                     AmountFieldQuickPad(
                       controller: _amountCtrl,
-                      quickUnits: const [2000, 5000, 10000, 20000, 50000],
+                      quickUnits: const [
+                        2000,
+                        5000,
+                        10000,
+                        20000,
+                        50000,
+                        100000,
+                        200000,
+                        300000,
+                        400000,
+                        500000,
+                        1000000,
+                      ],
                       lockToItems: _items.isNotEmpty && _lockAmountToItems,
                       onToggleLock: _items.isEmpty
                           ? null

@@ -147,7 +147,8 @@ class _AmountFieldQuickPadState extends State<AmountFieldQuickPad> {
   }
 
   Widget? _buildSuffix() {
-    final buttons = <Widget>[_previewBadge()];
+    // final buttons = <Widget>[_previewBadge()];
+    final buttons = <Widget>[];
 
     if (widget.onToggleLock != null) {
       buttons.add(
@@ -178,22 +179,6 @@ class _AmountFieldQuickPadState extends State<AmountFieldQuickPad> {
               ? null
               : () => setState(() => _addMode = !_addMode),
           icon: Icon(_addMode ? Icons.add : Icons.swap_horiz),
-        ),
-      ),
-    );
-
-    // Toggle afficher/masquer pad
-    buttons.add(
-      Tooltip(
-        message: _expanded ? 'Masquer le pavé' : 'Afficher le pavé',
-        child: IconButton(
-          iconSize: 20,
-          padding: const EdgeInsets.symmetric(horizontal: 6),
-          constraints: const BoxConstraints.tightFor(width: 36, height: 36),
-          onPressed: widget.lockToItems
-              ? null
-              : () => setState(() => _expanded = !_expanded),
-          icon: Icon(_expanded ? Icons.keyboard_hide : Icons.keyboard),
         ),
       ),
     );

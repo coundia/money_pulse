@@ -17,6 +17,7 @@ class TypeHeader extends StatelessWidget {
       ),
       child: Row(
         children: [
+          const Spacer(),
           Icon(isDebit ? Icons.south : Icons.north, color: accent),
           const SizedBox(width: 8),
           Text(
@@ -24,13 +25,6 @@ class TypeHeader extends StatelessWidget {
             style: Theme.of(context).textTheme.titleMedium,
           ),
           const Spacer(),
-          Chip(
-            label: Text(isDebit ? 'Dépense' : 'Revenu'),
-            avatar: Icon(
-              isDebit ? Icons.arrow_downward : Icons.arrow_upward,
-              size: 18,
-            ),
-          ),
         ],
       ),
     );
