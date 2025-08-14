@@ -27,7 +27,7 @@ import '../../app/providers/checkout_cart_usecase_provider.dart';
 // local pieces
 import 'intents/submit_form_intent.dart' hide SubmitFormIntent;
 import 'models/tx_item.dart';
-import 'widgets/amount_field.dart';
+
 import 'widgets/amount_field_quickpad.dart';
 import 'widgets/bottom_bar.dart';
 import 'widgets/category_autocomplete.dart';
@@ -494,8 +494,9 @@ class _TransactionQuickAddSheetState
                               });
                             },
                       onChanged: () => setState(() {}),
-                      // labelText: 'Montant', // optional
+                      autofocus: true, // <— ensure focus when the sheet opens
                     ),
+
                     const SizedBox(height: 12),
                     CategoryAutocomplete(
                       controller: _categoryCtrl,

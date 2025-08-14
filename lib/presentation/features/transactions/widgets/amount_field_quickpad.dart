@@ -3,30 +3,37 @@ import 'package:flutter/services.dart';
 import 'package:money_pulse/presentation/shared/formatters.dart';
 
 /// A money input with a quick-amount pad (chips).
-/// - Shows a TextFormField to type an amount
-/// - When focused (or always) shows chips 2000, 5000, 10000… that add/replace
-/// - Optional lock toggle to keep amount = sum(lines)
 ///
-/// Amounts are entered in "units" (e.g., 2000) and preview is shown using
-/// Formatters.amountFromCents for consistency with the rest of the app.
+/// - TextFormField to type an amount
+/// - Horizontal quick chips (e.g., 2000, 5000, 10000…) to add/replace
+/// - Optional lock toggle to keep amount = sum(lines) (readOnly when locked)
+/// - Shows a live currency preview using Formatters.amountFromCents
+///
+/// Amounts in `quickUnits` are *units* (e.g., 2000), not cents.
+/// The field text is also in units; preview shows formatted currency.
 class AmountFieldQuickPad extends StatefulWidget {
   final TextEditingController controller;
 
-  /// List of quick amounts in *units* (e.g., [2000, 5000, 10000]).
+  /// Quick amounts in *units* (e.g., [2000, 5000, 10000]).
   final List<int> quickUnits;
 
-  /// Called whenever text changes.
+  /// Called whenever the text changes.
   final VoidCallback? onChanged;
 
-  /// If not null, shows a small lock toggle; when true, TextField is readOnly.
+  /// When true, the field is readOnly and shows a lock icon.
   final bool lockToItems;
+
+  /// Toggle for the lock state. If null, the lock icon is hidden.
   final ValueChanged<bool>? onToggleLock;
 
-  /// If true, only show the quick pad when field is focused.
+  /// If true, only show the quick pad when the field has focus.
   final bool showQuickPadOnFocusOnly;
 
-  /// Optional label
+  /// Field label.
   final String labelText;
+
+  /// Request focus automatically when the widget appears (if not locked).
+  final bool autofocus;
 
   const AmountFieldQuickPad({
     super.key,
@@ -37,6 +44,7 @@ class AmountFieldQuickPad extends StatefulWidget {
     this.onToggleLock,
     this.showQuickPadOnFocusOnly = true,
     this.labelText = 'Montant',
+    this.autofocus = true,
   });
 
   @override
@@ -54,10 +62,46 @@ class _AmountFieldQuickPadState extends State<AmountFieldQuickPad> {
   void initState() {
     super.initState();
     _focusNode = FocusNode();
+    _focusNode.canRequestFocus =
+        !widget.lockToItems; // bloque la prise de focus si verrouillé
     _focusNode.addListener(() {
       if (!mounted) return;
       setState(() => _hasFocus = _focusNode.hasFocus);
     });
+
+    // Ensure focus after first frame (more reliable in sheets/drawers)
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      if (widget.autofocus && !widget.lockToItems) {
+        _focusNode.requestFocus();
+      }
+    });
+  }
+
+  @override
+  void didUpdateWidget(covariant AmountFieldQuickPad oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.lockToItems != widget.lockToItems) {
+      // Met à jour la capacité à prendre le focus
+      _focusNode.canRequestFocus = !widget.lockToItems;
+
+      if (widget.lockToItems) {
+        // Si on vient de verrouiller alors que le champ avait le focus, on le retire
+        if (_focusNode.hasFocus) {
+          _focusNode.unfocus();
+        }
+      } else {
+        // Si on déverrouille et que l'autofocus est souhaité, on peut redemander le focus
+        if (widget.autofocus) {
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            if (!mounted) return;
+            _focusNode.requestFocus();
+          });
+        }
+      }
+      // Forcer le rebuild pour que le quick pad suive l'état
+      if (mounted) setState(() {});
+    }
   }
 
   @override
@@ -68,7 +112,7 @@ class _AmountFieldQuickPadState extends State<AmountFieldQuickPad> {
 
   // ----- parsing/formatting helpers ------------------------------------------
   String _sanitize(String v) {
-    // remove spaces/nbsp, normalize comma to dot; collapse multiple dots
+    // Remove spaces (incl. NBSP), normalize comma to dot; collapse multiple dots
     var s = v
         .trim()
         .replaceAll(RegExp(r'[\u00A0\u202F\s]'), '')
@@ -100,8 +144,8 @@ class _AmountFieldQuickPadState extends State<AmountFieldQuickPad> {
   void _addUnits(int units) {
     final currentCents = _toCents(widget.controller.text);
     final addCents = (units * 100);
-    final next = (currentCents + addCents) / 100.0;
-    widget.controller.text = next.toStringAsFixed(0); // keep whole units UX
+    final nextUnits = ((currentCents + addCents) / 100.0).round();
+    widget.controller.text = nextUnits.toString();
     widget.onChanged?.call();
     setState(() {});
   }
@@ -115,9 +159,24 @@ class _AmountFieldQuickPadState extends State<AmountFieldQuickPad> {
     }
   }
 
+  void _showLockedHint() {
+    final messenger = ScaffoldMessenger.maybeOf(context);
+    messenger?.hideCurrentSnackBar();
+    messenger?.showSnackBar(
+      const SnackBar(
+        content: Text('Montant verrouillé sur le total des articles'),
+        duration: Duration(milliseconds: 1200),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
-    final showQuickPad = widget.showQuickPadOnFocusOnly ? _hasFocus : true;
+    // Masque le quick pad lorsqu'on est verrouillé,
+    // et sinon on suit la règle "showQuickPadOnFocusOnly".
+    final showQuickPad =
+        !widget.lockToItems &&
+        (widget.showQuickPadOnFocusOnly ? _hasFocus : true);
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -129,6 +188,8 @@ class _AmountFieldQuickPadState extends State<AmountFieldQuickPad> {
                 controller: widget.controller,
                 focusNode: _focusNode,
                 readOnly: widget.lockToItems,
+                enableInteractiveSelection: !widget.lockToItems,
+                autofocus: false, // focus handled in initState/didUpdateWidget
                 keyboardType: const TextInputType.numberWithOptions(
                   decimal: true,
                 ),
@@ -137,6 +198,16 @@ class _AmountFieldQuickPadState extends State<AmountFieldQuickPad> {
                     RegExp(r'[0-9\.\,\u00A0\u202F\s]'),
                   ),
                 ],
+                onTap: widget.lockToItems
+                    ? () {
+                        // Empêche toute interaction lorsqu'il est verrouillé
+                        _focusNode.unfocus();
+                        _showLockedHint();
+                      }
+                    : null,
+                onTapOutside: (_) {
+                  if (_focusNode.hasFocus) _focusNode.unfocus();
+                },
                 textAlign: TextAlign.center,
                 style: Theme.of(context).textTheme.headlineMedium,
                 decoration: InputDecoration(
@@ -203,6 +274,7 @@ class _AmountFieldQuickPadState extends State<AmountFieldQuickPad> {
           ],
         ),
 
+        // Quick pad (chips)
         AnimatedSwitcher(
           duration: const Duration(milliseconds: 180),
           child: showQuickPad
@@ -212,6 +284,7 @@ class _AmountFieldQuickPadState extends State<AmountFieldQuickPad> {
                     scrollDirection: Axis.horizontal,
                     child: Row(
                       children: [
+                        // Main quick chips with long press to "replace"
                         ...widget.quickUnits.map(
                           (u) => Padding(
                             padding: const EdgeInsets.only(right: 6),
@@ -238,7 +311,7 @@ class _AmountFieldQuickPadState extends State<AmountFieldQuickPad> {
                           ),
                         ),
 
-                        // Little helpers
+                        // Helpers
                         Padding(
                           padding: const EdgeInsets.only(right: 6),
                           child: ActionChip(
@@ -247,7 +320,7 @@ class _AmountFieldQuickPadState extends State<AmountFieldQuickPad> {
                                 ? null
                                 : () {
                                     final c = _toCents(widget.controller.text);
-                                    final nextUnits = ((c / 100) * 2).round();
+                                    final nextUnits = ((c / 100.0) * 2).round();
                                     _setUnits(nextUnits);
                                   },
                           ),
@@ -273,10 +346,9 @@ class _AmountFieldQuickPadState extends State<AmountFieldQuickPad> {
   }
 
   String _formatUnits(int units) {
-    // Show units as "2 000" etc. Preview already shows currency format.
+    // Render chips with your standard formatter (e.g., "2 000 XOF").
+    // Preview already shows currency; keeping full format helps consistency.
     final cents = units * 100;
-    final pretty = Formatters.amountFromCents(cents);
-    // Remove currency symbol if your formatter includes one (optional)
-    return pretty;
+    return Formatters.amountFromCents(cents);
   }
 }

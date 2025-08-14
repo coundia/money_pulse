@@ -29,9 +29,21 @@ class TransactionTile extends StatelessWidget {
     final color = isDebit ? Colors.red : Colors.green;
 
     return Dismissible(
-      key: ValueKey(entry.id),
-      background: Container(color: Colors.red),
-      onDismissed: (_) async => onDeleted(),
+      key: ValueKey('txn-${entry.id}'),
+      direction: DismissDirection.endToStart,
+      background: _buildSwipeBg(context, alignStart: true),
+      secondaryBackground: _buildSwipeBg(context, alignStart: false),
+
+      // 🔒 Intercepter le swipe AVANT suppression
+      confirmDismiss: (direction) async {
+        final ok = await _confirmDelete(context);
+        if (!ok) return false; // Annule → la tuile reste
+
+        await onDeleted(); // Supprime réellement (repo + refresh)
+        return false; // Empêche Dismissible de retirer l’item
+      },
+
+      // ❌ Pas de onDismissed – on gère tout dans confirmDismiss
       child: ListTile(
         contentPadding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
         leading: CircleAvatar(
@@ -60,6 +72,53 @@ class TransactionTile extends StatelessWidget {
         onLongPress: () => _openContextMenu(context),
       ),
     );
+  }
+
+  // ————————————————— UI helpers —————————————————
+
+  static Widget _buildSwipeBg(
+    BuildContext context, {
+    required bool alignStart,
+  }) {
+    final danger = Theme.of(context).colorScheme.error;
+    final child = Row(
+      mainAxisAlignment: alignStart
+          ? MainAxisAlignment.start
+          : MainAxisAlignment.end,
+      children: [
+        if (alignStart) const SizedBox(width: 16),
+        Icon(Icons.delete_outline, color: Colors.white),
+        const SizedBox(width: 8),
+        const Text('Supprimer', style: TextStyle(color: Colors.white)),
+        if (!alignStart) const SizedBox(width: 16),
+      ],
+    );
+    return Container(
+      color: danger,
+      padding: const EdgeInsets.symmetric(horizontal: 12),
+      child: child,
+    );
+  }
+
+  static Future<bool> _confirmDelete(BuildContext context) async {
+    return await showDialog<bool>(
+          context: context,
+          builder: (dCtx) => AlertDialog(
+            title: const Text('Confirmer la suppression'),
+            content: const Text('Supprimer cette transaction ?'),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(dCtx, false),
+                child: const Text('Annuler'),
+              ),
+              FilledButton.tonal(
+                onPressed: () => Navigator.pop(dCtx, true),
+                child: const Text('Supprimer'),
+              ),
+            ],
+          ),
+        ) ??
+        false;
   }
 
   Future<void> _openContextMenu(BuildContext context) async {
@@ -123,26 +182,8 @@ class TransactionTile extends StatelessWidget {
                 textColor: Colors.red,
                 onTap: () async {
                   Navigator.pop(ctx);
-                  final ok = await showDialog<bool>(
-                    context: context,
-                    builder: (dCtx) {
-                      return AlertDialog(
-                        title: const Text('Confirmer la suppression'),
-                        content: const Text('Supprimer cette transaction ?'),
-                        actions: [
-                          TextButton(
-                            onPressed: () => Navigator.pop(dCtx, false),
-                            child: const Text('Annuler'),
-                          ),
-                          FilledButton.tonal(
-                            onPressed: () => Navigator.pop(dCtx, true),
-                            child: const Text('Supprimer'),
-                          ),
-                        ],
-                      );
-                    },
-                  );
-                  if (ok == true) await onDeleted();
+                  final ok = await _confirmDelete(context);
+                  if (ok) await onDeleted();
                 },
               ),
               const SizedBox(height: 8),
