@@ -1,4 +1,4 @@
-// Product form right-drawer panel with purchase price and single-string status; Enter/NumpadEnter submits the form.
+// Product form right-drawer panel with purchase price and single-string status; robust number parsing and Enter submit.
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:intl/intl.dart';
@@ -43,7 +43,7 @@ class ProductFormPanel extends StatefulWidget {
 class _ProductFormPanelState extends State<ProductFormPanel> {
   final _formKey = GlobalKey<FormState>();
 
-  // controllers
+  // Controllers
   late final TextEditingController _code = TextEditingController(
     text: widget.existing?.code ?? '',
   );
@@ -67,7 +67,7 @@ class _ProductFormPanelState extends State<ProductFormPanel> {
         : _moneyFromCents(widget.existing!.purchasePrice),
   );
 
-  // focus chain
+  // Focus chain
   final _fPriceBuy = FocusNode();
   final _fName = FocusNode();
   final _fCode = FocusNode();
@@ -83,8 +83,9 @@ class _ProductFormPanelState extends State<ProductFormPanel> {
     ('ARCHIVED', 'Archivé'),
   ];
 
+  // Accept digits, dot, comma, normal spaces and NBSP variants
   static final _numFilter = FilteringTextInputFormatter.allow(
-    RegExp(r'[0-9\.\,\s]'),
+    RegExp(r'[0-9\.\, \u00A0\u202F]'),
   );
 
   @override
@@ -114,11 +115,29 @@ class _ProductFormPanelState extends State<ProductFormPanel> {
 
   String _moneyFromCents(int cents) {
     final v = cents / 100.0;
+    // Keep 0 decimals to match your UX: user types "1500" for 1500 units
     return NumberFormat.currency(symbol: '', decimalDigits: 0).format(v).trim();
   }
 
+  // --- robust number sanitizer ------------------------------------------------
+  // 1) remove all spaces including NBSP (\u00A0) and NNBSP (\u202F)
+  // 2) convert comma to dot for decimals
+  // 3) if multiple dots exist, treat them as thousand separators -> remove all dots
+  String _sanitizeNumber(String v) {
+    var s = v.trim();
+    s = s.replaceAll(RegExp(r'[\u00A0\u202F\s]'), ''); // all kinds of spaces
+    s = s.replaceAll(',', '.'); // unify decimal sep
+    final firstDot = s.indexOf('.');
+    final lastDot = s.lastIndexOf('.');
+    if (firstDot != -1 && firstDot != lastDot) {
+      // multiple dots -> consider them as grouping; remove all
+      s = s.replaceAll('.', '');
+    }
+    return s;
+  }
+
   int _toCents(String v) {
-    final s = v.replaceAll(',', '.').replaceAll(' ', '');
+    final s = _sanitizeNumber(v);
     final d = double.tryParse(s) ?? 0;
     final cents = (d * 100).round();
     return cents < 0 ? 0 : cents;
@@ -152,7 +171,9 @@ class _ProductFormPanelState extends State<ProductFormPanel> {
 
   void _submit() {
     if (!_formKey.currentState!.validate()) return;
+
     final nameValue = _name.text.trim().isEmpty ? 'No name' : _name.text.trim();
+
     final result = ProductFormResult(
       code: _code.text.trim().isEmpty ? null : _code.text.trim(),
       name: nameValue,
@@ -165,6 +186,7 @@ class _ProductFormPanelState extends State<ProductFormPanel> {
           : _toCents(_priceBuy.text),
       status: _status,
     );
+
     Navigator.pop(context, result);
   }
 
@@ -210,7 +232,7 @@ class _ProductFormPanelState extends State<ProductFormPanel> {
               child: ListView(
                 padding: const EdgeInsets.all(16),
                 children: [
-                  // prix de vente (requis)
+                  // Prix de vente (requis)
                   TextFormField(
                     controller: _priceSell,
                     keyboardType: const TextInputType.numberWithOptions(
@@ -230,7 +252,7 @@ class _ProductFormPanelState extends State<ProductFormPanel> {
                   ),
                   const SizedBox(height: 12),
 
-                  // prix d'achat (optionnel)
+                  // Prix d'achat (optionnel)
                   TextFormField(
                     focusNode: _fPriceBuy,
                     controller: _priceBuy,
@@ -249,7 +271,7 @@ class _ProductFormPanelState extends State<ProductFormPanel> {
                   ),
                   const SizedBox(height: 16),
 
-                  // nom
+                  // Nom
                   TextFormField(
                     focusNode: _fName,
                     controller: _name,
@@ -262,7 +284,7 @@ class _ProductFormPanelState extends State<ProductFormPanel> {
                   ),
                   const SizedBox(height: 12),
 
-                  // code
+                  // Code
                   TextFormField(
                     focusNode: _fCode,
                     controller: _code,
@@ -272,7 +294,7 @@ class _ProductFormPanelState extends State<ProductFormPanel> {
                   ),
                   const SizedBox(height: 12),
 
-                  // code barre
+                  // Code barre
                   TextFormField(
                     focusNode: _fBarcode,
                     controller: _barcode,
@@ -282,7 +304,7 @@ class _ProductFormPanelState extends State<ProductFormPanel> {
                   ),
                   const SizedBox(height: 12),
 
-                  // catégorie
+                  // Catégorie
                   DropdownButtonFormField<String>(
                     value: _categoryId,
                     items: widget.categories
@@ -298,7 +320,7 @@ class _ProductFormPanelState extends State<ProductFormPanel> {
                   ),
                   const SizedBox(height: 12),
 
-                  // statut
+                  // Statut
                   DropdownButtonFormField<String>(
                     value: _status,
                     items: _statusOptions
@@ -312,7 +334,7 @@ class _ProductFormPanelState extends State<ProductFormPanel> {
                   ),
                   const SizedBox(height: 16),
 
-                  // description
+                  // Description
                   TextFormField(
                     focusNode: _fDesc,
                     controller: _desc,
