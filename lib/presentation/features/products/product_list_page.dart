@@ -1,4 +1,4 @@
-// Product list page: fixes "State is unmounted" when editing from the view drawer by capturing NavigatorState and guarding with mounted; also cleans status subtitle.
+// Product list page: loads, searches, filters, shows view drawer, add/edit/delete/duplicate, and handles safe drawer navigation.
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -138,6 +138,42 @@ class _ProductListPageState extends ConsumerState<ProductListPage> {
       );
       await _repo.update(updated);
     }
+    if (mounted) setState(() {});
+  }
+
+  Future<void> _duplicate(Product p) async {
+    final categories = await ref.read(categoryRepoProvider).findAllActive();
+    if (!mounted) return;
+
+    final res = await showRightDrawer<ProductFormResult?>(
+      context,
+      child: ProductFormPanel(existing: p, categories: categories),
+      widthFraction: 0.92,
+      heightFraction: 0.96,
+    );
+    if (res == null) return;
+
+    final now = DateTime.now();
+    final copy = Product(
+      id: const Uuid().v4(),
+      remoteId: null,
+      code: res.code,
+      name: res.name + " duplicate",
+      description: res.description,
+      barcode: res.barcode,
+      unitId: p.unitId,
+      categoryId: res.categoryId,
+      defaultPrice: res.priceCents,
+      purchasePrice: res.purchasePriceCents,
+      statuses: res.status,
+      createdAt: now,
+      updatedAt: now,
+      deletedAt: null,
+      syncAt: null,
+      version: 0,
+      isDirty: 1,
+    );
+    await _repo.create(copy);
     if (mounted) setState(() {});
   }
 
@@ -374,6 +410,9 @@ class _ProductListPageState extends ConsumerState<ProductListPage> {
                                 break;
                               case 'edit':
                                 await _addOrEdit(existing: p);
+                                break;
+                              case 'duplicate':
+                                await _duplicate(p);
                                 break;
                               case 'adjust':
                                 await _openAdjust(p);
