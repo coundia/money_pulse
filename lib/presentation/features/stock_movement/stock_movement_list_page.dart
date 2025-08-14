@@ -5,10 +5,10 @@ import 'package:money_pulse/presentation/widgets/right_drawer.dart';
 
 import '../../../domain/stock/repositories/stock_movement_repository.dart';
 import '../../shared/formatters.dart';
-import '../../stock/movements/widgets/movement_filter_sheet.dart';
-import '../../stock/movements/widgets/movement_filters.dart';
-import '../../stock/movements/widgets/movement_item.dart';
-import '../../stock/movements/widgets/movement_summary_bar.dart';
+import 'widgets/movement_filter_sheet.dart';
+import 'widgets/movement_filters.dart';
+import 'widgets/movement_item.dart';
+import 'widgets/movement_summary_bar.dart';
 import 'providers/stock_movement_list_provider.dart';
 import 'stock_movement_form_panel.dart';
 import 'stock_movement_view_panel.dart';
