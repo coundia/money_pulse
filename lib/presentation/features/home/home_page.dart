@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:money_pulse/presentation/features/customers/customer_list_page.dart';
 import 'package:money_pulse/presentation/features/pos/pos_page.dart';
+import 'package:money_pulse/presentation/features/products/product_list_page.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'package:money_pulse/presentation/app/providers.dart';
@@ -257,6 +258,15 @@ class _HomePageState extends ConsumerState<HomePage> {
                       ),
                     );
                     break;
+
+                  case 'produits':
+                    if (!mounted) break;
+                    await Navigator.of(context).push(
+                      MaterialPageRoute(
+                        builder: (_) => const ProductListPage(),
+                      ),
+                    );
+                    break;
                 }
               },
               itemBuilder: (context) => const [
@@ -298,6 +308,13 @@ class _HomePageState extends ConsumerState<HomePage> {
                 ),
                 PopupMenuDivider(),
                 PopupMenuItem(
+                  value: 'produits',
+                  child: ListTile(
+                    leading: Icon(Icons.shop),
+                    title: Text('Produits'),
+                  ),
+                ),
+                PopupMenuItem(
                   value: 'manageCategories',
                   child: ListTile(
                     leading: Icon(Icons.category_outlined),
@@ -307,14 +324,15 @@ class _HomePageState extends ConsumerState<HomePage> {
                 PopupMenuItem(
                   value: 'manageAccounts',
                   child: ListTile(
-                    leading: Icon(Icons.account_balance_wallet_outlined),
+                    leading: Icon(Icons.wallet_giftcard),
                     title: Text('Comptes'),
                   ),
                 ),
+
                 PopupMenuItem(
                   value: 'clients',
                   child: ListTile(
-                    leading: Icon(Icons.account_balance_wallet_outlined),
+                    leading: Icon(Icons.person),
                     title: Text('Clients'),
                   ),
                 ),

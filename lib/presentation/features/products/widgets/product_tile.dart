@@ -1,3 +1,4 @@
+// lib/presentation/features/products/widgets/product_tile.dart
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 
@@ -7,7 +8,8 @@ class ProductTile extends StatelessWidget {
   final int priceCents;
   final VoidCallback? onTap;
 
-  /// Called with one of: 'view' | 'edit' | 'delete' | 'share'
+  /// Actions possibles :
+  /// 'view' | 'edit' | 'delete' | 'share' | 'adjust'
   final Future<void> Function(String action)? onMenuAction;
 
   const ProductTile({
@@ -57,6 +59,13 @@ class ProductTile extends StatelessWidget {
                   child: ListTile(
                     leading: Icon(Icons.edit_outlined),
                     title: Text('Modifier'),
+                  ),
+                ),
+                PopupMenuItem(
+                  value: 'adjust',
+                  child: ListTile(
+                    leading: Icon(Icons.tune),
+                    title: Text('Ajuster stock'),
                   ),
                 ),
                 PopupMenuItem(

@@ -1,8 +1,10 @@
+// lib/presentation/features/products/product_context_menu.dart
 import 'package:flutter/material.dart';
 
 abstract class ProductContextMenu {
   static const String view = 'view';
   static const String edit = 'edit';
+  static const String adjust = 'adjust';
   static const String delete = 'delete';
   static const String share = 'share';
 }
@@ -26,6 +28,10 @@ List<PopupMenuEntry<String>> buildProductContextMenuItems({
         leading: Icon(Icons.edit_outlined),
         title: Text('Modifier'),
       ),
+    ),
+    const PopupMenuItem(
+      value: ProductContextMenu.adjust,
+      child: ListTile(leading: Icon(Icons.tune), title: Text('Ajuster stock')),
     ),
     const PopupMenuItem(
       value: ProductContextMenu.delete,
