@@ -5,11 +5,13 @@ import 'package:money_pulse/domain/categories/entities/category.dart';
 
 class ProductFormResult {
   final String? code;
-  final String name;
+  final String name; // will be "No name" if left empty in the form
   final String? description;
   final String? barcode;
   final String? categoryId;
-  final int priceCents;
+  final int priceCents; // prix de vente (obligatoire)
+  final int purchasePriceCents; // prix d'achat (optionnel; default 0)
+
   const ProductFormResult({
     this.code,
     required this.name,
@@ -17,6 +19,7 @@ class ProductFormResult {
     this.barcode,
     this.categoryId,
     required this.priceCents,
+    this.purchasePriceCents = 0, // ✅ keeps older call sites working
   });
 }
 
@@ -31,6 +34,7 @@ class ProductFormPanel extends StatefulWidget {
 
 class _ProductFormPanelState extends State<ProductFormPanel> {
   final _formKey = GlobalKey<FormState>();
+
   late final TextEditingController _code = TextEditingController(
     text: widget.existing?.code ?? '',
   );
@@ -43,11 +47,20 @@ class _ProductFormPanelState extends State<ProductFormPanel> {
   late final TextEditingController _barcode = TextEditingController(
     text: widget.existing?.barcode ?? '',
   );
-  late final TextEditingController _price = TextEditingController(
+
+  /// Prix de vente (obligatoire)
+  late final TextEditingController _priceSell = TextEditingController(
     text: widget.existing == null
         ? ''
-        : ((widget.existing!.defaultPrice) / 100).toStringAsFixed(0),
+        : _moneyFromCents(widget.existing!.defaultPrice),
   );
+
+  /// Prix d'achat / coût (optionnel). If your Product entity does not yet
+  /// carry a stored purchase price, leave this empty – it will resolve to 0.
+  late final TextEditingController _priceBuy = TextEditingController(
+    text: '', // fill from existing if/when you add the field to Product
+  );
+
   String? _categoryId;
 
   @override
@@ -64,19 +77,54 @@ class _ProductFormPanelState extends State<ProductFormPanel> {
     _name.dispose();
     _desc.dispose();
     _barcode.dispose();
-    _price.dispose();
+    _priceSell.dispose();
+    _priceBuy.dispose();
     super.dispose();
   }
 
+  // --- helpers --------------------------------------------------------------
+
+  // Display helper (integer cents -> plain string, no symbol)
+  String _moneyFromCents(int cents) {
+    final v = cents / 100.0;
+    // No symbol, no decimals (to match your previous behavior)
+    return NumberFormat.currency(symbol: '', decimalDigits: 0).format(v).trim();
+  }
+
+  // Parse helper (string -> integer cents)
   int _toCents(String v) {
     final s = v.replaceAll(',', '.').replaceAll(' ', '');
     final d = double.tryParse(s) ?? 0;
-    return (d * 100).round();
+    final cents = (d * 100).round();
+    return cents < 0 ? 0 : cents;
   }
+
+  void _submit() {
+    if (!_formKey.currentState!.validate()) return;
+
+    final nameValue = _name.text.trim().isEmpty ? 'No name' : _name.text.trim();
+
+    final result = ProductFormResult(
+      code: _code.text.trim().isEmpty ? null : _code.text.trim(),
+      name: nameValue, // ✅ fallback if empty
+      description: _desc.text.trim().isEmpty ? null : _desc.text.trim(),
+      barcode: _barcode.text.trim().isEmpty ? null : _barcode.text.trim(),
+      categoryId: _categoryId,
+      priceCents: _toCents(_priceSell.text), // required
+      purchasePriceCents: _toCents(_priceBuy.text), // optional (0 if blank)
+    );
+
+    Navigator.pop(context, result);
+  }
+
+  // Simple required validator used only for selling price
+  String? _required(String? v) =>
+      (v == null || v.trim().isEmpty) ? 'Requis' : null;
 
   @override
   Widget build(BuildContext context) {
     final isEdit = widget.existing != null;
+
     return Scaffold(
       appBar: AppBar(
         title: Text(isEdit ? 'Modifier le produit' : 'Nouveau produit'),
@@ -86,24 +134,7 @@ class _ProductFormPanelState extends State<ProductFormPanel> {
         ),
         actions: [
           FilledButton.icon(
-            onPressed: () {
-              if (!_formKey.currentState!.validate()) return;
-              Navigator.pop(
-                context,
-                ProductFormResult(
-                  code: _code.text.trim().isEmpty ? null : _code.text.trim(),
-                  name: _name.text.trim(),
-                  description: _desc.text.trim().isEmpty
-                      ? null
-                      : _desc.text.trim(),
-                  barcode: _barcode.text.trim().isEmpty
-                      ? null
-                      : _barcode.text.trim(),
-                  categoryId: _categoryId,
-                  priceCents: _toCents(_price.text),
-                ),
-              );
-            },
+            onPressed: _submit,
             icon: const Icon(Icons.check),
             label: Text(isEdit ? 'Enregistrer' : 'Ajouter'),
           ),
@@ -115,30 +146,48 @@ class _ProductFormPanelState extends State<ProductFormPanel> {
         child: ListView(
           padding: const EdgeInsets.all(16),
           children: [
+            // --- Prix (vente) obligatoire
             TextFormField(
-              controller: _price,
+              controller: _priceSell,
               keyboardType: const TextInputType.numberWithOptions(
                 decimal: true,
+                signed: false,
               ),
               decoration: const InputDecoration(
-                labelText: 'Prix par défaut (ex: 1500)',
+                labelText: 'Prix de vente (ex: 1500)',
+                helperText: 'Obligatoire',
                 border: OutlineInputBorder(),
               ),
-              validator: (v) =>
-                  (v == null || v.trim().isEmpty) ? 'Requis' : null,
+              validator: _required,
               autofocus: true,
             ),
             const SizedBox(height: 12),
+
+            // --- Prix d'achat optionnel
+            TextFormField(
+              controller: _priceBuy,
+              keyboardType: const TextInputType.numberWithOptions(
+                decimal: true,
+                signed: false,
+              ),
+              decoration: const InputDecoration(
+                labelText: "Prix d'achat / coût (ex: 1200)",
+                helperText: "Optionnel — laissé vide = 0",
+                border: OutlineInputBorder(),
+              ),
+            ),
+            const SizedBox(height: 16),
+
+            // --- Informations générales (toutes optionnelles)
             TextFormField(
               controller: _name,
               decoration: const InputDecoration(
-                labelText: 'Nom',
+                labelText: 'Nom (laisser vide = "No name")',
                 border: OutlineInputBorder(),
               ),
-              validator: (v) =>
-                  (v == null || v.trim().isEmpty) ? 'Requis' : null,
             ),
             const SizedBox(height: 12),
+
             TextFormField(
               controller: _code,
               decoration: const InputDecoration(
@@ -147,6 +196,7 @@ class _ProductFormPanelState extends State<ProductFormPanel> {
               ),
             ),
             const SizedBox(height: 12),
+
             TextFormField(
               controller: _barcode,
               decoration: const InputDecoration(
@@ -155,6 +205,7 @@ class _ProductFormPanelState extends State<ProductFormPanel> {
               ),
             ),
             const SizedBox(height: 12),
+
             DropdownButtonFormField<String>(
               value: _categoryId,
               items: widget.categories
@@ -168,8 +219,8 @@ class _ProductFormPanelState extends State<ProductFormPanel> {
                 border: OutlineInputBorder(),
               ),
             ),
-
             const SizedBox(height: 12),
+
             TextFormField(
               controller: _desc,
               maxLines: 3,
@@ -178,9 +229,10 @@ class _ProductFormPanelState extends State<ProductFormPanel> {
                 border: OutlineInputBorder(),
               ),
             ),
-            const SizedBox(height: 8),
+
+            const SizedBox(height: 10),
             Text(
-              'Astuce: utilisez la barre de recherche pour retrouver rapidement par nom, code ou EAN.',
+              'Astuce : utilisez la recherche pour retrouver rapidement par nom, code ou EAN.',
               style: Theme.of(context).textTheme.bodySmall,
             ),
           ],
