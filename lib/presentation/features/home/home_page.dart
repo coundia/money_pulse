@@ -341,13 +341,7 @@ class _HomePageState extends ConsumerState<HomePage> {
         // Keep state of each tab
         children: const [TransactionListPage(), PosPage(), SettingsPage()],
       ),
-      floatingActionButton: pageIdx == 0
-          ? FloatingActionButton.extended(
-              onPressed: _openQuickAdd,
-              icon: const Icon(Icons.add),
-              label: const Text('Ajouter'),
-            )
-          : null,
+
       bottomNavigationBar: NavigationBar(
         labelBehavior: NavigationDestinationLabelBehavior.onlyShowSelected,
         selectedIndex: pageIdx, // <-- highlight current tab

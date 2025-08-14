@@ -10,17 +10,21 @@ import 'package:money_pulse/domain/company/entities/company.dart';
 import 'package:money_pulse/domain/customer/entities/customer.dart';
 import 'package:money_pulse/domain/company/repositories/company_repository.dart';
 import 'package:money_pulse/domain/customer/repositories/customer_repository.dart';
+import 'package:uuid/uuid.dart';
 
+import '../../../domain/products/entities/product.dart';
 import '../../app/account_selection.dart';
 import '../../app/providers/company_repo_provider.dart';
 import '../../app/providers/customer_repo_provider.dart';
 import '../../widgets/right_drawer.dart';
 import '../products/product_picker_panel.dart';
+import '../products/product_repo_provider.dart';
+import '../products/widgets/product_form_panel.dart';
 import 'providers/transaction_list_providers.dart';
 import '../../app/providers/checkout_cart_usecase_provider.dart';
 
 // local pieces
-import 'intents/submit_form_intent.dart';
+import 'intents/submit_form_intent.dart' hide SubmitFormIntent;
 import 'models/tx_item.dart';
 import 'widgets/amount_field.dart';
 import 'widgets/bottom_bar.dart';
@@ -257,6 +261,62 @@ class _TransactionQuickAddSheetState
     }
   }
 
+  Future<void> _createProductAndAddLine() async {
+    // Load categories for the form
+    final categories = await ref.read(categoryRepoProvider).findAllActive();
+    if (!mounted) return;
+
+    final formRes = await showRightDrawer<ProductFormResult?>(
+      context,
+      child: ProductFormPanel(existing: null, categories: categories),
+      widthFraction: 0.92,
+      heightFraction: 0.96,
+    );
+    if (formRes == null) return;
+
+    // Persist product
+    final repo = ref.read(productRepoProvider);
+    final now = DateTime.now();
+    final p = Product(
+      id: const Uuid().v4(),
+      remoteId: null,
+      code: formRes.code,
+      name: formRes.name,
+      description: formRes.description,
+      barcode: formRes.barcode,
+      unitId: null,
+      categoryId: formRes.categoryId,
+      defaultPrice: formRes.priceCents,
+      purchasePrice: formRes.purchasePriceCents,
+      statuses: formRes.status,
+      createdAt: now,
+      updatedAt: now,
+      deletedAt: null,
+      syncAt: null,
+      version: 0,
+      isDirty: 1,
+    );
+    await repo.create(p);
+
+    // Add a line to the current items with qty = 1
+    setState(() {
+      _items.add(
+        TxItem(
+          productId: p.id,
+          label: (p.name?.isNotEmpty ?? false)
+              ? p.name!
+              : (p.code ?? 'Produit'),
+          unitPriceCents: p.defaultPrice,
+          quantity: 1,
+        ),
+      );
+      _lockAmountToItems = true;
+    });
+    _syncAmountFromItems();
+
+    _snack('Produit ajouté et ligne insérée');
+  }
+
   Future<void> _save() async {
     if (!_formKey.currentState!.validate()) return;
     await _ensureDefaultCompanyIfMissing();
@@ -414,6 +474,7 @@ class _TransactionQuickAddSheetState
                         });
                       },
                       onTapItem: _openProductPicker,
+                      onCreateProduct: _createProductAndAddLine,
                     ),
                     const SizedBox(height: 12),
                     DateRow(when: _when, onPick: _pickDate),

@@ -108,7 +108,7 @@ class _CustomerFormPanelState extends ConsumerState<CustomerFormPanel> {
     if (!_formKey.currentState!.validate()) return;
     final repo = ref.read(customerRepoProvider);
     final now = DateTime.now();
-    final base = Customer(
+    final entity = Customer(
       id: widget.initial?.id ?? const Uuid().v4(),
       remoteId: widget.initial?.remoteId,
       code: _code.text.trim().isEmpty ? null : _code.text.trim(),
@@ -139,11 +139,11 @@ class _CustomerFormPanelState extends ConsumerState<CustomerFormPanel> {
       isDirty: true,
     );
     if (widget.initial == null) {
-      await repo.create(base);
+      await repo.create(entity);
     } else {
-      await repo.update(base);
+      await repo.update(entity);
     }
-    if (mounted) Navigator.of(context).pop(true);
+    if (mounted) Navigator.of(context).pop<Customer>(entity); // RETURN entity
   }
 
   void _next(FocusNode node) {
@@ -180,7 +180,7 @@ class _CustomerFormPanelState extends ConsumerState<CustomerFormPanel> {
               FilledButton.icon(
                 onPressed: _save,
                 icon: const Icon(Icons.check),
-                label: Text(isEdit ? '' : ''),
+                label: Text(isEdit ? 'Enregistrer' : 'Créer'), // FIX
               ),
               const SizedBox(width: 8),
             ],
@@ -310,49 +310,48 @@ class _CustomerFormPanelState extends ConsumerState<CustomerFormPanel> {
                       onFieldSubmitted: (_) => _save(),
                     ),
                     const SizedBox(height: 16),
-                    Expanded(
-                      child: DropdownButtonFormField<String?>(
-                        focusNode: _fCompany,
-                        value: _companyId,
+
+                    // NOTE: remove Expanded – it breaks in ListView
+                    DropdownButtonFormField<String?>(
+                      focusNode: _fCompany,
+                      value: _companyId,
+                      isDense: true,
+                      decoration: const InputDecoration(
+                        labelText: 'Société',
+                        prefixIcon: Icon(Icons.business),
                         isDense: true,
-                        decoration: const InputDecoration(
-                          labelText: 'Société',
-                          prefixIcon: Icon(Icons.business),
-                          isDense: true,
-                          border: OutlineInputBorder(),
-                        ),
-                        items: [
-                          const DropdownMenuItem<String?>(
-                            value: null,
-                            child: Text('— Aucune —'),
-                          ),
-                          ...companies.map(
-                            (c) => DropdownMenuItem<String?>(
-                              value: c.id,
-                              child: Text('${c.name} (${c.code})'),
-                            ),
-                          ),
-                        ],
-                        onChanged: (v) => setState(() => _companyId = v),
+                        border: OutlineInputBorder(),
                       ),
+                      items: [
+                        const DropdownMenuItem<String?>(
+                          value: null,
+                          child: Text('— Aucune —'),
+                        ),
+                        ...companies.map(
+                          (c) => DropdownMenuItem<String?>(
+                            value: c.id,
+                            child: Text('${c.name} (${c.code})'),
+                          ),
+                        ),
+                      ],
+                      onChanged: (v) => setState(() => _companyId = v),
                     ),
                     const SizedBox(height: 16),
-                    Expanded(
-                      child: TextFormField(
-                        focusNode: _fCode,
-                        controller: _code,
-                        decoration: const InputDecoration(
-                          labelText: 'Code',
-                          prefixIcon: Icon(Icons.qr_code_2),
-                          isDense: true,
-                          border: OutlineInputBorder(),
-                        ),
-                        textInputAction: TextInputAction.next,
-                        onFieldSubmitted: (_) => _next(_fFirst),
-                        inputFormatters: [
-                          FilteringTextInputFormatter.deny(RegExp(r'\s')),
-                        ],
+
+                    TextFormField(
+                      focusNode: _fCode,
+                      controller: _code,
+                      decoration: const InputDecoration(
+                        labelText: 'Code',
+                        prefixIcon: Icon(Icons.qr_code_2),
+                        isDense: true,
+                        border: OutlineInputBorder(),
                       ),
+                      textInputAction: TextInputAction.next,
+                      onFieldSubmitted: (_) => _next(_fFirst),
+                      inputFormatters: [
+                        FilteringTextInputFormatter.deny(RegExp(r'\s')),
+                      ],
                     ),
                     const SizedBox(height: 16),
                     SafeArea(
