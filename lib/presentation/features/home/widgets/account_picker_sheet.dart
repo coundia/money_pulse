@@ -1,4 +1,5 @@
-// Compact bottom sheet to pick an account, always showing a "Voir plus/Voir moins" row and allowing balance adjust via right drawer.
+// Compact bottom sheet to pick an account, always showing a "Voir plus/Voir moins" row,
+// allowing balance adjust via right drawer, and a button to view all accounts.
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:money_pulse/domain/accounts/entities/account.dart';
@@ -6,6 +7,7 @@ import 'package:money_pulse/presentation/widgets/money_text.dart';
 import 'package:money_pulse/presentation/widgets/right_drawer.dart';
 import 'package:money_pulse/presentation/features/accounts/widgets/account_adjust_balance_panel.dart';
 import 'package:money_pulse/presentation/app/providers.dart';
+import 'package:money_pulse/presentation/features/accounts/account_page.dart';
 
 Future<Account?> showAccountPickerSheet({
   required BuildContext context,
@@ -34,9 +36,32 @@ Future<Account?> showAccountPickerSheet({
 
               final all = List<Account>.of(snap.data ?? const <Account>[]);
               if (all.isEmpty) {
-                return const Padding(
-                  padding: EdgeInsets.all(24),
-                  child: Center(child: Text('Aucun compte')),
+                return Padding(
+                  padding: const EdgeInsets.all(24),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      const Text('Aucun compte'),
+                      const SizedBox(height: 12),
+                      SizedBox(
+                        width: double.infinity,
+                        child: FilledButton.icon(
+                          onPressed: () {
+                            Navigator.of(context).pop();
+                            Future.microtask(() {
+                              Navigator.of(context).push(
+                                MaterialPageRoute(
+                                  builder: (_) => const AccountPage(),
+                                ),
+                              );
+                            });
+                          },
+                          icon: const Icon(Icons.open_in_new),
+                          label: const Text('Voir tous les comptes'),
+                        ),
+                      ),
+                    ],
+                  ),
                 );
               }
 
@@ -112,18 +137,14 @@ Future<Account?> showAccountPickerSheet({
                                       final ix = all.indexWhere(
                                         (x) => x.id == a.id,
                                       );
-                                      if (ix != -1) {
-                                        all[ix] = updated;
-                                      }
+                                      if (ix != -1) all[ix] = updated;
                                       setLocalState(() {});
                                       if (context.mounted) {
                                         ScaffoldMessenger.of(
                                           context,
                                         ).showSnackBar(
-                                          SnackBar(
-                                            content: Text(
-                                              'Solde ajusté à ${updated.currency ?? 'XOF'}',
-                                            ),
+                                          const SnackBar(
+                                            content: Text('Solde ajusté'),
                                           ),
                                         );
                                       }
@@ -161,12 +182,29 @@ Future<Account?> showAccountPickerSheet({
                       ),
                     ),
                     const Divider(height: 1),
-                    ListTile(
-                      title: Text(showAll ? 'Voir moins' : 'Voir plus'),
-                      trailing: Icon(
-                        showAll ? Icons.expand_less : Icons.expand_more,
+                    // Row actions: Voir plus/moins + Voir tous les comptes
+                    Padding(
+                      padding: const EdgeInsets.fromLTRB(12, 6, 12, 12),
+                      child: Row(
+                        children: [
+                          Expanded(
+                            child: FilledButton.icon(
+                              onPressed: () {
+                                Navigator.of(context).pop();
+                                Future.microtask(() {
+                                  Navigator.of(context).push(
+                                    MaterialPageRoute(
+                                      builder: (_) => const AccountPage(),
+                                    ),
+                                  );
+                                });
+                              },
+                              icon: const Icon(Icons.open_in_new),
+                              label: const Text('Tous les comptes'),
+                            ),
+                          ),
+                        ],
                       ),
-                      onTap: () => setLocalState(() => showAll = !showAll),
                     ),
                   ],
                 ),
