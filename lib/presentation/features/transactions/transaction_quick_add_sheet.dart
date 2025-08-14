@@ -19,9 +19,17 @@ import '../products/product_picker_panel.dart';
 import 'providers/transaction_list_providers.dart';
 import '../../app/providers/checkout_cart_usecase_provider.dart';
 
-/// ===============================
-/// TransactionQuickAddSheet (SRP)
-/// ===============================
+// local pieces
+import 'intents/submit_form_intent.dart';
+import 'models/tx_item.dart';
+import 'widgets/amount_field.dart';
+import 'widgets/bottom_bar.dart';
+import 'widgets/category_autocomplete.dart';
+import 'widgets/date_row.dart';
+import 'widgets/items_section.dart';
+import 'widgets/party_section.dart';
+import 'widgets/type_toggle.dart';
+
 class TransactionQuickAddSheet extends ConsumerStatefulWidget {
   final bool initialIsDebit;
   const TransactionQuickAddSheet({super.key, this.initialIsDebit = true});
@@ -33,30 +41,30 @@ class TransactionQuickAddSheet extends ConsumerStatefulWidget {
 
 class _TransactionQuickAddSheetState
     extends ConsumerState<TransactionQuickAddSheet> {
-  // --- Controllers & State ---
+  // Form + fields
   final _formKey = GlobalKey<FormState>();
   final _amountCtrl = TextEditingController();
   final _descCtrl = TextEditingController();
   final _categoryCtrl = TextEditingController();
 
+  // state
   bool _isDebit = true;
   DateTime _when = DateTime.now();
 
-  // Category
+  // category
   Category? _selectedCategory;
   List<Category> _allCategories = const [];
 
-  // Party (Company + Customer)
+  // party
   String? _companyId;
   String? _customerId;
   List<Company> _companies = const [];
   List<Customer> _customers = const [];
 
-  // Items (from ProductPicker)
-  final List<_TxItem> _items = [];
-  bool _lockAmountToItems = true; // when products exist
+  // items
+  final List<TxItem> _items = [];
+  bool _lockAmountToItems = true; // default when items exist
 
-  // --- Lifecycle ---
   @override
   void initState() {
     super.initState();
@@ -72,7 +80,6 @@ class _TransactionQuickAddSheetState
     super.dispose();
   }
 
-  // --- Data loading ---
   Future<void> _loadInitialData() async {
     try {
       final catRepo = ref.read(categoryRepoProvider);
@@ -109,11 +116,10 @@ class _TransactionQuickAddSheetState
         _clearCategoryInternal();
       });
     } catch (_) {
-      // Silent, keep UI usable
+      // keep UI usable
     }
   }
 
-  // --- Helpers ---
   void _snack(String message) {
     if (!mounted) return;
     ScaffoldMessenger.of(
@@ -168,9 +174,7 @@ class _TransactionQuickAddSheetState
       );
       if (!mounted) return;
       setState(() => _customers = list);
-    } catch (_) {
-      // ignore
-    }
+    } catch (_) {}
   }
 
   Future<void> _ensureDefaultCompanyIfMissing() async {
@@ -188,9 +192,7 @@ class _TransactionQuickAddSheetState
       }
       if (!mounted) return;
       setState(() => _companyId = def?.id);
-    } catch (_) {
-      // ignore
-    }
+    } catch (_) {}
   }
 
   int get _itemsTotalCents =>
@@ -210,7 +212,7 @@ class _TransactionQuickAddSheetState
     );
     if (!mounted) return;
     if (result is List) {
-      final List<_TxItem> parsed = [];
+      final List<TxItem> parsed = [];
       for (final e in result) {
         if (e is Map) {
           final id = e['productId'] as String?;
@@ -220,7 +222,7 @@ class _TransactionQuickAddSheetState
           final qty = (e['quantity'] as int?) ?? 1;
           if (id != null) {
             parsed.add(
-              _TxItem(
+              TxItem(
                 productId: id,
                 label: label,
                 unitPriceCents: unit,
@@ -234,7 +236,7 @@ class _TransactionQuickAddSheetState
         _items
           ..clear()
           ..addAll(parsed);
-        _lockAmountToItems = true; // default lock when items exist
+        _lockAmountToItems = true;
       });
       _syncAmountFromItems();
     }
@@ -273,7 +275,6 @@ class _TransactionQuickAddSheetState
       return;
     }
 
-    // Prepare lines (items or single line from amount)
     final cents = _parseAmountToCents(_amountCtrl.text);
     final lines = _items.isNotEmpty
         ? _items
@@ -324,20 +325,18 @@ class _TransactionQuickAddSheetState
     }
   }
 
-  // --- UI ---
   @override
   Widget build(BuildContext context) {
     final insets = MediaQuery.of(context).viewInsets.bottom;
 
     return Shortcuts(
       shortcuts: <LogicalKeySet, Intent>{
-        LogicalKeySet(LogicalKeyboardKey.enter): const _SubmitFormIntent(),
-        LogicalKeySet(LogicalKeyboardKey.numpadEnter):
-            const _SubmitFormIntent(),
+        LogicalKeySet(LogicalKeyboardKey.enter): const SubmitFormIntent(),
+        LogicalKeySet(LogicalKeyboardKey.numpadEnter): const SubmitFormIntent(),
       },
       child: Actions(
         actions: <Type, Action<Intent>>{
-          _SubmitFormIntent: CallbackAction<_SubmitFormIntent>(
+          SubmitFormIntent: CallbackAction<SubmitFormIntent>(
             onInvoke: (_) {
               _save();
               return null;
@@ -369,18 +368,17 @@ class _TransactionQuickAddSheetState
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    _TypeToggle(
+                    TypeToggle(
                       isDebit: _isDebit,
                       onChanged: (v) {
                         setState(() {
                           _isDebit = v;
-                          // reset category when flipping type to avoid mismatch
-                          _clearCategoryInternal();
+                          _clearCategoryInternal(); // avoid mismatch types
                         });
                       },
                     ),
                     const SizedBox(height: 12),
-                    _AmountField(
+                    AmountField(
                       controller: _amountCtrl,
                       lockToItems: _items.isNotEmpty && _lockAmountToItems,
                       onToggleLock: _items.isEmpty
@@ -395,7 +393,7 @@ class _TransactionQuickAddSheetState
                       preview: _amountPreview,
                     ),
                     const SizedBox(height: 12),
-                    _CategoryAutocomplete(
+                    CategoryAutocomplete(
                       controller: _categoryCtrl,
                       initialSelected: _selectedCategory,
                       optionsBuilder: _filteredCategories,
@@ -408,7 +406,7 @@ class _TransactionQuickAddSheetState
                           : 'Aucune catégorie Crédit',
                     ),
                     const SizedBox(height: 12),
-                    _PartySection(
+                    PartySection(
                       companies: _companies,
                       customers: _customers,
                       companyId: _companyId,
@@ -417,10 +415,9 @@ class _TransactionQuickAddSheetState
                       isDebit: _isDebit,
                       onCompanyChanged: _onSelectCompany,
                       onCustomerChanged: (v) => setState(() => _customerId = v),
-                      // Info banner text informs stock flow direction
                     ),
                     const SizedBox(height: 12),
-                    _ItemsSection(
+                    ItemsSection(
                       items: _items,
                       totalCents: _itemsTotalCents,
                       onPick: _openProductPicker,
@@ -433,7 +430,7 @@ class _TransactionQuickAddSheetState
                       onTapItem: _openProductPicker,
                     ),
                     const SizedBox(height: 12),
-                    _DateRow(when: _when, onPick: _pickDate),
+                    DateRow(when: _when, onPick: _pickDate),
                     const SizedBox(height: 12),
                     TextFormField(
                       controller: _descCtrl,
@@ -444,519 +441,18 @@ class _TransactionQuickAddSheetState
                       textInputAction: TextInputAction.done,
                       onFieldSubmitted: (_) => _save(),
                     ),
-                    const SizedBox(height: 80), // keep space above bottom bar
+                    const SizedBox(height: 80),
                   ],
                 ),
               ),
             ),
           ),
-          bottomSheet: _BottomBar(
+          bottomSheet: BottomBar(
             onCancel: () => Navigator.of(context).maybePop(false),
             onSave: _save,
           ),
         ),
       ),
-    );
-  }
-}
-
-/// ===============================
-/// Smaller, focused UI widgets (SRP)
-/// ===============================
-
-class _TypeToggle extends StatelessWidget {
-  final bool isDebit;
-  final ValueChanged<bool> onChanged;
-  const _TypeToggle({required this.isDebit, required this.onChanged});
-
-  @override
-  Widget build(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
-    final accent = isDebit ? cs.error : cs.primary;
-
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
-      decoration: BoxDecoration(
-        border: Border.all(color: Theme.of(context).colorScheme.outlineVariant),
-        borderRadius: BorderRadius.circular(10),
-      ),
-      child: Row(
-        children: [
-          Icon(isDebit ? Icons.south : Icons.north, color: accent),
-          const SizedBox(width: 8),
-          Expanded(
-            child: SegmentedButton<bool>(
-              segments: const [
-                ButtonSegment(
-                  value: true,
-                  icon: Icon(Icons.south),
-                  label: Text('Dépense'),
-                ),
-                ButtonSegment(
-                  value: false,
-                  icon: Icon(Icons.north),
-                  label: Text('Revenu'),
-                ),
-              ],
-              selected: {isDebit},
-              showSelectedIcon: false,
-              onSelectionChanged: (s) => onChanged(s.first),
-            ),
-          ),
-          const SizedBox(width: 8),
-          Chip(
-            label: Text(isDebit ? 'Dépense' : 'Revenu'),
-            avatar: Icon(
-              isDebit ? Icons.arrow_downward : Icons.arrow_upward,
-              size: 18,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _AmountField extends StatelessWidget {
-  final TextEditingController controller;
-  final bool lockToItems;
-  final ValueChanged<bool>? onToggleLock;
-  final VoidCallback onChanged;
-  final String preview;
-
-  const _AmountField({
-    required this.controller,
-    required this.lockToItems,
-    required this.onChanged,
-    required this.preview,
-    this.onToggleLock,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final readOnly = lockToItems;
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        TextFormField(
-          controller: controller,
-          readOnly: readOnly,
-          inputFormatters: [
-            FilteringTextInputFormatter.allow(RegExp(r'[0-9,.\s]')),
-          ],
-          keyboardType: const TextInputType.numberWithOptions(decimal: true),
-          textAlign: TextAlign.center,
-          style: Theme.of(context).textTheme.headlineMedium,
-          decoration: InputDecoration(
-            border: const OutlineInputBorder(),
-            labelText: 'Montant',
-            suffixIcon: onToggleLock == null
-                ? null
-                : Tooltip(
-                    message: lockToItems
-                        ? "Montant verrouillé sur le total des articles"
-                        : "Saisir manuellement le montant",
-                    child: Switch(value: lockToItems, onChanged: onToggleLock),
-                  ),
-          ),
-          validator: (v) =>
-              (v == null || v.trim().isEmpty) ? 'Obligatoire' : null,
-          autofocus: true,
-          onChanged: (_) => onChanged(),
-          textInputAction: TextInputAction.done,
-        ),
-        const SizedBox(height: 6),
-        Align(
-          alignment: Alignment.centerRight,
-          child: Text(
-            'Aperçu: $preview',
-            style: Theme.of(context).textTheme.bodySmall,
-          ),
-        ),
-      ],
-    );
-  }
-}
-
-class _PartySection extends StatelessWidget {
-  final List<Company> companies;
-  final List<Customer> customers;
-  final String? companyId;
-  final String? customerId;
-  final int itemsCount;
-  final bool isDebit;
-  final ValueChanged<String?> onCompanyChanged;
-  final ValueChanged<String?> onCustomerChanged;
-
-  const _PartySection({
-    required this.companies,
-    required this.customers,
-    required this.companyId,
-    required this.customerId,
-    required this.itemsCount,
-    required this.isDebit,
-    required this.onCompanyChanged,
-    required this.onCustomerChanged,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final flowText = itemsCount == 0
-        ? null
-        : (isDebit
-              ? 'Le stock sera augmenté pour $itemsCount produit(s) dans la société sélectionnée.'
-              : 'Le stock sera diminué pour $itemsCount produit(s) dans la société sélectionnée.');
-
-    return Card(
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            Text('Tiers', style: Theme.of(context).textTheme.titleMedium),
-            const SizedBox(height: 8),
-            DropdownButtonFormField<String?>(
-              value: companyId,
-              isDense: true,
-              items: [
-                const DropdownMenuItem<String?>(
-                  value: null,
-                  child: Text('— Aucune société —'),
-                ),
-                ...companies.map(
-                  (co) => DropdownMenuItem<String?>(
-                    value: co.id,
-                    child: Text(
-                      '${co.name} (${co.code})',
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                  ),
-                ),
-              ],
-              onChanged: onCompanyChanged,
-              decoration: const InputDecoration(
-                border: OutlineInputBorder(),
-                labelText: 'Société',
-                isDense: true,
-              ),
-            ),
-            const SizedBox(height: 8),
-            DropdownButtonFormField<String?>(
-              value: customerId,
-              isDense: true,
-              items: [
-                const DropdownMenuItem<String?>(
-                  value: null,
-                  child: Text('— Aucun client —'),
-                ),
-                ...customers.map(
-                  (cu) => DropdownMenuItem<String?>(
-                    value: cu.id,
-                    child: Text(
-                      cu.fullName,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                  ),
-                ),
-              ],
-              onChanged: onCustomerChanged,
-              decoration: const InputDecoration(
-                border: OutlineInputBorder(),
-                labelText: 'Client',
-                isDense: true,
-              ),
-            ),
-            if (flowText != null) ...[
-              const SizedBox(height: 8),
-              Row(
-                children: [
-                  const Icon(Icons.inventory_2_outlined, size: 18),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: Text(flowText, overflow: TextOverflow.ellipsis),
-                  ),
-                ],
-              ),
-            ],
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-class _ItemsSection extends StatelessWidget {
-  final List<_TxItem> items;
-  final int totalCents;
-  final VoidCallback onPick;
-  final VoidCallback onClear;
-  final VoidCallback onTapItem;
-
-  const _ItemsSection({
-    required this.items,
-    required this.totalCents,
-    required this.onPick,
-    required this.onClear,
-    required this.onTapItem,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Column(
-      children: [
-        Row(
-          children: [
-            Expanded(
-              child: OutlinedButton.icon(
-                onPressed: onPick,
-                icon: const Icon(Icons.add_shopping_cart),
-                label: Text(
-                  items.isEmpty
-                      ? 'Ajouter des produits'
-                      : 'Modifier les produits',
-                ),
-              ),
-            ),
-            const SizedBox(width: 8),
-            if (items.isNotEmpty)
-              Wrap(
-                spacing: 6,
-                children: [
-                  Chip(label: Text('${items.length} produit(s)')),
-                  Chip(
-                    label: Text(
-                      'Total: ${Formatters.amountFromCents(totalCents)}',
-                    ),
-                  ),
-                  IconButton(
-                    tooltip: 'Vider',
-                    onPressed: onClear,
-                    icon: const Icon(Icons.delete_sweep),
-                  ),
-                ],
-              ),
-          ],
-        ),
-        if (items.isNotEmpty) const SizedBox(height: 8),
-        if (items.isNotEmpty)
-          ListView.separated(
-            shrinkWrap: true,
-            physics: const NeverScrollableScrollPhysics(),
-            itemCount: items.length,
-            separatorBuilder: (_, __) => const Divider(height: 1),
-            itemBuilder: (_, i) {
-              final it = items[i];
-              final lineTotal = it.unitPriceCents * it.quantity;
-              return ListTile(
-                dense: true,
-                leading: const Icon(Icons.shopping_bag),
-                title: Text(it.label.isEmpty ? 'Produit' : it.label),
-                subtitle: Text(
-                  'Qté: ${it.quantity} • PU: ${Formatters.amountFromCents(it.unitPriceCents)}',
-                ),
-                trailing: Text(Formatters.amountFromCents(lineTotal)),
-                onTap: onTapItem,
-              );
-            },
-          ),
-      ],
-    );
-  }
-}
-
-class _DateRow extends StatelessWidget {
-  final DateTime when;
-  final VoidCallback onPick;
-  const _DateRow({required this.when, required this.onPick});
-
-  @override
-  Widget build(BuildContext context) {
-    return ListTile(
-      contentPadding: EdgeInsets.zero,
-      title: const Text('Date'),
-      subtitle: Text(Formatters.dateFull(when)),
-      trailing: const Icon(Icons.calendar_today),
-      onTap: onPick,
-    );
-  }
-}
-
-class _BottomBar extends StatelessWidget {
-  final VoidCallback onCancel;
-  final VoidCallback onSave;
-  const _BottomBar({required this.onCancel, required this.onSave});
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.fromLTRB(16, 10, 16, 16),
-      decoration: BoxDecoration(
-        color: Theme.of(context).colorScheme.surfaceContainerHighest,
-        border: Border(
-          top: BorderSide(color: Theme.of(context).dividerColor, width: 0.6),
-        ),
-      ),
-      child: SafeArea(
-        top: false,
-        child: Row(
-          children: [
-            Expanded(
-              child: OutlinedButton(
-                onPressed: onCancel,
-                child: const Text('Annuler'),
-              ),
-            ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: FilledButton.icon(
-                onPressed: onSave,
-                icon: const Icon(Icons.check),
-                label: const Text('Enregistrer'),
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-/// Model for product lines
-class _TxItem {
-  final String productId;
-  final String label;
-  final int unitPriceCents;
-  final int quantity;
-  const _TxItem({
-    required this.productId,
-    required this.label,
-    required this.unitPriceCents,
-    required this.quantity,
-  });
-}
-
-/// Intent to submit on Enter
-class _SubmitFormIntent extends Intent {
-  const _SubmitFormIntent();
-}
-
-/// Reusable category autocomplete
-class _CategoryAutocomplete extends StatelessWidget {
-  final TextEditingController controller;
-  final Category? initialSelected;
-  final List<Category> Function(String query) optionsBuilder;
-  final void Function(Category) onSelected;
-  final VoidCallback onClear;
-  final String labelText;
-  final String emptyHint;
-
-  const _CategoryAutocomplete({
-    super.key,
-    required this.controller,
-    required this.initialSelected,
-    required this.optionsBuilder,
-    required this.onSelected,
-    required this.onClear,
-    required this.labelText,
-    required this.emptyHint,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Autocomplete<Category>(
-      optionsBuilder: (textEditingValue) {
-        final q = textEditingValue.text;
-        return optionsBuilder(q);
-      },
-      displayStringForOption: (c) =>
-          c.code +
-          ((c.description?.isNotEmpty ?? false) ? ' — ${c.description}' : ''),
-      fieldViewBuilder:
-          (context, textEditingController, focusNode, onFieldSubmitted) {
-            if (controller.text.isNotEmpty &&
-                textEditingController.text.isEmpty) {
-              textEditingController.text = controller.text;
-            }
-            return ValueListenableBuilder<TextEditingValue>(
-              valueListenable: textEditingController,
-              builder: (context, value, _) {
-                return TextFormField(
-                  controller: textEditingController,
-                  focusNode: focusNode,
-                  decoration: InputDecoration(
-                    border: const OutlineInputBorder(),
-                    labelText: labelText,
-                    suffixIcon: value.text.isNotEmpty
-                        ? IconButton(
-                            tooltip: 'Effacer',
-                            icon: const Icon(Icons.clear),
-                            onPressed: () {
-                              textEditingController.clear();
-                              controller.clear();
-                              onClear();
-                            },
-                          )
-                        : null,
-                  ),
-                  textInputAction: TextInputAction.next,
-                );
-              },
-            );
-          },
-      optionsViewBuilder: (context, onSelectedCb, options) {
-        final opts = options.toList();
-        return Align(
-          alignment: Alignment.topLeft,
-          child: Material(
-            elevation: 4,
-            child: ConstrainedBox(
-              constraints: const BoxConstraints(maxHeight: 280, maxWidth: 480),
-              child: opts.isEmpty
-                  ? Container(
-                      padding: const EdgeInsets.all(12),
-                      alignment: Alignment.centerLeft,
-                      child: Text(
-                        emptyHint,
-                        style: const TextStyle(color: Colors.black54),
-                      ),
-                    )
-                  : ListView.separated(
-                      padding: EdgeInsets.zero,
-                      itemCount: opts.length,
-                      separatorBuilder: (_, __) =>
-                          const Divider(height: 1, thickness: 0.5),
-                      itemBuilder: (_, i) {
-                        final c = opts[i];
-                        return ListTile(
-                          dense: true,
-                          leading: CircleAvatar(
-                            child: Text(
-                              (c.code.isNotEmpty ? c.code[0] : '?')
-                                  .toUpperCase(),
-                            ),
-                          ),
-                          title: Text(c.code),
-                          subtitle: c.description?.isNotEmpty == true
-                              ? Text(c.description!)
-                              : null,
-                          trailing: Text(
-                            c.typeEntry == 'DEBIT' ? 'Débit' : 'Crédit',
-                            style: const TextStyle(fontSize: 12),
-                          ),
-                          onTap: () => onSelectedCb(c),
-                        );
-                      },
-                    ),
-            ),
-          ),
-        );
-      },
-      onSelected: (c) {
-        controller.text = c.code;
-        onSelected(c);
-      },
     );
   }
 }
