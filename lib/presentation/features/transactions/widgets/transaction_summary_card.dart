@@ -1,4 +1,4 @@
-// UI card for period navigation, animated metrics, quick actions, and keyboard shortcuts.
+// UI card for period navigation, animated metrics, quick actions, and keyboard shortcuts; metrics open the report when tapped.
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:money_pulse/presentation/shared/formatters.dart';
@@ -6,6 +6,34 @@ import 'package:money_pulse/presentation/shared/formatters.dart';
 import 'summary_period_header.dart';
 import 'summary_metric_chip.dart';
 import 'summary_quick_actions.dart';
+
+class PrevPeriodIntent extends Intent {
+  const PrevPeriodIntent();
+}
+
+class NextPeriodIntent extends Intent {
+  const NextPeriodIntent();
+}
+
+class OpenPeriodIntent extends Intent {
+  const OpenPeriodIntent();
+}
+
+class OpenReportIntent extends Intent {
+  const OpenReportIntent();
+}
+
+class OpenSettingsIntent extends Intent {
+  const OpenSettingsIntent();
+}
+
+class AddExpenseIntent extends Intent {
+  const AddExpenseIntent();
+}
+
+class AddIncomeIntent extends Intent {
+  const AddIncomeIntent();
+}
 
 class TransactionSummaryCard extends StatelessWidget {
   final String periodLabel;
@@ -43,66 +71,63 @@ class TransactionSummaryCard extends StatelessWidget {
 
     return Shortcuts(
       shortcuts: <LogicalKeySet, Intent>{
-        LogicalKeySet(LogicalKeyboardKey.arrowLeft):
-            const ActivateIntent(), // précédent
-        LogicalKeySet(LogicalKeyboardKey.arrowRight):
-            const NextFocusIntent(), // suivant
-        // période
-        // rapport
-        LogicalKeySet(LogicalKeyboardKey.keyS): const DirectionalFocusIntent(
-          TraversalDirection.down,
-        ), // paramètres
-        LogicalKeySet(LogicalKeyboardKey.keyE):
-            const DoNothingIntent(), // dépense
-        LogicalKeySet(LogicalKeyboardKey.keyI):
-            const DoNothingIntent(), // revenu
+        LogicalKeySet(LogicalKeyboardKey.arrowLeft): const PrevPeriodIntent(),
+        LogicalKeySet(LogicalKeyboardKey.arrowRight): const NextPeriodIntent(),
+        LogicalKeySet(LogicalKeyboardKey.keyP): const OpenPeriodIntent(),
+        LogicalKeySet(LogicalKeyboardKey.keyR): const OpenReportIntent(),
+        LogicalKeySet(LogicalKeyboardKey.keyS): const OpenSettingsIntent(),
+        LogicalKeySet(LogicalKeyboardKey.keyE): const AddExpenseIntent(),
+        LogicalKeySet(LogicalKeyboardKey.keyI): const AddIncomeIntent(),
       },
       child: Actions(
         actions: <Type, Action<Intent>>{
-          ActivateIntent: CallbackAction<ActivateIntent>(
+          PrevPeriodIntent: CallbackAction<PrevPeriodIntent>(
             onInvoke: (_) {
               HapticFeedback.selectionClick();
               onPrev();
               return null;
             },
           ),
-          NextFocusIntent: CallbackAction<NextFocusIntent>(
+          NextPeriodIntent: CallbackAction<NextPeriodIntent>(
             onInvoke: (_) {
               HapticFeedback.selectionClick();
               onNext();
               return null;
             },
           ),
-          RequestFocusIntent: CallbackAction<RequestFocusIntent>(
+          OpenPeriodIntent: CallbackAction<OpenPeriodIntent>(
             onInvoke: (_) {
               HapticFeedback.selectionClick();
               onTapPeriod();
               return null;
             },
           ),
-          SelectIntent: CallbackAction<SelectIntent>(
+          OpenReportIntent: CallbackAction<OpenReportIntent>(
             onInvoke: (_) {
               HapticFeedback.selectionClick();
               onOpenReport();
               return null;
             },
           ),
-          DirectionalFocusIntent: CallbackAction<DirectionalFocusIntent>(
+          OpenSettingsIntent: CallbackAction<OpenSettingsIntent>(
             onInvoke: (_) {
               HapticFeedback.selectionClick();
               onOpenSettings();
               return null;
             },
           ),
-          DoNothingIntent: CallbackAction<DoNothingIntent>(
-            onInvoke: (i) {
-              final lastKey =
-                  HardwareKeyboard.instance.logicalKeysPressed.lastOrNull;
-              if (lastKey == LogicalKeyboardKey.keyE && onAddExpense != null) {
+          AddExpenseIntent: CallbackAction<AddExpenseIntent>(
+            onInvoke: (_) {
+              if (onAddExpense != null) {
                 HapticFeedback.selectionClick();
                 onAddExpense!.call();
-              } else if (lastKey == LogicalKeyboardKey.keyI &&
-                  onAddIncome != null) {
+              }
+              return null;
+            },
+          ),
+          AddIncomeIntent: CallbackAction<AddIncomeIntent>(
+            onInvoke: (_) {
+              if (onAddIncome != null) {
                 HapticFeedback.selectionClick();
                 onAddIncome!.call();
               }
@@ -139,7 +164,7 @@ class TransactionSummaryCard extends StatelessWidget {
                   const SizedBox(height: 8),
                   LayoutBuilder(
                     builder: (ctx, c) {
-                      final isTight = c.maxWidth < 420;
+                      final isTight = c.maxWidth < 520;
                       final wrapAlign = isTight
                           ? WrapAlignment.center
                           : WrapAlignment.spaceBetween;
@@ -149,16 +174,11 @@ class TransactionSummaryCard extends StatelessWidget {
                         spacing: 10,
                         runSpacing: 10,
                         children: [
-                          _IconFilledTonal(
-                            tooltip: 'Paramètres',
-                            icon: Icons.settings_outlined,
-                            onPressed: onOpenSettings,
-                          ),
                           AnimatedSwitcher(
                             duration: const Duration(milliseconds: 220),
                             transitionBuilder: (child, anim) =>
                                 FadeTransition(opacity: anim, child: child),
-                            child: SummaryMetricChip(
+                            child: _TappableMetric(
                               key: ValueKey('expense-$expenseCents'),
                               label: 'Dépenses',
                               valueText:
@@ -166,13 +186,18 @@ class TransactionSummaryCard extends StatelessWidget {
                               tone: Theme.of(context).colorScheme.error,
                               semanticsValue:
                                   '${Formatters.amountFromCents(expenseCents)} négatif',
+                              onTap: () {
+                                HapticFeedback.selectionClick();
+                                onOpenReport();
+                              },
+                              tooltip: 'Voir le rapport des dépenses',
                             ),
                           ),
                           AnimatedSwitcher(
                             duration: const Duration(milliseconds: 220),
                             transitionBuilder: (child, anim) =>
                                 FadeTransition(opacity: anim, child: child),
-                            child: SummaryMetricChip(
+                            child: _TappableMetric(
                               key: ValueKey('income-$incomeCents'),
                               label: 'Revenus',
                               valueText:
@@ -180,28 +205,33 @@ class TransactionSummaryCard extends StatelessWidget {
                               tone: Theme.of(context).colorScheme.tertiary,
                               semanticsValue:
                                   '${Formatters.amountFromCents(incomeCents)} positif',
+                              onTap: () {
+                                HapticFeedback.selectionClick();
+                                onOpenReport();
+                              },
+                              tooltip: 'Voir le rapport des revenus',
                             ),
                           ),
                           AnimatedSwitcher(
                             duration: const Duration(milliseconds: 220),
                             transitionBuilder: (child, anim) =>
                                 FadeTransition(opacity: anim, child: child),
-                            child: SummaryMetricChip(
+                            child: _TappableMetric(
                               key: ValueKey('net-$netCents'),
                               label: 'Net',
                               valueText:
-                                  '$netPrefix${Formatters.amountFromCents(netAbs)}',
+                                  '${netPrefix}${Formatters.amountFromCents(netAbs)}',
                               tone: netIsPositive
                                   ? Theme.of(context).colorScheme.tertiary
                                   : Theme.of(context).colorScheme.error,
                               semanticsValue:
                                   '${Formatters.amountFromCents(netAbs)} ${netIsPositive ? 'positif' : 'négatif'}',
+                              onTap: () {
+                                HapticFeedback.selectionClick();
+                                onOpenReport();
+                              },
+                              tooltip: 'Voir le rapport global',
                             ),
-                          ),
-                          _IconFilledTonal(
-                            tooltip: 'Rapport',
-                            icon: Icons.pie_chart,
-                            onPressed: onOpenReport,
                           ),
                         ],
                       );
@@ -222,39 +252,46 @@ class TransactionSummaryCard extends StatelessWidget {
   }
 }
 
-class _IconFilledTonal extends StatelessWidget {
+class _TappableMetric extends StatelessWidget {
+  final String label;
+  final String valueText;
+  final Color tone;
+  final String? semanticsValue;
+  final VoidCallback onTap;
   final String tooltip;
-  final IconData icon;
-  final VoidCallback onPressed;
 
-  const _IconFilledTonal({
+  const _TappableMetric({
+    super.key,
+    required this.label,
+    required this.valueText,
+    required this.tone,
+    required this.onTap,
     required this.tooltip,
-    required this.icon,
-    required this.onPressed,
+    this.semanticsValue,
   });
 
   @override
   Widget build(BuildContext context) {
-    final bg = Theme.of(context).colorScheme.surfaceVariant.withOpacity(0.54);
-    final fg = Theme.of(context).colorScheme.onSurfaceVariant;
+    final radius = BorderRadius.circular(10);
     return Tooltip(
       message: tooltip,
       waitDuration: const Duration(milliseconds: 400),
-      child: FilledButton.tonalIcon(
-        style: FilledButton.styleFrom(
-          backgroundColor: bg,
-          foregroundColor: fg,
-          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(10),
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          borderRadius: radius,
+          onTap: onTap,
+          child: Semantics(
+            button: true,
+            onTapHint: 'Ouvrir le rapport',
+            child: SummaryMetricChip(
+              label: label,
+              valueText: valueText,
+              tone: tone,
+              semanticsValue: semanticsValue,
+            ),
           ),
         ),
-        onPressed: () {
-          HapticFeedback.selectionClick();
-          onPressed();
-        },
-        icon: Icon(icon),
-        label: Text(tooltip),
       ),
     );
   }
