@@ -6,6 +6,7 @@ import 'package:uuid/uuid.dart';
 import 'package:money_pulse/domain/products/entities/product.dart';
 import 'package:money_pulse/domain/products/repositories/product_repository.dart';
 import 'package:money_pulse/presentation/features/products/product_repo_provider.dart';
+
 import 'package:money_pulse/presentation/app/providers.dart'; // categoryRepoProvider
 import 'package:money_pulse/presentation/widgets/right_drawer.dart';
 
@@ -15,10 +16,12 @@ import 'widgets/product_delete_panel.dart';
 import 'widgets/product_view_panel.dart';
 import 'widgets/product_stock_adjust_panel.dart';
 
-import '../stock/providers/stock_level_repo_provider.dart'; // stockLevelRepoProvider
-import 'widgets/header_bar.dart';
+// Filters UI
 import 'filters/product_filters.dart';
 import 'filters/filters_sheet.dart';
+
+// stock repo to compute per-product totals
+import '../stock/providers/stock_level_repo_provider.dart';
 
 class ProductListPage extends ConsumerStatefulWidget {
   const ProductListPage({super.key});
@@ -174,6 +177,8 @@ class _ProductListPageState extends ConsumerState<ProductListPage> {
     );
   }
 
+  /// Naive stock computation (sum stockOnHand - stockAllocated across companies)
+  /// using the existing search endpoint. Works with current repos without schema changes.
   Future<Map<String, int>> _computeStockMap(List<Product> items) async {
     final stockRepo = ref.read(stockLevelRepoProvider);
     final map = <String, int>{}; // productId -> total (onHand - allocated)
@@ -241,8 +246,8 @@ class _ProductListPageState extends ConsumerState<ProductListPage> {
     }
 
     bool matchStock(Product p) {
-      if (f.stock == StockFilter.any) return true;
       final qty = stockByProduct?[p.id];
+      if (f.stock == StockFilter.any) return true;
       if (qty == null) return true; // pas de donnée => ne pas exclure
       if (f.stock == StockFilter.inStock) return qty > 0;
       if (f.stock == StockFilter.outOfStock) return qty <= 0;
@@ -280,10 +285,8 @@ class _ProductListPageState extends ConsumerState<ProductListPage> {
           builder: (context, snap) {
             final items = snap.data ?? const <Product>[];
 
-            final needsStock = _filters.stock != StockFilter.any;
-            final stockFuture = needsStock
-                ? _computeStockMap(items)
-                : Future.value(<String, int>{});
+            // ✅ Always compute stock map so tiles can show stock
+            final stockFuture = _computeStockMap(items);
 
             final body = switch (snap.connectionState) {
               ConnectionState.waiting => const Center(
@@ -292,11 +295,7 @@ class _ProductListPageState extends ConsumerState<ProductListPage> {
               _ => FutureBuilder<Map<String, int>>(
                 future: stockFuture,
                 builder: (context, stockSnap) {
-                  final stockMap =
-                      (stockSnap.connectionState == ConnectionState.done)
-                      ? (stockSnap.data ?? const <String, int>{})
-                      : null;
-
+                  final stockMap = stockSnap.data ?? const <String, int>{};
                   final filtered = _applyLocalFilters(
                     items,
                     stockByProduct: stockMap,
@@ -316,7 +315,7 @@ class _ProductListPageState extends ConsumerState<ProductListPage> {
                           : const Divider(height: 1),
                       itemBuilder: (_, i) {
                         if (i == 0) {
-                          return HeaderBar(
+                          return _HeaderBar(
                             total: items.length,
                             searchCtrl: _searchCtrl,
                             filters: _filters,
@@ -337,15 +336,13 @@ class _ProductListPageState extends ConsumerState<ProductListPage> {
                           if ((p.description ?? '').isNotEmpty) p.description!,
                         ].join('  •  ');
 
-                        final stockQty = (needsStock && stockMap != null)
-                            ? (stockMap[p.id] ?? 0)
-                            : null;
+                        final qty = stockMap[p.id] ?? 0;
 
                         return ProductTile(
                           title: title,
                           subtitle: sub.isEmpty ? null : sub,
                           priceCents: p.defaultPrice,
-                          stockQty: stockQty,
+                          stockQty: qty, // ✅ show stock
                           onTap: () => _view(p),
                           onMenuAction: (action) async {
                             await Future.delayed(Duration.zero);
@@ -437,6 +434,70 @@ class _EmptySection extends StatelessWidget {
           ],
         ),
       ),
+    );
+  }
+}
+
+class _HeaderBar extends StatelessWidget {
+  final int total;
+  final TextEditingController searchCtrl;
+  final ProductFilters filters;
+  final VoidCallback onOpenFilters;
+  final VoidCallback onClearFilters;
+
+  const _HeaderBar({
+    required this.total,
+    required this.searchCtrl,
+    required this.filters,
+    required this.onOpenFilters,
+    required this.onClearFilters,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final isFiltered = filters != const ProductFilters();
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const SizedBox(height: 8),
+        Text('Produits', style: Theme.of(context).textTheme.headlineSmall),
+        const SizedBox(height: 8),
+        Wrap(
+          spacing: 8,
+          runSpacing: 8,
+          children: [
+            Chip(
+              avatar: const Icon(Icons.inventory_2_outlined, size: 18),
+              label: Text('Total: $total'),
+            ),
+            if (isFiltered)
+              ActionChip(
+                avatar: const Icon(Icons.filter_alt_off),
+                label: const Text('Effacer les filtres'),
+                onPressed: onClearFilters,
+              ),
+          ],
+        ),
+        const SizedBox(height: 12),
+        Row(
+          children: [
+            Expanded(
+              child: TextField(
+                controller: searchCtrl,
+                decoration: InputDecoration(
+                  hintText: 'Rechercher par nom, code ou EAN',
+                  prefixIcon: const Icon(Icons.search),
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  isDense: true,
+                ),
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 12),
+      ],
     );
   }
 }

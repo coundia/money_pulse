@@ -178,7 +178,7 @@ class _FiltersSheetState extends State<FiltersSheet> {
                           FilteringTextInputFormatter.digitsOnly,
                         ],
                         decoration: const InputDecoration(
-                          labelText: 'Prix min (€)',
+                          labelText: 'Prix min ',
                           border: OutlineInputBorder(),
                           isDense: true,
                         ),

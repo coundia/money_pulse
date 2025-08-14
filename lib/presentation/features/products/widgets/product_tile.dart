@@ -5,7 +5,7 @@ class ProductTile extends StatelessWidget {
   final String title;
   final String? subtitle;
   final int priceCents;
-  final int? stockQty; // ✅ NEW: display stock on the list
+  final int? stockQty; // show stock on the list
   final VoidCallback? onTap;
 
   /// Actions via long-press:
@@ -84,31 +84,30 @@ class ProductTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final stock = stockQty;
-    final hasStock = stock != null;
-    final positive = (stock ?? 0) > 0;
+    // Always display a stock chip; default to 0 when null
+    final qty = stockQty ?? 0;
+    final positive = qty > 0;
 
-    final stockChip = hasStock
-        ? Container(
-            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-            decoration: BoxDecoration(
-              color: (positive
-                  ? Colors.green.withOpacity(.12)
-                  : Colors.red.withOpacity(.12)),
-              borderRadius: BorderRadius.circular(10),
-            ),
-            child: Text(
-              positive ? 'Stock: $stock' : 'Rupture',
-              style: TextStyle(
-                color: positive ? Colors.green.shade800 : Colors.red.shade700,
-                fontWeight: FontWeight.w600,
-                fontSize: 12,
-              ),
-            ),
-          )
-        : const SizedBox.shrink();
+    final stockChip = Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+      decoration: BoxDecoration(
+        color: (positive
+            ? Colors.green.withOpacity(.12)
+            : Colors.red.withOpacity(.12)),
+        borderRadius: BorderRadius.circular(10),
+      ),
+      child: Text(
+        positive ? 'Stock: $qty' : 'Rupture',
+        style: TextStyle(
+          color: positive ? Colors.green.shade800 : Colors.red.shade700,
+          fontWeight: FontWeight.w600,
+          fontSize: 12,
+        ),
+      ),
+    );
 
     return GestureDetector(
+      behavior: HitTestBehavior.opaque,
       onLongPressStart: (details) =>
           _showContextMenu(context, details.globalPosition),
       child: ListTile(
@@ -122,11 +121,11 @@ class ProductTile extends StatelessWidget {
         subtitle: (subtitle == null || subtitle!.isEmpty)
             ? null
             : Text(subtitle!),
-        // trailing kept compact so it won't overflow
+        // Compact trailing to avoid overflow on small screens
         trailing: Wrap(
           spacing: 10,
           crossAxisAlignment: WrapCrossAlignment.center,
-          children: [if (hasStock) stockChip, Text(_money(priceCents))],
+          children: [stockChip, Text(_money(priceCents))],
         ),
       ),
     );
