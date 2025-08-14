@@ -1,5 +1,4 @@
-// Compact bottom sheet to pick an account, with adjust-balance via right drawer,
-// quick access to the Accounts page, and auto-creation of an adjustment transaction.
+// Bottom sheet to pick an account with adjust-balance action, creates an adjustment transaction, and links to Accounts page.
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:sqflite/sqflite.dart';
@@ -88,16 +87,25 @@ Future<Account?> showAccountPickerSheet({
                           final isSelected = (selectedAccountId ?? '') == a.id;
 
                           return ListTile(
+                            key: ValueKey(
+                              '${a.id}:${a.balance}:${a.updatedAt?.toIso8601String()}',
+                            ),
                             leading: const Icon(Icons.account_balance_wallet),
                             title: Text(
                               a.code ?? 'Compte',
                               maxLines: 1,
                               overflow: TextOverflow.ellipsis,
                             ),
-                            subtitle: MoneyText(
-                              amountCents: a.balance,
-                              currency: a.currency ?? 'XOF',
-                              style: Theme.of(context).textTheme.titleLarge,
+                            subtitle: AnimatedSwitcher(
+                              duration: const Duration(milliseconds: 220),
+                              transitionBuilder: (child, anim) =>
+                                  FadeTransition(opacity: anim, child: child),
+                              child: MoneyText(
+                                key: ValueKey(a.balance),
+                                amountCents: a.balance,
+                                currency: a.currency ?? 'XOF',
+                                style: Theme.of(context).textTheme.titleLarge,
+                              ),
                             ),
                             trailing: Row(
                               mainAxisSize: MainAxisSize.min,
@@ -138,10 +146,7 @@ Future<Account?> showAccountPickerSheet({
                                         isDirty: true,
                                       );
 
-                                      // 1) Update account
                                       await repo.update(updated);
-
-                                      // 2) Insert adjustment transaction (delta)
                                       await _insertAdjustmentTransaction(
                                         container: container,
                                         account: updated,
@@ -151,7 +156,6 @@ Future<Account?> showAccountPickerSheet({
                                         userNote: result.note,
                                       );
 
-                                      // 3) Refresh UI states
                                       final ix = all.indexWhere(
                                         (x) => x.id == a.id,
                                       );
@@ -251,8 +255,6 @@ Future<Account?> showAccountPickerSheet({
   );
 }
 
-/// Inserts an "adjustment" transaction row based on the delta between before/after balances.
-/// Uses a minimal, generic schema: amountCents is stored as absolute value and typeEntry is IN/OUT.
 Future<void> _insertAdjustmentTransaction({
   required ProviderContainer container,
   required Account account,
@@ -285,9 +287,9 @@ Future<void> _insertAdjustmentTransaction({
       'id': idTx,
       'accountId': account.id,
       'typeEntry': typeEntry,
-      'amount': amountAbs, // ✅ correspond au schéma
+      'amount': amountAbs,
       'description': description,
-      'dateTransaction': nowIso, // ✅ utile pour tri/affichage
+      'dateTransaction': nowIso,
       'createdAt': nowIso,
       'updatedAt': nowIso,
       'version': 0,
