@@ -1,5 +1,6 @@
-// Product form panel; captures purchasePrice and a single String status.
+// Product form right-drawer panel with purchase price and single-string status; Enter/NumpadEnter submits the form.
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:intl/intl.dart';
 import 'package:money_pulse/domain/products/entities/product.dart';
 import 'package:money_pulse/domain/categories/entities/category.dart';
@@ -26,6 +27,10 @@ class ProductFormResult {
   });
 }
 
+class SubmitFormIntent extends Intent {
+  const SubmitFormIntent();
+}
+
 class ProductFormPanel extends StatefulWidget {
   final Product? existing;
   final List<Category> categories;
@@ -38,6 +43,7 @@ class ProductFormPanel extends StatefulWidget {
 class _ProductFormPanelState extends State<ProductFormPanel> {
   final _formKey = GlobalKey<FormState>();
 
+  // controllers
   late final TextEditingController _code = TextEditingController(
     text: widget.existing?.code ?? '',
   );
@@ -61,6 +67,13 @@ class _ProductFormPanelState extends State<ProductFormPanel> {
         : _moneyFromCents(widget.existing!.purchasePrice),
   );
 
+  // focus chain
+  final _fPriceBuy = FocusNode();
+  final _fName = FocusNode();
+  final _fCode = FocusNode();
+  final _fBarcode = FocusNode();
+  final _fDesc = FocusNode();
+
   String? _categoryId;
   String _status = 'ACTIVE';
 
@@ -70,13 +83,17 @@ class _ProductFormPanelState extends State<ProductFormPanel> {
     ('ARCHIVED', 'Archivé'),
   ];
 
+  static final _numFilter = FilteringTextInputFormatter.allow(
+    RegExp(r'[0-9\.\,\s]'),
+  );
+
   @override
   void initState() {
     super.initState();
     _categoryId =
         widget.existing?.categoryId ??
         (widget.categories.isNotEmpty ? widget.categories.first.id : null);
-    _status = widget.existing?.statuses ?? "ACTIVE";
+    _status = widget.existing?.statuses ?? 'ACTIVE';
   }
 
   @override
@@ -87,6 +104,11 @@ class _ProductFormPanelState extends State<ProductFormPanel> {
     _barcode.dispose();
     _priceSell.dispose();
     _priceBuy.dispose();
+    _fPriceBuy.dispose();
+    _fName.dispose();
+    _fCode.dispose();
+    _fBarcode.dispose();
+    _fDesc.dispose();
     super.dispose();
   }
 
@@ -104,6 +126,29 @@ class _ProductFormPanelState extends State<ProductFormPanel> {
 
   String? _required(String? v) =>
       (v == null || v.trim().isEmpty) ? 'Requis' : null;
+
+  InputDecoration _dec(
+    String label, {
+    String? helper,
+    String? hint,
+    TextEditingController? ctrl,
+  }) {
+    return InputDecoration(
+      labelText: label,
+      helperText: helper,
+      hintText: hint,
+      border: const OutlineInputBorder(),
+      isDense: true,
+      contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+      suffixIcon: (ctrl == null || ctrl.text.isEmpty)
+          ? null
+          : IconButton(
+              tooltip: 'Effacer',
+              icon: const Icon(Icons.clear),
+              onPressed: () => setState(() => ctrl.clear()),
+            ),
+    );
+  }
 
   void _submit() {
     if (!_formKey.currentState!.validate()) return;
@@ -127,125 +172,165 @@ class _ProductFormPanelState extends State<ProductFormPanel> {
   Widget build(BuildContext context) {
     final isEdit = widget.existing != null;
 
-    return Scaffold(
-      appBar: AppBar(
-        title: Text(isEdit ? 'Modifier le produit' : 'Nouveau produit'),
-        leading: IconButton(
-          icon: const Icon(Icons.close),
-          onPressed: () => Navigator.pop(context),
-        ),
-        actions: [
-          FilledButton.icon(
-            onPressed: _submit,
-            icon: const Icon(Icons.check),
-            label: Text(isEdit ? 'Enregistrer' : 'Ajouter'),
+    return Shortcuts(
+      shortcuts: <LogicalKeySet, Intent>{
+        LogicalKeySet(LogicalKeyboardKey.enter): const SubmitFormIntent(),
+        LogicalKeySet(LogicalKeyboardKey.numpadEnter): const SubmitFormIntent(),
+      },
+      child: Actions(
+        actions: <Type, Action<Intent>>{
+          SubmitFormIntent: CallbackAction<SubmitFormIntent>(
+            onInvoke: (_) {
+              _submit();
+              return null;
+            },
           ),
-          const SizedBox(width: 8),
-        ],
-      ),
-      body: Form(
-        key: _formKey,
-        child: ListView(
-          padding: const EdgeInsets.all(16),
-          children: [
-            TextFormField(
-              controller: _priceSell,
-              keyboardType: const TextInputType.numberWithOptions(
-                decimal: true,
-                signed: false,
-              ),
-              textInputAction: TextInputAction.next,
-              decoration: const InputDecoration(
-                labelText: 'Prix de vente (ex: 1500)',
-                helperText: 'Obligatoire',
-                border: OutlineInputBorder(),
-              ),
-              validator: _required,
-              autofocus: true,
+        },
+        child: Scaffold(
+          appBar: AppBar(
+            title: Text(isEdit ? 'Modifier le produit' : 'Nouveau produit'),
+            leading: IconButton(
+              icon: const Icon(Icons.close),
+              onPressed: () => Navigator.pop(context),
+              tooltip: 'Fermer',
             ),
-            const SizedBox(height: 12),
-            TextFormField(
-              controller: _priceBuy,
-              keyboardType: const TextInputType.numberWithOptions(
-                decimal: true,
-                signed: false,
+            actions: [
+              FilledButton.icon(
+                onPressed: _submit,
+                icon: const Icon(Icons.check),
+                label: Text(isEdit ? 'Enregistrer' : 'Ajouter'),
               ),
-              textInputAction: TextInputAction.next,
-              decoration: const InputDecoration(
-                labelText: "Prix d'achat / coût (ex: 1200)",
-                helperText: 'Optionnel',
-                border: OutlineInputBorder(),
+              const SizedBox(width: 8),
+            ],
+          ),
+          body: SafeArea(
+            child: Form(
+              key: _formKey,
+              autovalidateMode: AutovalidateMode.onUserInteraction,
+              child: ListView(
+                padding: const EdgeInsets.all(16),
+                children: [
+                  // prix de vente (requis)
+                  TextFormField(
+                    controller: _priceSell,
+                    keyboardType: const TextInputType.numberWithOptions(
+                      decimal: true,
+                      signed: false,
+                    ),
+                    inputFormatters: [_numFilter],
+                    textInputAction: TextInputAction.next,
+                    onFieldSubmitted: (_) => _fPriceBuy.requestFocus(),
+                    decoration: _dec(
+                      'Prix de vente (ex: 1500)',
+                      helper: 'Obligatoire',
+                      ctrl: _priceSell,
+                    ),
+                    validator: _required,
+                    autofocus: true,
+                  ),
+                  const SizedBox(height: 12),
+
+                  // prix d'achat (optionnel)
+                  TextFormField(
+                    focusNode: _fPriceBuy,
+                    controller: _priceBuy,
+                    keyboardType: const TextInputType.numberWithOptions(
+                      decimal: true,
+                      signed: false,
+                    ),
+                    inputFormatters: [_numFilter],
+                    textInputAction: TextInputAction.next,
+                    onFieldSubmitted: (_) => _fName.requestFocus(),
+                    decoration: _dec(
+                      "Prix d'achat / coût (ex: 1200)",
+                      helper: 'Optionnel',
+                      ctrl: _priceBuy,
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+
+                  // nom
+                  TextFormField(
+                    focusNode: _fName,
+                    controller: _name,
+                    textInputAction: TextInputAction.next,
+                    onFieldSubmitted: (_) => _fCode.requestFocus(),
+                    decoration: _dec(
+                      'Nom (laisser vide = "No name")',
+                      ctrl: _name,
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+
+                  // code
+                  TextFormField(
+                    focusNode: _fCode,
+                    controller: _code,
+                    textInputAction: TextInputAction.next,
+                    onFieldSubmitted: (_) => _fBarcode.requestFocus(),
+                    decoration: _dec('Code (SKU)', ctrl: _code),
+                  ),
+                  const SizedBox(height: 12),
+
+                  // code barre
+                  TextFormField(
+                    focusNode: _fBarcode,
+                    controller: _barcode,
+                    textInputAction: TextInputAction.next,
+                    onFieldSubmitted: (_) => _fDesc.requestFocus(),
+                    decoration: _dec('Code barre (EAN/UPC)', ctrl: _barcode),
+                  ),
+                  const SizedBox(height: 12),
+
+                  // catégorie
+                  DropdownButtonFormField<String>(
+                    value: _categoryId,
+                    items: widget.categories
+                        .map(
+                          (c) => DropdownMenuItem(
+                            value: c.id,
+                            child: Text(c.code),
+                          ),
+                        )
+                        .toList(),
+                    onChanged: (v) => setState(() => _categoryId = v),
+                    decoration: _dec('Catégorie'),
+                  ),
+                  const SizedBox(height: 12),
+
+                  // statut
+                  DropdownButtonFormField<String>(
+                    value: _status,
+                    items: _statusOptions
+                        .map(
+                          (e) =>
+                              DropdownMenuItem(value: e.$1, child: Text(e.$2)),
+                        )
+                        .toList(),
+                    onChanged: (v) => setState(() => _status = v ?? 'ACTIVE'),
+                    decoration: _dec('Statut'),
+                  ),
+                  const SizedBox(height: 16),
+
+                  // description
+                  TextFormField(
+                    focusNode: _fDesc,
+                    controller: _desc,
+                    maxLines: 3,
+                    textInputAction: TextInputAction.done,
+                    onFieldSubmitted: (_) => _submit(),
+                    decoration: _dec('Description', ctrl: _desc),
+                  ),
+
+                  const SizedBox(height: 10),
+                  Text(
+                    'Astuce : appuyez sur Entrée pour enregistrer rapidement.',
+                    style: Theme.of(context).textTheme.bodySmall,
+                  ),
+                ],
               ),
             ),
-            const SizedBox(height: 16),
-            TextFormField(
-              controller: _name,
-              textInputAction: TextInputAction.next,
-              decoration: const InputDecoration(
-                labelText: 'Nom (laisser vide = "No name")',
-                border: OutlineInputBorder(),
-              ),
-            ),
-            const SizedBox(height: 12),
-            TextFormField(
-              controller: _code,
-              textInputAction: TextInputAction.next,
-              decoration: const InputDecoration(
-                labelText: 'Code (SKU)',
-                border: OutlineInputBorder(),
-              ),
-            ),
-            const SizedBox(height: 12),
-            TextFormField(
-              controller: _barcode,
-              textInputAction: TextInputAction.done,
-              onFieldSubmitted: (_) => _submit(),
-              decoration: const InputDecoration(
-                labelText: 'Code barre (EAN/UPC)',
-                border: OutlineInputBorder(),
-              ),
-            ),
-            const SizedBox(height: 12),
-            DropdownButtonFormField<String>(
-              value: _categoryId,
-              items: widget.categories
-                  .map(
-                    (c) => DropdownMenuItem(value: c.id, child: Text(c.code)),
-                  )
-                  .toList(),
-              onChanged: (v) => setState(() => _categoryId = v),
-              decoration: const InputDecoration(
-                labelText: 'Catégorie',
-                border: OutlineInputBorder(),
-              ),
-            ),
-            const SizedBox(height: 12),
-            DropdownButtonFormField<String>(
-              value: _status,
-              items: _statusOptions
-                  .map((e) => DropdownMenuItem(value: e.$1, child: Text(e.$2)))
-                  .toList(),
-              onChanged: (v) => setState(() => _status = v ?? 'ACTIVE'),
-              decoration: const InputDecoration(
-                labelText: 'Statut',
-                border: OutlineInputBorder(),
-              ),
-            ),
-            const SizedBox(height: 16),
-            TextFormField(
-              controller: _desc,
-              maxLines: 3,
-              decoration: const InputDecoration(
-                labelText: 'Description',
-                border: OutlineInputBorder(),
-              ),
-            ),
-            const SizedBox(height: 10),
-            Text(
-              'Astuce : utilisez la recherche pour retrouver rapidement par nom, code ou EAN.',
-              style: Theme.of(context).textTheme.bodySmall,
-            ),
-          ],
+          ),
         ),
       ),
     );

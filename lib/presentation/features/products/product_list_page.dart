@@ -1,24 +1,30 @@
-// Product list page; handles single String status and purchase price.
+// Product list page: fixes "State is unmounted" when editing from the view drawer by capturing NavigatorState and guarding with mounted; also cleans status subtitle.
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:uuid/uuid.dart';
+
 import 'package:money_pulse/domain/products/entities/product.dart';
 import 'package:money_pulse/domain/products/repositories/product_repository.dart';
 import 'package:money_pulse/presentation/features/products/product_repo_provider.dart';
+
 import 'package:money_pulse/presentation/app/providers.dart';
 import 'package:money_pulse/presentation/widgets/right_drawer.dart';
+
 import 'widgets/product_tile.dart';
 import 'widgets/product_form_panel.dart';
 import 'widgets/product_delete_panel.dart';
 import 'widgets/product_view_panel.dart';
 import 'widgets/product_stock_adjust_panel.dart';
+
 import 'filters/product_filters.dart';
 import 'filters/filters_sheet.dart';
+
 import '../stock/providers/stock_level_repo_provider.dart';
 
 class ProductListPage extends ConsumerStatefulWidget {
   const ProductListPage({super.key});
+
   @override
   ConsumerState<ProductListPage> createState() => _ProductListPageState();
 }
@@ -157,21 +163,36 @@ class _ProductListPageState extends ConsumerState<ProductListPage> {
       catLabel = cat?.code;
     }
     if (!mounted) return;
+
+    final nav = Navigator.of(context);
+
     await showRightDrawer<void>(
       context,
       child: ProductViewPanel(
         product: p,
         categoryLabel: catLabel,
         onEdit: () async {
-          Navigator.of(context).pop();
+          if (!mounted) return;
+          nav.pop();
+          await Future.delayed(const Duration(milliseconds: 60));
+          if (!mounted) return;
           await _addOrEdit(existing: p);
         },
         onDelete: () async {
-          Navigator.of(context).pop();
+          if (!mounted) return;
+          nav.pop();
+          await Future.delayed(const Duration(milliseconds: 60));
+          if (!mounted) return;
           await _confirmDelete(p);
         },
         onShare: () => _share(p),
-        onAdjust: () => _openAdjust(p),
+        onAdjust: () async {
+          if (!mounted) return;
+          nav.pop();
+          await Future.delayed(const Duration(milliseconds: 60));
+          if (!mounted) return;
+          await _openAdjust(p);
+        },
       ),
       widthFraction: 0.92,
       heightFraction: 0.96,

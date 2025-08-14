@@ -1,4 +1,4 @@
-// Tile component for an account item with clear default badge and accessible layout.
+// Tile component for an account item with clear default badge and safe trailing to avoid overflow.
 import 'package:flutter/material.dart';
 import 'package:money_pulse/domain/accounts/entities/account.dart';
 
@@ -74,17 +74,25 @@ class AccountTile extends StatelessWidget {
         ],
       ),
       subtitle: Text(sub, maxLines: 1, overflow: TextOverflow.ellipsis),
-      trailing: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        crossAxisAlignment: CrossAxisAlignment.end,
-        children: [
-          Text(
-            balanceText,
-            style: const TextStyle(fontWeight: FontWeight.w600),
+      trailing: ConstrainedBox(
+        // <— prevents layout overflow on small screens
+        constraints: const BoxConstraints(maxWidth: 180),
+        child: FittedBox(
+          fit: BoxFit.scaleDown,
+          alignment: Alignment.centerRight,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.end,
+            children: [
+              Text(
+                balanceText,
+                style: const TextStyle(fontWeight: FontWeight.w600),
+              ),
+              const SizedBox(height: 2),
+              Text(updatedAtText, style: Theme.of(context).textTheme.bodySmall),
+            ],
           ),
-          const SizedBox(height: 2),
-          Text(updatedAtText, style: Theme.of(context).textTheme.bodySmall),
-        ],
+        ),
       ),
       selected: isDefault,
       selectedTileColor: Theme.of(

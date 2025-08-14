@@ -13,6 +13,7 @@ import 'package:money_pulse/presentation/shared/formatters.dart';
 import 'widgets/account_details_panel.dart';
 import 'widgets/account_tile.dart';
 import 'widgets/account_context_menu.dart';
+import 'widgets/account_adjust_balance_panel.dart'; // <— NEW
 
 class AccountPage extends ConsumerStatefulWidget {
   const AccountPage({super.key});
@@ -93,6 +94,33 @@ class _AccountPageState extends ConsumerState<AccountPage> {
       await _repo.update(updated);
     }
     if (mounted) setState(() {});
+  }
+
+  Future<void> _adjustBalance(Account acc) async {
+    // <— NEW
+    final result = await showRightDrawer<AccountAdjustBalanceResult>(
+      context,
+      child: AccountAdjustBalancePanel(account: acc),
+      widthFraction: 0.64,
+      heightFraction: 0.96,
+    );
+    if (result == null) return;
+    final updated = acc.copyWith(
+      balancePrev: acc.balance,
+      balance: result.newBalanceCents,
+      updatedAt: DateTime.now(),
+      isDirty: true,
+    );
+    await _repo.update(updated);
+    if (!mounted) return;
+    setState(() {});
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(
+          'Solde ajusté à ${_fmtMoney(updated.balance, updated.currency)}',
+        ),
+      ),
+    );
   }
 
   Future<void> _setDefault(Account acc) async {
@@ -270,6 +298,8 @@ class _AccountPageState extends ConsumerState<AccountPage> {
                                 onEdit: () => _addOrEdit(existing: a),
                                 onDelete: () => _delete(a),
                                 onShare: () => _share(a),
+                                onAdjustBalance: () =>
+                                    _adjustBalance(a), // <— NEW
                                 accountLabel: a.code,
                                 balanceCents: a.balance,
                                 currency: a.currency,
@@ -286,6 +316,8 @@ class _AccountPageState extends ConsumerState<AccountPage> {
                                 onEdit: () => _addOrEdit(existing: a),
                                 onDelete: () => _delete(a),
                                 onShare: () => _share(a),
+                                onAdjustBalance: () =>
+                                    _adjustBalance(a), // <— NEW
                                 accountLabel: a.code,
                                 balanceCents: a.balance,
                                 currency: a.currency,

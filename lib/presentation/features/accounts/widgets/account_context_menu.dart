@@ -1,4 +1,4 @@
-// Context menu for account items with optional header and safe actions.
+// Context menu for account items with optional header, adjust-balance action and safe deletes.
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:money_pulse/presentation/shared/formatters.dart';
@@ -12,6 +12,7 @@ Future<void> showAccountContextMenu(
   required VoidCallback onEdit,
   required VoidCallback onDelete,
   required VoidCallback onShare,
+  VoidCallback? onAdjustBalance, // <— NEW
   bool confirmDelete = true,
   String? accountLabel,
   int? balanceCents,
@@ -53,6 +54,14 @@ Future<void> showAccountContextMenu(
         title: Text('Voir les détails'),
       ),
     ),
+    if (onAdjustBalance != null)
+      const PopupMenuItem(
+        value: 'adjust',
+        child: ListTile(
+          leading: Icon(Icons.toll_outlined),
+          title: Text('Ajuster le solde'),
+        ),
+      ),
     if (canMakeDefault)
       const PopupMenuItem(
         value: 'default',
@@ -102,6 +111,9 @@ Future<void> showAccountContextMenu(
   switch (result) {
     case 'view':
       onView();
+      break;
+    case 'adjust':
+      onAdjustBalance?.call();
       break;
     case 'default':
       onMakeDefault?.call();
