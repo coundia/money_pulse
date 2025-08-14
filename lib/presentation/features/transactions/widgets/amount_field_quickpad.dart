@@ -1,39 +1,35 @@
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:money_pulse/presentation/shared/formatters.dart';
 
-/// A money input with a quick-amount pad (chips).
-///
-/// - TextFormField to type an amount
-/// - Horizontal quick chips (e.g., 2000, 5000, 10000…) to add/replace
-/// - Optional lock toggle to keep amount = sum(lines) (readOnly when locked)
-/// - Shows a live currency preview using Formatters.amountFromCents
-///
-/// Amounts in `quickUnits` are *units* (e.g., 2000), not cents.
-/// The field text is also in units; preview shows formatted currency.
+/// Champ montant avec mini-pad compact.
+/// - Pas de clavier système (édition via boutons).
+/// - Ligne de montants rapides (pliable) + bouton "…" pour pad complet en sheet.
+/// - Toggle Ajouter/Remplacer très discret.
+/// - Aperçu monnaie compact en suffixe.
+/// - Verrouillage géré (lecture seule + message).
 class AmountFieldQuickPad extends StatefulWidget {
   final TextEditingController controller;
 
-  /// Quick amounts in *units* (e.g., [2000, 5000, 10000]).
+  /// Montants rapides en *unités* (ex: [2000, 5000, 10000]).
   final List<int> quickUnits;
 
-  /// Called whenever the text changes.
+  /// Callback sur changement de texte.
   final VoidCallback? onChanged;
 
-  /// When true, the field is readOnly and shows a lock icon.
+  /// Si true, le champ est verrouillé (lecture seule) et le pad est masqué.
   final bool lockToItems;
 
-  /// Toggle for the lock state. If null, the lock icon is hidden.
+  /// Toggle de verrouillage (si null, l’icône lock est cachée).
   final ValueChanged<bool>? onToggleLock;
 
-  /// If true, only show the quick pad when the field has focus.
-  final bool showQuickPadOnFocusOnly;
-
-  /// Field label.
+  /// Libellé du champ.
   final String labelText;
 
-  /// Request focus automatically when the widget appears (if not locked).
-  final bool autofocus;
+  /// Démarrer en mode **compact** (pad replié). Déplié automatiquement si false.
+  final bool compact;
+
+  /// Démarrer le pad en **déplié** même si `compact:true`.
+  final bool startExpanded;
 
   const AmountFieldQuickPad({
     super.key,
@@ -42,9 +38,9 @@ class AmountFieldQuickPad extends StatefulWidget {
     this.onChanged,
     this.lockToItems = false,
     this.onToggleLock,
-    this.showQuickPadOnFocusOnly = true,
     this.labelText = 'Montant',
-    this.autofocus = true,
+    this.compact = true,
+    this.startExpanded = false,
   });
 
   @override
@@ -52,67 +48,38 @@ class AmountFieldQuickPad extends StatefulWidget {
 }
 
 class _AmountFieldQuickPadState extends State<AmountFieldQuickPad> {
-  late final FocusNode _focusNode;
-  bool _hasFocus = false;
+  final FocusNode _nofocus = FocusNode(canRequestFocus: false);
 
-  /// Tap mode: true = add to current, false = replace current
+  /// true = Ajouter ; false = Remplacer
   bool _addMode = true;
+
+  /// Pad replié/déplié
+  late bool _expanded;
 
   @override
   void initState() {
     super.initState();
-    _focusNode = FocusNode();
-    _focusNode.canRequestFocus =
-        !widget.lockToItems; // bloque la prise de focus si verrouillé
-    _focusNode.addListener(() {
-      if (!mounted) return;
-      setState(() => _hasFocus = _focusNode.hasFocus);
-    });
-
-    // Ensure focus after first frame (more reliable in sheets/drawers)
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (!mounted) return;
-      if (widget.autofocus && !widget.lockToItems) {
-        _focusNode.requestFocus();
-      }
-    });
+    _expanded =
+        !widget.compact || (widget.startExpanded && !widget.lockToItems);
   }
 
   @override
   void didUpdateWidget(covariant AmountFieldQuickPad oldWidget) {
     super.didUpdateWidget(oldWidget);
-    if (oldWidget.lockToItems != widget.lockToItems) {
-      // Met à jour la capacité à prendre le focus
-      _focusNode.canRequestFocus = !widget.lockToItems;
-
-      if (widget.lockToItems) {
-        // Si on vient de verrouiller alors que le champ avait le focus, on le retire
-        if (_focusNode.hasFocus) {
-          _focusNode.unfocus();
-        }
-      } else {
-        // Si on déverrouille et que l'autofocus est souhaité, on peut redemander le focus
-        if (widget.autofocus) {
-          WidgetsBinding.instance.addPostFrameCallback((_) {
-            if (!mounted) return;
-            _focusNode.requestFocus();
-          });
-        }
-      }
-      // Forcer le rebuild pour que le quick pad suive l'état
-      if (mounted) setState(() {});
+    // Si on passe en lock, on replie le pad.
+    if (!oldWidget.lockToItems && widget.lockToItems) {
+      _expanded = false;
     }
   }
 
   @override
   void dispose() {
-    _focusNode.dispose();
+    _nofocus.dispose();
     super.dispose();
   }
 
-  // ----- parsing/formatting helpers ------------------------------------------
+  // ----------------- parsing / preview -----------------
   String _sanitize(String v) {
-    // Remove spaces (incl. NBSP), normalize comma to dot; collapse multiple dots
     var s = v
         .trim()
         .replaceAll(RegExp(r'[\u00A0\u202F\s]'), '')
@@ -135,6 +102,7 @@ class _AmountFieldQuickPadState extends State<AmountFieldQuickPad> {
   String get _preview =>
       Formatters.amountFromCents(_toCents(widget.controller.text));
 
+  // ----------------- actions -----------------
   void _setUnits(int units) {
     widget.controller.text = units.toString();
     widget.onChanged?.call();
@@ -150,19 +118,15 @@ class _AmountFieldQuickPadState extends State<AmountFieldQuickPad> {
     setState(() {});
   }
 
-  void _onTapChip(int units) {
+  void _tapAmount(int units) {
     if (widget.lockToItems) return;
-    if (_addMode) {
-      _addUnits(units);
-    } else {
-      _setUnits(units);
-    }
+    _addMode ? _addUnits(units) : _setUnits(units);
   }
 
   void _showLockedHint() {
-    final messenger = ScaffoldMessenger.maybeOf(context);
-    messenger?.hideCurrentSnackBar();
-    messenger?.showSnackBar(
+    final m = ScaffoldMessenger.maybeOf(context);
+    m?.hideCurrentSnackBar();
+    m?.showSnackBar(
       const SnackBar(
         content: Text('Montant verrouillé sur le total des articles'),
         duration: Duration(milliseconds: 1200),
@@ -170,185 +134,312 @@ class _AmountFieldQuickPadState extends State<AmountFieldQuickPad> {
     );
   }
 
+  // ----------------- UI helpers -----------------
+  Widget _previewBadge() {
+    return Padding(
+      padding: const EdgeInsets.only(right: 4),
+      child: Text(
+        _preview,
+        style: Theme.of(context).textTheme.bodySmall,
+        overflow: TextOverflow.ellipsis,
+      ),
+    );
+  }
+
+  Widget? _buildSuffix() {
+    final buttons = <Widget>[_previewBadge()];
+
+    if (widget.onToggleLock != null) {
+      buttons.add(
+        Tooltip(
+          message: widget.lockToItems
+              ? 'Verrouillé sur total articles'
+              : 'Verrouiller',
+          child: IconButton(
+            iconSize: 20,
+            padding: const EdgeInsets.symmetric(horizontal: 6),
+            constraints: const BoxConstraints.tightFor(width: 36, height: 36),
+            icon: Icon(widget.lockToItems ? Icons.lock : Icons.lock_open),
+            onPressed: () => widget.onToggleLock?.call(!widget.lockToItems),
+          ),
+        ),
+      );
+    }
+
+    // Toggle ajouter/remplacer (compact)
+    buttons.add(
+      Tooltip(
+        message: _addMode ? 'Ajouter' : 'Remplacer',
+        child: IconButton(
+          iconSize: 20,
+          padding: const EdgeInsets.symmetric(horizontal: 6),
+          constraints: const BoxConstraints.tightFor(width: 36, height: 36),
+          onPressed: widget.lockToItems
+              ? null
+              : () => setState(() => _addMode = !_addMode),
+          icon: Icon(_addMode ? Icons.add : Icons.swap_horiz),
+        ),
+      ),
+    );
+
+    // Toggle afficher/masquer pad
+    buttons.add(
+      Tooltip(
+        message: _expanded ? 'Masquer le pavé' : 'Afficher le pavé',
+        child: IconButton(
+          iconSize: 20,
+          padding: const EdgeInsets.symmetric(horizontal: 6),
+          constraints: const BoxConstraints.tightFor(width: 36, height: 36),
+          onPressed: widget.lockToItems
+              ? null
+              : () => setState(() => _expanded = !_expanded),
+          icon: Icon(_expanded ? Icons.keyboard_hide : Icons.keyboard),
+        ),
+      ),
+    );
+
+    // Effacer
+    if (widget.controller.text.isNotEmpty && !widget.lockToItems) {
+      buttons.add(
+        Tooltip(
+          message: 'Effacer',
+          child: IconButton(
+            iconSize: 20,
+            padding: const EdgeInsets.symmetric(horizontal: 6),
+            constraints: const BoxConstraints.tightFor(width: 36, height: 36),
+            onPressed: () {
+              widget.controller.clear();
+              widget.onChanged?.call();
+              setState(() {});
+            },
+            icon: const Icon(Icons.clear),
+          ),
+        ),
+      );
+    }
+
+    return Row(mainAxisSize: MainAxisSize.min, children: buttons);
+  }
+
+  ButtonStyle get _chipStyle => FilledButton.styleFrom(
+    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+    minimumSize: const Size(0, 36),
+    textStyle: Theme.of(context).textTheme.bodySmall,
+  );
+
+  Widget _chip(int units) {
+    final label = Formatters.amountFromCents(units * 100);
+    return Padding(
+      padding: const EdgeInsets.only(right: 6),
+      child: FilledButton.tonal(
+        onPressed: widget.lockToItems ? null : () => _tapAmount(units),
+        onLongPress: widget.lockToItems ? null : () => _setUnits(units),
+        child: Text(label, maxLines: 1, overflow: TextOverflow.ellipsis),
+      ),
+    );
+  }
+
+  void _openFullPad() {
+    if (widget.lockToItems) {
+      _showLockedHint();
+      return;
+    }
+    showModalBottomSheet<void>(
+      context: context,
+      useSafeArea: true,
+      showDragHandle: true,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+      ),
+      builder: (ctx) {
+        return Padding(
+          padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                children: [
+                  for (final u in widget.quickUnits)
+                    FilledButton.tonal(
+                      style: _chipStyle,
+                      onPressed: () {
+                        Navigator.pop(ctx);
+                        _tapAmount(u);
+                      },
+                      onLongPress: () {
+                        Navigator.pop(ctx);
+                        _setUnits(u);
+                      },
+                      child: Text(
+                        Formatters.amountFromCents(u * 100),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                  FilledButton.tonal(
+                    style: _chipStyle,
+                    onPressed: () {
+                      Navigator.pop(ctx);
+                      final c = _toCents(widget.controller.text) / 100.0;
+                      _setUnits((c * 2).round());
+                    },
+                    child: const Text('×2'),
+                  ),
+                  OutlinedButton(
+                    style: OutlinedButton.styleFrom(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 12,
+                        vertical: 8,
+                      ),
+                      minimumSize: const Size(0, 36),
+                      textStyle: Theme.of(context).textTheme.bodySmall,
+                    ),
+                    onPressed: () {
+                      Navigator.pop(ctx);
+                      widget.controller.clear();
+                      widget.onChanged?.call();
+                      setState(() {});
+                    },
+                    child: const Text('Vider'),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 12),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  // ----------------- build -----------------
   @override
   Widget build(BuildContext context) {
-    // Masque le quick pad lorsqu'on est verrouillé,
-    // et sinon on suit la règle "showQuickPadOnFocusOnly".
-    final showQuickPad =
-        !widget.lockToItems &&
-        (widget.showQuickPadOnFocusOnly ? _hasFocus : true);
+    final showRow = _expanded && !widget.lockToItems;
+    // Si très compact voulu, n’afficher qu’un aperçu de 3 chips max
+    final visibleUnits = widget.compact && !_expanded
+        ? widget.quickUnits.take(3).toList()
+        : widget.quickUnits;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        Row(
-          children: [
-            Expanded(
-              child: TextFormField(
-                controller: widget.controller,
-                focusNode: _focusNode,
-                readOnly: widget.lockToItems,
-                enableInteractiveSelection: !widget.lockToItems,
-                autofocus: false, // focus handled in initState/didUpdateWidget
-                keyboardType: const TextInputType.numberWithOptions(
-                  decimal: true,
-                ),
-                inputFormatters: [
-                  FilteringTextInputFormatter.allow(
-                    RegExp(r'[0-9\.\,\u00A0\u202F\s]'),
-                  ),
-                ],
-                onTap: widget.lockToItems
-                    ? () {
-                        // Empêche toute interaction lorsqu'il est verrouillé
-                        _focusNode.unfocus();
-                        _showLockedHint();
-                      }
-                    : null,
-                onTapOutside: (_) {
-                  if (_focusNode.hasFocus) _focusNode.unfocus();
-                },
-                textAlign: TextAlign.center,
-                style: Theme.of(context).textTheme.headlineMedium,
-                decoration: InputDecoration(
-                  border: const OutlineInputBorder(),
-                  labelText: widget.labelText,
-                  helperText: 'Aperçu: $_preview',
-                  suffixIcon: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      if (widget.onToggleLock != null)
-                        Tooltip(
-                          message: widget.lockToItems
-                              ? 'Verrouillé sur total articles'
-                              : 'Déverrouiller',
-                          child: IconButton(
-                            icon: Icon(
-                              widget.lockToItems ? Icons.lock : Icons.lock_open,
-                            ),
-                            onPressed: () =>
-                                widget.onToggleLock?.call(!widget.lockToItems),
-                          ),
-                        ),
-                      if (widget.controller.text.isNotEmpty &&
-                          !widget.lockToItems)
-                        IconButton(
-                          tooltip: 'Effacer',
-                          icon: const Icon(Icons.clear),
-                          onPressed: () {
-                            widget.controller.clear();
-                            widget.onChanged?.call();
-                            setState(() {});
-                          },
-                        ),
-                    ],
-                  ),
-                ),
-                validator: (v) {
-                  if (v == null || v.trim().isEmpty) return 'Requis';
-                  if (_toCents(v) <= 0) return 'Montant invalide';
-                  return null;
-                },
-                onChanged: (_) {
-                  widget.onChanged?.call();
-                  setState(() {});
-                },
-                textInputAction: TextInputAction.done,
-              ),
+        // Champ (pas de clavier système)
+        TextFormField(
+          controller: widget.controller,
+          focusNode: _nofocus,
+          keyboardType: TextInputType.none, // pas de clavier
+          readOnly: true,
+          enableInteractiveSelection: false,
+          showCursor: false,
+          onTap: widget.lockToItems ? _showLockedHint : null,
+          textAlign: TextAlign.center,
+          style: Theme.of(context).textTheme.titleLarge, // un poil plus compact
+          decoration: InputDecoration(
+            border: const OutlineInputBorder(),
+            labelText: widget.labelText,
+            // pas de helperText pour gagner en hauteur
+            suffixIcon: _buildSuffix(),
+            suffixIconConstraints: const BoxConstraints(
+              minWidth: 0,
+              minHeight: 0,
             ),
-            const SizedBox(width: 8),
-            // Add/Replace mode switch
-            Tooltip(
-              message: _addMode ? 'Mode: Ajouter' : 'Mode: Remplacer',
-              child: InkResponse(
-                onTap: widget.lockToItems
-                    ? null
-                    : () => setState(() => _addMode = !_addMode),
-                radius: 24,
-                child: CircleAvatar(
-                  radius: 18,
-                  child: Icon(_addMode ? Icons.add : Icons.swap_horiz),
-                ),
-              ),
+            contentPadding: const EdgeInsets.symmetric(
+              horizontal: 12,
+              vertical: 10,
             ),
-          ],
+          ),
+          validator: (v) {
+            if (v == null || v.trim().isEmpty) return 'Requis';
+            if (_toCents(v) <= 0) return 'Montant invalide';
+            return null;
+          },
         ),
 
-        // Quick pad (chips)
+        // Ligne de chips ultra-compacte + bouton "…"
         AnimatedSwitcher(
-          duration: const Duration(milliseconds: 180),
-          child: showQuickPad
+          duration: const Duration(milliseconds: 150),
+          child: (showRow || (widget.compact && !widget.lockToItems))
               ? Padding(
-                  padding: const EdgeInsets.only(top: 8),
-                  child: SingleChildScrollView(
-                    scrollDirection: Axis.horizontal,
-                    child: Row(
-                      children: [
-                        // Main quick chips with long press to "replace"
-                        ...widget.quickUnits.map(
-                          (u) => Padding(
-                            padding: const EdgeInsets.only(right: 6),
-                            child: Tooltip(
-                              message: _addMode
-                                  ? 'Ajouter $u (appui long = remplacer)'
-                                  : 'Remplacer par $u (appui long = idem)',
-                              child: InkWell(
-                                borderRadius: BorderRadius.circular(24),
-                                onTap: widget.lockToItems
-                                    ? null
-                                    : () => _onTapChip(u),
-                                onLongPress: widget.lockToItems
-                                    ? null
-                                    : () => _setUnits(u),
-                                child: Chip(
-                                  avatar: const Icon(Icons.payments, size: 18),
-                                  label: Text(_formatUnits(u)),
-                                  materialTapTargetSize:
-                                      MaterialTapTargetSize.shrinkWrap,
+                  padding: const EdgeInsets.only(top: 6),
+                  child: Row(
+                    children: [
+                      // Scroll horizontal compact
+                      Expanded(
+                        child: SingleChildScrollView(
+                          scrollDirection: Axis.horizontal,
+                          child: Row(
+                            children: [
+                              for (final u in visibleUnits) _chip(u),
+                              // Bouton "…" vers pad complet
+                              if (widget.compact)
+                                Padding(
+                                  padding: const EdgeInsets.only(right: 6),
+                                  child: OutlinedButton(
+                                    style: OutlinedButton.styleFrom(
+                                      minimumSize: const Size(0, 36),
+                                      padding: const EdgeInsets.symmetric(
+                                        horizontal: 10,
+                                        vertical: 8,
+                                      ),
+                                      visualDensity: VisualDensity.compact,
+                                      textStyle: Theme.of(
+                                        context,
+                                      ).textTheme.bodySmall,
+                                    ),
+                                    onPressed: widget.lockToItems
+                                        ? null
+                                        : _openFullPad,
+                                    child: const Text('…'),
+                                  ),
                                 ),
-                              ),
-                            ),
+                              if (!widget.compact) ...[
+                                FilledButton.tonal(
+                                  style: _chipStyle,
+                                  onPressed: widget.lockToItems
+                                      ? null
+                                      : () {
+                                          final c =
+                                              _toCents(widget.controller.text) /
+                                              100.0;
+                                          _setUnits((c * 2).round());
+                                        },
+                                  child: const Text('×2'),
+                                ),
+                                const SizedBox(width: 6),
+                                OutlinedButton(
+                                  style: OutlinedButton.styleFrom(
+                                    minimumSize: const Size(0, 36),
+                                    padding: const EdgeInsets.symmetric(
+                                      horizontal: 10,
+                                      vertical: 8,
+                                    ),
+                                    textStyle: Theme.of(
+                                      context,
+                                    ).textTheme.bodySmall,
+                                  ),
+                                  onPressed: widget.lockToItems
+                                      ? null
+                                      : () {
+                                          widget.controller.clear();
+                                          widget.onChanged?.call();
+                                          setState(() {});
+                                        },
+                                  child: const Text('Vider'),
+                                ),
+                              ],
+                            ],
                           ),
                         ),
-
-                        // Helpers
-                        Padding(
-                          padding: const EdgeInsets.only(right: 6),
-                          child: ActionChip(
-                            label: const Text('×2'),
-                            onPressed: widget.lockToItems
-                                ? null
-                                : () {
-                                    final c = _toCents(widget.controller.text);
-                                    final nextUnits = ((c / 100.0) * 2).round();
-                                    _setUnits(nextUnits);
-                                  },
-                          ),
-                        ),
-                        ActionChip(
-                          label: const Text('Vider'),
-                          onPressed: widget.lockToItems
-                              ? null
-                              : () {
-                                  widget.controller.clear();
-                                  widget.onChanged?.call();
-                                  setState(() {});
-                                },
-                        ),
-                      ],
-                    ),
+                      ),
+                    ],
                   ),
                 )
               : const SizedBox.shrink(),
         ),
       ],
     );
-  }
-
-  String _formatUnits(int units) {
-    // Render chips with your standard formatter (e.g., "2 000 XOF").
-    // Preview already shows currency; keeping full format helps consistency.
-    final cents = units * 100;
-    return Formatters.amountFromCents(cents);
   }
 }

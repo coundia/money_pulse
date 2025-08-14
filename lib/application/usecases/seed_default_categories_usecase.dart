@@ -21,7 +21,8 @@ class SeedDefaultCategoriesUseCase {
       {'code': 'Internet', 'type': 'DEBIT'},
       {'code': 'Eau', 'type': 'DEBIT'},
       {'code': 'Electricité', 'type': 'DEBIT'},
-      {'code': 'Dons', 'type': 'CREDIT'},
+      {'code': 'Dons', 'type': 'DEBIT'},
+      {'code': 'Achat', 'type': 'DEBIT'},
       //entree
       {'code': 'salaire', 'type': 'CREDIT'},
       {'code': 'remboursement', 'type': 'CREDIT'},

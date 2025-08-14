@@ -158,6 +158,58 @@ class _TransactionQuickAddSheetState
     _categoryCtrl.text = c.code;
   }
 
+  /// Heuristique pour déterminer la catégorie par défaut lorsque des produits
+  /// sont présents : VENTE pour CREDIT, ACHAT pour DEBIT (si existante).
+  Category? _findDefaultCategoryForProducts() {
+    final desiredType = _isDebit ? 'DEBIT' : 'CREDIT';
+    final preferCodes = _isDebit
+        ? <String>['ACHAT', 'ACHATS', 'PURCHASE', 'PURCHASES']
+        : <String>['VENTE', 'VENTES', 'SALE', 'SALES'];
+
+    // 1) Match exact du code
+    final upperList = _allCategories
+        .where((c) => c.typeEntry == desiredType)
+        .toList(growable: false);
+    for (final pref in preferCodes) {
+      final hit = upperList.firstWhere(
+        (c) => (c.code).toUpperCase() == pref,
+        orElse: () => null as Category,
+      );
+      if (hit != null) return hit;
+    }
+
+    // 2) Match par mot-clé dans code/description
+    final containsAny = _isDebit
+        ? <String>['ACHAT', 'PURCHASE', 'ACHATS']
+        : <String>['VENTE', 'SALE', 'VENTES', 'SALES'];
+    for (final c in upperList) {
+      final codeU = c.code.toUpperCase();
+      final descU = (c.description ?? '').toUpperCase();
+      if (containsAny.any((k) => codeU.contains(k) || descU.contains(k))) {
+        return c;
+      }
+    }
+
+    // 3) Fallback : première catégorie du type (si vraiment rien)
+    return upperList.isNotEmpty ? upperList.first : null;
+  }
+
+  /// Applique la catégorie par défaut liée aux produits (si trouvée).
+  void _autoSelectCategoryForProducts() {
+    final cat = _findDefaultCategoryForProducts();
+    if (cat == null) return;
+    // si déjà sélectionnée, ne rien faire
+    if (_selectedCategory?.id == cat.id) return;
+
+    setState(() {
+      _setCategoryInternal(cat);
+    });
+
+    // Optionnel : petit feedback
+    final label = _isDebit ? 'Achat' : 'Vente';
+    _snack('Catégorie $label sélectionnée automatiquement');
+  }
+
   Future<void> _onSelectCompany(String? id) async {
     setState(() {
       _companyId = id;
@@ -234,9 +286,13 @@ class _TransactionQuickAddSheetState
         _items
           ..clear()
           ..addAll(parsed);
-        _lockAmountToItems = true;
+        _lockAmountToItems = _items.isNotEmpty;
       });
-      _syncAmountFromItems();
+
+      if (_items.isNotEmpty) {
+        _syncAmountFromItems();
+        _autoSelectCategoryForProducts(); // <<< auto catégorie ici
+      }
     }
   }
 
@@ -315,6 +371,9 @@ class _TransactionQuickAddSheetState
       _lockAmountToItems = true;
     });
     _syncAmountFromItems();
+
+    // Auto catégorie après ajout d'un produit
+    _autoSelectCategoryForProducts();
 
     _snack('Produit ajouté et ligne insérée');
   }
@@ -494,7 +553,6 @@ class _TransactionQuickAddSheetState
                               });
                             },
                       onChanged: () => setState(() {}),
-                      autofocus: true, // <— ensure focus when the sheet opens
                     ),
 
                     const SizedBox(height: 12),
@@ -502,7 +560,7 @@ class _TransactionQuickAddSheetState
                       controller: _categoryCtrl,
                       initialSelected: _selectedCategory,
                       optionsBuilder:
-                          _filteredCategories, // already filtered by _isDebit
+                          _filteredCategories, // déjà filtrées par _isDebit
                       onSelected: (c) =>
                           setState(() => _setCategoryInternal(c)),
                       onClear: () => setState(() => _clearCategoryInternal()),
@@ -510,7 +568,7 @@ class _TransactionQuickAddSheetState
                       emptyHint: _isDebit
                           ? 'Aucune catégorie Débit'
                           : 'Aucune catégorie Crédit',
-                      typeEntry: _isDebit ? 'DEBIT' : 'CREDIT', // <<< NEW
+                      typeEntry: _isDebit ? 'DEBIT' : 'CREDIT',
                     ),
 
                     const SizedBox(height: 12),
@@ -560,7 +618,7 @@ class _TransactionQuickAddSheetState
           bottomSheet: BottomBar(
             onCancel: () => Navigator.of(context).maybePop(false),
             onSave: _save,
-            primaryLabel: primaryLabel, // NEW label
+            primaryLabel: primaryLabel,
           ),
         ),
       ),
