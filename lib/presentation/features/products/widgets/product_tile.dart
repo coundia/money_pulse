@@ -1,4 +1,3 @@
-// lib/presentation/features/products/widgets/product_tile.dart
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 
@@ -6,9 +5,10 @@ class ProductTile extends StatelessWidget {
   final String title;
   final String? subtitle;
   final int priceCents;
+  final int? stockQty; // ✅ NEW: display stock on the list
   final VoidCallback? onTap;
 
-  /// Actions possibles :
+  /// Actions via long-press:
   /// 'view' | 'edit' | 'delete' | 'share' | 'adjust'
   final Future<void> Function(String action)? onMenuAction;
 
@@ -17,6 +17,7 @@ class ProductTile extends StatelessWidget {
     required this.title,
     this.subtitle,
     required this.priceCents,
+    this.stockQty,
     this.onTap,
     this.onMenuAction,
   });
@@ -26,66 +27,107 @@ class ProductTile extends StatelessWidget {
     return NumberFormat.currency(symbol: '', decimalDigits: 0).format(v);
   }
 
+  Future<void> _showContextMenu(BuildContext context, Offset globalPos) async {
+    if (onMenuAction == null) return;
+    final overlay = Overlay.of(context).context.findRenderObject() as RenderBox;
+    final result = await showMenu<String>(
+      context: context,
+      position: RelativeRect.fromLTRB(
+        globalPos.dx,
+        globalPos.dy,
+        overlay.size.width - globalPos.dx,
+        overlay.size.height - globalPos.dy,
+      ),
+      items: const [
+        PopupMenuItem(
+          value: 'view',
+          child: ListTile(
+            leading: Icon(Icons.visibility_outlined),
+            title: Text('Voir'),
+          ),
+        ),
+        PopupMenuItem(
+          value: 'edit',
+          child: ListTile(
+            leading: Icon(Icons.edit_outlined),
+            title: Text('Modifier'),
+          ),
+        ),
+        PopupMenuItem(
+          value: 'adjust',
+          child: ListTile(
+            leading: Icon(Icons.tune),
+            title: Text('Ajuster stock'),
+          ),
+        ),
+        PopupMenuItem(
+          value: 'delete',
+          child: ListTile(
+            leading: Icon(Icons.delete_outline),
+            title: Text('Supprimer'),
+          ),
+        ),
+        PopupMenuDivider(),
+        PopupMenuItem(
+          value: 'share',
+          child: ListTile(
+            leading: Icon(Icons.ios_share),
+            title: Text('Partager'),
+          ),
+        ),
+      ],
+    );
+    if (result != null) {
+      await onMenuAction!(result);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
-    return ListTile(
-      onTap: onTap,
-      leading: CircleAvatar(
-        child: Text(
-          (title.isNotEmpty ? title.characters.first : '?').toUpperCase(),
-        ),
-      ),
-      title: Text(title, maxLines: 1, overflow: TextOverflow.ellipsis),
-      subtitle: (subtitle == null || subtitle!.isEmpty)
-          ? null
-          : Text(subtitle!),
-      trailing: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Text(_money(priceCents)),
-          if (onMenuAction != null)
-            PopupMenuButton<String>(
-              onSelected: (v) async => onMenuAction!(v),
-              itemBuilder: (_) => const [
-                PopupMenuItem(
-                  value: 'view',
-                  child: ListTile(
-                    leading: Icon(Icons.visibility_outlined),
-                    title: Text('Voir'),
-                  ),
-                ),
-                PopupMenuItem(
-                  value: 'edit',
-                  child: ListTile(
-                    leading: Icon(Icons.edit_outlined),
-                    title: Text('Modifier'),
-                  ),
-                ),
-                PopupMenuItem(
-                  value: 'adjust',
-                  child: ListTile(
-                    leading: Icon(Icons.tune),
-                    title: Text('Ajuster stock'),
-                  ),
-                ),
-                PopupMenuItem(
-                  value: 'delete',
-                  child: ListTile(
-                    leading: Icon(Icons.delete_outline),
-                    title: Text('Supprimer'),
-                  ),
-                ),
-                PopupMenuDivider(),
-                PopupMenuItem(
-                  value: 'share',
-                  child: ListTile(
-                    leading: Icon(Icons.ios_share),
-                    title: Text('Partager'),
-                  ),
-                ),
-              ],
+    final stock = stockQty;
+    final hasStock = stock != null;
+    final positive = (stock ?? 0) > 0;
+
+    final stockChip = hasStock
+        ? Container(
+            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+            decoration: BoxDecoration(
+              color: (positive
+                  ? Colors.green.withOpacity(.12)
+                  : Colors.red.withOpacity(.12)),
+              borderRadius: BorderRadius.circular(10),
             ),
-        ],
+            child: Text(
+              positive ? 'Stock: $stock' : 'Rupture',
+              style: TextStyle(
+                color: positive ? Colors.green.shade800 : Colors.red.shade700,
+                fontWeight: FontWeight.w600,
+                fontSize: 12,
+              ),
+            ),
+          )
+        : const SizedBox.shrink();
+
+    return GestureDetector(
+      onLongPressStart: (details) =>
+          _showContextMenu(context, details.globalPosition),
+      child: ListTile(
+        onTap: onTap,
+        leading: CircleAvatar(
+          child: Text(
+            (title.isNotEmpty ? title.characters.first : '?').toUpperCase(),
+          ),
+        ),
+        title: Text(title, maxLines: 1, overflow: TextOverflow.ellipsis),
+        subtitle: (subtitle == null || subtitle!.isEmpty)
+            ? null
+            : Text(subtitle!),
+        // trailing kept compact so it won't overflow
+        trailing: Wrap(
+          spacing: 10,
+          crossAxisAlignment: WrapCrossAlignment.center,
+          children: [if (hasStock) stockChip, Text(_money(priceCents))],
+        ),
       ),
     );
   }

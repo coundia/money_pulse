@@ -17,7 +17,6 @@ import 'widgets/product_stock_adjust_panel.dart';
 
 import '../stock/providers/stock_level_repo_provider.dart'; // stockLevelRepoProvider
 import 'widgets/header_bar.dart';
-import 'widgets/stock_badge_overlay.dart';
 import 'filters/product_filters.dart';
 import 'filters/filters_sheet.dart';
 
@@ -338,39 +337,37 @@ class _ProductListPageState extends ConsumerState<ProductListPage> {
                           if ((p.description ?? '').isNotEmpty) p.description!,
                         ].join('  •  ');
 
-                        final stockBadge = (needsStock && stockMap != null)
+                        final stockQty = (needsStock && stockMap != null)
                             ? (stockMap[p.id] ?? 0)
                             : null;
 
-                        return StockBadgeOverlay(
-                          badgeValue: stockBadge,
-                          child: ProductTile(
-                            title: title,
-                            subtitle: sub.isEmpty ? null : sub,
-                            priceCents: p.defaultPrice,
-                            onTap: () => _view(p),
-                            onMenuAction: (action) async {
-                              await Future.delayed(Duration.zero);
-                              if (!mounted) return;
-                              switch (action) {
-                                case 'view':
-                                  await _view(p);
-                                  break;
-                                case 'edit':
-                                  await _addOrEdit(existing: p);
-                                  break;
-                                case 'adjust':
-                                  await _openAdjust(p);
-                                  break;
-                                case 'delete':
-                                  await _confirmDelete(p);
-                                  break;
-                                case 'share':
-                                  await _share(p);
-                                  break;
-                              }
-                            },
-                          ),
+                        return ProductTile(
+                          title: title,
+                          subtitle: sub.isEmpty ? null : sub,
+                          priceCents: p.defaultPrice,
+                          stockQty: stockQty,
+                          onTap: () => _view(p),
+                          onMenuAction: (action) async {
+                            await Future.delayed(Duration.zero);
+                            if (!mounted) return;
+                            switch (action) {
+                              case 'view':
+                                await _view(p);
+                                break;
+                              case 'edit':
+                                await _addOrEdit(existing: p);
+                                break;
+                              case 'adjust':
+                                await _openAdjust(p);
+                                break;
+                              case 'delete':
+                                await _confirmDelete(p);
+                                break;
+                              case 'share':
+                                await _share(p);
+                                break;
+                            }
+                          },
                         );
                       },
                     ),
