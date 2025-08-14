@@ -1,4 +1,4 @@
-// Bottom sheet to pick an account with adjust-balance action, creates an adjustment transaction, and links to Accounts page.
+// Bottom sheet to pick an account; supports balance adjustment (with transaction creation), refreshes UI/state, and auto-closes after success.
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:sqflite/sqflite.dart';
@@ -66,6 +66,18 @@ Future<Account?> showAccountPickerSheet({
                   ),
                 );
               }
+
+              all.sort((a, b) {
+                final da =
+                    a.updatedAt ??
+                    a.createdAt ??
+                    DateTime.fromMillisecondsSinceEpoch(0);
+                final db =
+                    b.updatedAt ??
+                    b.createdAt ??
+                    DateTime.fromMillisecondsSinceEpoch(0);
+                return db.compareTo(da);
+              });
 
               return ConstrainedBox(
                 constraints: BoxConstraints(
@@ -186,6 +198,10 @@ Future<Account?> showAccountPickerSheet({
                                             ),
                                           ),
                                         );
+                                      }
+
+                                      if (Navigator.of(ctx).canPop()) {
+                                        Navigator.of(ctx).pop();
                                       }
                                     } catch (e) {
                                       if (context.mounted) {

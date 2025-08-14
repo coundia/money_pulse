@@ -1,4 +1,4 @@
-// POS product grid tile with price, stock badge, and acontext menu for quick actions.
+// POS product grid tile with price, stock badge and context menu for quick actions.
 import 'package:flutter/material.dart';
 import 'package:money_pulse/presentation/shared/formatters.dart';
 
@@ -7,8 +7,8 @@ class PosProductTile extends StatelessWidget {
   final String? subtitle;
   final int priceCents;
   final int? stockQty;
-  final VoidCallback? onTap; // add 1 to cart
-  final VoidCallback? onLongPress; // open qty chooser drawer
+  final VoidCallback? onTap;
+  final VoidCallback? onLongPress;
   final Future<void> Function(String action)? onMenuAction;
 
   const PosProductTile({
@@ -105,7 +105,6 @@ class PosProductTile extends StatelessWidget {
           padding: const EdgeInsets.all(10),
           child: Column(
             children: [
-              // header row: avatar + stock + price
               Row(
                 children: [
                   CircleAvatar(
@@ -124,7 +123,6 @@ class PosProductTile extends StatelessWidget {
                 ],
               ),
               const SizedBox(height: 8),
-              // title
               Align(
                 alignment: Alignment.centerLeft,
                 child: Text(
@@ -147,7 +145,6 @@ class PosProductTile extends StatelessWidget {
                 ),
               ],
               const Spacer(),
-              // primary action
               SizedBox(
                 width: double.infinity,
                 child: FilledButton.icon(
