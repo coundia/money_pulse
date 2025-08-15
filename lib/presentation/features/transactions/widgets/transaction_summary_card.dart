@@ -146,6 +146,11 @@ class TransactionSummaryCard extends StatelessWidget {
               padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
               child: Column(
                 children: [
+                  SummaryQuickActions(
+                    onAddExpense: onAddExpense,
+                    onAddIncome: onAddIncome,
+                  ),
+                  const SizedBox(height: 10),
                   SummaryPeriodHeader(
                     label: periodLabel,
                     onPrev: () {
@@ -236,12 +241,6 @@ class TransactionSummaryCard extends StatelessWidget {
                         ],
                       );
                     },
-                  ),
-
-                  const SizedBox(height: 10),
-                  SummaryQuickActions(
-                    onAddExpense: onAddExpense,
-                    onAddIncome: onAddIncome,
                   ),
                 ],
               ),
