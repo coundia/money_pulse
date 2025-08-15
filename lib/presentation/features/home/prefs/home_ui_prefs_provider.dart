@@ -20,7 +20,7 @@ class HomeUiPrefs {
     return HomeUiPrefs(
       showBottomNav: map['showBottomNav'] is bool
           ? map['showBottomNav'] as bool
-          : true,
+          : false,
     );
   }
 }
