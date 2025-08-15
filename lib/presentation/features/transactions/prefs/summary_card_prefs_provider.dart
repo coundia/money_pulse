@@ -22,8 +22,8 @@ class SummaryCardPrefs {
     showQuickActions: true,
     showExpenseButton: true,
     showIncomeButton: true,
-    showPeriodHeader: true,
-    showMetrics: true,
+    showPeriodHeader: false,
+    showMetrics: false,
   );
 
   SummaryCardPrefs copyWith({

@@ -17,7 +17,7 @@ class SummaryCardPrefsPanel extends ConsumerWidget {
         child: ListView(
           children: [
             Text(
-              'Personnaliser',
+              'Personnalisation',
               style: Theme.of(context).textTheme.titleLarge,
             ),
             const SizedBox(height: 12),

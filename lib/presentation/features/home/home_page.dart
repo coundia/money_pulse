@@ -1,3 +1,4 @@
+// Home page with bottom navigation visibility preference and interface right-drawer panel.
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -33,6 +34,9 @@ import 'widgets/period_picker_sheet.dart';
 import 'widgets/share_account_dialog.dart';
 import 'package:money_pulse/presentation/shared/formatters.dart';
 
+import 'prefs/home_ui_prefs_provider.dart';
+import 'prefs/home_ui_prefs_panel.dart';
+
 class HomePage extends ConsumerStatefulWidget {
   const HomePage({super.key});
 
@@ -46,7 +50,6 @@ class _HomePageState extends ConsumerState<HomePage> {
   @override
   void initState() {
     super.initState();
-    // Warm up data on launch
     Future.microtask(() async {
       await ref.read(transactionsProvider.notifier).load();
       await ref.read(categoriesProvider.notifier).load();
@@ -111,7 +114,7 @@ class _HomePageState extends ConsumerState<HomePage> {
     await showShareAccountDialog(context: context, acc: acc);
   }
 
-  Future<void> openPrefs() async {
+  Future<void> openSummaryPrefs() async {
     await showRightDrawer(
       context,
       child: const SummaryCardPrefsPanel(),
@@ -120,8 +123,16 @@ class _HomePageState extends ConsumerState<HomePage> {
     );
   }
 
+  Future<void> openUiPrefs() async {
+    await showRightDrawer(
+      context,
+      child: const HomeUiPrefsPanel(),
+      widthFraction: 0.86,
+      heightFraction: 1.0,
+    );
+  }
+
   void _onDestinationSelected(int v) {
-    // Simple tab switcher
     if (!mounted) return;
     setState(() => pageIdx = v);
   }
@@ -129,6 +140,7 @@ class _HomePageState extends ConsumerState<HomePage> {
   @override
   Widget build(BuildContext context) {
     final accAsync = ref.watch(selectedAccountProvider);
+    final uiPrefs = ref.watch(homeUiPrefsProvider);
 
     return Scaffold(
       appBar: AppBar(
@@ -243,12 +255,14 @@ class _HomePageState extends ConsumerState<HomePage> {
                       MaterialPageRoute(builder: (_) => const SettingsPage()),
                     );
                     break;
-
                   case 'personnalisation':
                     if (!mounted) break;
-                    await openPrefs();
+                    await openSummaryPrefs();
                     break;
-
+                  case 'ui':
+                    if (!mounted) break;
+                    await openUiPrefs();
+                    break;
                   case 'manageCategories':
                     if (!mounted) break;
                     await Navigator.of(context).push(
@@ -344,8 +358,15 @@ class _HomePageState extends ConsumerState<HomePage> {
                 PopupMenuItem(
                   value: 'personnalisation',
                   child: ListTile(
-                    leading: Icon(Icons.settings),
+                    leading: Icon(Icons.dashboard_customize),
                     title: Text('Personnalisation'),
+                  ),
+                ),
+                PopupMenuItem(
+                  value: 'ui',
+                  child: ListTile(
+                    leading: Icon(Icons.tune),
+                    title: Text('Interface'),
                   ),
                 ),
                 PopupMenuItem(
@@ -361,23 +382,36 @@ class _HomePageState extends ConsumerState<HomePage> {
       ),
       body: IndexedStack(
         index: pageIdx,
-        // Keep state of each tab
         children: const [TransactionListPage(), PosPage(), SettingsPage()],
       ),
-
-      bottomNavigationBar: NavigationBar(
-        labelBehavior: NavigationDestinationLabelBehavior.onlyShowSelected,
-        selectedIndex: pageIdx, // <-- highlight current tab
-        onDestinationSelected: _onDestinationSelected,
-        destinations: const [
-          NavigationDestination(
-            icon: Icon(Icons.list_alt),
-            label: 'Transactions',
-          ),
-          NavigationDestination(icon: Icon(Icons.point_of_sale), label: 'POS'),
-          NavigationDestination(icon: Icon(Icons.person), label: 'Profil'),
-        ],
+      bottomNavigationBar: uiPrefs.showBottomNav
+          ? NavigationBar(
+              labelBehavior:
+                  NavigationDestinationLabelBehavior.onlyShowSelected,
+              selectedIndex: pageIdx,
+              onDestinationSelected: _onDestinationSelected,
+              destinations: const [
+                NavigationDestination(
+                  icon: Icon(Icons.list_alt),
+                  label: 'Transactions',
+                ),
+                NavigationDestination(
+                  icon: Icon(Icons.point_of_sale),
+                  label: 'POS',
+                ),
+                NavigationDestination(
+                  icon: Icon(Icons.person),
+                  label: 'Profil',
+                ),
+              ],
+            )
+          : null,
+      floatingActionButton: FloatingActionButton.extended(
+        onPressed: _openQuickAdd,
+        icon: const Icon(Icons.add),
+        label: const Text('Saisie rapide'),
       ),
+      floatingActionButtonLocation: FloatingActionButtonLocation.endFloat,
     );
   }
 }
