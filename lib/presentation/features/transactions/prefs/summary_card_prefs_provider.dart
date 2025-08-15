@@ -33,11 +33,11 @@ class SummaryCardPrefs {
     showExpenseButton: true,
     showIncomeButton: true,
     showNavShortcuts: true,
-    showNavTransactionsButton: true,
+    showNavTransactionsButton: false,
     showNavPosButton: true,
-    showNavSettingsButton: true,
-    showPeriodHeader: true,
-    showMetrics: true,
+    showNavSettingsButton: false,
+    showPeriodHeader: false,
+    showMetrics: false,
   );
 
   SummaryCardPrefs copyWith({
@@ -94,19 +94,19 @@ class SummaryCardPrefs {
           : true,
       showNavTransactionsButton: map['showNavTransactionsButton'] is bool
           ? map['showNavTransactionsButton'] as bool
-          : true,
+          : false,
       showNavPosButton: map['showNavPosButton'] is bool
           ? map['showNavPosButton'] as bool
           : true,
       showNavSettingsButton: map['showNavSettingsButton'] is bool
           ? map['showNavSettingsButton'] as bool
-          : true,
+          : false,
       showPeriodHeader: map['showPeriodHeader'] is bool
           ? map['showPeriodHeader'] as bool
-          : true,
+          : false,
       showMetrics: map['showMetrics'] is bool
           ? map['showMetrics'] as bool
-          : true,
+          : false,
     );
   }
 }

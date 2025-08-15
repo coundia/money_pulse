@@ -18,6 +18,7 @@ import 'package:money_pulse/presentation/features/sync/sync_state_list_page.dart
 import 'package:money_pulse/presentation/shared/formatters.dart';
 import 'package:money_pulse/presentation/widgets/right_drawer.dart';
 
+import '../../app/app_exit/app_exit.dart';
 import '../products/product_list_page.dart';
 import 'widgets/confirm_panel.dart';
 
@@ -97,14 +98,36 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
     );
     if (!ok) return;
 
-    if (Platform.isIOS) {
-      final messenger = ScaffoldMessenger.maybeOf(context);
-      messenger?.showSnackBar(
-        const SnackBar(content: Text('Fermeture non autorisée sur iOS.')),
+    final res = await AppExit.requestClose(context);
+
+    if (!mounted) return;
+    if (res.success) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            res.message.isEmpty ? 'Fermeture en cours…' : res.message,
+          ),
+        ),
       );
-      return;
+    } else if (res.needsUserAction) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            res.message.isEmpty
+                ? 'Veuillez fermer l’application/onglet manuellement.'
+                : res.message,
+          ),
+        ),
+      );
+    } else {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            res.message.isEmpty ? 'Échec de la fermeture.' : res.message,
+          ),
+        ),
+      );
     }
-    SystemNavigator.pop();
   }
 
   @override
@@ -176,7 +199,7 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
               _tile(
                 icon: Icons.swap_horiz_rounded,
                 title: 'Mouvements',
-                subtitle: 'List',
+                subtitle: 'Historique des entrée et sortie ',
                 onTap: () => Navigator.of(context).push(
                   MaterialPageRoute(
                     builder: (_) => const StockMovementListPage(),
