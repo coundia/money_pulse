@@ -85,7 +85,7 @@ class SummaryQuickActions extends StatelessWidget {
           buttons.add(
             _btn(
               context,
-              label: 'Dépense',
+              label: '+ Dépense',
               icon: Icons.trending_down_rounded,
               tone: Theme.of(context).colorScheme.error,
               onTap: onAddExpense,
@@ -96,7 +96,7 @@ class SummaryQuickActions extends StatelessWidget {
           buttons.add(
             _btn(
               context,
-              label: 'Revenu',
+              label: '+ Revenu',
               icon: Icons.trending_up_rounded,
               tone: Theme.of(context).colorScheme.tertiary,
               onTap: onAddIncome,
