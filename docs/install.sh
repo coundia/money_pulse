@@ -5,6 +5,7 @@ cd money_pulse
 flutter pub add flutter_riverpod go_router sqflite path_provider uuid intl shared_preferences  path fl_chart
 flutter pub add share_plus
 flutter pub add path_provider printing pdf 
+flutter pub add flutter_svg
 
 mkdir -p assets/db
 mkdir -p lib/domain/accounts/entities lib/domain/accounts/repositories

@@ -1,6 +1,7 @@
-// Large-icon quick actions with SRP: palette, decoration, layout, and interactions separated for clarity.
+// Large-icon quick actions using SVG assets with SRP (palette, decoration, layout, and svg rendering separated).
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter_svg/flutter_svg.dart';
 
 class SummaryQuickActions extends StatelessWidget {
   final VoidCallback? onAddExpense;
@@ -20,14 +21,14 @@ class SummaryQuickActions extends StatelessWidget {
         final children = <Widget>[
           _TonedFilledButton(
             label: 'Dépense',
-            icon: Icons.trending_down_rounded,
+            svgAsset: 'assets/icons/expense_add.svg',
             tone: Theme.of(context).colorScheme.error,
             onPressed: onAddExpense,
           ),
           SizedBox(width: isNarrow ? 0 : 12, height: isNarrow ? 12 : 0),
           _TonedFilledButton(
             label: 'Revenu',
-            icon: Icons.trending_up_rounded,
+            svgAsset: 'assets/icons/income_add.svg',
             tone: Theme.of(context).colorScheme.tertiary,
             onPressed: onAddIncome,
           ),
@@ -40,13 +41,13 @@ class SummaryQuickActions extends StatelessWidget {
 
 class _TonedFilledButton extends StatefulWidget {
   final String label;
-  final IconData icon;
+  final String svgAsset;
   final Color tone;
   final VoidCallback? onPressed;
 
   const _TonedFilledButton({
     required this.label,
-    required this.icon,
+    required this.svgAsset,
     required this.tone,
     required this.onPressed,
   });
@@ -68,6 +69,7 @@ class _TonedFilledButtonState extends State<_TonedFilledButton> {
       hovered: _hovered,
       focused: _focused,
     );
+
     return Expanded(
       child: FocusableActionDetector(
         mouseCursor: widget.onPressed == null
@@ -114,8 +116,8 @@ class _TonedFilledButtonState extends State<_TonedFilledButton> {
                           return Column(
                             mainAxisAlignment: MainAxisAlignment.center,
                             children: [
-                              Icon(
-                                widget.icon,
+                              _SvgIcon(
+                                asset: widget.svgAsset,
                                 size: iconSize,
                                 color: palette.fg,
                               ),
@@ -143,6 +145,30 @@ class _TonedFilledButtonState extends State<_TonedFilledButton> {
           ),
         ),
       ),
+    );
+  }
+}
+
+class _SvgIcon extends StatelessWidget {
+  final String asset;
+  final double size;
+  final Color color;
+
+  const _SvgIcon({
+    required this.asset,
+    required this.size,
+    required this.color,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return SvgPicture.asset(
+      asset,
+      width: size,
+      height: size,
+      colorFilter: ColorFilter.mode(color, BlendMode.srcIn),
+      excludeFromSemantics: true,
+      fit: BoxFit.contain,
     );
   }
 }
@@ -218,8 +244,8 @@ class _DecorationBuilder {
 
 class _Layout {
   static double iconSize(double width) {
-    if (width < 140) return 40;
-    if (width < 180) return 52;
-    return 60;
+    if (width < 140) return 48;
+    if (width < 180) return 56;
+    return 64;
   }
 }

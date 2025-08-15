@@ -351,7 +351,7 @@ class _HomePageState extends ConsumerState<HomePage> {
             icon: Icon(Icons.list_alt),
             label: 'Transactions',
           ),
-          NavigationDestination(icon: Icon(Icons.shopping_cart), label: 'POS'),
+          NavigationDestination(icon: Icon(Icons.point_of_sale), label: 'POS'),
           NavigationDestination(icon: Icon(Icons.person), label: 'Profil'),
         ],
       ),
