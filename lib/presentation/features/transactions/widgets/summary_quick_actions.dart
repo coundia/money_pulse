@@ -1,12 +1,25 @@
-// Quick actions with large stacked icons and optional per-button visibility flags.
+// Quick actions with expense/income and optional nav shortcuts to Transactions, POS, and Settings.
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:money_pulse/presentation/features/transactions/pages/transaction_list_page.dart';
+import 'package:money_pulse/presentation/features/pos/pos_page.dart';
+import 'package:money_pulse/presentation/features/settings/settings_page.dart';
 
 class SummaryQuickActions extends StatelessWidget {
   final VoidCallback? onAddExpense;
   final VoidCallback? onAddIncome;
+
   final bool showExpenseButton;
   final bool showIncomeButton;
+
+  final bool showNavShortcuts;
+  final bool showNavTransactionsButton;
+  final bool showNavPosButton;
+  final bool showNavSettingsButton;
+
+  final VoidCallback? onOpenTransactions;
+  final VoidCallback? onOpenPos;
+  final VoidCallback? onOpenSettings;
 
   const SummaryQuickActions({
     super.key,
@@ -14,6 +27,13 @@ class SummaryQuickActions extends StatelessWidget {
     required this.onAddIncome,
     this.showExpenseButton = true,
     this.showIncomeButton = true,
+    this.showNavShortcuts = true,
+    this.showNavTransactionsButton = true,
+    this.showNavPosButton = true,
+    this.showNavSettingsButton = true,
+    this.onOpenTransactions,
+    this.onOpenPos,
+    this.onOpenSettings,
   });
 
   @override
@@ -44,6 +64,80 @@ class SummaryQuickActions extends StatelessWidget {
           onPressed: onAddIncome,
         ),
       );
+    }
+
+    if (showNavShortcuts) {
+      if (tiles.isNotEmpty)
+        tiles.add(
+          SizedBox(width: isNarrow ? 0 : 12, height: isNarrow ? 12 : 0),
+        );
+      if (showNavTransactionsButton) {
+        tiles.add(
+          _TonedFilledButton(
+            label: 'Transactions',
+            icon: Icons.list_alt,
+            tone: Theme.of(context).colorScheme.primary,
+            onPressed: () {
+              HapticFeedback.selectionClick();
+              if (onOpenTransactions != null) {
+                onOpenTransactions!();
+              } else {
+                Navigator.of(context).push(
+                  MaterialPageRoute(
+                    builder: (_) => const TransactionListPage(),
+                  ),
+                );
+              }
+            },
+          ),
+        );
+      }
+      if (showNavPosButton) {
+        if (tiles.isNotEmpty)
+          tiles.add(
+            SizedBox(width: isNarrow ? 0 : 12, height: isNarrow ? 12 : 0),
+          );
+        tiles.add(
+          _TonedFilledButton(
+            label: 'POS',
+            icon: Icons.point_of_sale,
+            tone: Theme.of(context).colorScheme.secondary,
+            onPressed: () {
+              HapticFeedback.selectionClick();
+              if (onOpenPos != null) {
+                onOpenPos!();
+              } else {
+                Navigator.of(
+                  context,
+                ).push(MaterialPageRoute(builder: (_) => const PosPage()));
+              }
+            },
+          ),
+        );
+      }
+      if (showNavSettingsButton) {
+        if (tiles.isNotEmpty)
+          tiles.add(
+            SizedBox(width: isNarrow ? 0 : 12, height: isNarrow ? 12 : 0),
+          );
+        tiles.add(
+          _TonedFilledButton(
+            label: 'Paramètres',
+            icon: Icons.settings,
+            tone: Theme.of(context).colorScheme.primary,
+            onPressed: () {
+              HapticFeedback.selectionClick();
+              if (onOpenSettings != null) {
+                onOpenSettings!();
+              } else {
+                Navigator.of(
+                  context,
+                ).push(MaterialPageRoute(builder: (_) => const SettingsPage()));
+              }
+            },
+          ),
+        );
+      }
     }
 
     if (tiles.isEmpty) return const SizedBox.shrink();
@@ -117,7 +211,7 @@ class _TonedFilledButtonState extends State<_TonedFilledButton> {
         child: Semantics(
           button: true,
           label: widget.label,
-          onTapHint: 'Créer une transaction',
+          onTapHint: 'Ouvrir',
           child: AnimatedScale(
             duration: const Duration(milliseconds: 120),
             scale: _pressed ? 0.98 : 1.0,

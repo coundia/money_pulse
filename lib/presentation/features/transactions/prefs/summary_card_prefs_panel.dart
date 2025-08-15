@@ -1,4 +1,4 @@
-// Right-drawer panel to configure which sections of TransactionSummaryCard are visible, plus bottom navigation visibility.
+// Right-drawer panel to configure which sections of TransactionSummaryCard are visible, including nav shortcuts.
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../prefs/summary_card_prefs_provider.dart';
@@ -46,6 +46,38 @@ class SummaryCardPrefsPanel extends ConsumerWidget {
                   ? (v) => ctrl.setShowIncomeButton(v)
                   : null,
               subtitle: const Text('Dépend des actions rapides'),
+            ),
+
+            const Divider(height: 24),
+
+            SwitchListTile.adaptive(
+              title: const Text('Afficher les raccourcis de navigation'),
+              value: prefs.showNavShortcuts,
+              onChanged: prefs.showQuickActions
+                  ? (v) => ctrl.setShowNavShortcuts(v)
+                  : null,
+              subtitle: const Text('Dépend des actions rapides'),
+            ),
+            SwitchListTile.adaptive(
+              title: const Text('Bouton Transactions'),
+              value: prefs.showNavTransactionsButton,
+              onChanged: prefs.showQuickActions && prefs.showNavShortcuts
+                  ? (v) => ctrl.setShowNavTransactionsButton(v)
+                  : null,
+            ),
+            SwitchListTile.adaptive(
+              title: const Text('Bouton POS'),
+              value: prefs.showNavPosButton,
+              onChanged: prefs.showQuickActions && prefs.showNavShortcuts
+                  ? (v) => ctrl.setShowNavPosButton(v)
+                  : null,
+            ),
+            SwitchListTile.adaptive(
+              title: const Text('Bouton Paramètres'),
+              value: prefs.showNavSettingsButton,
+              onChanged: prefs.showQuickActions && prefs.showNavShortcuts
+                  ? (v) => ctrl.setShowNavSettingsButton(v)
+                  : null,
             ),
 
             const Divider(height: 24),

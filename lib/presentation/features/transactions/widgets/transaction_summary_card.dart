@@ -1,4 +1,4 @@
-// Configurable summary card that reads persisted visibility prefs and opens a right-drawer to customize.
+// Configurable summary card that reads persisted visibility prefs and injects quick actions with nav shortcuts.
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -51,6 +51,8 @@ class TransactionSummaryCard extends ConsumerWidget {
   final VoidCallback onOpenSettings;
   final VoidCallback? onAddExpense;
   final VoidCallback? onAddIncome;
+  final VoidCallback? onOpenTransactions;
+  final VoidCallback? onOpenPos;
 
   const TransactionSummaryCard({
     super.key,
@@ -65,6 +67,8 @@ class TransactionSummaryCard extends ConsumerWidget {
     required this.onOpenSettings,
     this.onAddExpense,
     this.onAddIncome,
+    this.onOpenTransactions,
+    this.onOpenPos,
   });
 
   @override
@@ -160,6 +164,7 @@ class TransactionSummaryCard extends ConsumerWidget {
               padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
               child: Column(
                 children: [
+                  const SizedBox(height: 6),
                   if (prefs.showQuickActions)
                     SummaryQuickActions(
                       onAddExpense: prefs.showExpenseButton
@@ -168,6 +173,14 @@ class TransactionSummaryCard extends ConsumerWidget {
                       onAddIncome: prefs.showIncomeButton ? onAddIncome : null,
                       showExpenseButton: prefs.showExpenseButton,
                       showIncomeButton: prefs.showIncomeButton,
+                      showNavShortcuts: prefs.showNavShortcuts,
+                      showNavTransactionsButton:
+                          prefs.showNavTransactionsButton,
+                      showNavPosButton: prefs.showNavPosButton,
+                      showNavSettingsButton: prefs.showNavSettingsButton,
+                      onOpenTransactions: onOpenTransactions,
+                      onOpenPos: onOpenPos,
+                      onOpenSettings: onOpenSettings,
                     ),
                   if (prefs.showQuickActions) const SizedBox(height: 10),
                   if (prefs.showPeriodHeader)

@@ -1,4 +1,4 @@
-// Riverpod state + persistence for TransactionSummaryCard visibility preferences.
+// Riverpod state + persistence for TransactionSummaryCard visibility preferences, including quick actions and nav shortcuts.
 import 'dart:convert';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -7,6 +7,12 @@ class SummaryCardPrefs {
   final bool showQuickActions;
   final bool showExpenseButton;
   final bool showIncomeButton;
+
+  final bool showNavShortcuts;
+  final bool showNavTransactionsButton;
+  final bool showNavPosButton;
+  final bool showNavSettingsButton;
+
   final bool showPeriodHeader;
   final bool showMetrics;
 
@@ -14,6 +20,10 @@ class SummaryCardPrefs {
     required this.showQuickActions,
     required this.showExpenseButton,
     required this.showIncomeButton,
+    required this.showNavShortcuts,
+    required this.showNavTransactionsButton,
+    required this.showNavPosButton,
+    required this.showNavSettingsButton,
     required this.showPeriodHeader,
     required this.showMetrics,
   });
@@ -22,14 +32,22 @@ class SummaryCardPrefs {
     showQuickActions: true,
     showExpenseButton: true,
     showIncomeButton: true,
-    showPeriodHeader: false,
-    showMetrics: false,
+    showNavShortcuts: true,
+    showNavTransactionsButton: true,
+    showNavPosButton: true,
+    showNavSettingsButton: true,
+    showPeriodHeader: true,
+    showMetrics: true,
   );
 
   SummaryCardPrefs copyWith({
     bool? showQuickActions,
     bool? showExpenseButton,
     bool? showIncomeButton,
+    bool? showNavShortcuts,
+    bool? showNavTransactionsButton,
+    bool? showNavPosButton,
+    bool? showNavSettingsButton,
     bool? showPeriodHeader,
     bool? showMetrics,
   }) {
@@ -37,6 +55,12 @@ class SummaryCardPrefs {
       showQuickActions: showQuickActions ?? this.showQuickActions,
       showExpenseButton: showExpenseButton ?? this.showExpenseButton,
       showIncomeButton: showIncomeButton ?? this.showIncomeButton,
+      showNavShortcuts: showNavShortcuts ?? this.showNavShortcuts,
+      showNavTransactionsButton:
+          showNavTransactionsButton ?? this.showNavTransactionsButton,
+      showNavPosButton: showNavPosButton ?? this.showNavPosButton,
+      showNavSettingsButton:
+          showNavSettingsButton ?? this.showNavSettingsButton,
       showPeriodHeader: showPeriodHeader ?? this.showPeriodHeader,
       showMetrics: showMetrics ?? this.showMetrics,
     );
@@ -46,6 +70,10 @@ class SummaryCardPrefs {
     'showQuickActions': showQuickActions,
     'showExpenseButton': showExpenseButton,
     'showIncomeButton': showIncomeButton,
+    'showNavShortcuts': showNavShortcuts,
+    'showNavTransactionsButton': showNavTransactionsButton,
+    'showNavPosButton': showNavPosButton,
+    'showNavSettingsButton': showNavSettingsButton,
     'showPeriodHeader': showPeriodHeader,
     'showMetrics': showMetrics,
   };
@@ -60,6 +88,18 @@ class SummaryCardPrefs {
           : true,
       showIncomeButton: map['showIncomeButton'] is bool
           ? map['showIncomeButton'] as bool
+          : true,
+      showNavShortcuts: map['showNavShortcuts'] is bool
+          ? map['showNavShortcuts'] as bool
+          : true,
+      showNavTransactionsButton: map['showNavTransactionsButton'] is bool
+          ? map['showNavTransactionsButton'] as bool
+          : true,
+      showNavPosButton: map['showNavPosButton'] is bool
+          ? map['showNavPosButton'] as bool
+          : true,
+      showNavSettingsButton: map['showNavSettingsButton'] is bool
+          ? map['showNavSettingsButton'] as bool
           : true,
       showPeriodHeader: map['showPeriodHeader'] is bool
           ? map['showPeriodHeader'] as bool
@@ -110,6 +150,26 @@ class SummaryCardPrefsController extends StateNotifier<SummaryCardPrefs> {
 
   Future<void> setShowIncomeButton(bool v) async {
     state = state.copyWith(showIncomeButton: v);
+    await _save();
+  }
+
+  Future<void> setShowNavShortcuts(bool v) async {
+    state = state.copyWith(showNavShortcuts: v);
+    await _save();
+  }
+
+  Future<void> setShowNavTransactionsButton(bool v) async {
+    state = state.copyWith(showNavTransactionsButton: v);
+    await _save();
+  }
+
+  Future<void> setShowNavPosButton(bool v) async {
+    state = state.copyWith(showNavPosButton: v);
+    await _save();
+  }
+
+  Future<void> setShowNavSettingsButton(bool v) async {
+    state = state.copyWith(showNavSettingsButton: v);
     await _save();
   }
 
