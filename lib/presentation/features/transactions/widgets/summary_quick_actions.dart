@@ -1,4 +1,4 @@
-// Quick actions with large icon stacked above a label, gradient background, and smooth hover/focus/press states.
+// Large-icon quick actions with SRP: palette, decoration, layout, and interactions separated for clarity.
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
@@ -19,15 +19,15 @@ class SummaryQuickActions extends StatelessWidget {
         final isNarrow = c.maxWidth < 360;
         final children = <Widget>[
           _TonedFilledButton(
-            label: 'Ajouter dépense',
-            icon: Icons.remove_circle_outline,
+            label: 'Dépense',
+            icon: Icons.trending_down_rounded,
             tone: Theme.of(context).colorScheme.error,
             onPressed: onAddExpense,
           ),
           SizedBox(width: isNarrow ? 0 : 12, height: isNarrow ? 12 : 0),
           _TonedFilledButton(
-            label: 'Ajouter revenu',
-            icon: Icons.add_circle_outline,
+            label: 'Revenu',
+            icon: Icons.trending_up_rounded,
             tone: Theme.of(context).colorScheme.tertiary,
             onPressed: onAddIncome,
           ),
@@ -62,38 +62,12 @@ class _TonedFilledButtonState extends State<_TonedFilledButton> {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final isDark = theme.brightness == Brightness.dark;
-    final base = widget.tone;
-    final hsl = HSLColor.fromColor(base);
-    final light = hsl
-        .withLightness((hsl.lightness + (isDark ? 0.10 : 0.20)).clamp(0, 1))
-        .toColor();
-    final dark = hsl
-        .withLightness((hsl.lightness - (isDark ? 0.10 : 0.05)).clamp(0, 1))
-        .toColor();
-    final bgA = isDark ? light.withOpacity(0.22) : light.withOpacity(0.18);
-    final bgB = isDark ? dark.withOpacity(0.28) : dark.withOpacity(0.16);
-    final fg = isDark ? base.withOpacity(0.95) : base.withOpacity(0.90);
-    final radius = BorderRadius.circular(14);
-    final hoveredOrFocused = _hovered || _focused;
-
-    final boxShadow = hoveredOrFocused
-        ? [
-            BoxShadow(
-              color: base.withOpacity(isDark ? 0.26 : 0.20),
-              blurRadius: 18,
-              spreadRadius: 1,
-              offset: const Offset(0, 8),
-            ),
-          ]
-        : const <BoxShadow>[];
-
-    final border = Border.all(
-      color: hoveredOrFocused ? fg.withOpacity(0.45) : Colors.transparent,
-      width: hoveredOrFocused ? 1.2 : 0,
+    final palette = _Palette.from(context, widget.tone);
+    final decoration = _DecorationBuilder.forStates(
+      palette: palette,
+      hovered: _hovered,
+      focused: _focused,
     );
-
     return Expanded(
       child: FocusableActionDetector(
         mouseCursor: widget.onPressed == null
@@ -111,22 +85,13 @@ class _TonedFilledButtonState extends State<_TonedFilledButton> {
             child: AnimatedContainer(
               duration: const Duration(milliseconds: 160),
               curve: Curves.easeOut,
-              decoration: BoxDecoration(
-                gradient: LinearGradient(
-                  begin: Alignment.topLeft,
-                  end: Alignment.bottomRight,
-                  colors: [bgA, bgB],
-                ),
-                borderRadius: radius,
-                border: border,
-                boxShadow: boxShadow,
-              ),
+              decoration: decoration,
               child: Material(
                 color: Colors.transparent,
                 child: InkWell(
-                  borderRadius: radius,
-                  splashColor: fg.withOpacity(0.10),
-                  highlightColor: fg.withOpacity(0.06),
+                  borderRadius: BorderRadius.circular(16),
+                  splashColor: palette.fg.withOpacity(0.10),
+                  highlightColor: palette.fg.withOpacity(0.06),
                   onHighlightChanged: (v) => setState(() => _pressed = v),
                   onTap: widget.onPressed == null
                       ? null
@@ -135,7 +100,7 @@ class _TonedFilledButtonState extends State<_TonedFilledButton> {
                           widget.onPressed!.call();
                         },
                   child: ConstrainedBox(
-                    constraints: const BoxConstraints(minHeight: 96),
+                    constraints: const BoxConstraints(minHeight: 118),
                     child: Padding(
                       padding: const EdgeInsets.symmetric(
                         vertical: 16,
@@ -143,21 +108,26 @@ class _TonedFilledButtonState extends State<_TonedFilledButton> {
                       ),
                       child: LayoutBuilder(
                         builder: (context, constraints) {
-                          final w = constraints.maxWidth;
-                          final iconSize = w < 160 ? 32.0 : 40.0;
+                          final iconSize = _Layout.iconSize(
+                            constraints.maxWidth,
+                          );
                           return Column(
                             mainAxisAlignment: MainAxisAlignment.center,
                             children: [
-                              Icon(widget.icon, size: iconSize, color: fg),
-                              const SizedBox(height: 8),
+                              Icon(
+                                widget.icon,
+                                size: iconSize,
+                                color: palette.fg,
+                              ),
+                              const SizedBox(height: 10),
                               Text(
                                 widget.label,
                                 textAlign: TextAlign.center,
                                 maxLines: 2,
                                 overflow: TextOverflow.ellipsis,
                                 style: TextStyle(
-                                  fontWeight: FontWeight.w700,
-                                  color: fg,
+                                  fontWeight: FontWeight.w800,
+                                  color: palette.fg,
                                   letterSpacing: 0.2,
                                 ),
                               ),
@@ -174,5 +144,82 @@ class _TonedFilledButtonState extends State<_TonedFilledButton> {
         ),
       ),
     );
+  }
+}
+
+class _Palette {
+  final Color bgA;
+  final Color bgB;
+  final Color fg;
+  final Color base;
+  final bool isDark;
+
+  const _Palette({
+    required this.bgA,
+    required this.bgB,
+    required this.fg,
+    required this.base,
+    required this.isDark,
+  });
+
+  factory _Palette.from(BuildContext context, Color tone) {
+    final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
+    final h = HSLColor.fromColor(tone);
+    final light = h
+        .withLightness((h.lightness + (isDark ? 0.10 : 0.20)).clamp(0, 1))
+        .toColor();
+    final dark = h
+        .withLightness((h.lightness - (isDark ? 0.10 : 0.05)).clamp(0, 1))
+        .toColor();
+    final bgA = isDark ? light.withOpacity(0.22) : light.withOpacity(0.18);
+    final bgB = isDark ? dark.withOpacity(0.28) : dark.withOpacity(0.16);
+    final fg = isDark ? tone.withOpacity(0.98) : tone.withOpacity(0.92);
+    return _Palette(bgA: bgA, bgB: bgB, fg: fg, base: tone, isDark: isDark);
+  }
+}
+
+class _DecorationBuilder {
+  static BoxDecoration forStates({
+    required _Palette palette,
+    required bool hovered,
+    required bool focused,
+  }) {
+    final radius = BorderRadius.circular(16);
+    final hoveredOrFocused = hovered || focused;
+    final boxShadow = hoveredOrFocused
+        ? [
+            BoxShadow(
+              color: palette.base.withOpacity(palette.isDark ? 0.26 : 0.20),
+              blurRadius: 18,
+              spreadRadius: 1,
+              offset: const Offset(0, 8),
+            ),
+          ]
+        : const <BoxShadow>[];
+    final border = Border.all(
+      color: hoveredOrFocused
+          ? palette.fg.withOpacity(0.45)
+          : Colors.transparent,
+      width: hoveredOrFocused ? 1.2 : 0,
+    );
+    return BoxDecoration(
+      gradient: LinearGradient(
+        begin: Alignment.topLeft,
+        end: Alignment.bottomRight,
+        colors: [palette.bgA, palette.bgB],
+      ),
+      borderRadius: radius,
+      border: border,
+      boxShadow: boxShadow,
+    );
+  }
+}
+
+class _Layout {
+  static double iconSize(double width) {
+    if (width < 140) return 40;
+    if (width < 180) return 52;
+    return 60;
   }
 }
