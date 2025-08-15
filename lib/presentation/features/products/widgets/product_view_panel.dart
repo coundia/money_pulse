@@ -1,4 +1,5 @@
-// Product detail right-drawer panel; shows selling price, purchase price, and single-string status.
+// Right-drawer product details with responsive header: title never wraps (single-line ellipsis) and price badges flow below on small widths.
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -49,6 +50,16 @@ class ProductViewPanel extends ConsumerWidget {
         : (product.name?.trim() ?? '');
     final asyncLevels = ref.watch(_stockSearchProvider(q));
 
+    final priceBadges = Wrap(
+      spacing: 8,
+      runSpacing: 8,
+      children: [
+        _PriceBadge(text: 'Vente: ${_money(product.defaultPrice)}'),
+        if (product.purchasePrice > 0)
+          _PriceBadge(text: "Coût: ${_money(product.purchasePrice)}"),
+      ],
+    );
+
     return Scaffold(
       appBar: AppBar(
         title: const Text('Détails du produit'),
@@ -76,52 +87,10 @@ class ProductViewPanel extends ConsumerWidget {
       body: ListView(
         padding: const EdgeInsets.all(16),
         children: [
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              CircleAvatar(
-                radius: 26,
-                child: Text(
-                  (title.isNotEmpty ? title.characters.first : '?')
-                      .toUpperCase(),
-                  style: const TextStyle(
-                    fontSize: 20,
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      title,
-                      style: Theme.of(context).textTheme.titleLarge,
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                    if (subtitle.isNotEmpty) ...[
-                      const SizedBox(height: 4),
-                      Text(
-                        subtitle,
-                        style: Theme.of(context).textTheme.bodySmall,
-                      ),
-                    ],
-                  ],
-                ),
-              ),
-              const SizedBox(width: 8),
-              Wrap(
-                spacing: 8,
-                runSpacing: 8,
-                children: [
-                  _PriceBadge(text: 'Vente: ${_money(product.defaultPrice)}'),
-                  if (product.purchasePrice > 0)
-                    _PriceBadge(text: "Coût: ${_money(product.purchasePrice)}"),
-                ],
-              ),
-            ],
+          _HeaderBlock(
+            title: title,
+            subtitle: subtitle,
+            priceBadges: priceBadges,
           ),
 
           const SizedBox(height: 16),
@@ -311,6 +280,100 @@ class ProductViewPanel extends ConsumerWidget {
           const SizedBox(height: 16),
         ],
       ),
+    );
+  }
+}
+
+class _HeaderBlock extends StatelessWidget {
+  final String title;
+  final String subtitle;
+  final Widget priceBadges;
+  const _HeaderBlock({
+    required this.title,
+    required this.subtitle,
+    required this.priceBadges,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final isCompact = MediaQuery.sizeOf(context).width < 520;
+
+    final titleText = Text(
+      title,
+      maxLines: 1,
+      softWrap: false,
+      overflow: TextOverflow.ellipsis,
+      style: Theme.of(context).textTheme.titleLarge,
+    );
+
+    final subtitleText = subtitle.isEmpty
+        ? const SizedBox.shrink()
+        : Padding(
+            padding: const EdgeInsets.only(top: 4),
+            child: Text(
+              subtitle,
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+              style: Theme.of(context).textTheme.bodySmall,
+            ),
+          );
+
+    if (isCompact) {
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              CircleAvatar(
+                radius: 26,
+                child: Text(
+                  (title.isNotEmpty ? title.characters.first : '?')
+                      .toUpperCase(),
+                  style: const TextStyle(
+                    fontSize: 20,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [titleText, subtitleText],
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 10),
+          priceBadges,
+        ],
+      );
+    }
+
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        CircleAvatar(
+          radius: 26,
+          child: Text(
+            (title.isNotEmpty ? title.characters.first : '?').toUpperCase(),
+            style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w600),
+          ),
+        ),
+        const SizedBox(width: 12),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              titleText,
+              subtitleText,
+              const SizedBox(height: 8),
+              priceBadges,
+            ],
+          ),
+        ),
+      ],
     );
   }
 }

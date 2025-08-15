@@ -23,12 +23,14 @@ class SeedDefaultCategoriesUseCase {
       {'code': 'Electricité', 'type': 'DEBIT'},
       {'code': 'Dons', 'type': 'DEBIT'},
       {'code': 'Achat', 'type': 'DEBIT'},
+      {'code': 'Autres', 'type': 'DEBIT'},
       //entree
       {'code': 'salaire', 'type': 'CREDIT'},
       {'code': 'remboursement', 'type': 'CREDIT'},
       {'code': 'vente', 'type': 'CREDIT'},
       {'code': 'cadeaux', 'type': 'CREDIT'},
       {'code': 'prestations', 'type': 'CREDIT'},
+      {'code': 'Autres', 'type': 'CREDIT'},
     ];
 
     final have = existing.map((e) => e.code).toSet();

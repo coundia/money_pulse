@@ -1,3 +1,4 @@
+// POS cart right-drawer panel; now forwards customerId from checkout payload to onCheckout.
 import 'package:flutter/material.dart';
 import 'package:money_pulse/presentation/features/pos/state/pos_cart.dart';
 import 'package:money_pulse/presentation/widgets/right_drawer.dart';
@@ -23,6 +24,7 @@ class PosCartPanel extends StatefulWidget {
     String typeEntry, {
     String? description,
     String? categoryId,
+    String? customerId, // NEW
     DateTime? when,
   })
   onCheckout;
@@ -77,12 +79,15 @@ class _PosCartPanelState extends State<PosCartPanel> {
     DateTime when = DateTime.now();
     String? description;
     String? categoryId;
+    String? customerId; // NEW
 
     if (res is Map) {
       final te = res['typeEntry'] as String?;
       final w = res['when'];
       final desc = res['description'] as String?;
       final cat = res['categoryId'] as String?;
+      final cust = res['customerId'] as String?; // NEW
+
       if (te == 'DEBIT' || te == 'CREDIT') typeEntry = te!;
       if (w is DateTime) when = w;
       if (w is String) {
@@ -91,12 +96,14 @@ class _PosCartPanelState extends State<PosCartPanel> {
       }
       description = desc;
       categoryId = cat;
+      customerId = cust; // NEW
     }
 
     await widget.onCheckout(
       typeEntry,
       description: description,
       categoryId: categoryId,
+      customerId: customerId, // NEW
       when: when,
     );
 
@@ -202,7 +209,7 @@ class _PosCartPanelState extends State<PosCartPanel> {
           child: FilledButton.icon(
             onPressed: widget.cart.isEmpty ? null : _openCheckout,
             icon: const Icon(Icons.point_of_sale),
-            label: Text('Encaisser • ${_money(widget.cart.total)}'),
+            label: const Text('Encaisser'),
           ),
         ),
       ),

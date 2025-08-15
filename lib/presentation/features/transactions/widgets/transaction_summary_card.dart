@@ -237,6 +237,7 @@ class TransactionSummaryCard extends StatelessWidget {
                       );
                     },
                   ),
+
                   const SizedBox(height: 10),
                   SummaryQuickActions(
                     onAddExpense: onAddExpense,

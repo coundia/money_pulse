@@ -10,7 +10,6 @@ import 'widgets/movement_filters.dart';
 import 'widgets/movement_item.dart';
 import 'widgets/movement_summary_bar.dart';
 import 'providers/stock_movement_list_provider.dart';
-import 'stock_movement_form_panel.dart';
 import 'stock_movement_view_panel.dart';
 
 class StockMovementListPage extends ConsumerStatefulWidget {
@@ -36,16 +35,6 @@ class _StockMovementListPageState extends ConsumerState<StockMovementListPage> {
       context,
       child: StockMovementViewPanel(itemId: row.id),
     );
-  }
-
-  Future<void> _openForm() async {
-    final changed = await showRightDrawer<bool>(
-      context,
-      child: const StockMovementFormPanel(),
-    );
-    if (changed == true && mounted) {
-      ref.invalidate(stockMovementListProvider);
-    }
   }
 
   void _applySearch() {
@@ -130,11 +119,7 @@ class _StockMovementListPageState extends ConsumerState<StockMovementListPage> {
           ),
         ),
       ),
-      floatingActionButton: FloatingActionButton.extended(
-        onPressed: _openForm,
-        label: const Text('Ajouter'),
-        icon: const Icon(Icons.add),
-      ),
+
       body: SafeArea(
         child: Padding(
           padding: const EdgeInsets.all(12),

@@ -1,4 +1,4 @@
-// Quick action buttons for adding expense and income with toned visuals.
+// Stylish quick actions with gradient buttons, hover/focus visuals, and subtle press animation.
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
@@ -38,7 +38,7 @@ class SummaryQuickActions extends StatelessWidget {
   }
 }
 
-class _TonedFilledButton extends StatelessWidget {
+class _TonedFilledButton extends StatefulWidget {
   final String label;
   final IconData icon;
   final Color tone;
@@ -52,53 +52,130 @@ class _TonedFilledButton extends StatelessWidget {
   });
 
   @override
+  State<_TonedFilledButton> createState() => _TonedFilledButtonState();
+}
+
+class _TonedFilledButtonState extends State<_TonedFilledButton> {
+  bool _hovered = false;
+  bool _focused = false;
+  bool _pressed = false;
+
+  @override
   Widget build(BuildContext context) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-    final bg = (isDark ? tone.withOpacity(0.20) : tone.withOpacity(0.12));
-    final fg = isDark ? tone.withOpacity(0.95) : tone.withOpacity(0.90);
+    final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
+    final base = widget.tone;
+    final hsl = HSLColor.fromColor(base);
+    final light = hsl
+        .withLightness((hsl.lightness + (isDark ? 0.10 : 0.20)).clamp(0, 1))
+        .toColor();
+    final dark = hsl
+        .withLightness((hsl.lightness - (isDark ? 0.10 : 0.05)).clamp(0, 1))
+        .toColor();
+    final bgA = isDark ? light.withOpacity(0.22) : light.withOpacity(0.18);
+    final bgB = isDark ? dark.withOpacity(0.28) : dark.withOpacity(0.16);
+    final fg = isDark ? base.withOpacity(0.95) : base.withOpacity(0.90);
+    final radius = BorderRadius.circular(14);
+    final hoveredOrFocused = _hovered || _focused;
+
+    final boxShadow = hoveredOrFocused
+        ? [
+            BoxShadow(
+              color: base.withOpacity(isDark ? 0.26 : 0.20),
+              blurRadius: 18,
+              spreadRadius: 1,
+              offset: const Offset(0, 8),
+            ),
+          ]
+        : const <BoxShadow>[];
+
+    final border = Border.all(
+      color: hoveredOrFocused ? fg.withOpacity(0.45) : Colors.transparent,
+      width: hoveredOrFocused ? 1.2 : 0,
+    );
 
     return Expanded(
-      child: Tooltip(
-        message: label,
-        waitDuration: const Duration(milliseconds: 400),
-        child: FilledButton.icon(
-          onPressed: onPressed == null
-              ? null
-              : () {
-                  HapticFeedback.selectionClick();
-                  onPressed!.call();
-                },
-          icon: Icon(icon, size: 20),
-          label: Text(
-            label,
-            style: const TextStyle(fontWeight: FontWeight.w600),
-          ),
-          style:
-              FilledButton.styleFrom(
-                padding: const EdgeInsets.symmetric(vertical: 14),
-                backgroundColor: bg,
-                foregroundColor: fg,
-                disabledForegroundColor: fg.withOpacity(0.38),
-                disabledBackgroundColor: bg.withOpacity(0.5),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(12),
+      child: FocusableActionDetector(
+        mouseCursor: widget.onPressed == null
+            ? SystemMouseCursors.forbidden
+            : SystemMouseCursors.click,
+        onShowFocusHighlight: (v) => setState(() => _focused = v),
+        onShowHoverHighlight: (v) => setState(() => _hovered = v),
+        child: Semantics(
+          button: true,
+          label: widget.label,
+          onTapHint: 'Créer une transaction',
+          child: AnimatedScale(
+            duration: const Duration(milliseconds: 120),
+            scale: _pressed ? 0.98 : 1.0,
+            child: AnimatedContainer(
+              duration: const Duration(milliseconds: 160),
+              curve: Curves.easeOut,
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                  colors: [bgA, bgB],
                 ),
-                elevation: 0,
-              ).merge(
-                ButtonStyle(
-                  overlayColor: MaterialStateProperty.resolveWith((states) {
-                    if (states.contains(MaterialState.pressed)) {
-                      return fg.withOpacity(0.08);
-                    }
-                    if (states.contains(MaterialState.hovered) ||
-                        states.contains(MaterialState.focused)) {
-                      return fg.withOpacity(0.06);
-                    }
-                    return null;
-                  }),
-                  animationDuration: const Duration(milliseconds: 120),
+                borderRadius: radius,
+                border: border,
+                boxShadow: boxShadow,
+              ),
+              child: Material(
+                color: Colors.transparent,
+                child: InkWell(
+                  borderRadius: radius,
+                  splashColor: fg.withOpacity(0.10),
+                  highlightColor: fg.withOpacity(0.06),
+                  onHighlightChanged: (v) => setState(() => _pressed = v),
+                  onTap: widget.onPressed == null
+                      ? null
+                      : () {
+                          HapticFeedback.selectionClick();
+                          widget.onPressed!.call();
+                        },
+                  child: ConstrainedBox(
+                    constraints: const BoxConstraints(minHeight: 52),
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(
+                        vertical: 16,
+                        horizontal: 14,
+                      ),
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Container(
+                            width: 28,
+                            height: 28,
+                            alignment: Alignment.center,
+                            decoration: BoxDecoration(
+                              color: fg.withOpacity(isDark ? 0.18 : 0.14),
+                              shape: BoxShape.circle,
+                              border: Border.all(color: fg.withOpacity(0.22)),
+                            ),
+                            child: Icon(widget.icon, size: 18, color: fg),
+                          ),
+                          const SizedBox(width: 10),
+                          Flexible(
+                            child: Text(
+                              widget.label,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: TextStyle(
+                                fontWeight: FontWeight.w700,
+                                color: fg,
+                                letterSpacing: 0.2,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
                 ),
               ),
+            ),
+          ),
         ),
       ),
     );

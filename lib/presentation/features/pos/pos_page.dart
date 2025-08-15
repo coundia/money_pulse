@@ -1,7 +1,8 @@
-// POS page with improved UI: debounced search, visible active-filter chips, clear-filters buttons, filter badge, refresh, stock display, responsive grid.
+// POS page with product create/list shortcuts from app bar menu, product view from tile menu, debounced search, responsive grid (fr labels, en code).
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:uuid/uuid.dart';
 
 import 'package:money_pulse/presentation/app/providers.dart';
 import 'package:money_pulse/domain/products/entities/product.dart';
@@ -15,6 +16,11 @@ import 'package:money_pulse/presentation/features/stock/providers/stock_level_re
 import 'package:money_pulse/domain/categories/entities/category.dart';
 
 import 'widgets/pos_cart_tile.dart';
+
+// NEW imports for create/list/view product
+import 'package:money_pulse/presentation/features/products/widgets/product_form_panel.dart';
+import 'package:money_pulse/presentation/features/products/product_list_page.dart';
+import 'package:money_pulse/presentation/features/products/widgets/product_view_panel.dart';
 
 class PosFilters {
   final bool inStockOnly;
@@ -156,33 +162,37 @@ class _PosPageState extends ConsumerState<PosPage> {
       context,
       child: PosCartPanel(
         cart: _cart,
-        onCheckout: (typeEntry, {description, categoryId, when}) async {
-          final snap = _cart.snapshot();
-          final lines = snap.values
-              .map(
-                (it) => {
-                  'productId': it.productId,
-                  'label': it.label,
-                  'quantity': it.quantity,
-                  'unitPrice': it.unitPrice,
-                },
-              )
-              .toList();
-          await checkout.execute(
-            typeEntry: typeEntry,
-            description: description,
-            categoryId: categoryId,
-            when: when,
-            lines: lines,
-          );
-          await ref.read(balanceProvider.notifier).load();
-          await ref.read(transactionsProvider.notifier).load();
-          _cart.clear();
-          if (!mounted) return;
-          ScaffoldMessenger.of(
-            context,
-          ).showSnackBar(const SnackBar(content: Text('Vente enregistrée')));
-        },
+        onCheckout:
+            (typeEntry, {description, categoryId, customerId, when}) async {
+              final snap = _cart.snapshot();
+              final lines = snap.values
+                  .map(
+                    (it) => {
+                      'productId': it.productId,
+                      'label': it.label,
+                      'quantity': it.quantity,
+                      'unitPrice': it.unitPrice,
+                    },
+                  )
+                  .toList();
+
+              await checkout.execute(
+                typeEntry: typeEntry,
+                description: description,
+                categoryId: categoryId,
+                customerId: customerId, // NEW
+                when: when,
+                lines: lines,
+              );
+
+              await ref.read(balanceProvider.notifier).load();
+              await ref.read(transactionsProvider.notifier).load();
+              _cart.clear();
+              if (!mounted) return;
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(content: Text('Vente enregistrée')),
+              );
+            },
       ),
       widthFraction: 0.92,
       heightFraction: 0.96,
@@ -206,8 +216,76 @@ class _PosPageState extends ConsumerState<PosPage> {
   }
 
   void _clearFilters() => setState(() => _filters = const PosFilters());
-
   void _refresh() => setState(() => _reloadTick++);
+
+  // NEW: create product from POS
+  Future<void> _addProductFromPos() async {
+    final categories = await ref.read(categoryRepoProvider).findAllActive();
+    if (!mounted) return;
+    final res = await showRightDrawer<ProductFormResult?>(
+      context,
+      child: ProductFormPanel(categories: categories),
+      widthFraction: 0.92,
+      heightFraction: 0.96,
+    );
+    if (res == null) return;
+
+    final repo = ref.read(productRepoProvider);
+    final now = DateTime.now();
+    final p = Product(
+      id: const Uuid().v4(),
+      remoteId: null,
+      code: res.code,
+      name: res.name,
+      description: res.description,
+      barcode: res.barcode,
+      unitId: null,
+      categoryId: res.categoryId,
+      defaultPrice: res.priceCents,
+      purchasePrice: res.purchasePriceCents,
+      statuses: res.status,
+      createdAt: now,
+      updatedAt: now,
+      deletedAt: null,
+      syncAt: null,
+      version: 0,
+      isDirty: 1,
+    );
+    await repo.create(p);
+    if (!mounted) return;
+    setState(() => _reloadTick++);
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(const SnackBar(content: Text('Produit créé')));
+  }
+
+  // NEW: list products inside a right drawer
+  Future<void> _openProductList() async {
+    await showRightDrawer<void>(
+      context,
+      child: const ProductListPage(),
+      widthFraction: 0.92,
+      heightFraction: 0.96,
+    );
+    if (!mounted) return;
+    setState(() => _reloadTick++);
+  }
+
+  // NEW: view product detail from grid tile context menu
+  Future<void> _viewProduct(Product p) async {
+    String? catLabel;
+    if (p.categoryId != null) {
+      final cat = await ref.read(categoryRepoProvider).findById(p.categoryId!);
+      catLabel = cat?.code;
+    }
+    if (!mounted) return;
+    await showRightDrawer<void>(
+      context,
+      child: ProductViewPanel(product: p, categoryLabel: catLabel),
+      widthFraction: 0.92,
+      heightFraction: 0.96,
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -250,6 +328,36 @@ class _PosPageState extends ConsumerState<PosPage> {
               onPressed: _clearFilters,
               icon: const Icon(Icons.filter_alt_off),
             ),
+          // NEW: single overflow menu to keep UI clean
+          PopupMenuButton<String>(
+            tooltip: 'Actions',
+            onSelected: (v) async {
+              switch (v) {
+                case 'list':
+                  await _openProductList();
+                  break;
+                case 'new':
+                  await _addProductFromPos();
+                  break;
+              }
+            },
+            itemBuilder: (_) => const [
+              PopupMenuItem(
+                value: 'list',
+                child: ListTile(
+                  leading: Icon(Icons.inventory_2_outlined),
+                  title: Text('Lister les produits'),
+                ),
+              ),
+              PopupMenuItem(
+                value: 'new',
+                child: ListTile(
+                  leading: Icon(Icons.add),
+                  title: Text('Créer un produit'),
+                ),
+              ),
+            ],
+          ),
           IconButton(
             tooltip: 'Panier',
             onPressed: _cart.isEmpty ? null : _openCart,
@@ -285,7 +393,7 @@ class _PosPageState extends ConsumerState<PosPage> {
             child: TextField(
               controller: _searchCtrl,
               decoration: InputDecoration(
-                hintText: 'Rechercher (nom, code, EAN)',
+                hintText: 'Rechercher (nom produit)',
                 prefixIcon: const Icon(Icons.search),
                 border: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(12),
@@ -395,13 +503,17 @@ class _PosPageState extends ConsumerState<PosPage> {
                                 final title = (p.name?.isNotEmpty ?? false)
                                     ? p.name!
                                     : (p.code ?? 'Produit');
-                                final sub = (p.code ?? '').isNotEmpty
-                                    ? 'Code: ${p.code}'
-                                    : (p.barcode ?? '');
+
+                                // Do not show codes/ids on UI; use description as secondary text
+                                final subtitle =
+                                    (p.description ?? '').trim().isEmpty
+                                    ? null
+                                    : p.description!.trim();
+
                                 final stockQty = stockMap[p.id] ?? 0;
                                 return PosProductTile(
                                   title: title,
-                                  subtitle: sub.isEmpty ? null : sub,
+                                  subtitle: subtitle,
                                   priceCents: p.defaultPrice,
                                   stockQty: stockQty,
                                   onTap: () {
@@ -575,6 +687,8 @@ class _PosPageState extends ConsumerState<PosPage> {
                                         widthFraction: 0.86,
                                         heightFraction: 0.6,
                                       );
+                                    } else if (action == 'details') {
+                                      await _viewProduct(p);
                                     }
                                   },
                                 );
