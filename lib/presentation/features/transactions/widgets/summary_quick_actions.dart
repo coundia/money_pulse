@@ -1,4 +1,4 @@
-// Stylish quick actions with gradient buttons, hover/focus visuals, and subtle press animation.
+// Quick actions with large icon stacked above a label, gradient background, and smooth hover/focus/press states.
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
@@ -135,40 +135,35 @@ class _TonedFilledButtonState extends State<_TonedFilledButton> {
                           widget.onPressed!.call();
                         },
                   child: ConstrainedBox(
-                    constraints: const BoxConstraints(minHeight: 52),
+                    constraints: const BoxConstraints(minHeight: 96),
                     child: Padding(
                       padding: const EdgeInsets.symmetric(
                         vertical: 16,
                         horizontal: 14,
                       ),
-                      child: Row(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          Container(
-                            width: 28,
-                            height: 28,
-                            alignment: Alignment.center,
-                            decoration: BoxDecoration(
-                              color: fg.withOpacity(isDark ? 0.18 : 0.14),
-                              shape: BoxShape.circle,
-                              border: Border.all(color: fg.withOpacity(0.22)),
-                            ),
-                            child: Icon(widget.icon, size: 18, color: fg),
-                          ),
-                          const SizedBox(width: 10),
-                          Flexible(
-                            child: Text(
-                              widget.label,
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                              style: TextStyle(
-                                fontWeight: FontWeight.w700,
-                                color: fg,
-                                letterSpacing: 0.2,
+                      child: LayoutBuilder(
+                        builder: (context, constraints) {
+                          final w = constraints.maxWidth;
+                          final iconSize = w < 160 ? 32.0 : 40.0;
+                          return Column(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              Icon(widget.icon, size: iconSize, color: fg),
+                              const SizedBox(height: 8),
+                              Text(
+                                widget.label,
+                                textAlign: TextAlign.center,
+                                maxLines: 2,
+                                overflow: TextOverflow.ellipsis,
+                                style: TextStyle(
+                                  fontWeight: FontWeight.w700,
+                                  color: fg,
+                                  letterSpacing: 0.2,
+                                ),
                               ),
-                            ),
-                          ),
-                        ],
+                            ],
+                          );
+                        },
                       ),
                     ),
                   ),
