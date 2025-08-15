@@ -24,6 +24,7 @@ import 'package:money_pulse/domain/accounts/entities/account.dart';
 import 'package:money_pulse/domain/transactions/entities/transaction_entry.dart';
 
 import '../transactions/controllers/transaction_list_controller.dart';
+import '../transactions/prefs/summary_card_prefs_panel.dart';
 import '../transactions/providers/transaction_list_providers.dart'
     show transactionListItemsProvider;
 
@@ -108,6 +109,15 @@ class _HomePageState extends ConsumerState<HomePage> {
 
   Future<void> _showShareDialog(Account acc) async {
     await showShareAccountDialog(context: context, acc: acc);
+  }
+
+  Future<void> openPrefs() async {
+    await showRightDrawer(
+      context,
+      child: const SummaryCardPrefsPanel(),
+      widthFraction: 0.86,
+      heightFraction: 1.0,
+    );
   }
 
   void _onDestinationSelected(int v) {
@@ -233,6 +243,12 @@ class _HomePageState extends ConsumerState<HomePage> {
                       MaterialPageRoute(builder: (_) => const SettingsPage()),
                     );
                     break;
+
+                  case 'personnalisation':
+                    if (!mounted) break;
+                    await openPrefs();
+                    break;
+
                   case 'manageCategories':
                     if (!mounted) break;
                     await Navigator.of(context).push(
@@ -325,6 +341,13 @@ class _HomePageState extends ConsumerState<HomePage> {
                   ),
                 ),
                 PopupMenuDivider(),
+                PopupMenuItem(
+                  value: 'personnalisation',
+                  child: ListTile(
+                    leading: Icon(Icons.settings),
+                    title: Text('Personnalisation'),
+                  ),
+                ),
                 PopupMenuItem(
                   value: 'settings',
                   child: ListTile(
