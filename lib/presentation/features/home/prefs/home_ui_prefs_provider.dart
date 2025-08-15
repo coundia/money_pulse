@@ -8,7 +8,7 @@ class HomeUiPrefs {
 
   const HomeUiPrefs({required this.showBottomNav});
 
-  factory HomeUiPrefs.defaults() => const HomeUiPrefs(showBottomNav: true);
+  factory HomeUiPrefs.defaults() => const HomeUiPrefs(showBottomNav: false);
 
   HomeUiPrefs copyWith({bool? showBottomNav}) {
     return HomeUiPrefs(showBottomNav: showBottomNav ?? this.showBottomNav);
@@ -49,6 +49,7 @@ class HomeUiPrefsController extends StateNotifier<HomeUiPrefs> {
 
   Future<void> reset() async {
     state = HomeUiPrefs.defaults();
+    HomeUiPrefs.defaults();
     await _save();
   }
 

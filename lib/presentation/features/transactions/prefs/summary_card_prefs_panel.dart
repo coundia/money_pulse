@@ -1,7 +1,8 @@
-// Right-drawer panel to configure which sections of TransactionSummaryCard are visible.
+// Right-drawer panel to configure which sections of TransactionSummaryCard are visible, plus bottom navigation visibility.
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../prefs/summary_card_prefs_provider.dart';
+import 'package:money_pulse/presentation/features/home/prefs/home_ui_prefs_provider.dart';
 
 class SummaryCardPrefsPanel extends ConsumerWidget {
   const SummaryCardPrefsPanel({super.key});
@@ -10,6 +11,9 @@ class SummaryCardPrefsPanel extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final prefs = ref.watch(summaryCardPrefsProvider);
     final ctrl = ref.read(summaryCardPrefsProvider.notifier);
+
+    final uiPrefs = ref.watch(homeUiPrefsProvider);
+    final uiCtrl = ref.read(homeUiPrefsProvider.notifier);
 
     return SafeArea(
       child: Padding(
@@ -21,6 +25,7 @@ class SummaryCardPrefsPanel extends ConsumerWidget {
               style: Theme.of(context).textTheme.titleLarge,
             ),
             const SizedBox(height: 12),
+
             SwitchListTile.adaptive(
               title: const Text('Afficher les actions rapides'),
               value: prefs.showQuickActions,
@@ -42,7 +47,9 @@ class SummaryCardPrefsPanel extends ConsumerWidget {
                   : null,
               subtitle: const Text('Dépend des actions rapides'),
             ),
+
             const Divider(height: 24),
+
             SwitchListTile.adaptive(
               title: const Text('Afficher l’entête de période'),
               value: prefs.showPeriodHeader,
@@ -53,9 +60,21 @@ class SummaryCardPrefsPanel extends ConsumerWidget {
               value: prefs.showMetrics,
               onChanged: (v) => ctrl.setShowMetrics(v),
             ),
+
+            const Divider(height: 24),
+
+            SwitchListTile.adaptive(
+              title: const Text('Afficher la barre de navigation en bas'),
+              value: uiPrefs.showBottomNav,
+              onChanged: (v) => uiCtrl.setShowBottomNav(v),
+            ),
+
             const SizedBox(height: 16),
             FilledButton.tonal(
-              onPressed: () => ctrl.reset(),
+              onPressed: () async {
+                await ctrl.reset();
+                await uiCtrl.reset();
+              },
               child: const Text('Réinitialiser'),
             ),
             const SizedBox(height: 8),

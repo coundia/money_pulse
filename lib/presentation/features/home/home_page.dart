@@ -32,7 +32,6 @@ import '../transactions/providers/transaction_list_providers.dart'
 import 'widgets/account_picker_sheet.dart';
 import 'widgets/period_picker_sheet.dart';
 import 'widgets/share_account_dialog.dart';
-import 'package:money_pulse/presentation/shared/formatters.dart';
 
 import 'prefs/home_ui_prefs_provider.dart';
 import 'prefs/home_ui_prefs_panel.dart';
@@ -57,22 +56,6 @@ class _HomePageState extends ConsumerState<HomePage> {
       ref.invalidate(selectedAccountProvider);
       ref.invalidate(transactionListItemsProvider);
     });
-  }
-
-  Future<void> _openQuickAdd() async {
-    final ok = await showRightDrawer<bool>(
-      context,
-      child: const TransactionQuickAddSheet(),
-      widthFraction: 0.86,
-      heightFraction: 0.96,
-    );
-    if (ok == true) {
-      await ref.read(transactionsProvider.notifier).load();
-      await ref.read(balanceProvider.notifier).load();
-      ref.invalidate(selectedAccountProvider);
-      ref.invalidate(transactionListItemsProvider);
-      if (mounted) setState(() {});
-    }
   }
 
   Future<void> _showAccountPicker() async {
@@ -362,13 +345,7 @@ class _HomePageState extends ConsumerState<HomePage> {
                     title: Text('Personnalisation'),
                   ),
                 ),
-                PopupMenuItem(
-                  value: 'ui',
-                  child: ListTile(
-                    leading: Icon(Icons.tune),
-                    title: Text('Interface'),
-                  ),
-                ),
+
                 PopupMenuItem(
                   value: 'settings',
                   child: ListTile(
@@ -406,11 +383,7 @@ class _HomePageState extends ConsumerState<HomePage> {
               ],
             )
           : null,
-      floatingActionButton: FloatingActionButton.extended(
-        onPressed: _openQuickAdd,
-        icon: const Icon(Icons.add),
-        label: const Text('Saisie rapide'),
-      ),
+
       floatingActionButtonLocation: FloatingActionButtonLocation.endFloat,
     );
   }
