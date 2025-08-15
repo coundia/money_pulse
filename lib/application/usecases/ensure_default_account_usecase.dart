@@ -11,7 +11,7 @@ class EnsureDefaultAccountUseCase {
   EnsureDefaultAccountUseCase(
     this.repo, {
     this.code = 'Main',
-    this.description = '',
+    this.description = 'Principal',
     this.currency = 'XOF',
   });
 

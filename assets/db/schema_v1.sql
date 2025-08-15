@@ -56,6 +56,7 @@ CREATE TABLE transaction_entry (
   categoryId TEXT,
   companyId TEXT,    
   customerId TEXT,     
+  debtId TEXT,     
   createdAt TEXT DEFAULT (datetime('now')),
   updatedAt TEXT DEFAULT (datetime('now')),
   deletedAt TEXT,
@@ -297,3 +298,24 @@ CREATE INDEX IF NOT EXISTS IDX_stockmove_product   ON stock_movement(productVari
 CREATE INDEX IF NOT EXISTS IDX_stockmove_orderline ON stock_movement(orderLineId);
 CREATE INDEX IF NOT EXISTS IDX_stockmove_type      ON stock_movement(type_stock_movement);
 CREATE INDEX IF NOT EXISTS IDX_stockmove_created   ON stock_movement(createdAt);
+
+CREATE TABLE IF NOT EXISTS debt (
+  id TEXT PRIMARY KEY,
+  remoteId TEXT,
+  code TEXT,
+  notes TEXT,
+  balance INTEGER DEFAULT 0,
+  balanceDebt INTEGER DEFAULT 0,
+  dueDate TEXT,
+  statuses TEXT ,
+  customerId TEXT,
+  createdAt TEXT DEFAULT (datetime('now')),
+  updatedAt TEXT DEFAULT (datetime('now')),
+  deletedAt TEXT,
+  syncAt TEXT,
+  version INTEGER DEFAULT 0,
+  isDirty INTEGER DEFAULT 1
+);
+
+CREATE INDEX IF NOT EXISTS uq_debt_code_active ON debt(code) WHERE deletedAt IS NULL;
+ 

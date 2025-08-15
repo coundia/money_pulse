@@ -1,3 +1,4 @@
+// Quick add transaction sheet with selectable types: Depense, Revenu, Dette, Remboursement, Pret.
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -23,8 +24,8 @@ import '../products/product_repo_provider.dart';
 import '../products/widgets/product_form_panel.dart';
 import 'providers/transaction_list_providers.dart';
 import '../../app/providers/checkout_cart_usecase_provider.dart';
+import '../../app/providers/add_sale_to_debt_usecase_provider.dart';
 
-// local pieces
 import 'models/tx_item.dart';
 
 import 'widgets/amount_field_quickpad.dart';
@@ -33,10 +34,14 @@ import 'widgets/category_autocomplete.dart';
 import 'widgets/date_row.dart';
 import 'widgets/items_section.dart';
 import 'widgets/party_section.dart';
-import 'widgets/type_header.dart';
+import 'widgets/type_selector.dart';
+
+class SubmitFormIntent extends Intent {
+  const SubmitFormIntent();
+}
 
 class TransactionQuickAddSheet extends ConsumerStatefulWidget {
-  final bool initialIsDebit; // fixed at construction time
+  final bool initialIsDebit;
   const TransactionQuickAddSheet({super.key, this.initialIsDebit = true});
 
   @override
@@ -51,7 +56,7 @@ class _TransactionQuickAddSheetState
   final _descCtrl = TextEditingController();
   final _categoryCtrl = TextEditingController();
 
-  late final bool _isDebit = widget.initialIsDebit; // FIXED — no toggle
+  late TxKind _kind = widget.initialIsDebit ? TxKind.debit : TxKind.credit;
   DateTime _when = DateTime.now();
 
   Category? _selectedCategory;
@@ -84,7 +89,6 @@ class _TransactionQuickAddSheetState
       final catRepo = ref.read(categoryRepoProvider);
       final coRepo = ref.read(companyRepoProvider);
       final cuRepo = ref.read(customerRepoProvider);
-
       final cats = await catRepo.findAllActive();
       final cos = await coRepo.findAll(
         const CompanyQuery(limit: 300, offset: 0),
@@ -130,11 +134,11 @@ class _TransactionQuickAddSheetState
     return (d * 100).round();
   }
 
-  String get _amountPreview =>
-      Formatters.amountFromCents(_parseAmountToCents(_amountCtrl.text));
-
   List<Category> _filteredCategories(String query) {
-    final wanted = _isDebit ? 'DEBIT' : 'CREDIT';
+    String? wanted;
+    if (_kind == TxKind.debit) wanted = 'DEBIT';
+    if (_kind == TxKind.credit || _kind == TxKind.debt) wanted = 'CREDIT';
+    if (wanted == null) return const [];
     final base = _allCategories.where((c) => c.typeEntry == wanted);
     if (query.trim().isEmpty) return base.toList();
     final q = query.toLowerCase().trim();
@@ -157,15 +161,16 @@ class _TransactionQuickAddSheetState
     _categoryCtrl.text = c.code;
   }
 
-  /// Heuristique pour déterminer la catégorie par défaut lorsque des produits
-  /// sont présents : VENTE pour CREDIT, ACHAT pour DEBIT (si existante).
   Category? _findDefaultCategoryForProducts() {
-    final desiredType = _isDebit ? 'DEBIT' : 'CREDIT';
-    final preferCodes = _isDebit
+    String? desiredType;
+    if (_kind == TxKind.debit) desiredType = 'DEBIT';
+    if (_kind == TxKind.credit || _kind == TxKind.debt) desiredType = 'CREDIT';
+    if (desiredType == null) return null;
+
+    final preferCodes = _kind == TxKind.debit
         ? <String>['ACHAT', 'ACHATS', 'PURCHASE', 'PURCHASES']
         : <String>['VENTE', 'VENTES', 'SALE', 'SALES'];
 
-    // 1) Match exact du code
     final upperList = _allCategories
         .where((c) => c.typeEntry == desiredType)
         .toList(growable: false);
@@ -177,8 +182,7 @@ class _TransactionQuickAddSheetState
       if (hit != null) return hit;
     }
 
-    // 2) Match par mot-clé dans code/description
-    final containsAny = _isDebit
+    final containsAny = _kind == TxKind.debit
         ? <String>['ACHAT', 'PURCHASE', 'ACHATS']
         : <String>['VENTE', 'SALE', 'VENTES', 'SALES'];
     for (final c in upperList) {
@@ -188,24 +192,17 @@ class _TransactionQuickAddSheetState
         return c;
       }
     }
-
-    // 3) Fallback : première catégorie du type (si vraiment rien)
     return upperList.isNotEmpty ? upperList.first : null;
   }
 
-  /// Applique la catégorie par défaut liée aux produits (si trouvée).
   void _autoSelectCategoryForProducts() {
     final cat = _findDefaultCategoryForProducts();
     if (cat == null) return;
-    // si déjà sélectionnée, ne rien faire
     if (_selectedCategory?.id == cat.id) return;
-
     setState(() {
       _setCategoryInternal(cat);
     });
-
-    // Optionnel : petit feedback
-    final label = _isDebit ? 'Achat' : 'Vente';
+    final label = (_kind == TxKind.debit) ? 'Achat' : 'Vente';
     _snack('Catégorie $label sélectionnée automatiquement');
   }
 
@@ -287,10 +284,9 @@ class _TransactionQuickAddSheetState
           ..addAll(parsed);
         _lockAmountToItems = _items.isNotEmpty;
       });
-
       if (_items.isNotEmpty) {
         _syncAmountFromItems();
-        _autoSelectCategoryForProducts(); // <<< auto catégorie ici
+        _autoSelectCategoryForProducts();
       }
     }
   }
@@ -319,7 +315,6 @@ class _TransactionQuickAddSheetState
   }
 
   Future<void> _createProductAndAddLine() async {
-    // Load categories for the form
     final categories = await ref.read(categoryRepoProvider).findAllActive();
     if (!mounted) return;
 
@@ -331,7 +326,6 @@ class _TransactionQuickAddSheetState
     );
     if (formRes == null) return;
 
-    // Persist product
     final repo = ref.read(productRepoProvider);
     final now = DateTime.now();
     final p = Product(
@@ -355,7 +349,6 @@ class _TransactionQuickAddSheetState
     );
     await repo.create(p);
 
-    // Add a line to the current items with qty = 1
     setState(() {
       _items.add(
         TxItem(
@@ -370,16 +363,88 @@ class _TransactionQuickAddSheetState
       _lockAmountToItems = true;
     });
     _syncAmountFromItems();
-
-    // Auto catégorie après ajout d'un produit
     _autoSelectCategoryForProducts();
-
     _snack('Produit ajouté et ligne insérée');
+  }
+
+  List<Map<String, Object?>> _buildLines(int cents) {
+    if (_items.isNotEmpty) {
+      return _items
+          .map<Map<String, Object?>>(
+            (it) => {
+              'productId': it.productId,
+              'label': it.label,
+              'quantity': it.quantity,
+              'unitPrice': it.unitPriceCents,
+            },
+          )
+          .toList();
+    }
+    String label;
+    switch (_kind) {
+      case TxKind.debit:
+        label = 'Dépense';
+        break;
+      case TxKind.credit:
+        label = 'Revenu';
+        break;
+      case TxKind.debt:
+        label = 'Vente à crédit';
+        break;
+      case TxKind.remboursement:
+        label = 'Remboursement';
+        break;
+      case TxKind.pret:
+        label = 'Prêt';
+        break;
+    }
+    return [
+      {
+        'productId': null,
+        'label': (_descCtrl.text.trim().isEmpty
+            ? label
+            : _descCtrl.text.trim()),
+        'quantity': 1,
+        'unitPrice': cents,
+      },
+    ];
   }
 
   Future<void> _save() async {
     if (!_formKey.currentState!.validate()) return;
     await _ensureDefaultCompanyIfMissing();
+
+    final cents = _parseAmountToCents(_amountCtrl.text);
+
+    if (_kind == TxKind.debt) {
+      if (_customerId == null || _customerId!.isEmpty) {
+        _snack('Sélectionnez d’abord un client');
+        return;
+      }
+      final lines = _buildLines(cents);
+      try {
+        await ref
+            .read(addSaleToDebtUseCaseProvider)
+            .execute(
+              customerId: _customerId!,
+              companyId: _companyId,
+              categoryId: _selectedCategory?.id,
+              description: _descCtrl.text.trim().isEmpty
+                  ? null
+                  : _descCtrl.text.trim(),
+              when: _when,
+              lines: lines,
+            );
+        await ref.read(transactionsProvider.notifier).load();
+        await ref.read(balanceProvider.notifier).load();
+        ref.invalidate(transactionListItemsProvider);
+        ref.invalidate(selectedAccountProvider);
+        if (mounted) Navigator.of(context).pop(true);
+      } catch (e) {
+        _snack('Échec de l’enregistrement de la dette: $e');
+      }
+      return;
+    }
 
     final accountId = ref.read(selectedAccountIdProvider);
     if (accountId == null || accountId.isEmpty) {
@@ -387,34 +452,21 @@ class _TransactionQuickAddSheetState
       return;
     }
 
-    final cents = _parseAmountToCents(_amountCtrl.text);
-    final lines = _items.isNotEmpty
-        ? _items
-              .map<Map<String, Object?>>(
-                (it) => {
-                  'productId': it.productId,
-                  'label': it.label,
-                  'quantity': it.quantity,
-                  'unitPrice': it.unitPriceCents,
-                },
-              )
-              .toList()
-        : <Map<String, Object?>>[
-            {
-              'productId': null,
-              'label': (_descCtrl.text.trim().isEmpty
-                  ? (_isDebit ? 'Dépense' : 'Revenu')
-                  : _descCtrl.text.trim()),
-              'quantity': 1,
-              'unitPrice': cents,
-            },
-          ];
+    final typeEntry = switch (_kind) {
+      TxKind.debit => 'DEBIT',
+      TxKind.credit => 'CREDIT',
+      TxKind.remboursement => 'REMBOURSEMENT',
+      TxKind.pret => 'PRET',
+      TxKind.debt => 'DEBT',
+    };
+
+    final lines = _buildLines(cents);
 
     try {
       await ref
           .read(checkoutCartUseCaseProvider)
           .execute(
-            typeEntry: _isDebit ? 'DEBIT' : 'CREDIT',
+            typeEntry: typeEntry,
             accountId: accountId,
             categoryId: _selectedCategory?.id,
             description: _descCtrl.text.trim().isEmpty
@@ -495,8 +547,52 @@ class _TransactionQuickAddSheetState
   @override
   Widget build(BuildContext context) {
     final insets = MediaQuery.of(context).viewInsets.bottom;
-    final primaryLabel = _isDebit ? 'Ajouter dépense' : 'Ajouter revenu';
-    final title = _isDebit ? 'Ajouter une dépense' : 'Ajouter un revenu';
+
+    String title;
+    switch (_kind) {
+      case TxKind.debit:
+        title = 'Ajouter une dépense';
+        break;
+      case TxKind.credit:
+        title = 'Ajouter un revenu';
+        break;
+      case TxKind.debt:
+        title = 'Ajouter une dette';
+        break;
+      case TxKind.remboursement:
+        title = 'Ajouter un remboursement';
+        break;
+      case TxKind.pret:
+        title = 'Ajouter un prêt';
+        break;
+    }
+
+    String primaryLabel;
+    switch (_kind) {
+      case TxKind.debit:
+        primaryLabel = 'Ajouter dépense';
+        break;
+      case TxKind.credit:
+        primaryLabel = 'Ajouter revenu';
+        break;
+      case TxKind.debt:
+        primaryLabel = 'Ajouter à la dette';
+        break;
+      case TxKind.remboursement:
+        primaryLabel = 'Ajouter remboursement';
+        break;
+      case TxKind.pret:
+        primaryLabel = 'Ajouter prêt';
+        break;
+    }
+
+    final showCategory =
+        _kind == TxKind.debit || _kind == TxKind.credit || _kind == TxKind.debt;
+    final categoryType = _kind == TxKind.debit
+        ? 'DEBIT'
+        : (_kind == TxKind.credit || _kind == TxKind.debt ? 'CREDIT' : null);
+    final showItems =
+        _kind == TxKind.debit || _kind == TxKind.credit || _kind == TxKind.debt;
 
     return Shortcuts(
       shortcuts: <LogicalKeySet, Intent>{
@@ -537,7 +633,22 @@ class _TransactionQuickAddSheetState
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    TypeHeader(isDebit: _isDebit), // static header (no toggle)
+                    TypeSelector(
+                      value: _kind,
+                      onChanged: (k) {
+                        setState(() {
+                          _kind = k;
+                          if (!showItems) {
+                            _lockAmountToItems = false;
+                          }
+                          if (!showCategory) {
+                            _clearCategoryInternal();
+                          } else if (_items.isNotEmpty) {
+                            _autoSelectCategoryForProducts();
+                          }
+                        });
+                      },
+                    ),
                     const SizedBox(height: 12),
                     AmountFieldQuickPad(
                       controller: _amountCtrl,
@@ -554,8 +665,9 @@ class _TransactionQuickAddSheetState
                         500000,
                         1000000,
                       ],
-                      lockToItems: _items.isNotEmpty && _lockAmountToItems,
-                      onToggleLock: _items.isEmpty
+                      lockToItems:
+                          showItems && _items.isNotEmpty && _lockAmountToItems,
+                      onToggleLock: (!showItems || _items.isEmpty)
                           ? null
                           : (v) {
                               setState(() {
@@ -565,23 +677,21 @@ class _TransactionQuickAddSheetState
                             },
                       onChanged: () => setState(() {}),
                     ),
-
                     const SizedBox(height: 12),
-                    CategoryAutocomplete(
-                      controller: _categoryCtrl,
-                      initialSelected: _selectedCategory,
-                      optionsBuilder:
-                          _filteredCategories, // déjà filtrées par _isDebit
-                      onSelected: (c) =>
-                          setState(() => _setCategoryInternal(c)),
-                      onClear: () => setState(() => _clearCategoryInternal()),
-                      labelText: 'Catégorie',
-                      emptyHint: _isDebit
-                          ? 'Aucune catégorie Débit'
-                          : 'Aucune catégorie Crédit',
-                      typeEntry: _isDebit ? 'DEBIT' : 'CREDIT',
-                    ),
-
+                    if (showCategory)
+                      CategoryAutocomplete(
+                        controller: _categoryCtrl,
+                        initialSelected: _selectedCategory,
+                        optionsBuilder: _filteredCategories,
+                        onSelected: (c) =>
+                            setState(() => _setCategoryInternal(c)),
+                        onClear: () => setState(() => _clearCategoryInternal()),
+                        labelText: 'Catégorie',
+                        emptyHint: categoryType == 'DEBIT'
+                            ? 'Aucune catégorie Débit'
+                            : 'Aucune catégorie Crédit',
+                        typeEntry: categoryType ?? 'CREDIT',
+                      ),
                     const SizedBox(height: 12),
                     PartySection(
                       companies: _companies,
@@ -589,25 +699,27 @@ class _TransactionQuickAddSheetState
                       companyId: _companyId,
                       customerId: _customerId,
                       itemsCount: _items.length,
-                      isDebit: _isDebit,
+                      isDebit: _kind == TxKind.debit,
                       onCompanyChanged: _onSelectCompany,
                       onCustomerChanged: (v) => setState(() => _customerId = v),
                       onCreateCustomer: _createCustomerAndSelect,
                     ),
-                    const SizedBox(height: 12),
-                    ItemsSection(
-                      items: _items,
-                      totalCents: _itemsTotalCents,
-                      onPick: _openProductPicker,
-                      onClear: () {
-                        setState(() {
-                          _items.clear();
-                          _lockAmountToItems = false;
-                        });
-                      },
-                      onTapItem: _openProductPicker,
-                      onCreateProduct: _createProductAndAddLine,
-                    ),
+                    if (showItems) ...[
+                      const SizedBox(height: 12),
+                      ItemsSection(
+                        items: _items,
+                        totalCents: _itemsTotalCents,
+                        onPick: _openProductPicker,
+                        onClear: () {
+                          setState(() {
+                            _items.clear();
+                            _lockAmountToItems = false;
+                          });
+                        },
+                        onTapItem: _openProductPicker,
+                        onCreateProduct: _createProductAndAddLine,
+                      ),
+                    ],
                     const SizedBox(height: 12),
                     DateRow(when: _when, onPick: _pickDate),
                     const SizedBox(height: 12),

@@ -14,7 +14,7 @@ class SeedDefaultCompanyUseCase {
     final now = DateTime.now();
     final company = Company(
       id: const Uuid().v4(),
-      code: '',
+      code: 'SA',
       name: 'Main',
       description: 'Créée automatiquement',
       isDefault: true,

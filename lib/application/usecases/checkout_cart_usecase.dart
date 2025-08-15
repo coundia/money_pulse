@@ -1,4 +1,4 @@
-/// Use case that creates a transaction with items, updates stock levels, and inserts stock movement rows atomically with change_log entries.
+// Use case creating a transaction with optional stock moves and account update for typeEntry: DEBIT, CREDIT, DEBT, REMBOURSEMENT, PRET.
 import 'package:uuid/uuid.dart';
 import 'package:sqflite/sqflite.dart';
 import 'package:money_pulse/infrastructure/db/app_database.dart';
@@ -20,11 +20,12 @@ class CheckoutCartUseCase {
     required List<Map<String, Object?>> lines,
   }) async {
     final t = typeEntry.toUpperCase();
-    if (t != 'CREDIT' && t != 'DEBIT') {
+    const allowed = {'DEBIT', 'CREDIT', 'DEBT', 'REMBOURSEMENT', 'PRET'};
+    if (!allowed.contains(t)) {
       throw ArgumentError.value(
         typeEntry,
         'typeEntry',
-        "must be 'CREDIT' or 'DEBIT'",
+        "must be one of $allowed",
       );
     }
     if (lines.isEmpty) {
@@ -33,10 +34,13 @@ class CheckoutCartUseCase {
 
     int asInt(Object? v) => (v is int) ? v : int.tryParse('${v ?? 0}') ?? 0;
 
-    final acc = accountId != null
-        ? await accountRepo.findById(accountId)
-        : await accountRepo.findDefault();
-    if (acc == null) {
+    final needsAccount = t != 'DEBT';
+    final acc = needsAccount
+        ? (accountId != null
+              ? await accountRepo.findById(accountId)
+              : await accountRepo.findDefault())
+        : null;
+    if (needsAccount && acc == null) {
       throw StateError('No default account found');
     }
 
@@ -52,6 +56,14 @@ class CheckoutCartUseCase {
 
     await db.tx((txn) async {
       final resolvedCompany = await _resolveCompanyId(txn, companyId);
+      final nowIso = now.toIso8601String();
+
+      final status = switch (t) {
+        'DEBT' => 'DEBT',
+        'REMBOURSEMENT' => 'REPAYMENT',
+        'PRET' => 'LOAN',
+        _ => null,
+      };
 
       await txn.insert('transaction_entry', {
         'id': txId,
@@ -61,21 +73,22 @@ class CheckoutCartUseCase {
         'amount': total,
         'typeEntry': t,
         'dateTransaction': date.toIso8601String(),
-        'status': null,
-        'entityName': null,
-        'entityId': null,
-        'accountId': acc.id,
+        'status': status,
+        'entityName': customerId == null ? null : 'CUSTOMER',
+        'entityId': customerId,
+        'accountId': acc?.id,
         'categoryId': categoryId,
-        'companyId': companyId,
+        'companyId': resolvedCompany,
         'customerId': customerId,
-        'createdAt': now.toIso8601String(),
-        'updatedAt': now.toIso8601String(),
+        'createdAt': nowIso,
+        'updatedAt': nowIso,
         'deletedAt': null,
         'syncAt': null,
         'version': 0,
         'isDirty': 1,
       });
 
+      final affectsStock = t == 'DEBIT' || t == 'CREDIT' || t == 'DEBT';
       for (final l in lines) {
         final itemId = const Uuid().v4();
         final qty = asInt(l['quantity']);
@@ -90,64 +103,68 @@ class CheckoutCartUseCase {
           'productId': l['productId'],
           'label': (l['label'] ?? '').toString(),
           'quantity': safeQty,
+          'unitId': l['unitId'],
           'unitPrice': safeUp,
           'total': tot,
           'notes': null,
-          'createdAt': now.toIso8601String(),
-          'updatedAt': now.toIso8601String(),
+          'createdAt': nowIso,
+          'updatedAt': nowIso,
           'deletedAt': null,
           'syncAt': null,
           'version': 0,
           'isDirty': 1,
         });
 
-        final productIdStr = (l['productId']?.toString() ?? '');
-        if (productIdStr.isNotEmpty &&
-            safeQty > 0 &&
-            (resolvedCompany ?? '').isNotEmpty) {
-          final mvType = (t == 'DEBIT') ? 'IN' : 'OUT';
-          final movementId = await txn.insert('stock_movement', {
-            'type_stock_movement': mvType,
-            'quantity': safeQty,
-            'companyId': resolvedCompany,
-            'productVariantId': productIdStr,
-            'orderLineId': itemId,
-            'discriminator': 'TXN',
-            'createdAt': now.toIso8601String(),
-            'updatedAt': now.toIso8601String(),
-          });
-          await _upsertChangeLog(
-            txn,
-            'stock_movement',
-            '$movementId',
-            'INSERT',
-            now.toIso8601String(),
-          );
+        if (affectsStock) {
+          final productIdStr = (l['productId']?.toString() ?? '');
+          if (productIdStr.isNotEmpty &&
+              safeQty > 0 &&
+              (resolvedCompany ?? '').isNotEmpty) {
+            final mvType = (t == 'DEBIT') ? 'IN' : 'OUT';
+            final movementId = await txn.insert('stock_movement', {
+              'type_stock_movement': mvType,
+              'quantity': safeQty,
+              'companyId': resolvedCompany,
+              'productVariantId': productIdStr,
+              'orderLineId': itemId,
+              'discriminator': 'TXN',
+              'createdAt': nowIso,
+              'updatedAt': nowIso,
+            });
+            await _upsertChangeLog(
+              txn,
+              'stock_movement',
+              '$movementId',
+              'INSERT',
+              nowIso,
+            );
+          }
         }
       }
 
-      await _applyStockAdjustments(
-        txn: txn,
-        typeEntry: t,
-        lines: lines,
-        companyId: resolvedCompany,
-        nowIso: now.toIso8601String(),
-      );
+      if (affectsStock) {
+        await _applyStockAdjustments(
+          txn: txn,
+          typeEntry: t,
+          lines: lines,
+          companyId: resolvedCompany,
+          nowIso: nowIso,
+        );
+      }
 
-      final newBalance = t == 'CREDIT'
-          ? acc.balance + total
-          : acc.balance - total;
-      await txn.update(
-        'account',
-        {
-          'balance': newBalance,
-          'updatedAt': now.toIso8601String(),
-          'isDirty': 1,
-          'version': acc.version + 1,
-        },
-        where: 'id=?',
-        whereArgs: [acc.id],
-      );
+      if (needsAccount) {
+        final delta = switch (t) {
+          'DEBIT' => -total,
+          'CREDIT' => total,
+          'REMBOURSEMENT' => total,
+          'PRET' => -total,
+          _ => 0,
+        };
+        await txn.rawUpdate(
+          'UPDATE account SET balance = COALESCE(balance,0) + ?, updatedAt=?, isDirty=1, version=COALESCE(version,0)+1 WHERE id=?',
+          [delta, nowIso, acc!.id],
+        );
+      }
 
       final idLog = const Uuid().v4();
       await txn.rawInsert(
@@ -170,8 +187,8 @@ class CheckoutCartUseCase {
           'PENDING',
           0,
           null,
-          now.toIso8601String(),
-          now.toIso8601String(),
+          nowIso,
+          nowIso,
           null,
         ],
       );
@@ -188,9 +205,7 @@ class CheckoutCartUseCase {
     required String nowIso,
   }) async {
     String? company = companyId;
-    if (company == null || company.isEmpty) {
-      return;
-    }
+    if (company == null || company.isEmpty) return;
 
     final Map<String, int> totalsByVariant = {};
     for (final l in lines) {
@@ -203,14 +218,14 @@ class CheckoutCartUseCase {
     }
     if (totalsByVariant.isEmpty) return;
 
-    final sign = typeEntry == 'DEBIT' ? 1 : -1;
+    final sign = (typeEntry == 'DEBIT') ? 1 : -1;
 
     for (final entry in totalsByVariant.entries) {
       final pvId = entry.key;
       final qty = entry.value * sign;
 
       final row = await txn.rawQuery(
-        "SELECT id FROM stock_level WHERE productVariantId=? AND companyId=? LIMIT 1",
+        'SELECT id FROM stock_level WHERE productVariantId=? AND companyId=? LIMIT 1',
         [pvId, company],
       );
 
@@ -233,7 +248,7 @@ class CheckoutCartUseCase {
       }
 
       await txn.rawUpdate(
-        "UPDATE stock_level SET stockOnHand = COALESCE(stockOnHand,0) + ?, updatedAt=? WHERE productVariantId=? AND companyId=?",
+        'UPDATE stock_level SET stockOnHand = COALESCE(stockOnHand,0) + ?, updatedAt=? WHERE productVariantId=? AND companyId=?',
         [qty, nowIso, pvId, company],
       );
       await _upsertChangeLog(
@@ -249,7 +264,7 @@ class CheckoutCartUseCase {
   Future<String?> _resolveCompanyId(Transaction txn, String? provided) async {
     if (provided != null && provided.isNotEmpty) return provided;
     final def = await txn.rawQuery(
-      "SELECT id FROM company WHERE isDefault=1 AND deletedAt IS NULL LIMIT 1",
+      'SELECT id FROM company WHERE isDefault=1 AND deletedAt IS NULL LIMIT 1',
     );
     return def.isEmpty ? null : (def.first['id'] as String?);
   }
