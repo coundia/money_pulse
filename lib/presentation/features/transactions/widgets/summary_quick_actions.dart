@@ -1,4 +1,4 @@
-// Quick actions with expense/income and optional nav shortcuts to Transactions, POS, and Settings.
+// Responsive quick actions: auto-wrap grid with adaptive button sizing for many items, large icon stacked above label.
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:money_pulse/presentation/features/transactions/pages/transaction_list_page.dart';
@@ -38,110 +38,119 @@ class SummaryQuickActions extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final tiles = <Widget>[];
-    final isNarrow = MediaQuery.sizeOf(context).width < 360;
-
-    if (showExpenseButton) {
-      tiles.add(
-        _TonedFilledButton(
-          label: 'Dépense',
-          icon: Icons.trending_down_rounded,
-          tone: Theme.of(context).colorScheme.error,
-          onPressed: onAddExpense,
-        ),
-      );
-    }
-    if (showIncomeButton) {
-      if (tiles.isNotEmpty)
-        tiles.add(
-          SizedBox(width: isNarrow ? 0 : 12, height: isNarrow ? 12 : 0),
-        );
-      tiles.add(
-        _TonedFilledButton(
-          label: 'Revenu',
-          icon: Icons.trending_up_rounded,
-          tone: Theme.of(context).colorScheme.tertiary,
-          onPressed: onAddIncome,
-        ),
-      );
-    }
-
-    if (showNavShortcuts) {
-      if (tiles.isNotEmpty)
-        tiles.add(
-          SizedBox(width: isNarrow ? 0 : 12, height: isNarrow ? 12 : 0),
-        );
-      if (showNavTransactionsButton) {
-        tiles.add(
-          _TonedFilledButton(
-            label: 'Transactions',
-            icon: Icons.list_alt,
-            tone: Theme.of(context).colorScheme.primary,
-            onPressed: () {
-              HapticFeedback.selectionClick();
-              if (onOpenTransactions != null) {
-                onOpenTransactions!();
-              } else {
-                Navigator.of(context).push(
-                  MaterialPageRoute(
-                    builder: (_) => const TransactionListPage(),
-                  ),
-                );
-              }
-            },
-          ),
-        );
-      }
-      if (showNavPosButton) {
-        if (tiles.isNotEmpty)
-          tiles.add(
-            SizedBox(width: isNarrow ? 0 : 12, height: isNarrow ? 12 : 0),
+    return LayoutBuilder(
+      builder: (ctx, c) {
+        final buttons = <Widget>[];
+        if (showExpenseButton) {
+          buttons.add(
+            _TonedFilledButton(
+              label: 'Dépense',
+              icon: Icons.trending_down_rounded,
+              tone: Theme.of(context).colorScheme.error,
+              onPressed: onAddExpense,
+            ),
           );
-        tiles.add(
-          _TonedFilledButton(
-            label: 'POS',
-            icon: Icons.point_of_sale,
-            tone: Theme.of(context).colorScheme.secondary,
-            onPressed: () {
-              HapticFeedback.selectionClick();
-              if (onOpenPos != null) {
-                onOpenPos!();
-              } else {
-                Navigator.of(
-                  context,
-                ).push(MaterialPageRoute(builder: (_) => const PosPage()));
-              }
-            },
-          ),
-        );
-      }
-      if (showNavSettingsButton) {
-        if (tiles.isNotEmpty)
-          tiles.add(
-            SizedBox(width: isNarrow ? 0 : 12, height: isNarrow ? 12 : 0),
+        }
+        if (showIncomeButton) {
+          buttons.add(
+            _TonedFilledButton(
+              label: 'Revenu',
+              icon: Icons.trending_up_rounded,
+              tone: Theme.of(context).colorScheme.tertiary,
+              onPressed: onAddIncome,
+            ),
           );
-        tiles.add(
-          _TonedFilledButton(
-            label: 'Paramètres',
-            icon: Icons.settings,
-            tone: Theme.of(context).colorScheme.primary,
-            onPressed: () {
-              HapticFeedback.selectionClick();
-              if (onOpenSettings != null) {
-                onOpenSettings!();
-              } else {
-                Navigator.of(
-                  context,
-                ).push(MaterialPageRoute(builder: (_) => const SettingsPage()));
-              }
-            },
-          ),
-        );
-      }
-    }
+        }
 
-    if (tiles.isEmpty) return const SizedBox.shrink();
-    return isNarrow ? Column(children: tiles) : Row(children: tiles);
+        if (showNavShortcuts) {
+          if (showNavTransactionsButton) {
+            buttons.add(
+              _TonedFilledButton(
+                label: 'Transactions',
+                icon: Icons.list_alt,
+                tone: Theme.of(context).colorScheme.primary,
+                onPressed: () {
+                  HapticFeedback.selectionClick();
+                  if (onOpenTransactions != null) {
+                    onOpenTransactions!();
+                  } else {
+                    Navigator.of(context).push(
+                      MaterialPageRoute(
+                        builder: (_) => const TransactionListPage(),
+                      ),
+                    );
+                  }
+                },
+              ),
+            );
+          }
+          if (showNavPosButton) {
+            buttons.add(
+              _TonedFilledButton(
+                label: 'POS',
+                icon: Icons.point_of_sale,
+                tone: Theme.of(context).colorScheme.secondary,
+                onPressed: () {
+                  HapticFeedback.selectionClick();
+                  if (onOpenPos != null) {
+                    onOpenPos!();
+                  } else {
+                    Navigator.of(
+                      context,
+                    ).push(MaterialPageRoute(builder: (_) => const PosPage()));
+                  }
+                },
+              ),
+            );
+          }
+          if (showNavSettingsButton) {
+            buttons.add(
+              _TonedFilledButton(
+                label: 'Paramètres',
+                icon: Icons.settings,
+                tone: Theme.of(context).colorScheme.primary,
+                onPressed: () {
+                  HapticFeedback.selectionClick();
+                  if (onOpenSettings != null) {
+                    onOpenSettings!();
+                  } else {
+                    Navigator.of(context).push(
+                      MaterialPageRoute(builder: (_) => const SettingsPage()),
+                    );
+                  }
+                },
+              ),
+            );
+          }
+        }
+
+        if (buttons.isEmpty) return const SizedBox.shrink();
+
+        final spacing = 12.0;
+        final w = c.maxWidth;
+        final cols = _columnsForWidth(w);
+        final itemWidth = ((w - (spacing * (cols - 1))) / cols).clamp(
+          120.0,
+          360.0,
+        );
+
+        return Wrap(
+          spacing: spacing,
+          runSpacing: spacing,
+          children: buttons
+              .map((b) => SizedBox(width: itemWidth as double, child: b))
+              .toList(growable: false),
+        );
+      },
+    );
+  }
+
+  static int _columnsForWidth(double w) {
+    if (w >= 1040) return 5;
+    if (w >= 840) return 4;
+    if (w >= 600) return 3;
+    if (w >= 360) return 2;
+    return 1;
   }
 }
 
@@ -201,79 +210,83 @@ class _TonedFilledButtonState extends State<_TonedFilledButton> {
       width: hoveredOrFocused ? 1.2 : 0,
     );
 
-    return Expanded(
-      child: FocusableActionDetector(
-        mouseCursor: widget.onPressed == null
-            ? SystemMouseCursors.forbidden
-            : SystemMouseCursors.click,
-        onShowFocusHighlight: (v) => setState(() => _focused = v),
-        onShowHoverHighlight: (v) => setState(() => _hovered = v),
-        child: Semantics(
-          button: true,
-          label: widget.label,
-          onTapHint: 'Ouvrir',
-          child: AnimatedScale(
-            duration: const Duration(milliseconds: 120),
-            scale: _pressed ? 0.98 : 1.0,
-            child: AnimatedContainer(
-              duration: const Duration(milliseconds: 160),
-              curve: Curves.easeOut,
-              decoration: BoxDecoration(
-                gradient: LinearGradient(
-                  begin: Alignment.topLeft,
-                  end: Alignment.bottomRight,
-                  colors: [bgA, bgB],
-                ),
-                borderRadius: radius,
-                border: border,
-                boxShadow: boxShadow,
+    return FocusableActionDetector(
+      mouseCursor: widget.onPressed == null
+          ? SystemMouseCursors.forbidden
+          : SystemMouseCursors.click,
+      onShowFocusHighlight: (v) => setState(() => _focused = v),
+      onShowHoverHighlight: (v) => setState(() => _hovered = v),
+      child: Semantics(
+        button: true,
+        label: widget.label,
+        onTapHint: 'Ouvrir',
+        child: AnimatedScale(
+          duration: const Duration(milliseconds: 120),
+          scale: _pressed ? 0.98 : 1.0,
+          child: AnimatedContainer(
+            duration: const Duration(milliseconds: 160),
+            curve: Curves.easeOut,
+            decoration: BoxDecoration(
+              gradient: LinearGradient(
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+                colors: [bgA, bgB],
               ),
-              child: Material(
-                color: Colors.transparent,
-                child: InkWell(
-                  borderRadius: radius,
-                  splashColor: fg.withOpacity(0.10),
-                  highlightColor: fg.withOpacity(0.06),
-                  onHighlightChanged: (v) => setState(() => _pressed = v),
-                  onTap: widget.onPressed == null
-                      ? null
-                      : () {
-                          HapticFeedback.selectionClick();
-                          widget.onPressed!.call();
-                        },
-                  child: ConstrainedBox(
-                    constraints: const BoxConstraints(minHeight: 118),
-                    child: Padding(
-                      padding: const EdgeInsets.symmetric(
-                        vertical: 16,
-                        horizontal: 14,
-                      ),
-                      child: LayoutBuilder(
-                        builder: (context, constraints) {
-                          final w = constraints.maxWidth;
-                          final iconSize = w < 160 ? 44.0 : 56.0;
-                          return Column(
-                            mainAxisAlignment: MainAxisAlignment.center,
-                            children: [
-                              Icon(widget.icon, size: iconSize, color: fg),
-                              const SizedBox(height: 10),
-                              Text(
-                                widget.label,
-                                textAlign: TextAlign.center,
-                                maxLines: 2,
-                                overflow: TextOverflow.ellipsis,
-                                style: TextStyle(
-                                  fontWeight: FontWeight.w800,
-                                  color: fg,
-                                  letterSpacing: 0.2,
-                                ),
+              borderRadius: radius,
+              border: border,
+              boxShadow: boxShadow,
+            ),
+            child: Material(
+              color: Colors.transparent,
+              child: InkWell(
+                borderRadius: radius,
+                splashColor: fg.withOpacity(0.10),
+                highlightColor: fg.withOpacity(0.06),
+                onHighlightChanged: (v) => setState(() => _pressed = v),
+                onTap: widget.onPressed == null
+                    ? null
+                    : () {
+                        HapticFeedback.selectionClick();
+                        widget.onPressed!.call();
+                      },
+                child: LayoutBuilder(
+                  builder: (context, constraints) {
+                    final cw = constraints.maxWidth;
+                    final dense = cw < 150;
+                    final iconSize = cw < 150 ? 36.0 : (cw < 200 ? 44.0 : 56.0);
+                    final fontSize = cw < 150 ? 12.0 : 14.0;
+                    final padV = cw < 150 ? 12.0 : 16.0;
+                    final minH = cw < 150 ? 88.0 : 118.0;
+
+                    return ConstrainedBox(
+                      constraints: BoxConstraints(minHeight: minH),
+                      child: Padding(
+                        padding: EdgeInsets.symmetric(
+                          vertical: padV,
+                          horizontal: 14,
+                        ),
+                        child: Column(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Icon(widget.icon, size: iconSize, color: fg),
+                            const SizedBox(height: 8),
+                            Text(
+                              widget.label,
+                              textAlign: TextAlign.center,
+                              maxLines: dense ? 1 : 2,
+                              overflow: TextOverflow.ellipsis,
+                              style: TextStyle(
+                                fontWeight: FontWeight.w800,
+                                fontSize: fontSize,
+                                color: fg,
+                                letterSpacing: 0.2,
                               ),
-                            ],
-                          );
-                        },
+                            ),
+                          ],
+                        ),
                       ),
-                    ),
-                  ),
+                    );
+                  },
                 ),
               ),
             ),
