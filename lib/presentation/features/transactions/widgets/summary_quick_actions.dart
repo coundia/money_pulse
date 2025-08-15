@@ -171,10 +171,22 @@ class SummaryQuickActions extends StatelessWidget {
                 label: 'Recherche',
                 icon: Icons.search_rounded,
                 tone: Theme.of(context).colorScheme.primary,
-                onTap: onOpenSearch ?? () {},
+                onTap: () {
+                  HapticFeedback.selectionClick();
+                  if (onOpenSearch != null) {
+                    onOpenSearch!(); // délégué à la page hôte (ex: ouvre TxnSearchDelegate)
+                  } else {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(
+                        content: Text('Recherche indisponible ici'),
+                      ),
+                    );
+                  }
+                },
               ),
             );
           }
+
           if (showNavStockButton) {
             buttons.add(
               _btn(

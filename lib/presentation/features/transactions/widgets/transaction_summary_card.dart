@@ -1,4 +1,4 @@
-// Configurable summary card that reads persisted visibility prefs and injects quick actions with nav shortcuts.
+// Configurable summary card injecting quick actions and wiring onOpenSearch down to SummaryQuickActions.
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -51,8 +51,11 @@ class TransactionSummaryCard extends ConsumerWidget {
   final VoidCallback onOpenSettings;
   final VoidCallback? onAddExpense;
   final VoidCallback? onAddIncome;
+
+  // Optional navigations
   final VoidCallback? onOpenTransactions;
   final VoidCallback? onOpenPos;
+  final VoidCallback? onOpenSearch; // <-- ajouté
 
   const TransactionSummaryCard({
     super.key,
@@ -69,6 +72,7 @@ class TransactionSummaryCard extends ConsumerWidget {
     this.onAddIncome,
     this.onOpenTransactions,
     this.onOpenPos,
+    this.onOpenSearch, // <-- ajouté
   });
 
   @override
@@ -166,34 +170,30 @@ class TransactionSummaryCard extends ConsumerWidget {
                 children: [
                   const SizedBox(height: 6),
                   if (prefs.showQuickActions)
-                    if (prefs.showQuickActions)
-                      SummaryQuickActions(
-                        onAddExpense: prefs.showExpenseButton
-                            ? onAddExpense
-                            : null,
-                        onAddIncome: prefs.showIncomeButton
-                            ? onAddIncome
-                            : null,
-                        showExpenseButton: prefs.showExpenseButton,
-                        showIncomeButton: prefs.showIncomeButton,
-                        showNavShortcuts: prefs.showNavShortcuts,
-                        showNavTransactionsButton:
-                            prefs.showNavTransactionsButton,
-                        showNavPosButton: prefs.showNavPosButton,
-                        showNavSettingsButton: prefs.showNavSettingsButton,
-
-                        showNavSearchButton: prefs.showNavSearchButton,
-                        showNavStockButton: prefs.showNavStockButton,
-                        showNavReportButton: prefs.showNavReportButton,
-                        showNavProductsButton: prefs.showNavProductsButton,
-                        showNavCustomersButton: prefs.showNavCustomersButton,
-                        showNavCategoriesButton: prefs.showNavCategoriesButton,
-                        showNavAccountsButton: prefs.showNavAccountsButton,
-
-                        onOpenTransactions: onOpenTransactions,
-                        onOpenPos: onOpenPos,
-                        onOpenSettings: onOpenSettings,
-                      ),
+                    SummaryQuickActions(
+                      onAddExpense: prefs.showExpenseButton
+                          ? onAddExpense
+                          : null,
+                      onAddIncome: prefs.showIncomeButton ? onAddIncome : null,
+                      showExpenseButton: prefs.showExpenseButton,
+                      showIncomeButton: prefs.showIncomeButton,
+                      showNavShortcuts: prefs.showNavShortcuts,
+                      showNavTransactionsButton:
+                          prefs.showNavTransactionsButton,
+                      showNavPosButton: prefs.showNavPosButton,
+                      showNavSettingsButton: prefs.showNavSettingsButton,
+                      showNavSearchButton: prefs.showNavSearchButton,
+                      showNavStockButton: prefs.showNavStockButton,
+                      showNavReportButton: prefs.showNavReportButton,
+                      showNavProductsButton: prefs.showNavProductsButton,
+                      showNavCustomersButton: prefs.showNavCustomersButton,
+                      showNavCategoriesButton: prefs.showNavCategoriesButton,
+                      showNavAccountsButton: prefs.showNavAccountsButton,
+                      onOpenTransactions: onOpenTransactions,
+                      onOpenPos: onOpenPos,
+                      onOpenSettings: onOpenSettings,
+                      onOpenSearch: onOpenSearch, // <-- transmis
+                    ),
                   if (prefs.showQuickActions) const SizedBox(height: 10),
                   if (prefs.showPeriodHeader)
                     SummaryPeriodHeader(
