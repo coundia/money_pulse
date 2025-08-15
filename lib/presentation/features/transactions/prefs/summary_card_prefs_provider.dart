@@ -1,4 +1,4 @@
-// Riverpod state + persistence for TransactionSummaryCard visibility preferences, including quick actions and nav shortcuts.
+// Riverpod state + persistence for TransactionSummaryCard preferences (quick actions + extended nav shortcuts).
 import 'dart:convert';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -13,6 +13,15 @@ class SummaryCardPrefs {
   final bool showNavPosButton;
   final bool showNavSettingsButton;
 
+  // New nav shortcuts (all hidden by default)
+  final bool showNavSearchButton;
+  final bool showNavStockButton;
+  final bool showNavReportButton;
+  final bool showNavProductsButton;
+  final bool showNavCustomersButton;
+  final bool showNavCategoriesButton;
+  final bool showNavAccountsButton;
+
   final bool showPeriodHeader;
   final bool showMetrics;
 
@@ -24,6 +33,13 @@ class SummaryCardPrefs {
     required this.showNavTransactionsButton,
     required this.showNavPosButton,
     required this.showNavSettingsButton,
+    required this.showNavSearchButton,
+    required this.showNavStockButton,
+    required this.showNavReportButton,
+    required this.showNavProductsButton,
+    required this.showNavCustomersButton,
+    required this.showNavCategoriesButton,
+    required this.showNavAccountsButton,
     required this.showPeriodHeader,
     required this.showMetrics,
   });
@@ -36,6 +52,14 @@ class SummaryCardPrefs {
     showNavTransactionsButton: false,
     showNavPosButton: true,
     showNavSettingsButton: false,
+    // New defaults (masked)
+    showNavSearchButton: false,
+    showNavStockButton: false,
+    showNavReportButton: false,
+    showNavProductsButton: false,
+    showNavCustomersButton: false,
+    showNavCategoriesButton: false,
+    showNavAccountsButton: false,
     showPeriodHeader: false,
     showMetrics: false,
   );
@@ -48,6 +72,13 @@ class SummaryCardPrefs {
     bool? showNavTransactionsButton,
     bool? showNavPosButton,
     bool? showNavSettingsButton,
+    bool? showNavSearchButton,
+    bool? showNavStockButton,
+    bool? showNavReportButton,
+    bool? showNavProductsButton,
+    bool? showNavCustomersButton,
+    bool? showNavCategoriesButton,
+    bool? showNavAccountsButton,
     bool? showPeriodHeader,
     bool? showMetrics,
   }) {
@@ -61,6 +92,17 @@ class SummaryCardPrefs {
       showNavPosButton: showNavPosButton ?? this.showNavPosButton,
       showNavSettingsButton:
           showNavSettingsButton ?? this.showNavSettingsButton,
+      showNavSearchButton: showNavSearchButton ?? this.showNavSearchButton,
+      showNavStockButton: showNavStockButton ?? this.showNavStockButton,
+      showNavReportButton: showNavReportButton ?? this.showNavReportButton,
+      showNavProductsButton:
+          showNavProductsButton ?? this.showNavProductsButton,
+      showNavCustomersButton:
+          showNavCustomersButton ?? this.showNavCustomersButton,
+      showNavCategoriesButton:
+          showNavCategoriesButton ?? this.showNavCategoriesButton,
+      showNavAccountsButton:
+          showNavAccountsButton ?? this.showNavAccountsButton,
       showPeriodHeader: showPeriodHeader ?? this.showPeriodHeader,
       showMetrics: showMetrics ?? this.showMetrics,
     );
@@ -74,39 +116,37 @@ class SummaryCardPrefs {
     'showNavTransactionsButton': showNavTransactionsButton,
     'showNavPosButton': showNavPosButton,
     'showNavSettingsButton': showNavSettingsButton,
+    'showNavSearchButton': showNavSearchButton,
+    'showNavStockButton': showNavStockButton,
+    'showNavReportButton': showNavReportButton,
+    'showNavProductsButton': showNavProductsButton,
+    'showNavCustomersButton': showNavCustomersButton,
+    'showNavCategoriesButton': showNavCategoriesButton,
+    'showNavAccountsButton': showNavAccountsButton,
     'showPeriodHeader': showPeriodHeader,
     'showMetrics': showMetrics,
   };
 
   factory SummaryCardPrefs.fromMap(Map<String, dynamic> map) {
     return SummaryCardPrefs(
-      showQuickActions: map['showQuickActions'] is bool
-          ? map['showQuickActions'] as bool
-          : true,
-      showExpenseButton: map['showExpenseButton'] is bool
-          ? map['showExpenseButton'] as bool
-          : true,
-      showIncomeButton: map['showIncomeButton'] is bool
-          ? map['showIncomeButton'] as bool
-          : true,
-      showNavShortcuts: map['showNavShortcuts'] is bool
-          ? map['showNavShortcuts'] as bool
-          : true,
-      showNavTransactionsButton: map['showNavTransactionsButton'] is bool
-          ? map['showNavTransactionsButton'] as bool
-          : false,
-      showNavPosButton: map['showNavPosButton'] is bool
-          ? map['showNavPosButton'] as bool
-          : true,
-      showNavSettingsButton: map['showNavSettingsButton'] is bool
-          ? map['showNavSettingsButton'] as bool
-          : false,
-      showPeriodHeader: map['showPeriodHeader'] is bool
-          ? map['showPeriodHeader'] as bool
-          : false,
-      showMetrics: map['showMetrics'] is bool
-          ? map['showMetrics'] as bool
-          : false,
+      showQuickActions: (map['showQuickActions'] as bool?) ?? true,
+      showExpenseButton: (map['showExpenseButton'] as bool?) ?? true,
+      showIncomeButton: (map['showIncomeButton'] as bool?) ?? true,
+      showNavShortcuts: (map['showNavShortcuts'] as bool?) ?? true,
+      showNavTransactionsButton:
+          (map['showNavTransactionsButton'] as bool?) ?? false,
+      showNavPosButton: (map['showNavPosButton'] as bool?) ?? true,
+      showNavSettingsButton: (map['showNavSettingsButton'] as bool?) ?? false,
+      showNavSearchButton: (map['showNavSearchButton'] as bool?) ?? false,
+      showNavStockButton: (map['showNavStockButton'] as bool?) ?? false,
+      showNavReportButton: (map['showNavReportButton'] as bool?) ?? false,
+      showNavProductsButton: (map['showNavProductsButton'] as bool?) ?? false,
+      showNavCustomersButton: (map['showNavCustomersButton'] as bool?) ?? false,
+      showNavCategoriesButton:
+          (map['showNavCategoriesButton'] as bool?) ?? false,
+      showNavAccountsButton: (map['showNavAccountsButton'] as bool?) ?? false,
+      showPeriodHeader: (map['showPeriodHeader'] as bool?) ?? false,
+      showMetrics: (map['showMetrics'] as bool?) ?? false,
     );
   }
 }
@@ -170,6 +210,41 @@ class SummaryCardPrefsController extends StateNotifier<SummaryCardPrefs> {
 
   Future<void> setShowNavSettingsButton(bool v) async {
     state = state.copyWith(showNavSettingsButton: v);
+    await _save();
+  }
+
+  Future<void> setShowNavSearchButton(bool v) async {
+    state = state.copyWith(showNavSearchButton: v);
+    await _save();
+  }
+
+  Future<void> setShowNavStockButton(bool v) async {
+    state = state.copyWith(showNavStockButton: v);
+    await _save();
+  }
+
+  Future<void> setShowNavReportButton(bool v) async {
+    state = state.copyWith(showNavReportButton: v);
+    await _save();
+  }
+
+  Future<void> setShowNavProductsButton(bool v) async {
+    state = state.copyWith(showNavProductsButton: v);
+    await _save();
+  }
+
+  Future<void> setShowNavCustomersButton(bool v) async {
+    state = state.copyWith(showNavCustomersButton: v);
+    await _save();
+  }
+
+  Future<void> setShowNavCategoriesButton(bool v) async {
+    state = state.copyWith(showNavCategoriesButton: v);
+    await _save();
+  }
+
+  Future<void> setShowNavAccountsButton(bool v) async {
+    state = state.copyWith(showNavAccountsButton: v);
     await _save();
   }
 

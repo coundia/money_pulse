@@ -166,22 +166,34 @@ class TransactionSummaryCard extends ConsumerWidget {
                 children: [
                   const SizedBox(height: 6),
                   if (prefs.showQuickActions)
-                    SummaryQuickActions(
-                      onAddExpense: prefs.showExpenseButton
-                          ? onAddExpense
-                          : null,
-                      onAddIncome: prefs.showIncomeButton ? onAddIncome : null,
-                      showExpenseButton: prefs.showExpenseButton,
-                      showIncomeButton: prefs.showIncomeButton,
-                      showNavShortcuts: prefs.showNavShortcuts,
-                      showNavTransactionsButton:
-                          prefs.showNavTransactionsButton,
-                      showNavPosButton: prefs.showNavPosButton,
-                      showNavSettingsButton: prefs.showNavSettingsButton,
-                      onOpenTransactions: onOpenTransactions,
-                      onOpenPos: onOpenPos,
-                      onOpenSettings: onOpenSettings,
-                    ),
+                    if (prefs.showQuickActions)
+                      SummaryQuickActions(
+                        onAddExpense: prefs.showExpenseButton
+                            ? onAddExpense
+                            : null,
+                        onAddIncome: prefs.showIncomeButton
+                            ? onAddIncome
+                            : null,
+                        showExpenseButton: prefs.showExpenseButton,
+                        showIncomeButton: prefs.showIncomeButton,
+                        showNavShortcuts: prefs.showNavShortcuts,
+                        showNavTransactionsButton:
+                            prefs.showNavTransactionsButton,
+                        showNavPosButton: prefs.showNavPosButton,
+                        showNavSettingsButton: prefs.showNavSettingsButton,
+
+                        showNavSearchButton: prefs.showNavSearchButton,
+                        showNavStockButton: prefs.showNavStockButton,
+                        showNavReportButton: prefs.showNavReportButton,
+                        showNavProductsButton: prefs.showNavProductsButton,
+                        showNavCustomersButton: prefs.showNavCustomersButton,
+                        showNavCategoriesButton: prefs.showNavCategoriesButton,
+                        showNavAccountsButton: prefs.showNavAccountsButton,
+
+                        onOpenTransactions: onOpenTransactions,
+                        onOpenPos: onOpenPos,
+                        onOpenSettings: onOpenSettings,
+                      ),
                   if (prefs.showQuickActions) const SizedBox(height: 10),
                   if (prefs.showPeriodHeader)
                     SummaryPeriodHeader(

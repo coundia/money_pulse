@@ -1,9 +1,16 @@
-// Responsive quick actions: auto-wrap grid with adaptive button sizing for many items, large icon stacked above label.
+// Responsive quick actions grid with extended nav shortcuts; all new shortcuts are hidden by default via prefs.
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+
 import 'package:money_pulse/presentation/features/transactions/pages/transaction_list_page.dart';
 import 'package:money_pulse/presentation/features/pos/pos_page.dart';
 import 'package:money_pulse/presentation/features/settings/settings_page.dart';
+import 'package:money_pulse/presentation/features/reports/report_page.dart';
+import 'package:money_pulse/presentation/features/products/product_list_page.dart';
+import 'package:money_pulse/presentation/features/customers/customer_list_page.dart';
+import 'package:money_pulse/presentation/features/categories/category_list_page.dart';
+import 'package:money_pulse/presentation/features/accounts/account_page.dart';
+import 'package:money_pulse/presentation/features/stock/stock_level_list_page.dart';
 
 class SummaryQuickActions extends StatelessWidget {
   final VoidCallback? onAddExpense;
@@ -17,9 +24,26 @@ class SummaryQuickActions extends StatelessWidget {
   final bool showNavPosButton;
   final bool showNavSettingsButton;
 
+  // New flags
+  final bool showNavSearchButton;
+  final bool showNavStockButton;
+  final bool showNavReportButton;
+  final bool showNavProductsButton;
+  final bool showNavCustomersButton;
+  final bool showNavCategoriesButton;
+  final bool showNavAccountsButton;
+
+  // Optional callbacks to override navigation (e.g., bottom nav tab switch or custom search)
   final VoidCallback? onOpenTransactions;
   final VoidCallback? onOpenPos;
   final VoidCallback? onOpenSettings;
+  final VoidCallback? onOpenSearch;
+  final VoidCallback? onOpenStock;
+  final VoidCallback? onOpenReport;
+  final VoidCallback? onOpenProducts;
+  final VoidCallback? onOpenCustomers;
+  final VoidCallback? onOpenCategories;
+  final VoidCallback? onOpenAccounts;
 
   const SummaryQuickActions({
     super.key,
@@ -31,9 +55,23 @@ class SummaryQuickActions extends StatelessWidget {
     this.showNavTransactionsButton = true,
     this.showNavPosButton = true,
     this.showNavSettingsButton = true,
+    this.showNavSearchButton = false,
+    this.showNavStockButton = false,
+    this.showNavReportButton = false,
+    this.showNavProductsButton = false,
+    this.showNavCustomersButton = false,
+    this.showNavCategoriesButton = false,
+    this.showNavAccountsButton = false,
     this.onOpenTransactions,
     this.onOpenPos,
     this.onOpenSettings,
+    this.onOpenSearch,
+    this.onOpenStock,
+    this.onOpenReport,
+    this.onOpenProducts,
+    this.onOpenCustomers,
+    this.onOpenCategories,
+    this.onOpenAccounts,
   });
 
   @override
@@ -41,84 +79,215 @@ class SummaryQuickActions extends StatelessWidget {
     return LayoutBuilder(
       builder: (ctx, c) {
         final buttons = <Widget>[];
+
+        // Add / Income
         if (showExpenseButton) {
           buttons.add(
-            _TonedFilledButton(
+            _btn(
+              context,
               label: 'Dépense',
               icon: Icons.trending_down_rounded,
               tone: Theme.of(context).colorScheme.error,
-              onPressed: onAddExpense,
+              onTap: onAddExpense,
             ),
           );
         }
         if (showIncomeButton) {
           buttons.add(
-            _TonedFilledButton(
+            _btn(
+              context,
               label: 'Revenu',
               icon: Icons.trending_up_rounded,
               tone: Theme.of(context).colorScheme.tertiary,
-              onPressed: onAddIncome,
+              onTap: onAddIncome,
             ),
           );
         }
 
+        // Nav shortcuts
         if (showNavShortcuts) {
           if (showNavTransactionsButton) {
             buttons.add(
-              _TonedFilledButton(
+              _btn(
+                context,
                 label: 'Transactions',
                 icon: Icons.list_alt,
                 tone: Theme.of(context).colorScheme.primary,
-                onPressed: () {
-                  HapticFeedback.selectionClick();
-                  if (onOpenTransactions != null) {
-                    onOpenTransactions!();
-                  } else {
-                    Navigator.of(context).push(
-                      MaterialPageRoute(
-                        builder: (_) => const TransactionListPage(),
-                      ),
-                    );
-                  }
-                },
+                onTap:
+                    onOpenTransactions ??
+                    () {
+                      HapticFeedback.selectionClick();
+                      Navigator.of(context).push(
+                        MaterialPageRoute(
+                          builder: (_) => const TransactionListPage(),
+                        ),
+                      );
+                    },
               ),
             );
           }
           if (showNavPosButton) {
             buttons.add(
-              _TonedFilledButton(
+              _btn(
+                context,
                 label: 'POS',
                 icon: Icons.point_of_sale,
                 tone: Theme.of(context).colorScheme.secondary,
-                onPressed: () {
-                  HapticFeedback.selectionClick();
-                  if (onOpenPos != null) {
-                    onOpenPos!();
-                  } else {
-                    Navigator.of(
-                      context,
-                    ).push(MaterialPageRoute(builder: (_) => const PosPage()));
-                  }
-                },
+                onTap:
+                    onOpenPos ??
+                    () {
+                      HapticFeedback.selectionClick();
+                      Navigator.of(context).push(
+                        MaterialPageRoute(builder: (_) => const PosPage()),
+                      );
+                    },
               ),
             );
           }
           if (showNavSettingsButton) {
             buttons.add(
-              _TonedFilledButton(
+              _btn(
+                context,
                 label: 'Paramètres',
                 icon: Icons.settings,
                 tone: Theme.of(context).colorScheme.primary,
-                onPressed: () {
-                  HapticFeedback.selectionClick();
-                  if (onOpenSettings != null) {
-                    onOpenSettings!();
-                  } else {
-                    Navigator.of(context).push(
-                      MaterialPageRoute(builder: (_) => const SettingsPage()),
-                    );
-                  }
-                },
+                onTap:
+                    onOpenSettings ??
+                    () {
+                      HapticFeedback.selectionClick();
+                      Navigator.of(context).push(
+                        MaterialPageRoute(builder: (_) => const SettingsPage()),
+                      );
+                    },
+              ),
+            );
+          }
+
+          // Extended (all hidden by default)
+          if (showNavSearchButton) {
+            buttons.add(
+              _btn(
+                context,
+                label: 'Recherche',
+                icon: Icons.search_rounded,
+                tone: Theme.of(context).colorScheme.primary,
+                onTap: onOpenSearch ?? () {},
+              ),
+            );
+          }
+          if (showNavStockButton) {
+            buttons.add(
+              _btn(
+                context,
+                label: 'Stock',
+                icon: Icons.inventory_rounded,
+                tone: Theme.of(context).colorScheme.primary,
+                onTap:
+                    onOpenStock ??
+                    () {
+                      HapticFeedback.selectionClick();
+                      Navigator.of(context).push(
+                        MaterialPageRoute(
+                          builder: (_) => const StockLevelListPage(),
+                        ),
+                      );
+                    },
+              ),
+            );
+          }
+          if (showNavReportButton) {
+            buttons.add(
+              _btn(
+                context,
+                label: 'Rapport',
+                icon: Icons.assessment_rounded,
+                tone: Theme.of(context).colorScheme.primary,
+                onTap:
+                    onOpenReport ??
+                    () {
+                      HapticFeedback.selectionClick();
+                      Navigator.of(context).push(
+                        MaterialPageRoute(builder: (_) => const ReportPage()),
+                      );
+                    },
+              ),
+            );
+          }
+          if (showNavProductsButton) {
+            buttons.add(
+              _btn(
+                context,
+                label: 'Produits',
+                icon: Icons.inventory_2_rounded,
+                tone: Theme.of(context).colorScheme.primary,
+                onTap:
+                    onOpenProducts ??
+                    () {
+                      HapticFeedback.selectionClick();
+                      Navigator.of(context).push(
+                        MaterialPageRoute(
+                          builder: (_) => const ProductListPage(),
+                        ),
+                      );
+                    },
+              ),
+            );
+          }
+          if (showNavCustomersButton) {
+            buttons.add(
+              _btn(
+                context,
+                label: 'Clients',
+                icon: Icons.group_rounded,
+                tone: Theme.of(context).colorScheme.primary,
+                onTap:
+                    onOpenCustomers ??
+                    () {
+                      HapticFeedback.selectionClick();
+                      Navigator.of(context).push(
+                        MaterialPageRoute(
+                          builder: (_) => const CustomerListPage(),
+                        ),
+                      );
+                    },
+              ),
+            );
+          }
+          if (showNavCategoriesButton) {
+            buttons.add(
+              _btn(
+                context,
+                label: 'Catégories',
+                icon: Icons.category_outlined,
+                tone: Theme.of(context).colorScheme.primary,
+                onTap:
+                    onOpenCategories ??
+                    () {
+                      HapticFeedback.selectionClick();
+                      Navigator.of(context).push(
+                        MaterialPageRoute(
+                          builder: (_) => const CategoryListPage(),
+                        ),
+                      );
+                    },
+              ),
+            );
+          }
+          if (showNavAccountsButton) {
+            buttons.add(
+              _btn(
+                context,
+                label: 'Comptes',
+                icon: Icons.account_balance_wallet_outlined,
+                tone: Theme.of(context).colorScheme.primary,
+                onTap:
+                    onOpenAccounts ??
+                    () {
+                      HapticFeedback.selectionClick();
+                      Navigator.of(context).push(
+                        MaterialPageRoute(builder: (_) => const AccountPage()),
+                      );
+                    },
               ),
             );
           }
@@ -142,6 +311,21 @@ class SummaryQuickActions extends StatelessWidget {
               .toList(growable: false),
         );
       },
+    );
+  }
+
+  Widget _btn(
+    BuildContext context, {
+    required String label,
+    required IconData icon,
+    required Color tone,
+    required VoidCallback? onTap,
+  }) {
+    return _TonedFilledButton(
+      label: label,
+      icon: icon,
+      tone: tone,
+      onPressed: onTap,
     );
   }
 
