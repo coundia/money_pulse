@@ -60,14 +60,8 @@ class SummaryCardPrefsPanel extends ConsumerWidget {
                   : null,
               subtitle: const Text('Dépend des actions rapides'),
             ),
+
             // Core
-            SwitchListTile.adaptive(
-              title: const Text('Transactions'),
-              value: prefs.showNavTransactionsButton,
-              onChanged: prefs.showQuickActions && prefs.showNavShortcuts
-                  ? (v) => ctrl.setShowNavTransactionsButton(v)
-                  : null,
-            ),
             SwitchListTile.adaptive(
               title: const Text('POS'),
               value: prefs.showNavPosButton,

@@ -1,4 +1,4 @@
-// Responsive quick actions grid with extended nav shortcuts; all new shortcuts are hidden by default via prefs.
+// Responsive quick actions grid with extended nav shortcuts; en petits écrans, force au moins 3 icônes par rangée.
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
@@ -174,7 +174,7 @@ class SummaryQuickActions extends StatelessWidget {
                 onTap: () {
                   HapticFeedback.selectionClick();
                   if (onOpenSearch != null) {
-                    onOpenSearch!(); // délégué à la page hôte (ex: ouvre TxnSearchDelegate)
+                    onOpenSearch!();
                   } else {
                     ScaffoldMessenger.of(context).showSnackBar(
                       const SnackBar(
@@ -186,7 +186,6 @@ class SummaryQuickActions extends StatelessWidget {
               ),
             );
           }
-
           if (showNavStockButton) {
             buttons.add(
               _btn(
@@ -307,13 +306,14 @@ class SummaryQuickActions extends StatelessWidget {
 
         if (buttons.isEmpty) return const SizedBox.shrink();
 
-        final spacing = 12.0;
+        // --- Responsive grid: au moins 3 colonnes sur petits écrans ---
         final w = c.maxWidth;
-        final cols = _columnsForWidth(w);
-        final itemWidth = ((w - (spacing * (cols - 1))) / cols).clamp(
-          120.0,
-          360.0,
-        );
+        final isSmall = w < 360;
+        final spacing = isSmall ? 8.0 : 12.0;
+
+        final cols = _columnsForWidth(w, buttons.length);
+        final calcWidth = (w - (spacing * (cols - 1))) / cols;
+        final itemWidth = calcWidth.clamp(64.0, 360.0);
 
         return Wrap(
           spacing: spacing,
@@ -341,12 +341,14 @@ class SummaryQuickActions extends StatelessWidget {
     );
   }
 
-  static int _columnsForWidth(double w) {
+  // Force au moins 3 colonnes sur petits écrans si ≥ 3 boutons.
+  static int _columnsForWidth(double w, int count) {
     if (w >= 1040) return 5;
     if (w >= 840) return 4;
     if (w >= 600) return 3;
-    if (w >= 360) return 2;
-    return 1;
+    if (w >= 360) return 3; // au lieu de 2 auparavant
+    // < 360 px : essai 3 colonnes si au moins 3 boutons, sinon s’adapte au nombre
+    return count >= 3 ? 3 : count;
   }
 }
 
@@ -448,28 +450,32 @@ class _TonedFilledButtonState extends State<_TonedFilledButton> {
                 child: LayoutBuilder(
                   builder: (context, constraints) {
                     final cw = constraints.maxWidth;
-                    final dense = cw < 150;
-                    final iconSize = cw < 150 ? 36.0 : (cw < 200 ? 44.0 : 56.0);
-                    final fontSize = cw < 150 ? 12.0 : 14.0;
-                    final padV = cw < 150 ? 12.0 : 16.0;
-                    final minH = cw < 150 ? 88.0 : 118.0;
+                    final veryTight =
+                        cw < 96; // pour forcer 3 colonnes sur ultra petit
+                    final tight = cw < 150;
+                    final iconSize = veryTight
+                        ? 28.0
+                        : (tight ? 36.0 : (cw < 200 ? 44.0 : 56.0));
+                    final fontSize = veryTight ? 11.0 : (tight ? 12.0 : 14.0);
+                    final padV = veryTight ? 10.0 : (tight ? 12.0 : 16.0);
+                    final minH = veryTight ? 74.0 : (tight ? 88.0 : 118.0);
 
                     return ConstrainedBox(
                       constraints: BoxConstraints(minHeight: minH),
                       child: Padding(
                         padding: EdgeInsets.symmetric(
                           vertical: padV,
-                          horizontal: 14,
+                          horizontal: 12,
                         ),
                         child: Column(
                           mainAxisAlignment: MainAxisAlignment.center,
                           children: [
                             Icon(widget.icon, size: iconSize, color: fg),
-                            const SizedBox(height: 8),
+                            const SizedBox(height: 6),
                             Text(
                               widget.label,
                               textAlign: TextAlign.center,
-                              maxLines: dense ? 1 : 2,
+                              maxLines: 2,
                               overflow: TextOverflow.ellipsis,
                               style: TextStyle(
                                 fontWeight: FontWeight.w800,

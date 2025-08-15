@@ -50,7 +50,7 @@ class SummaryCardPrefs {
     showIncomeButton: true,
     showNavShortcuts: true,
     showNavTransactionsButton: false,
-    showNavPosButton: true,
+    showNavPosButton: false,
     showNavSettingsButton: false,
     // New defaults (masked)
     showNavSearchButton: false,
