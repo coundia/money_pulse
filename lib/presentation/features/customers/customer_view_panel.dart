@@ -1,9 +1,8 @@
+// Customer details panel with linked debt + transactions and cleaner UI (no codes/IDs on screen).
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:money_pulse/presentation/shared/formatters.dart';
 import 'providers/customer_detail_providers.dart';
-
-// NEW: actions via right drawer
+import 'widgets/customer_linked_section.dart';
 import 'package:money_pulse/presentation/widgets/right_drawer.dart';
 import 'customer_form_panel.dart';
 import 'customer_delete_panel.dart';
@@ -43,7 +42,6 @@ class CustomerViewPanel extends ConsumerWidget {
         heightFraction: 0.6,
       );
       if (ok == true && context.mounted) {
-        // Renvoyer true au parent (liste) pour qu’il rafraîchisse et retirer l’item.
         Navigator.of(context).pop(true);
       }
     }
@@ -56,7 +54,6 @@ class CustomerViewPanel extends ConsumerWidget {
           icon: const Icon(Icons.close),
           onPressed: () => Navigator.of(context).maybePop(),
         ),
-        // NEW: menu contextuel (Modifier / Supprimer)
         actions: [
           PopupMenuButton<String>(
             onSelected: (v) {
@@ -108,7 +105,9 @@ class CustomerViewPanel extends ConsumerWidget {
                   c.fullName,
                   style: Theme.of(context).textTheme.titleLarge,
                 ),
-                subtitle: Text((c.code ?? '').isEmpty ? '—' : c.code!),
+                subtitle: Text(
+                  (c.phone ?? '').isNotEmpty ? (c.phone!) : (c.email ?? '—'),
+                ),
                 leading: const CircleAvatar(child: Icon(Icons.person)),
               ),
               const Divider(),
@@ -116,10 +115,7 @@ class CustomerViewPanel extends ConsumerWidget {
               _Info('Email', c.email ?? '—'),
               _Info('Statut', c.status ?? '—'),
               companyAsync.when(
-                data: (co) => _Info(
-                  'Société',
-                  co == null ? '—' : '${co.name} (${co.code})',
-                ),
+                data: (co) => _Info('Société', co == null ? '—' : '${co.name}'),
                 loading: () => const _Info('Société', 'Chargement...'),
                 error: (_, __) => const _Info('Société', 'Erreur'),
               ),
@@ -135,23 +131,14 @@ class CustomerViewPanel extends ConsumerWidget {
                   c.postalCode,
                 ),
               ),
-              const Divider(),
-              _Info('Créé le', Formatters.dateFull(c.createdAt)),
-              _Info('Mis à jour', Formatters.dateFull(c.updatedAt)),
-              const Divider(),
-              _Info('Identifiant', c.id),
-              if ((c.notes ?? '').trim().isNotEmpty) ...[
-                const Divider(),
-                _Info('Notes', c.notes!),
-              ],
+              const SizedBox(height: 16),
+              CustomerLinkedSection(customerId: customerId),
             ],
           );
         },
         loading: () => const Center(child: CircularProgressIndicator()),
         error: (e, _) => Center(child: Text('Erreur: $e')),
       ),
-
-      // NEW: boutons en bas (un par ligne)
       bottomNavigationBar: async.maybeWhen(
         data: (c) {
           if (c == null) return null;

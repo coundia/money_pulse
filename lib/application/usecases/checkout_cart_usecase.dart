@@ -1,13 +1,16 @@
-// Use case creating a transaction with optional stock moves and account update for typeEntry: DEBIT, CREDIT, DEBT, REMBOURSEMENT, PRET.
+// Use case creating a transaction with stock and optional debt linkage (DEBIT, CREDIT, DEBT, REMBOURSEMENT, PRET).
 import 'package:uuid/uuid.dart';
 import 'package:sqflite/sqflite.dart';
 import 'package:money_pulse/infrastructure/db/app_database.dart';
 import 'package:money_pulse/domain/accounts/repositories/account_repository.dart';
+import 'package:money_pulse/domain/debts/entities/debt.dart';
+import 'package:money_pulse/domain/debts/repositories/debt_repository.dart';
 
 class CheckoutCartUseCase {
   final AppDatabase db;
   final AccountRepository accountRepo;
-  CheckoutCartUseCase(this.db, this.accountRepo);
+  final DebtRepository debtRepo;
+  CheckoutCartUseCase(this.db, this.accountRepo, this.debtRepo);
 
   Future<String> execute({
     required String typeEntry,
@@ -34,7 +37,12 @@ class CheckoutCartUseCase {
 
     int asInt(Object? v) => (v is int) ? v : int.tryParse('${v ?? 0}') ?? 0;
 
-    final needsAccount = t != 'DEBT';
+    final isDebt = t == 'DEBT';
+    if (isDebt && (customerId == null || customerId.isEmpty)) {
+      throw StateError('customerId is required for DEBT');
+    }
+
+    final needsAccount = !isDebt;
     final acc = needsAccount
         ? (accountId != null
               ? await accountRepo.findById(accountId)
@@ -58,6 +66,11 @@ class CheckoutCartUseCase {
       final resolvedCompany = await _resolveCompanyId(txn, companyId);
       final nowIso = now.toIso8601String();
 
+      Debt? openDebt;
+      if (isDebt) {
+        openDebt = await debtRepo.upsertOpenForCustomerTx(txn, customerId!);
+      }
+
       final status = switch (t) {
         'DEBT' => 'DEBT',
         'REMBOURSEMENT' => 'REPAYMENT',
@@ -74,12 +87,13 @@ class CheckoutCartUseCase {
         'typeEntry': t,
         'dateTransaction': date.toIso8601String(),
         'status': status,
-        'entityName': customerId == null ? null : 'CUSTOMER',
+        'entityName': (customerId == null) ? null : 'CUSTOMER',
         'entityId': customerId,
         'accountId': acc?.id,
         'categoryId': categoryId,
         'companyId': resolvedCompany,
         'customerId': customerId,
+        'debtId': openDebt?.id,
         'createdAt': nowIso,
         'updatedAt': nowIso,
         'deletedAt': null,
@@ -150,6 +164,11 @@ class CheckoutCartUseCase {
           companyId: resolvedCompany,
           nowIso: nowIso,
         );
+      }
+
+      if (isDebt && openDebt != null) {
+        final newBalance = (openDebt.balance) + total;
+        await debtRepo.updateBalanceTx(txn, openDebt.id, newBalance);
       }
 
       if (needsAccount) {

@@ -1,12 +1,14 @@
+// Customer list page with SRP filters bar and updated list UX.
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-
 import 'package:money_pulse/presentation/widgets/right_drawer.dart';
 import 'providers/customer_list_providers.dart';
+import 'providers/customer_filters_providers.dart';
 import 'customer_form_panel.dart';
 import 'customer_view_panel.dart';
 import 'customer_delete_panel.dart';
 import 'widgets/customer_context_menu.dart';
+import 'widgets/customer_filters_bar.dart';
 
 class CustomerListPage extends ConsumerStatefulWidget {
   const CustomerListPage({super.key});
@@ -21,7 +23,6 @@ class _CustomerListPageState extends ConsumerState<CustomerListPage> {
   @override
   void initState() {
     super.initState();
-    // Préremplir avec la valeur actuelle du provider (ne pas recréer à chaque build)
     _searchCtrl = TextEditingController(text: ref.read(customerSearchProvider));
   }
 
@@ -45,50 +46,13 @@ class _CustomerListPageState extends ConsumerState<CustomerListPage> {
       appBar: AppBar(title: const Text('Clients')),
       body: Column(
         children: [
-          Padding(
-            padding: const EdgeInsets.fromLTRB(12, 10, 12, 6),
-            child: Row(
-              children: [
-                Expanded(
-                  child: TextField(
-                    controller: _searchCtrl,
-                    onSubmitted: (v) {
-                      ref.read(customerSearchProvider.notifier).state = v;
-                      ref.read(customerPageIndexProvider.notifier).state = 0;
-                    },
-                    decoration: InputDecoration(
-                      prefixIcon: const Icon(Icons.search),
-                      isDense: true,
-                      hintText: 'Rechercher par nom, téléphone, email, code',
-                      suffixIcon: IconButton(
-                        tooltip: 'Effacer',
-                        onPressed: () {
-                          _searchCtrl.clear();
-                          ref.read(customerSearchProvider.notifier).state = '';
-                          ref.read(customerPageIndexProvider.notifier).state =
-                              0;
-                        },
-                        icon: const Icon(Icons.clear),
-                      ),
-                      border: const OutlineInputBorder(),
-                    ),
-                  ),
-                ),
-                const SizedBox(width: 8),
-                countAsync.maybeWhen(
-                  data: (c) => Text('$c élément(s)'),
-                  orElse: () => const SizedBox.shrink(),
-                ),
-              ],
-            ),
-          ),
+          CustomerFiltersBar(searchCtrl: _searchCtrl),
           const Divider(height: 1),
           Expanded(
             child: listAsync.when(
               data: (rows) {
-                if (rows.isEmpty) {
+                if (rows.isEmpty)
                   return const Center(child: Text('Aucun client'));
-                }
                 return ListView.separated(
                   itemCount: rows.length,
                   separatorBuilder: (_, __) => const Divider(height: 1),
@@ -148,6 +112,16 @@ class _CustomerListPageState extends ConsumerState<CustomerListPage> {
               },
               loading: () => const Center(child: CircularProgressIndicator()),
               error: (e, _) => Center(child: Text('Erreur: $e')),
+            ),
+          ),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+            child: countAsync.maybeWhen(
+              data: (c) => Align(
+                alignment: Alignment.centerLeft,
+                child: Text('$c élément(s)'),
+              ),
+              orElse: () => const SizedBox.shrink(),
             ),
           ),
         ],

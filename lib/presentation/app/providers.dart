@@ -21,10 +21,12 @@ import 'package:money_pulse/domain/reports/repositories/report_repository.dart';
 import 'package:money_pulse/infrastructure/repositories/report_repository_sqflite.dart';
 
 import '../../application/usecases/checkout_cart_usecase.dart';
+import '../../domain/debts/repositories/debt_repository.dart';
 import '../../domain/sync/repositories/change_log_repository.dart';
 import '../../domain/transactions/repositories/transaction_item_repository.dart';
 import '../../infrastructure/sync/change_log_sqlite_repository.dart';
 import '../../infrastructure/transactions/repositories/transaction_item_repository_impl.dart';
+import '../features/debts/debt_repo_provider.dart';
 
 final dbProvider = Provider<AppDatabase>((ref) => AppDatabase.I);
 
@@ -110,9 +112,11 @@ final changeLogRepoProvider = Provider<ChangeLogRepository>((ref) {
 });
 
 final checkoutCartUseCaseProvider = Provider<CheckoutCartUseCase>((ref) {
+  final debtRepo = ref.read(debtRepoProvider) as DebtRepository;
   return CheckoutCartUseCase(
     ref.read(dbProvider),
     ref.read(accountRepoProvider),
+    debtRepo,
   );
 });
 

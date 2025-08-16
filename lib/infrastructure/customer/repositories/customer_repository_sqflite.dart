@@ -1,3 +1,4 @@
+// Sqflite implementation with hasOpenDebt filter and updatedAt DESC ordering.
 import 'package:uuid/uuid.dart';
 import 'package:sqflite/sqflite.dart';
 import 'package:money_pulse/infrastructure/db/app_database.dart';
@@ -29,12 +30,10 @@ class CustomerRepositorySqflite implements CustomerRepository {
       final args = <Object?>[];
 
       if (q.onlyActive) where.add('deletedAt IS NULL');
-
       if ((q.companyId ?? '').isNotEmpty) {
         where.add('companyId = ?');
         args.add(q.companyId);
       }
-
       if ((q.search ?? '').trim().isNotEmpty) {
         where.add(
           '(fullName LIKE ? OR phone LIKE ? OR email LIKE ? OR code LIKE ?)',
@@ -43,11 +42,27 @@ class CustomerRepositorySqflite implements CustomerRepository {
         args.addAll([v, v, v, v]);
       }
 
+      // hasOpenDebt filter via EXISTS
+      if (q.hasOpenDebt != null) {
+        final existsSql = '''
+          EXISTS(SELECT 1 FROM debt d
+                 WHERE d.customerId = customer.id
+                   AND d.deletedAt IS NULL
+                   AND (d.statuses IS NULL OR d.statuses='OPEN')
+                   AND COALESCE(d.balance,0) > 0)
+        ''';
+        where.add(q.hasOpenDebt! ? existsSql : 'NOT $existsSql');
+      }
+
+      final orderBy = q.orderByUpdatedAtDesc
+          ? 'updatedAt DESC'
+          : 'fullName COLLATE NOCASE ASC';
+
       final rows = await txn.query(
         'customer',
         where: where.isEmpty ? null : where.join(' AND '),
         whereArgs: args.isEmpty ? null : args,
-        orderBy: 'fullName COLLATE NOCASE ASC',
+        orderBy: orderBy,
         limit: q.limit,
         offset: q.offset,
       );
@@ -73,12 +88,25 @@ class CustomerRepositorySqflite implements CustomerRepository {
         final v = '%${q.search!.trim()}%';
         args.addAll([v, v, v, v]);
       }
+      if (q.hasOpenDebt != null) {
+        final existsSql = '''
+          EXISTS(SELECT 1 FROM debt d
+                 WHERE d.customerId = customer.id
+                   AND d.deletedAt IS NULL
+                   AND (d.statuses IS NULL OR d.statuses='OPEN')
+                   AND COALESCE(d.balance,0) > 0)
+        ''';
+        where.add(q.hasOpenDebt! ? existsSql : 'NOT $existsSql');
+      }
 
       final res = await txn.rawQuery(
         'SELECT COUNT(*) AS c FROM customer ${where.isEmpty ? '' : 'WHERE ${where.join(' AND ')}'}',
         args,
       );
-      return (res.first['c'] as int?) ?? 0;
+      final v = res.first['c'];
+      if (v is int) return v;
+      if (v is num) return v.toInt();
+      return int.tryParse('$v') ?? 0;
     });
   }
 
@@ -86,12 +114,9 @@ class CustomerRepositorySqflite implements CustomerRepository {
   Future<String> create(Customer c) async {
     final now = DateTime.now();
     final id = c.id.isNotEmpty ? c.id : const Uuid().v4();
-
-    // fullName fallback si vide
     final fullName = (c.fullName.trim().isEmpty)
         ? _joinName(c.firstName, c.lastName)
         : c.fullName;
-
     final data = c
         .copyWith(
           id: id,
@@ -119,7 +144,6 @@ class CustomerRepositorySqflite implements CustomerRepository {
     final fullName = (c.fullName.trim().isEmpty)
         ? _joinName(c.firstName, c.lastName)
         : c.fullName;
-
     final next = c.copyWith(
       fullName: fullName,
       updatedAt: now,

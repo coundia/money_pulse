@@ -8,6 +8,8 @@ import 'package:money_pulse/presentation/app/providers.dart';
 import 'package:money_pulse/domain/products/entities/product.dart';
 import 'package:money_pulse/presentation/features/products/product_repo_provider.dart';
 import 'package:money_pulse/presentation/shared/formatters.dart';
+import '../../../domain/debts/repositories/debt_repository.dart';
+import '../debts/debt_repo_provider.dart';
 import 'state/pos_cart.dart';
 import 'widgets/pos_cart_panel.dart';
 import 'package:money_pulse/presentation/widgets/right_drawer.dart';
@@ -94,7 +96,8 @@ class _PosPageState extends ConsumerState<PosPage> {
   Future<void> _openCart() async {
     final db = ref.read(dbProvider);
     final accRepo = ref.read(accountRepoProvider);
-    final checkout = CheckoutCartUseCase(db, accRepo);
+    final debtRepo = ref.read(debtRepoProvider) as DebtRepository;
+    final checkout = CheckoutCartUseCase(db, accRepo, debtRepo);
     await showRightDrawer<bool>(
       context,
       child: PosCartPanel(
