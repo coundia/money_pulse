@@ -1,8 +1,7 @@
-// List and count providers using SRP filters and updated sort by updatedAt DESC.
+// List and count providers using SRP filters, sort mode, and updated sort by updatedAt DESC.
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:money_pulse/domain/customer/entities/customer.dart';
 import 'package:money_pulse/domain/customer/repositories/customer_repository.dart';
-import 'package:money_pulse/presentation/app/providers.dart';
 import '../../../app/providers/customer_repo_provider.dart';
 import 'customer_filters_providers.dart';
 
@@ -11,8 +10,11 @@ final customerListProvider = FutureProvider<List<Customer>>((ref) async {
   final search = ref.watch(customerSearchProvider);
   final companyId = ref.watch(customerCompanyFilterProvider);
   final hasDebt = ref.watch(customerHasDebtFilterProvider);
+  final sortMode = ref.watch(customerSortModeProvider);
   final page = ref.watch(customerPageIndexProvider);
   final size = ref.watch(customerPageSizeProvider);
+
+  final orderByUpdated = sortMode == CustomerSortMode.recent;
 
   return repo.findAll(
     CustomerQuery(
@@ -22,7 +24,7 @@ final customerListProvider = FutureProvider<List<Customer>>((ref) async {
       limit: size,
       offset: page * size,
       onlyActive: true,
-      orderByUpdatedAtDesc: true,
+      orderByUpdatedAtDesc: orderByUpdated,
     ),
   );
 });
