@@ -1,4 +1,4 @@
-// Customer details panel showing balances (Solde, Dette) and linked sections.
+// Customer details panel with responsive cards, balance actions, and linked sections via right drawer.
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'providers/customer_detail_providers.dart';
@@ -7,6 +7,7 @@ import 'package:money_pulse/presentation/widgets/right_drawer.dart';
 import 'package:money_pulse/presentation/shared/formatters.dart';
 import 'customer_form_panel.dart';
 import 'customer_delete_panel.dart';
+import 'widgets/customer_balance_adjust_panel.dart';
 
 class CustomerViewPanel extends ConsumerWidget {
   final String customerId;
@@ -99,21 +100,10 @@ class CustomerViewPanel extends ConsumerWidget {
             companyOfCustomerProvider(c.companyId),
           );
 
-          return ListView(
-            padding: const EdgeInsets.all(16),
-            children: [
-              ListTile(
-                title: Text(
-                  c.fullName,
-                  style: Theme.of(context).textTheme.titleLarge,
-                ),
-                subtitle: Text(
-                  (c.phone ?? '').isNotEmpty ? (c.phone!) : (c.email ?? '—'),
-                ),
-                leading: const CircleAvatar(child: Icon(Icons.person)),
-              ),
-              const SizedBox(height: 8),
-              Row(
+          return LayoutBuilder(
+            builder: (context, constraints) {
+              final isWide = constraints.maxWidth >= 680;
+              final cards = Row(
                 children: [
                   Expanded(
                     child: Card(
@@ -156,31 +146,103 @@ class CustomerViewPanel extends ConsumerWidget {
                     ),
                   ),
                 ],
-              ),
-              const Divider(),
-              _Info('Téléphone', c.phone ?? '—'),
-              _Info('Email', c.email ?? '—'),
-              _Info('Statut', c.status ?? '—'),
-              companyAsync.when(
-                data: (co) => _Info('Société', co == null ? '—' : '${co.name}'),
-                loading: () => const _Info('Société', 'Chargement...'),
-                error: (_, __) => const _Info('Société', 'Erreur'),
-              ),
-              const Divider(),
-              _Info(
-                'Adresse',
-                _addr(
-                  c.addressLine1,
-                  c.addressLine2,
-                  c.city,
-                  c.region,
-                  c.country,
-                  c.postalCode,
-                ),
-              ),
-              const SizedBox(height: 16),
-              CustomerLinkedSection(customerId: customerId),
-            ],
+              );
+
+              return ListView(
+                padding: const EdgeInsets.all(16),
+                children: [
+                  ListTile(
+                    title: Text(
+                      c.fullName,
+                      style: Theme.of(context).textTheme.titleLarge,
+                    ),
+                    subtitle: Text(
+                      (c.phone ?? '').isNotEmpty
+                          ? (c.phone!)
+                          : (c.email ?? '—'),
+                    ),
+                    leading: const CircleAvatar(child: Icon(Icons.person)),
+                  ),
+                  const SizedBox(height: 8),
+                  if (isWide) cards else Column(children: [cards]),
+                  const SizedBox(height: 8),
+                  Wrap(
+                    spacing: 8,
+                    runSpacing: 8,
+                    children: [
+                      FilledButton.icon(
+                        onPressed: () async {
+                          final ok = await showRightDrawer<bool>(
+                            context,
+                            child: CustomerBalanceAdjustPanel(
+                              customerId: customerId,
+                              currentBalanceCents: c.balance,
+                              companyId: c.companyId,
+                              mode: 'add',
+                            ),
+                            widthFraction: 0.86,
+                            heightFraction: 0.96,
+                          );
+                          if (ok == true) {
+                            ref.invalidate(customerByIdProvider(customerId));
+                            if (context.mounted)
+                              Navigator.of(context).pop(true);
+                          }
+                        },
+                        icon: const Icon(Icons.add_circle_outline),
+                        label: const Text('Ajouter au solde'),
+                      ),
+                      OutlinedButton.icon(
+                        onPressed: () async {
+                          final ok = await showRightDrawer<bool>(
+                            context,
+                            child: CustomerBalanceAdjustPanel(
+                              customerId: customerId,
+                              currentBalanceCents: c.balance,
+                              companyId: c.companyId,
+                              mode: 'set',
+                            ),
+                            widthFraction: 0.86,
+                            heightFraction: 0.96,
+                          );
+                          if (ok == true) {
+                            ref.invalidate(customerByIdProvider(customerId));
+                            if (context.mounted)
+                              Navigator.of(context).pop(true);
+                          }
+                        },
+                        icon: const Icon(Icons.edit_outlined),
+                        label: const Text('Définir le solde'),
+                      ),
+                    ],
+                  ),
+                  const Divider(height: 24),
+                  _Info('Téléphone', c.phone ?? '—'),
+                  _Info('Email', c.email ?? '—'),
+                  _Info('Statut', c.status ?? '—'),
+                  companyAsync.when(
+                    data: (co) =>
+                        _Info('Société', co == null ? '—' : '${co.name}'),
+                    loading: () => const _Info('Société', 'Chargement...'),
+                    error: (_, __) => const _Info('Société', 'Erreur'),
+                  ),
+                  const Divider(),
+                  _Info(
+                    'Adresse',
+                    _addr(
+                      c.addressLine1,
+                      c.addressLine2,
+                      c.city,
+                      c.region,
+                      c.country,
+                      c.postalCode,
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  CustomerLinkedSection(customerId: customerId),
+                ],
+              );
+            },
           );
         },
         loading: () => const Center(child: CircularProgressIndicator()),

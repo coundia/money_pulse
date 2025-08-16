@@ -1,11 +1,13 @@
-// CustomerFormPanel: create/update a customer with improved UX and Enter-to-save behavior.
+// Customer create/update form showing balances and offering balance actions with responsive layout and enter-to-save.
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:uuid/uuid.dart';
 import 'package:money_pulse/domain/customer/entities/customer.dart';
 import 'package:money_pulse/domain/company/entities/company.dart';
-
+import 'package:money_pulse/presentation/shared/formatters.dart';
+import '../../widgets/right_drawer.dart';
+import 'widgets/customer_balance_adjust_panel.dart';
 import '../../../domain/company/repositories/company_repository.dart';
 import '../../app/providers/company_repo_provider.dart';
 import '../../app/providers/customer_repo_provider.dart';
@@ -21,7 +23,6 @@ class CustomerFormPanel extends ConsumerStatefulWidget {
 
 class _CustomerFormPanelState extends ConsumerState<CustomerFormPanel> {
   final _formKey = GlobalKey<FormState>();
-
   final _code = TextEditingController();
   final _first = TextEditingController();
   final _last = TextEditingController();
@@ -84,7 +85,6 @@ class _CustomerFormPanelState extends ConsumerState<CustomerFormPanel> {
     _email.dispose();
     _status.dispose();
     _notes.dispose();
-
     _fCode.dispose();
     _fFirst.dispose();
     _fLast.dispose();
@@ -102,8 +102,6 @@ class _CustomerFormPanelState extends ConsumerState<CustomerFormPanel> {
     final companies = await repo.findAll(
       const CompanyQuery(limit: 200, offset: 0),
     );
-
-    // For NEW customer only, pick a default if nothing selected or invalid
     if (mounted && widget.initial == null) {
       if (_companyId == null || !_containsCompanyId(companies, _companyId)) {
         Company? def;
@@ -117,7 +115,6 @@ class _CustomerFormPanelState extends ConsumerState<CustomerFormPanel> {
         }
       }
     }
-
     return companies;
   }
 
@@ -149,30 +146,30 @@ class _CustomerFormPanelState extends ConsumerState<CustomerFormPanel> {
       notes: _notes.text.trim().isEmpty ? null : _notes.text.trim(),
       status: _status.text.trim().isEmpty ? null : _status.text.trim(),
       companyId: (_companyId ?? '').isEmpty ? null : _companyId,
-      addressLine1: null,
-      addressLine2: null,
-      city: null,
-      region: null,
-      country: null,
-      postalCode: null,
+      addressLine1: widget.initial?.addressLine1,
+      addressLine2: widget.initial?.addressLine2,
+      city: widget.initial?.city,
+      region: widget.initial?.region,
+      country: widget.initial?.country,
+      postalCode: widget.initial?.postalCode,
       createdAt: widget.initial?.createdAt ?? now,
       updatedAt: now,
       deletedAt: null,
       syncAt: null,
       version: widget.initial?.version ?? 0,
       isDirty: true,
+      balance: widget.initial?.balance ?? 0,
+      balanceDebt: widget.initial?.balanceDebt ?? 0,
     );
     if (widget.initial == null) {
       await repo.create(entity);
     } else {
       await repo.update(entity);
     }
-    if (mounted) Navigator.of(context).pop<Customer>(entity); // RETURN entity
+    if (mounted) Navigator.of(context).pop<bool>(true);
   }
 
-  void _next(FocusNode node) {
-    FocusScope.of(context).requestFocus(node);
-  }
+  void _next(FocusNode node) => FocusScope.of(context).requestFocus(node);
 
   bool _containsCompanyId(List<Company> list, String? id) {
     if (id == null || id.isEmpty) return false;
@@ -185,14 +182,13 @@ class _CustomerFormPanelState extends ConsumerState<CustomerFormPanel> {
   @override
   Widget build(BuildContext context) {
     final isEdit = widget.initial != null;
-
     return Shortcuts(
-      shortcuts: <LogicalKeySet, Intent>{
+      shortcuts: {
         LogicalKeySet(LogicalKeyboardKey.enter): const _SubmitIntent(),
         LogicalKeySet(LogicalKeyboardKey.numpadEnter): const _SubmitIntent(),
       },
       child: Actions(
-        actions: <Type, Action<Intent>>{
+        actions: {
           _SubmitIntent: CallbackAction<_SubmitIntent>(
             onInvoke: (_) {
               _save();
@@ -212,7 +208,7 @@ class _CustomerFormPanelState extends ConsumerState<CustomerFormPanel> {
               FilledButton.icon(
                 onPressed: _save,
                 icon: const Icon(Icons.check),
-                label: Text(isEdit ? 'Enregistrer' : 'Créer'), // FIX
+                label: Text(isEdit ? 'Enregistrer' : 'Créer'),
               ),
               const SizedBox(width: 8),
             ],
@@ -221,7 +217,6 @@ class _CustomerFormPanelState extends ConsumerState<CustomerFormPanel> {
             future: _loadCompanies(),
             builder: (context, snap) {
               final companies = snap.data ?? const <Company>[];
-              // Ensure the value exists in items, or use null
               final safeCompanyId = _containsCompanyId(companies, _companyId)
                   ? _companyId
                   : null;
@@ -229,12 +224,13 @@ class _CustomerFormPanelState extends ConsumerState<CustomerFormPanel> {
               if (snap.connectionState == ConnectionState.waiting) {
                 return const Center(child: CircularProgressIndicator());
               }
-              return Form(
-                key: _formKey,
-                autovalidateMode: AutovalidateMode.onUserInteraction,
-                child: ListView(
-                  padding: const EdgeInsets.all(16),
-                  children: [
+
+              return LayoutBuilder(
+                builder: (context, constraints) {
+                  final isWide = constraints.maxWidth >= 760;
+                  final fieldGap = const SizedBox(height: 12);
+
+                  final left = <Widget>[
                     Row(
                       children: [
                         Expanded(
@@ -268,7 +264,7 @@ class _CustomerFormPanelState extends ConsumerState<CustomerFormPanel> {
                         ),
                       ],
                     ),
-                    const SizedBox(height: 12),
+                    fieldGap,
                     TextFormField(
                       focusNode: _fFull,
                       controller: _full,
@@ -281,7 +277,7 @@ class _CustomerFormPanelState extends ConsumerState<CustomerFormPanel> {
                       textInputAction: TextInputAction.next,
                       onFieldSubmitted: (_) => _next(_fPhone),
                     ),
-                    const SizedBox(height: 12),
+                    fieldGap,
                     Row(
                       children: [
                         Expanded(
@@ -318,7 +314,7 @@ class _CustomerFormPanelState extends ConsumerState<CustomerFormPanel> {
                         ),
                       ],
                     ),
-                    const SizedBox(height: 12),
+                    fieldGap,
                     TextFormField(
                       focusNode: _fStatus,
                       controller: _status,
@@ -331,7 +327,7 @@ class _CustomerFormPanelState extends ConsumerState<CustomerFormPanel> {
                       textInputAction: TextInputAction.next,
                       onFieldSubmitted: (_) => _next(_fNotes),
                     ),
-                    const SizedBox(height: 12),
+                    fieldGap,
                     TextFormField(
                       focusNode: _fNotes,
                       controller: _notes,
@@ -346,13 +342,11 @@ class _CustomerFormPanelState extends ConsumerState<CustomerFormPanel> {
                       textInputAction: TextInputAction.done,
                       onFieldSubmitted: (_) => _save(),
                     ),
-                    const SizedBox(height: 16),
+                  ];
 
-                    // NOTE: remove Expanded – it breaks in ListView
+                  final right = <Widget>[
                     DropdownButtonFormField<String?>(
-                      key: ValueKey(
-                        safeCompanyId,
-                      ), // forces rebuild if selection changes programmatically
+                      key: ValueKey(safeCompanyId),
                       focusNode: _fCompany,
                       value: safeCompanyId,
                       isDense: true,
@@ -376,9 +370,7 @@ class _CustomerFormPanelState extends ConsumerState<CustomerFormPanel> {
                       ],
                       onChanged: (v) => setState(() => _companyId = v),
                     ),
-
-                    const SizedBox(height: 16),
-
+                    fieldGap,
                     TextFormField(
                       focusNode: _fCode,
                       controller: _code,
@@ -394,17 +386,150 @@ class _CustomerFormPanelState extends ConsumerState<CustomerFormPanel> {
                         FilteringTextInputFormatter.deny(RegExp(r'\s')),
                       ],
                     ),
-                    const SizedBox(height: 16),
-                    SafeArea(
-                      top: false,
-                      child: FilledButton.icon(
-                        onPressed: _save,
-                        icon: const Icon(Icons.check),
-                        label: Text(isEdit ? 'Enregistrer' : 'Créer'),
-                      ),
+                    fieldGap,
+                    Row(
+                      children: [
+                        Expanded(
+                          child: Card(
+                            child: Padding(
+                              padding: const EdgeInsets.all(12),
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  const Text('Solde'),
+                                  const SizedBox(height: 4),
+                                  Text(
+                                    Formatters.amountFromCents(
+                                      widget.initial?.balance ?? 0,
+                                    ),
+                                    style: Theme.of(
+                                      context,
+                                    ).textTheme.titleLarge,
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: Card(
+                            child: Padding(
+                              padding: const EdgeInsets.all(12),
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  const Text('Dette'),
+                                  const SizedBox(height: 4),
+                                  Text(
+                                    Formatters.amountFromCents(
+                                      widget.initial?.balanceDebt ?? 0,
+                                    ),
+                                    style: Theme.of(context)
+                                        .textTheme
+                                        .titleLarge
+                                        ?.copyWith(
+                                          color: Theme.of(
+                                            context,
+                                          ).colorScheme.error,
+                                        ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ),
+                        ),
+                      ],
                     ),
-                  ],
-                ),
+                    fieldGap,
+                    Wrap(
+                      spacing: 8,
+                      runSpacing: 8,
+                      children: [
+                        FilledButton.tonalIcon(
+                          onPressed: widget.initial == null
+                              ? null
+                              : () async {
+                                  final ok = await showRightDrawer<bool>(
+                                    context,
+                                    child: CustomerBalanceAdjustPanel(
+                                      customerId: widget.initial!.id,
+                                      currentBalanceCents:
+                                          widget.initial!.balance,
+                                      companyId: widget.initial!.companyId,
+                                      mode: 'add',
+                                    ),
+                                    widthFraction: 0.86,
+                                    heightFraction: 0.96,
+                                  );
+                                  if (ok == true && context.mounted)
+                                    Navigator.of(context).pop<bool>(true);
+                                },
+                          icon: const Icon(Icons.add_circle_outline),
+                          label: const Text('Ajouter au solde'),
+                        ),
+                        OutlinedButton.icon(
+                          onPressed: widget.initial == null
+                              ? null
+                              : () async {
+                                  final ok = await showRightDrawer<bool>(
+                                    context,
+                                    child: CustomerBalanceAdjustPanel(
+                                      customerId: widget.initial!.id,
+                                      currentBalanceCents:
+                                          widget.initial!.balance,
+                                      companyId: widget.initial!.companyId,
+                                      mode: 'set',
+                                    ),
+                                    widthFraction: 0.86,
+                                    heightFraction: 0.96,
+                                  );
+                                  if (ok == true && context.mounted)
+                                    Navigator.of(context).pop<bool>(true);
+                                },
+                          icon: const Icon(Icons.edit_outlined),
+                          label: const Text('Définir le solde'),
+                        ),
+                      ],
+                    ),
+                  ];
+
+                  return Form(
+                    key: _formKey,
+                    autovalidateMode: AutovalidateMode.onUserInteraction,
+                    child: ListView(
+                      padding: const EdgeInsets.all(16),
+                      children: [
+                        if (isWide)
+                          Row(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Expanded(child: Column(children: [...left])),
+                              const SizedBox(width: 16),
+                              Expanded(child: Column(children: [...right])),
+                            ],
+                          )
+                        else
+                          Column(
+                            children: [
+                              ...left,
+                              const SizedBox(height: 16),
+                              ...right,
+                            ],
+                          ),
+                        const SizedBox(height: 16),
+                        SafeArea(
+                          top: false,
+                          child: FilledButton.icon(
+                            onPressed: _save,
+                            icon: const Icon(Icons.check),
+                            label: Text(isEdit ? 'Enregistrer' : 'Créer'),
+                          ),
+                        ),
+                      ],
+                    ),
+                  );
+                },
               );
             },
           ),
