@@ -1,4 +1,5 @@
-// Controller that centralizes actions for customer linked area: refresh, open popups, and reversal logic.
+// Controller for customer-linked actions; passes initial customer and default type to quick add.
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:money_pulse/presentation/widgets/right_drawer.dart';
@@ -234,7 +235,10 @@ class CustomerLinkedController {
   ) async {
     final ok = await showRightDrawer<bool>(
       context,
-      child: const TransactionQuickAddSheet(initialIsDebit: true),
+      child: TransactionQuickAddSheet(
+        initialCustomerId: customerId,
+        initialTypeEntry: 'DEBT',
+      ),
       widthFraction: 0.92,
       heightFraction: 0.98,
     );

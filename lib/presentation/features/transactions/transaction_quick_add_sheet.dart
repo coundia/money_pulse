@@ -1,4 +1,5 @@
-// Quick add transaction sheet with selectable types: Depense, Revenu, Dette, Remboursement, Pret.
+// Quick add transaction sheet that supports initial customer/company preselection and initial type entry.
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -42,7 +43,17 @@ class SubmitFormIntent extends Intent {
 
 class TransactionQuickAddSheet extends ConsumerStatefulWidget {
   final bool initialIsDebit;
-  const TransactionQuickAddSheet({super.key, this.initialIsDebit = true});
+  final String? initialCustomerId;
+  final String? initialCompanyId;
+  final String? initialTypeEntry;
+
+  const TransactionQuickAddSheet({
+    super.key,
+    this.initialIsDebit = true,
+    this.initialCustomerId,
+    this.initialCompanyId,
+    this.initialTypeEntry,
+  });
 
   @override
   ConsumerState<TransactionQuickAddSheet> createState() =>
@@ -56,7 +67,7 @@ class _TransactionQuickAddSheetState
   final _descCtrl = TextEditingController();
   final _categoryCtrl = TextEditingController();
 
-  late TxKind _kind = widget.initialIsDebit ? TxKind.debit : TxKind.credit;
+  late TxKind _kind;
   DateTime _when = DateTime.now();
 
   Category? _selectedCategory;
@@ -81,7 +92,27 @@ class _TransactionQuickAddSheetState
   @override
   void initState() {
     super.initState();
+    _kind =
+        _mapTypeEntryToKind(widget.initialTypeEntry) ??
+        (widget.initialIsDebit ? TxKind.debit : TxKind.credit);
     _loadInitialData();
+  }
+
+  TxKind? _mapTypeEntryToKind(String? t) {
+    switch ((t ?? '').toUpperCase()) {
+      case 'DEBIT':
+        return TxKind.debit;
+      case 'CREDIT':
+        return TxKind.credit;
+      case 'DEBT':
+        return TxKind.debt;
+      case 'REMBOURSEMENT':
+        return TxKind.remboursement;
+      case 'PRET':
+        return TxKind.pret;
+      default:
+        return null;
+    }
   }
 
   Future<void> _loadInitialData() async {
@@ -89,10 +120,11 @@ class _TransactionQuickAddSheetState
       final catRepo = ref.read(categoryRepoProvider);
       final coRepo = ref.read(companyRepoProvider);
       final cuRepo = ref.read(customerRepoProvider);
+
       final cats = await catRepo.findAllActive();
-      final cos = await coRepo.findAll(
-        const CompanyQuery(limit: 300, offset: 0),
-      );
+
+      List<Company> cos = const [];
+      cos = await coRepo.findAll(const CompanyQuery(limit: 300, offset: 0));
 
       Company? def;
       try {
@@ -101,21 +133,41 @@ class _TransactionQuickAddSheetState
         def = cos.isNotEmpty ? cos.first : null;
       }
 
-      String? selectedCompanyId = def?.id;
+      String? selectedCompanyId = widget.initialCompanyId ?? def?.id;
+
+      Customer? initialCustomer;
+      if (widget.initialCustomerId != null &&
+          widget.initialCustomerId!.isNotEmpty) {
+        try {
+          initialCustomer = await cuRepo.findById(widget.initialCustomerId!);
+          selectedCompanyId = initialCustomer?.companyId ?? selectedCompanyId;
+        } catch (_) {}
+      }
+
       List<Customer> cus = const [];
       if (selectedCompanyId != null) {
         cus = await cuRepo.findAll(
           CustomerQuery(companyId: selectedCompanyId, limit: 300, offset: 0),
         );
+      } else {
+        try {
+          cus = await cuRepo.findAll(
+            const CustomerQuery(limit: 300, offset: 0),
+          );
+        } catch (_) {}
       }
 
-      if (!mounted) return;
       setState(() {
         _allCategories = cats;
         _companies = cos;
-        _companyId = selectedCompanyId;
+        _companyId = selectedCompanyId ?? _companyId;
         _customers = cus;
-        _customerId = null;
+        _customerId =
+            initialCustomer?.id ??
+            (widget.initialCustomerId != null &&
+                    cus.any((c) => c.id == widget.initialCustomerId)
+                ? widget.initialCustomerId
+                : _customerId);
         _clearCategoryInternal();
       });
     } catch (_) {}
@@ -173,18 +225,20 @@ class _TransactionQuickAddSheetState
 
     final upperList = _allCategories
         .where((c) => c.typeEntry == desiredType)
-        .toList(growable: false);
+        .toList();
+
     for (final pref in preferCodes) {
-      final hit = upperList.firstWhere(
-        (c) => (c.code).toUpperCase() == pref,
-        orElse: () => null as Category,
-      );
+      final hit = upperList
+          .where((c) => c.code.toUpperCase() == pref)
+          .cast<Category?>()
+          .fold<Category?>(null, (p, n) => p ?? n);
       if (hit != null) return hit;
     }
 
     final containsAny = _kind == TxKind.debit
         ? <String>['ACHAT', 'PURCHASE', 'ACHATS']
         : <String>['VENTE', 'SALE', 'VENTES', 'SALES'];
+
     for (final c in upperList) {
       final codeU = c.code.toUpperCase();
       final descU = (c.description ?? '').toUpperCase();
@@ -653,6 +707,7 @@ class _TransactionQuickAddSheetState
                     AmountFieldQuickPad(
                       controller: _amountCtrl,
                       quickUnits: const [
+                        0,
                         2000,
                         5000,
                         10000,
