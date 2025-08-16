@@ -49,6 +49,8 @@ class _TransactionFormSheetState extends ConsumerState<TransactionFormSheet> {
   final descCtrl = TextEditingController();
 
   late final bool isDebit = widget.entry.typeEntry == 'DEBIT';
+  late final _Tone tone = _toneForType(context, widget.entry.typeEntry);
+
   DateTime when = DateTime.now();
 
   String? categoryId;
@@ -128,7 +130,6 @@ class _TransactionFormSheetState extends ConsumerState<TransactionFormSheet> {
                 ),
           );
 
-        // If there are item lines, default to "lock amount to items"
         _lockAmountToItems = _items.isNotEmpty;
         if (_lockAmountToItems) _syncAmountFromItems();
 
@@ -233,24 +234,19 @@ class _TransactionFormSheetState extends ConsumerState<TransactionFormSheet> {
   Future<void> _createCategoryAndSelect() async {
     final res = await showRightDrawer<CategoryFormResult?>(
       context,
-      child: CategoryFormPanel(
-        existing: null,
-        // If your CategoryFormPanel supports a forced type prop, pass it here.
-        // forcedTypeEntry: isDebit ? 'DEBIT' : 'CREDIT',
-      ),
+      child: CategoryFormPanel(existing: null),
       widthFraction: 0.86,
       heightFraction: 0.92,
     );
     if (res == null) return;
 
-    // Persist via repo
     final repo = ref.read(categoryRepoProvider);
     final now = DateTime.now();
     final cat = Category(
       id: const Uuid().v4(),
       code: res.code,
       description: res.description,
-      typeEntry: res.typeEntry, // trust panel; you can enforce here if needed
+      typeEntry: res.typeEntry,
       createdAt: now,
       updatedAt: now,
       deletedAt: null,
@@ -261,7 +257,6 @@ class _TransactionFormSheetState extends ConsumerState<TransactionFormSheet> {
     );
     await repo.create(cat);
 
-    // Update local lists and select if type matches current entry type
     final isSameType = cat.typeEntry == (isDebit ? 'DEBIT' : 'CREDIT');
     setState(() {
       _allCategories = [cat, ..._allCategories];
@@ -444,11 +439,10 @@ class _TransactionFormSheetState extends ConsumerState<TransactionFormSheet> {
       customerId: customerId,
       updatedAt: DateTime.now(),
       isDirty: true,
-      version: (widget.entry.version ?? 0) + 1,
+      version: (widget.entry.version) + 1,
     );
 
-    // Note: This updates transaction header only. If your domain supports updating
-    // lines + stock, call your dedicated usecase here instead of repo.update.
+    // Note: This updates transaction header only.
     await ref.read(transactionRepoProvider).update(updated);
 
     if (mounted) Navigator.of(context).pop(true);
@@ -457,10 +451,8 @@ class _TransactionFormSheetState extends ConsumerState<TransactionFormSheet> {
   // ---------------------------------- UI -------------------------------------
   @override
   Widget build(BuildContext context) {
-    final accent = isDebit
-        ? Theme.of(context).colorScheme.error
-        : Theme.of(context).colorScheme.primary;
-    final typeLabel = isDebit ? 'Dépense' : 'Revenu';
+    final accent = tone.color;
+    final typeLabel = tone.label;
 
     return Shortcuts(
       shortcuts: <LogicalKeySet, Intent>{
@@ -505,23 +497,14 @@ class _TransactionFormSheetState extends ConsumerState<TransactionFormSheet> {
               padding: const EdgeInsets.all(16),
               keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
               children: [
-                // Type header
-                ListTile(
-                  contentPadding: EdgeInsets.zero,
-                  leading: Icon(
-                    isDebit ? Icons.arrow_downward : Icons.arrow_upward,
-                    color: accent,
-                  ),
-                  title: Text(
-                    typeLabel,
-                    style: TextStyle(
-                      color: accent,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                  subtitle: const Text('Type de transaction'),
+                _HeaderToneCard(
+                  tone: tone,
+                  when: when,
+                  onTapDate: _pickDate,
+                  hasItems: _items.isNotEmpty,
+                  accountless: (widget.entry.accountId ?? '').isEmpty,
                 ),
-                const Divider(height: 24),
+                const SizedBox(height: 16),
 
                 // Amount
                 TextFormField(
@@ -535,11 +518,21 @@ class _TransactionFormSheetState extends ConsumerState<TransactionFormSheet> {
                     ),
                   ],
                   textAlign: TextAlign.center,
-                  style: Theme.of(context).textTheme.headlineMedium,
+                  style: Theme.of(context).textTheme.headlineMedium?.copyWith(
+                    fontWeight: FontWeight.w800,
+                    color: accent,
+                  ),
                   decoration: InputDecoration(
                     border: const OutlineInputBorder(),
+                    focusedBorder: OutlineInputBorder(
+                      borderSide: BorderSide(color: accent, width: 1.8),
+                    ),
                     labelText: 'Montant',
                     helperText: 'Exemple : 1 500 ou 1500,00',
+                    prefixIcon: Icon(
+                      Icons.payments_rounded,
+                      color: accent.withOpacity(0.9),
+                    ),
                     suffixIcon: amountCtrl.text.isEmpty
                         ? null
                         : IconButton(
@@ -550,6 +543,8 @@ class _TransactionFormSheetState extends ConsumerState<TransactionFormSheet> {
                             },
                             icon: const Icon(Icons.clear),
                           ),
+                    filled: true,
+                    fillColor: accent.withOpacity(0.05),
                   ),
                   validator: (v) {
                     if (v == null || v.trim().isEmpty) return 'Requis';
@@ -566,7 +561,9 @@ class _TransactionFormSheetState extends ConsumerState<TransactionFormSheet> {
                   alignment: Alignment.centerRight,
                   child: Text(
                     'Aperçu: $_amountPreview',
-                    style: Theme.of(context).textTheme.bodySmall,
+                    style: Theme.of(
+                      context,
+                    ).textTheme.bodySmall?.copyWith(color: accent),
                   ),
                 ),
 
@@ -585,6 +582,7 @@ class _TransactionFormSheetState extends ConsumerState<TransactionFormSheet> {
                         if (v) _syncAmountFromItems();
                       });
                     },
+                    secondary: Icon(Icons.link_rounded, color: accent),
                   ),
                 ],
 
@@ -633,10 +631,14 @@ class _TransactionFormSheetState extends ConsumerState<TransactionFormSheet> {
                                 )
                                 .toList(),
                             onChanged: (v) => setState(() => categoryId = v),
-                            decoration: const InputDecoration(
-                              border: OutlineInputBorder(),
+                            decoration: InputDecoration(
+                              border: const OutlineInputBorder(),
                               labelText: 'Catégorie',
                               isDense: true,
+                              prefixIcon: Icon(
+                                Icons.category_outlined,
+                                color: accent,
+                              ),
                             ),
                           ),
                         ),
@@ -657,6 +659,7 @@ class _TransactionFormSheetState extends ConsumerState<TransactionFormSheet> {
 
                 // Parties (Company & Customer, with "create customer")
                 Card(
+                  elevation: 0,
                   child: Padding(
                     padding: const EdgeInsets.symmetric(
                       horizontal: 12,
@@ -665,9 +668,28 @@ class _TransactionFormSheetState extends ConsumerState<TransactionFormSheet> {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.stretch,
                       children: [
-                        Text(
-                          'Tiers',
-                          style: Theme.of(context).textTheme.titleMedium,
+                        Row(
+                          children: [
+                            Icon(Icons.group_outlined, color: accent),
+                            const SizedBox(width: 8),
+                            Text(
+                              'Tiers',
+                              style: Theme.of(context).textTheme.titleMedium,
+                            ),
+                            const SizedBox(width: 8),
+                            if ((companyId ?? '').isNotEmpty)
+                              _TypePillSmall(
+                                label: 'Société liée',
+                                color: accent,
+                              ),
+                            if ((customerId ?? '').isNotEmpty) ...[
+                              const SizedBox(width: 6),
+                              _TypePillSmall(
+                                label: 'Client lié',
+                                color: accent,
+                              ),
+                            ],
+                          ],
                         ),
                         const SizedBox(height: 8),
                         DropdownButtonFormField<String?>(
@@ -782,7 +804,7 @@ class _TransactionFormSheetState extends ConsumerState<TransactionFormSheet> {
                         icon: const Icon(Icons.add_shopping_cart),
                         label: Text(
                           _items.isEmpty
-                              ? 'Selection des produits'
+                              ? 'Sélection des produits'
                               : 'Modifier les produits',
                         ),
                       ),
@@ -857,6 +879,7 @@ class _TransactionFormSheetState extends ConsumerState<TransactionFormSheet> {
                   decoration: InputDecoration(
                     border: const OutlineInputBorder(),
                     labelText: 'Description',
+                    prefixIcon: Icon(Icons.notes_outlined, color: accent),
                     suffixIcon: descCtrl.text.isEmpty
                         ? null
                         : IconButton(
@@ -931,4 +954,178 @@ class _TxItem {
     required this.unitPriceCents,
     required this.quantity,
   });
+}
+
+/// ----------------------------- UI helpers (tone / header) -----------------------------
+
+class _HeaderToneCard extends StatelessWidget {
+  final _Tone tone;
+  final DateTime when;
+  final VoidCallback onTapDate;
+  final bool hasItems;
+  final bool accountless;
+
+  const _HeaderToneCard({
+    required this.tone,
+    required this.when,
+    required this.onTapDate,
+    required this.hasItems,
+    required this.accountless,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final hsl = HSLColor.fromColor(tone.color);
+    final c1 = hsl
+        .withLightness((hsl.lightness + (isDark ? 0.12 : 0.20)).clamp(0, 1))
+        .toColor();
+    final c2 = hsl
+        .withLightness((hsl.lightness - (isDark ? 0.10 : 0.06)).clamp(0, 1))
+        .toColor();
+
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(14),
+        gradient: LinearGradient(
+          colors: [c1.withOpacity(0.18), c2.withOpacity(0.12)],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
+        border: Border.all(color: tone.color.withOpacity(0.28)),
+      ),
+      child: Row(
+        children: [
+          CircleAvatar(
+            backgroundColor: tone.color.withOpacity(0.15),
+            child: Icon(tone.icon, color: tone.color),
+          ),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Wrap(
+              spacing: 8,
+              runSpacing: 6,
+              crossAxisAlignment: WrapCrossAlignment.center,
+              children: [
+                _TypePill(label: tone.label, color: tone.color),
+                ActionChip(
+                  avatar: const Icon(Icons.event, size: 16),
+                  label: Text(Formatters.dateFull(when)),
+                  onPressed: onTapDate,
+                  visualDensity: VisualDensity.compact,
+                ),
+                if (hasItems)
+                  _TypePillSmall(label: 'Articles', color: tone.color),
+                if (accountless)
+                  _TypePillSmall(label: 'Hors compte', color: tone.color),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _TypePill extends StatelessWidget {
+  final String label;
+  final Color color;
+  const _TypePill({required this.label, required this.color});
+
+  @override
+  Widget build(BuildContext context) {
+    final bg = color.withOpacity(0.12);
+    final fg = color.withOpacity(0.95);
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+      decoration: BoxDecoration(
+        color: bg,
+        borderRadius: BorderRadius.circular(24),
+        border: Border.all(color: fg.withOpacity(0.35), width: 0.8),
+      ),
+      child: Text(
+        label,
+        style: TextStyle(
+          color: fg,
+          fontWeight: FontWeight.w800,
+          fontSize: 12,
+          letterSpacing: 0.2,
+        ),
+      ),
+    );
+  }
+}
+
+class _TypePillSmall extends StatelessWidget {
+  final String label;
+  final Color color;
+  const _TypePillSmall({required this.label, required this.color});
+
+  @override
+  Widget build(BuildContext context) {
+    final bg = color.withOpacity(0.10);
+    final fg = color.withOpacity(0.90);
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2.5),
+      decoration: BoxDecoration(
+        color: bg,
+        borderRadius: BorderRadius.circular(24),
+        border: Border.all(color: fg.withOpacity(0.28), width: 0.7),
+      ),
+      child: Text(
+        label,
+        style: TextStyle(
+          color: fg,
+          fontWeight: FontWeight.w700,
+          fontSize: 11,
+          letterSpacing: 0.2,
+        ),
+      ),
+    );
+  }
+}
+
+class _Tone {
+  final Color color;
+  final IconData icon;
+  final String label;
+
+  _Tone({required this.color, required this.icon, required this.label});
+}
+
+_Tone _toneForType(BuildContext context, String type) {
+  final scheme = Theme.of(context).colorScheme;
+  final upper = type.toUpperCase();
+
+  switch (upper) {
+    case 'DEBIT':
+      return _Tone(color: scheme.error, icon: Icons.south, label: 'Dépense');
+    case 'CREDIT':
+      return _Tone(color: scheme.tertiary, icon: Icons.north, label: 'Revenu');
+    case 'REMBOURSEMENT':
+      return _Tone(
+        color: Colors.teal,
+        icon: Icons.undo_rounded,
+        label: 'Remboursement',
+      );
+    case 'PRET':
+      return _Tone(
+        color: Colors.purple,
+        icon: Icons.account_balance_outlined,
+        label: 'Prêt',
+      );
+    case 'DEBT':
+      return _Tone(
+        color: Colors.amber.shade800,
+        icon: Icons.receipt_long,
+        label: 'Dette',
+      );
+    default:
+      return _Tone(
+        color: scheme.primary,
+        icon: Icons.receipt_long,
+        label: upper,
+      );
+  }
 }
