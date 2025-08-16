@@ -1,12 +1,14 @@
-// Search delegate for transactions with extended type filtering, quick date ranges, and net computation.
+// Search delegate for transactions with extended type filtering, quick date ranges, net computation, and right-drawer detail view.
 
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:money_pulse/domain/transactions/entities/transaction_entry.dart';
 import 'package:money_pulse/presentation/shared/formatters.dart';
 
+import '../widgets/transaction_detail_view.dart';
 import 'models/txn_search_filters.dart';
 import 'widgets/txn_filter_sheet.dart';
+import 'package:money_pulse/presentation/widgets/right_drawer.dart';
 
 class TxnSearchDelegate extends SearchDelegate<TransactionEntry?> {
   final List<TransactionEntry> items;
@@ -443,7 +445,14 @@ class TxnSearchDelegate extends SearchDelegate<TransactionEntry?> {
                               fontWeight: FontWeight.w600,
                             ),
                           ),
-                          onTap: () => close(context, e),
+                          onTap: () async {
+                            await showRightDrawer<void>(
+                              context,
+                              child: TransactionDetailView(entry: e),
+                              widthFraction: 0.92,
+                              heightFraction: 0.96,
+                            );
+                          },
                         );
                       },
                     ),
