@@ -1,3 +1,5 @@
+// Search delegate for transactions with extended type filtering, quick date ranges, and net computation.
+
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:money_pulse/domain/transactions/entities/transaction_entry.dart';
@@ -8,14 +10,11 @@ import 'widgets/txn_filter_sheet.dart';
 
 class TxnSearchDelegate extends SearchDelegate<TransactionEntry?> {
   final List<TransactionEntry> items;
-
-  // Par défaut: filtre sur "AUJOURD’HUI" (from = to = aujourd’hui)
   final ValueNotifier<TxnFilterState> _filter;
 
   TxnSearchDelegate(this.items)
     : _filter = ValueNotifier<TxnFilterState>(_todayFilter());
 
-  // ------------------ Aides date ------------------
   static DateTime _strip(DateTime d) => DateTime(d.year, d.month, d.day);
 
   static TxnFilterState _todayFilter() {
@@ -58,17 +57,50 @@ class TxnSearchDelegate extends SearchDelegate<TransactionEntry?> {
     return _isSameDay(f.from!, yFrom) && _isSameDay(f.to!, yTo);
   }
 
-  // ------------------ Filtrage ------------------
+  bool _isExpenseType(String t) {
+    final x = t.toUpperCase();
+    return x == 'DEBIT' || x == 'PRÊT' || x == 'PRET' || x == 'LOAN';
+  }
+
+  bool _isIncomeType(String t) {
+    final x = t.toUpperCase();
+    return x == 'CREDIT' || x == 'REMBOURSEMENT' || x == 'REPAYMENT';
+  }
+
+  bool _isDebtType(String t) {
+    final x = t.toUpperCase();
+    return x == 'DEBT' || x == 'DETTE';
+  }
+
+  bool _isLoanType(String t) {
+    final x = t.toUpperCase();
+    return x == 'PRÊT' || x == 'PRET' || x == 'LOAN';
+  }
+
+  bool _isReimbursementType(String t) {
+    final x = t.toUpperCase();
+    return x == 'REMBOURSEMENT' || x == 'REPAYMENT';
+  }
+
   List<TransactionEntry> _applyFilters(String q, TxnFilterState f) {
     final query = q.trim().toLowerCase();
     Iterable<TransactionEntry> it = items;
 
     switch (f.type) {
       case TxnTypeFilter.expense:
-        it = it.where((e) => e.typeEntry == 'DEBIT');
+        it = it.where((e) => _isExpenseType(e.typeEntry));
         break;
       case TxnTypeFilter.income:
-        it = it.where((e) => e.typeEntry == 'CREDIT');
+        it = it.where((e) => _isIncomeType(e.typeEntry));
+        break;
+      case TxnTypeFilter.debt:
+        it = it.where((e) => _isDebtType(e.typeEntry));
+        break;
+      case TxnTypeFilter.loan:
+        it = it.where((e) => _isLoanType(e.typeEntry));
+        break;
+      case TxnTypeFilter.reimbursement:
+        it = it.where((e) => _isReimbursementType(e.typeEntry));
         break;
       case TxnTypeFilter.all:
         break;
@@ -88,7 +120,7 @@ class TxnSearchDelegate extends SearchDelegate<TransactionEntry?> {
 
     if (query.isNotEmpty) {
       it = it.where((e) {
-        final text = '${e.code ?? ''} ${e.description ?? ''}'.toLowerCase();
+        final text = '${e.description ?? ''} ${e.code ?? ''}  '.toLowerCase();
         return text.contains(query);
       });
     }
@@ -111,24 +143,21 @@ class TxnSearchDelegate extends SearchDelegate<TransactionEntry?> {
     return list;
   }
 
-  // Netto (toujours CRÉDIT − DÉBIT) en ignorant le filtre "type"
   int _computeNetCents(String q, TxnFilterState f) {
     final base = _applyFilters(q, f.copyWith(type: TxnTypeFilter.all));
-    final credit = base
-        .where((e) => e.typeEntry == 'CREDIT')
-        .fold<int>(0, (p, e) => p + e.amount);
-    final debit = base
-        .where((e) => e.typeEntry == 'DEBIT')
-        .fold<int>(0, (p, e) => p + e.amount);
-    return credit - debit;
+    int net = 0;
+    for (final e in base) {
+      final t = e.typeEntry;
+      if (_isIncomeType(t)) net += e.amount;
+      if (_isExpenseType(t)) net -= e.amount;
+    }
+    return net;
   }
 
   String _formatWhen(DateTime d) => DateFormat.yMMMd().add_Hm().format(d);
 
-  String _amount(int cents, {bool withSign = true, required bool debit}) {
-    final sign = "";
-    //withSign ? (debit ? '−' : '+') : '';
-    return '$sign${Formatters.amountFromCents(cents)}';
+  String _amount(int cents, {required bool debit}) {
+    return Formatters.amountFromCents(cents);
   }
 
   InlineSpan _highlight(String text, String q, TextStyle base, TextStyle hi) {
@@ -154,20 +183,16 @@ class TxnSearchDelegate extends SearchDelegate<TransactionEntry?> {
     return TextSpan(children: spans);
   }
 
-  // Libellé de la plage en français
   String _rangeLabel(TxnFilterState f) {
     final from = f.from, to = f.to;
     if (from == null && to == null) return 'Toutes dates';
-
     final sameDay = (from != null && to != null)
         ? (from.year == to.year && from.month == to.month && from.day == to.day)
         : false;
-
     if (sameDay) {
       final isToday = _isSameDay(from!, _strip(DateTime.now()));
       return isToday ? 'Aujourd’hui' : DateFormat.yMMMd().format(from);
     }
-
     if (from != null && to != null) {
       final left = DateFormat.MMMd().format(from);
       final right = DateFormat.MMMd().format(to);
@@ -176,7 +201,6 @@ class TxnSearchDelegate extends SearchDelegate<TransactionEntry?> {
           ? 'Du $left au $right ${from.year}'
           : 'Du $left ${from.year} au $right ${to.year}';
     }
-
     if (from != null) return 'À partir du ${DateFormat.yMMMd().format(from)}';
     return 'Jusqu’au ${DateFormat.yMMMd().format(to!)}';
   }
@@ -198,7 +222,6 @@ class TxnSearchDelegate extends SearchDelegate<TransactionEntry?> {
 
         return Column(
           children: [
-            // ====== Actions rapides ======
             Padding(
               padding: const EdgeInsets.fromLTRB(12, 8, 12, 4),
               child: Wrap(
@@ -206,7 +229,6 @@ class TxnSearchDelegate extends SearchDelegate<TransactionEntry?> {
                 runSpacing: 8,
                 crossAxisAlignment: WrapCrossAlignment.center,
                 children: [
-                  // Type
                   ChoiceChip(
                     label: const Text('Tous'),
                     selected: f.type == TxnTypeFilter.all,
@@ -219,22 +241,50 @@ class TxnSearchDelegate extends SearchDelegate<TransactionEntry?> {
                     label: const Text('Dépenses'),
                     selected: f.type == TxnTypeFilter.expense,
                     onSelected: (sel) {
-                      if (sel)
+                      if (sel) {
                         _filter.value = f.copyWith(type: TxnTypeFilter.expense);
+                      }
                     },
                   ),
                   ChoiceChip(
                     label: const Text('Revenus'),
                     selected: f.type == TxnTypeFilter.income,
                     onSelected: (sel) {
-                      if (sel)
+                      if (sel) {
                         _filter.value = f.copyWith(type: TxnTypeFilter.income);
+                      }
                     },
                   ),
-
+                  ChoiceChip(
+                    label: const Text('Dettes'),
+                    selected: f.type == TxnTypeFilter.debt,
+                    onSelected: (sel) {
+                      if (sel) {
+                        _filter.value = f.copyWith(type: TxnTypeFilter.debt);
+                      }
+                    },
+                  ),
+                  ChoiceChip(
+                    label: const Text('Prêts'),
+                    selected: f.type == TxnTypeFilter.loan,
+                    onSelected: (sel) {
+                      if (sel) {
+                        _filter.value = f.copyWith(type: TxnTypeFilter.loan);
+                      }
+                    },
+                  ),
+                  ChoiceChip(
+                    label: const Text('Remboursements'),
+                    selected: f.type == TxnTypeFilter.reimbursement,
+                    onSelected: (sel) {
+                      if (sel) {
+                        _filter.value = f.copyWith(
+                          type: TxnTypeFilter.reimbursement,
+                        );
+                      }
+                    },
+                  ),
                   const SizedBox(width: 8),
-
-                  // Dates rapides
                   FilterChip(
                     avatar: const Icon(Icons.today, size: 18),
                     label: const Text('Aujourd’hui'),
@@ -262,8 +312,6 @@ class TxnSearchDelegate extends SearchDelegate<TransactionEntry?> {
                       _filter.value = f.copyWith(from: from, to: to);
                     },
                   ),
-
-                  // Choisir une date / plage
                   GestureDetector(
                     onTap: () async {
                       final picked = await showDatePicker(
@@ -300,10 +348,6 @@ class TxnSearchDelegate extends SearchDelegate<TransactionEntry?> {
                       materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
                     ),
                   ),
-
-                  const SizedBox(width: 8),
-
-                  // Tri
                   FilterChip(
                     label: Text(switch (f.sortBy) {
                       TxnSortBy.dateDesc => 'Date ↓',
@@ -322,8 +366,6 @@ class TxnSearchDelegate extends SearchDelegate<TransactionEntry?> {
                       _filter.value = f.copyWith(sortBy: order[f.sortBy]);
                     },
                   ),
-
-                  // Stats
                   Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
@@ -340,7 +382,7 @@ class TxnSearchDelegate extends SearchDelegate<TransactionEntry?> {
                       ),
                       const SizedBox(width: 4),
                       Text(
-                        _amount(net, withSign: true, debit: net < 0),
+                        _amount(net, debit: net < 0),
                         style: theme.textTheme.bodySmall?.copyWith(
                           color: netColor,
                           fontWeight: FontWeight.w600,
@@ -352,8 +394,6 @@ class TxnSearchDelegate extends SearchDelegate<TransactionEntry?> {
               ),
             ),
             const Divider(height: 1),
-
-            // ====== Résultats ======
             Expanded(
               child: list.isEmpty
                   ? _EmptyState(
@@ -368,9 +408,12 @@ class TxnSearchDelegate extends SearchDelegate<TransactionEntry?> {
                       separatorBuilder: (_, __) => const Divider(height: 1),
                       itemBuilder: (_, i) {
                         final e = list[i];
-                        final isDebit = e.typeEntry == 'DEBIT';
+                        final isDebit = _isExpenseType(e.typeEntry);
                         final color = isDebit ? Colors.red : Colors.green;
-                        final title = e.description ?? e.code ?? 'Transaction';
+                        final title =
+                            (e.description?.trim().isNotEmpty ?? false)
+                            ? e.description!.trim()
+                            : 'Transaction';
 
                         return ListTile(
                           leading: CircleAvatar(
@@ -435,7 +478,6 @@ class TxnSearchDelegate extends SearchDelegate<TransactionEntry?> {
   );
 }
 
-/// État vide
 class _EmptyState extends StatelessWidget {
   final String query;
   final VoidCallback onClear;

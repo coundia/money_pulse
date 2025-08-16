@@ -1,12 +1,12 @@
+// Lightweight filter state and enums for transaction search, with extended type groups.
+
 import 'package:flutter/foundation.dart';
 
-/// Type d’opérations
-enum TxnTypeFilter { all, expense, income }
+enum TxnTypeFilter { all, expense, income, debt, loan, reimbursement }
 
-/// Ordre de tri
 enum TxnSortBy { dateDesc, dateAsc, amountDesc, amountAsc }
 
-/// État des filtres de recherche
+@immutable
 class TxnFilterState {
   final TxnTypeFilter type;
   final DateTime? from;
@@ -46,28 +46,17 @@ class TxnFilterState {
     );
   }
 
-  bool get isEmpty =>
-      type == TxnTypeFilter.all &&
-      from == null &&
-      to == null &&
-      minCents == null &&
-      maxCents == null &&
-      sortBy == TxnSortBy.dateDesc;
-
-  @override
-  String toString() =>
-      'TxnFilterState($type, $from, $to, $minCents, $maxCents, $sortBy)';
-
-  @override
-  bool operator ==(Object other) =>
-      other is TxnFilterState &&
-      other.type == type &&
-      other.from == from &&
-      other.to == to &&
-      other.minCents == minCents &&
-      other.maxCents == maxCents &&
-      other.sortBy == sortBy;
-
   @override
   int get hashCode => Object.hash(type, from, to, minCents, maxCents, sortBy);
+
+  @override
+  bool operator ==(Object other) {
+    return other is TxnFilterState &&
+        other.type == type &&
+        other.from == from &&
+        other.to == to &&
+        other.minCents == minCents &&
+        other.maxCents == maxCents &&
+        other.sortBy == sortBy;
+  }
 }

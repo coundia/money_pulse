@@ -1,3 +1,5 @@
+// Compact CTA card to open transaction search quickly.
+
 import 'package:flutter/material.dart';
 
 class TxnSearchCta extends StatelessWidget {
@@ -26,7 +28,6 @@ class TxnSearchCta extends StatelessWidget {
           onTap: onTap,
           child: Padding(
             padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-            // ⬇️ Contenu centré horizontalement dans toute la largeur
             child: SizedBox(
               width: double.infinity,
               child: Center(
