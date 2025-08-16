@@ -103,7 +103,18 @@ class _CustomerAutocompleteState extends ConsumerState<CustomerAutocomplete> {
                         IconButton(
                           tooltip: 'Créer un client',
                           icon: const Icon(Icons.person_add_alt),
-                          onPressed: () => _createCustomer(context),
+                          onPressed: () async {
+                            // ferme le clavier et l’overlay d’options s’il est ouvert
+                            FocusScope.of(context).unfocus();
+
+                            // idem : laisse finir la frame en cours
+                            await Future<void>.delayed(
+                              const Duration(milliseconds: 1),
+                            );
+
+                            if (!mounted) return;
+                            await _createCustomer(this.context);
+                          },
                         ),
                         if (value.text.isNotEmpty)
                           IconButton(
@@ -145,7 +156,19 @@ class _CustomerAutocompleteState extends ConsumerState<CustomerAutocomplete> {
                       subtitle: (widget.companyLabel?.isNotEmpty ?? false)
                           ? Text('Société: ${widget.companyLabel!}')
                           : null,
-                      onTap: () => _createCustomer(context),
+                      onTap: () async {
+                        // 1) fermer l’overlay de l’autocomplete (ce `context` est celui de l’overlay)
+                        Navigator.of(context).pop();
+
+                        // 2) attendre la fin de la transition pour éviter !_debugLocked
+                        await Future<void>.delayed(
+                          const Duration(milliseconds: 1),
+                        );
+
+                        // 3) ouvrir le drawer avec le context du State (this.context)
+                        if (!mounted) return;
+                        await _createCustomer(this.context);
+                      },
                     );
                   }
                   final c = opts[i - 1];

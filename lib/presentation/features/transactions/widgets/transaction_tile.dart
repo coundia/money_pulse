@@ -58,20 +58,6 @@ class TransactionTile extends StatelessWidget {
               const Icon(Icons.schedule, size: 14),
               const SizedBox(width: 4),
               Text(time, style: Theme.of(context).textTheme.bodySmall),
-              const SizedBox(width: 8),
-              _TypePill(label: tone.label, color: tone.color),
-              if ((entry.companyId ?? '').isNotEmpty) ...[
-                const SizedBox(width: 8),
-                _MetaDot(),
-                const SizedBox(width: 8),
-                Text('Société', style: Theme.of(context).textTheme.bodySmall),
-              ],
-              if ((entry.customerId ?? '').isNotEmpty) ...[
-                const SizedBox(width: 8),
-                _MetaDot(),
-                const SizedBox(width: 8),
-                Text('Client', style: Theme.of(context).textTheme.bodySmall),
-              ],
             ],
           ),
           trailing: Column(
@@ -340,6 +326,7 @@ _Tone _toneForType(BuildContext context, String type) {
         label: 'Dépense',
         signPrefix: '−',
         semanticLabel: 'Dépense',
+        trailingHint: 'Dépense',
         textColor: scheme.error,
       );
     case 'CREDIT':
@@ -349,6 +336,7 @@ _Tone _toneForType(BuildContext context, String type) {
         label: 'Revenu',
         signPrefix: '+',
         semanticLabel: 'Revenu',
+        trailingHint: 'Revenu',
         textColor: scheme.tertiary,
       );
     case 'REMBOURSEMENT':
@@ -388,6 +376,7 @@ _Tone _toneForType(BuildContext context, String type) {
         label: upper,
         signPrefix: '',
         semanticLabel: 'Transaction',
+        trailingHint: 'Transaction',
         textColor: scheme.primary,
       );
   }

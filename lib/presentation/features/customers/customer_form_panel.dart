@@ -166,7 +166,9 @@ class _CustomerFormPanelState extends ConsumerState<CustomerFormPanel> {
     } else {
       await repo.update(entity);
     }
-    if (mounted) Navigator.of(context).pop<bool>(true);
+    if (mounted) {
+      Navigator.of(context).pop<Customer>(entity);
+    }
   }
 
   void _next(FocusNode node) => FocusScope.of(context).requestFocus(node);

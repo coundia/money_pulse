@@ -2,6 +2,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../domain/customer/entities/customer.dart';
 import 'providers/customer_list_providers.dart';
 import 'widgets/customer_tile.dart';
 import 'customer_form_panel.dart';
@@ -67,13 +68,22 @@ class _CustomerListPageState extends ConsumerState<CustomerListPage> {
             tooltip: 'Ajouter',
             icon: const Icon(Icons.add),
             onPressed: () async {
-              final ok = await showRightDrawer<bool>(
+              final created = await showRightDrawer<Customer?>(
                 context,
                 child: const CustomerFormPanel(),
                 widthFraction: 0.86,
                 heightFraction: 0.96,
               );
-              if (ok == true) _refresh();
+              if (created != null) {
+                _refresh();
+                if (context.mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(
+                      content: Text('Client créé : ${created.fullName}'),
+                    ),
+                  );
+                }
+              }
             },
           ),
         ],
