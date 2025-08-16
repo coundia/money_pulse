@@ -1,4 +1,6 @@
-// Customer details panel: minimalist list UI, responsive, balances are clickable (tap => action menu), full refresh after actions.
+// Customer details panel: minimalist list UI, responsive,
+// balances are clickable (tap => action menu), full refresh after actions.
+// Adds “Transactions” entry in AppBar menu to open CustomerTransactionsPopup.
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'providers/customer_detail_providers.dart';
@@ -11,6 +13,7 @@ import 'customer_delete_panel.dart';
 import 'widgets/customer_balance_adjust_panel.dart';
 import 'customer_debt_add_panel.dart';
 import 'customer_debt_payment_panel.dart';
+import 'widgets/customer_transactions_popup.dart';
 
 class CustomerViewPanel extends ConsumerWidget {
   final String customerId;
@@ -142,7 +145,29 @@ class CustomerViewPanel extends ConsumerWidget {
       }
     }
 
+    Future<void> _onShowTransactions() async {
+      final dirty = await showRightDrawer<bool>(
+        context,
+        child: CustomerTransactionsPopup(customerId: customerId),
+        widthFraction: 0.86,
+        heightFraction: 0.96,
+      );
+      if (dirty == true) {
+        await _refreshAll(ref);
+      }
+    }
+
     List<PopupMenuEntry<String>> _menuItems() => const [
+      PopupMenuItem(
+        value: 'txs',
+        child: Row(
+          children: [
+            Icon(Icons.receipt_long_outlined, size: 18),
+            SizedBox(width: 8),
+            Text('Transactions'),
+          ],
+        ),
+      ),
       PopupMenuItem(
         value: 'edit',
         child: Row(
@@ -167,6 +192,9 @@ class CustomerViewPanel extends ConsumerWidget {
 
     Future<void> _handleMenuSelection(String v) async {
       switch (v) {
+        case 'txs':
+          await _onShowTransactions();
+          break;
         case 'edit':
           await _onEdit();
           break;

@@ -31,6 +31,12 @@ class AmountFieldQuickPad extends StatefulWidget {
   /// Démarrer le pad en **déplié** même si `compact:true`.
   final bool startExpanded;
 
+  /// Le champ est-il requis ?
+  final bool isRequired;
+
+  /// Autoriser la valeur 0 ?
+  final bool allowZero;
+
   const AmountFieldQuickPad({
     super.key,
     required this.controller,
@@ -41,8 +47,8 @@ class AmountFieldQuickPad extends StatefulWidget {
     this.labelText = 'Montant',
     this.compact = true,
     this.startExpanded = false,
-    bool isRequired = false,
-    bool allowZero = false,
+    this.isRequired = false,
+    this.allowZero = false,
   });
 
   @override
@@ -248,6 +254,23 @@ class _AmountFieldQuickPadState extends State<AmountFieldQuickPad> {
                 spacing: 8,
                 runSpacing: 8,
                 children: [
+                  // Bouton 0 visible si autorisé
+                  if (widget.allowZero)
+                    OutlinedButton(
+                      style: OutlinedButton.styleFrom(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 12,
+                          vertical: 8,
+                        ),
+                        minimumSize: const Size(0, 36),
+                        textStyle: Theme.of(context).textTheme.bodySmall,
+                      ),
+                      onPressed: () {
+                        Navigator.pop(ctx);
+                        _setUnits(0);
+                      },
+                      child: const Text('0'),
+                    ),
                   for (final u in widget.quickUnits)
                     FilledButton.tonal(
                       style: _chipStyle,
@@ -339,8 +362,15 @@ class _AmountFieldQuickPadState extends State<AmountFieldQuickPad> {
             ),
           ),
           validator: (v) {
-            if (v == null || v.trim().isEmpty) return 'Requis';
-            if (_toCents(v) <= 0) return 'Montant invalide';
+            final txt = v?.trim() ?? '';
+            // Vide autorisé si non requis
+            if (txt.isEmpty) {
+              return widget.isRequired ? 'Requis' : null;
+            }
+            final cents = _toCents(txt);
+            if (cents < 0) return 'Montant invalide';
+            // 0 autorisé si allowZero == true
+            if (!widget.allowZero && cents == 0) return 'Montant invalide';
             return null;
           },
         ),
@@ -359,6 +389,27 @@ class _AmountFieldQuickPadState extends State<AmountFieldQuickPad> {
                           scrollDirection: Axis.horizontal,
                           child: Row(
                             children: [
+                              // Bouton 0 inline (si non-compact) pour accès rapide
+                              if (!widget.compact && widget.allowZero)
+                                Padding(
+                                  padding: const EdgeInsets.only(right: 6),
+                                  child: OutlinedButton(
+                                    style: OutlinedButton.styleFrom(
+                                      minimumSize: const Size(0, 36),
+                                      padding: const EdgeInsets.symmetric(
+                                        horizontal: 10,
+                                        vertical: 8,
+                                      ),
+                                      textStyle: Theme.of(
+                                        context,
+                                      ).textTheme.bodySmall,
+                                    ),
+                                    onPressed: widget.lockToItems
+                                        ? null
+                                        : () => _setUnits(0),
+                                    child: const Text('0'),
+                                  ),
+                                ),
                               for (final u in visibleUnits) _chip(u),
                               // Bouton "…" vers pad complet
                               if (widget.compact)

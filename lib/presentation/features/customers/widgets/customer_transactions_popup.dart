@@ -21,7 +21,8 @@ class CustomerTransactionsPopup extends ConsumerStatefulWidget {
 
 class _TxFilter {
   final String search;
-  final Set<String> types;
+  final Set<String>
+  types; // uses typeEntry: DEBIT, CREDIT, DEBT, REMBOURSEMENT, PRET
   final DateTime? from;
   final DateTime? to;
   final int? minCents;
@@ -69,6 +70,7 @@ class _CustomerTransactionsPopupState
   bool _dirty = false;
   _TxFilter _filter = _TxFilter.empty();
 
+  // Labels par TYPE (typeEntry)
   static const Map<String, String> _typeLabels = {
     'DEBIT': 'Dépense',
     'CREDIT': 'Revenu',
@@ -77,9 +79,56 @@ class _CustomerTransactionsPopupState
     'PRET': 'Prêt',
   };
 
+  // Labels par STATUT (status)
+  static const Map<String, String> _statusLabels = {
+    'DEBT': 'Dette',
+    'REPAYMENT': 'Remboursement',
+    'LOAN': 'Prêt',
+    'REVERSED': 'Annulé',
+  };
+
   String _typeLabel(String? t) {
     final k = (t ?? '').toUpperCase();
     return _typeLabels[k] ?? (t ?? '—');
+  }
+
+  String _statusLabel(String? s) {
+    if (s == null || s.isEmpty) return 'Autre';
+    final k = s.toUpperCase();
+    return _statusLabels[k] ?? s;
+  }
+
+  IconData _typeIcon(String? t) {
+    switch ((t ?? '').toUpperCase()) {
+      case 'DEBIT':
+        return Icons.remove_circle_outline;
+      case 'CREDIT':
+        return Icons.add_circle_outline;
+      case 'DEBT':
+        return Icons.shopping_cart_checkout_outlined;
+      case 'REMBOURSEMENT':
+        return Icons.payments_outlined;
+      case 'PRET':
+        return Icons.account_balance_outlined;
+      default:
+        return Icons.receipt_long_outlined;
+    }
+  }
+
+  Color _statusColor(BuildContext context, String? s) {
+    final scheme = Theme.of(context).colorScheme;
+    switch ((s ?? '').toUpperCase()) {
+      case 'DEBT':
+        return scheme.error;
+      case 'REPAYMENT':
+        return scheme.primary;
+      case 'LOAN':
+        return scheme.tertiary;
+      case 'REVERSED':
+        return scheme.outline;
+      default:
+        return scheme.secondary;
+    }
   }
 
   Future<void> _reverseOne(
@@ -153,6 +202,40 @@ class _CustomerTransactionsPopupState
     final out = list.toList()
       ..sort((a, b) => b.dateTransaction.compareTo(a.dateTransaction));
     return out;
+  }
+
+  Map<String, int> _statusTotals(List<LinkedTxnRow> filtered) {
+    final map = <String, int>{};
+    for (final r in filtered) {
+      final key = (r.status ?? '').isEmpty ? 'OTHER' : r.status!.toUpperCase();
+      map[key] = (map[key] ?? 0) + r.amount;
+    }
+    return map;
+  }
+
+  Widget _statusTotalsChips(BuildContext context, Map<String, int> totals) {
+    if (totals.isEmpty) return const SizedBox.shrink();
+    final keys = totals.keys.toList()
+      ..sort((a, b) => a.compareTo(b)); // ordre stable
+    return SingleChildScrollView(
+      scrollDirection: Axis.horizontal,
+      child: Row(
+        children: [
+          for (final k in keys)
+            Padding(
+              padding: const EdgeInsets.only(right: 6),
+              child: Chip(
+                label: Text(
+                  '${_statusLabel(k)}: ${Formatters.amountFromCents(totals[k] ?? 0)}',
+                ),
+                backgroundColor: _statusColor(context, k).withOpacity(0.12),
+                labelStyle: TextStyle(color: _statusColor(context, k)),
+                materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+              ),
+            ),
+        ],
+      ),
+    );
   }
 
   Widget _activeFiltersBar() {
@@ -295,6 +378,8 @@ class _CustomerTransactionsPopupState
                     return const Center(child: Text('Aucune transaction'));
                   }
                   final total = filtered.fold<int>(0, (p, e) => p + e.amount);
+                  final perStatus = _statusTotals(filtered);
+
                   return RefreshIndicator(
                     onRefresh: () async {
                       await controller.refreshAll(ref, widget.customerId);
@@ -302,9 +387,10 @@ class _CustomerTransactionsPopupState
                     },
                     child: ListView.separated(
                       padding: const EdgeInsets.only(top: 8),
-                      itemCount: filtered.length + 1,
+                      itemCount: filtered.length + 2, // + header rows
                       separatorBuilder: (_, __) => const Divider(height: 1),
                       itemBuilder: (_, i) {
+                        // Row 0: Total filtré
                         if (i == 0) {
                           return ListTile(
                             dense: true,
@@ -316,19 +402,60 @@ class _CustomerTransactionsPopupState
                             ),
                           );
                         }
-                        final r = filtered[i - 1];
+                        // Row 1: Totaux par statut (chips)
+                        if (i == 1) {
+                          return Padding(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 16,
+                              vertical: 4,
+                            ),
+                            child: _statusTotalsChips(context, perStatus),
+                          );
+                        }
+
+                        final r = filtered[i - 2];
                         final label = (r.description?.isNotEmpty ?? false)
                             ? r.description!
                             : _typeLabel(r.typeEntry);
+
                         return ListTile(
                           dense: true,
+                          leading: Icon(_typeIcon(r.typeEntry)),
                           title: Text(
                             label,
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
                           ),
-                          subtitle: Text(
-                            Formatters.dateFull(r.dateTransaction),
+                          subtitle: Row(
+                            children: [
+                              Flexible(
+                                child: Text(
+                                  Formatters.dateFull(r.dateTransaction),
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                              ),
+                              const SizedBox(width: 8),
+                              Container(
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 8,
+                                  vertical: 2,
+                                ),
+                                decoration: BoxDecoration(
+                                  color: _statusColor(
+                                    context,
+                                    r.status,
+                                  ).withOpacity(0.1),
+                                  borderRadius: BorderRadius.circular(12),
+                                ),
+                                child: Text(
+                                  _statusLabel(r.status),
+                                  style: TextStyle(
+                                    fontSize: 12,
+                                    color: _statusColor(context, r.status),
+                                  ),
+                                ),
+                              ),
+                            ],
                           ),
                           trailing: Row(
                             mainAxisSize: MainAxisSize.min,

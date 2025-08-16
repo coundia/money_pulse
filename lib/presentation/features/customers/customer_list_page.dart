@@ -120,7 +120,7 @@ class _CustomerListPageState extends ConsumerState<CustomerListPage> {
             ),
           ),
 
-          // IMPORTANT: provide the required onAnyChange callback
+          // IMPORTANT: Active filters
           ActiveFiltersBar(onAnyChange: _refresh),
 
           const Divider(height: 1),

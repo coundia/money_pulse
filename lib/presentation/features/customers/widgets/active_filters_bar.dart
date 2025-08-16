@@ -90,16 +90,7 @@ class ActiveFiltersBar extends ConsumerWidget {
                       loading: () => const InputChip(label: Text('Société: …')),
                       error: (_, __) => const SizedBox.shrink(),
                     ),
-                  if (hasDebt != null)
-                    InputChip(
-                      label: Text(hasDebt ? 'Avec dette' : 'Sans dette'),
-                      onDeleted: () {
-                        ref.read(customerHasDebtFilterProvider.notifier).state =
-                            null;
-                        resetPaging();
-                        onAnyChange();
-                      },
-                    ),
+
                   if (sort != CustomerSortMode.recent)
                     InputChip(
                       label: const Text('Tri: A–Z'),

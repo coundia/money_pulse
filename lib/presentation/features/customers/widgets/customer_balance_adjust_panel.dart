@@ -73,12 +73,12 @@ class _CustomerBalanceAdjustPanelState
       }
     } else {
       delta = amountCents;
-      if (delta <= 0) {
+      /* if (delta <= 0) {
         ScaffoldMessenger.of(
           context,
         ).showSnackBar(const SnackBar(content: Text('Montant invalide')));
         return;
-      }
+      }*/
       typeEntry = 'CREDIT';
     }
 

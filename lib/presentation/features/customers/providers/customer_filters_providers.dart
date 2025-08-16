@@ -1,7 +1,10 @@
 // Filters state for customer list (search, company, hasDebt, sort, paging).
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-enum CustomerSortMode { recent, az }
+enum CustomerSortMode {
+  recent,
+  nameAZ, // tri alphabétique A–Z
+}
 
 final customerSearchProvider = StateProvider<String>((_) => '');
 final customerCompanyFilterProvider = StateProvider<String?>((_) => null);
