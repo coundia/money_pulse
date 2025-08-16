@@ -1,4 +1,4 @@
-// Customer create/update form showing balances and offering balance actions with responsive layout and enter-to-save.
+// Customer create/update form with responsive layout, small AppBar action to avoid overflow, and enter-to-save.
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -205,12 +205,11 @@ class _CustomerFormPanelState extends ConsumerState<CustomerFormPanel> {
               onPressed: () => Navigator.of(context).maybePop(),
             ),
             actions: [
-              FilledButton.icon(
+              IconButton(
+                tooltip: isEdit ? 'Enregistrer' : 'Créer',
                 onPressed: _save,
                 icon: const Icon(Icons.check),
-                label: Text(isEdit ? 'Enregistrer' : 'Créer'),
               ),
-              const SizedBox(width: 8),
             ],
           ),
           body: FutureBuilder<List<Company>>(
@@ -228,7 +227,7 @@ class _CustomerFormPanelState extends ConsumerState<CustomerFormPanel> {
               return LayoutBuilder(
                 builder: (context, constraints) {
                   final isWide = constraints.maxWidth >= 760;
-                  final fieldGap = const SizedBox(height: 12);
+                  const fieldGap = SizedBox(height: 12);
 
                   final left = <Widget>[
                     Row(
@@ -442,55 +441,68 @@ class _CustomerFormPanelState extends ConsumerState<CustomerFormPanel> {
                       ],
                     ),
                     fieldGap,
-                    Wrap(
-                      spacing: 8,
-                      runSpacing: 8,
-                      children: [
-                        FilledButton.tonalIcon(
-                          onPressed: widget.initial == null
-                              ? null
-                              : () async {
-                                  final ok = await showRightDrawer<bool>(
-                                    context,
-                                    child: CustomerBalanceAdjustPanel(
-                                      customerId: widget.initial!.id,
-                                      currentBalanceCents:
-                                          widget.initial!.balance,
-                                      companyId: widget.initial!.companyId,
-                                      mode: 'add',
-                                    ),
-                                    widthFraction: 0.86,
-                                    heightFraction: 0.96,
-                                  );
-                                  if (ok == true && context.mounted)
-                                    Navigator.of(context).pop<bool>(true);
-                                },
+                    LayoutBuilder(
+                      builder: (context, cts) {
+                        final narrow = cts.maxWidth < 400;
+                        if (widget.initial == null) {
+                          return const SizedBox.shrink();
+                        }
+                        final addBtn = FilledButton.tonalIcon(
+                          onPressed: () async {
+                            final ok = await showRightDrawer<bool>(
+                              context,
+                              child: CustomerBalanceAdjustPanel(
+                                customerId: widget.initial!.id,
+                                currentBalanceCents: widget.initial!.balance,
+                                companyId: widget.initial!.companyId,
+                                mode: 'add',
+                              ),
+                              widthFraction: 0.86,
+                              heightFraction: 0.96,
+                            );
+                            if (ok == true && context.mounted) {
+                              Navigator.of(context).pop<bool>(true);
+                            }
+                          },
                           icon: const Icon(Icons.add_circle_outline),
                           label: const Text('Ajouter au solde'),
-                        ),
-                        OutlinedButton.icon(
-                          onPressed: widget.initial == null
-                              ? null
-                              : () async {
-                                  final ok = await showRightDrawer<bool>(
-                                    context,
-                                    child: CustomerBalanceAdjustPanel(
-                                      customerId: widget.initial!.id,
-                                      currentBalanceCents:
-                                          widget.initial!.balance,
-                                      companyId: widget.initial!.companyId,
-                                      mode: 'set',
-                                    ),
-                                    widthFraction: 0.86,
-                                    heightFraction: 0.96,
-                                  );
-                                  if (ok == true && context.mounted)
-                                    Navigator.of(context).pop<bool>(true);
-                                },
+                        );
+                        final setBtn = OutlinedButton.icon(
+                          onPressed: () async {
+                            final ok = await showRightDrawer<bool>(
+                              context,
+                              child: CustomerBalanceAdjustPanel(
+                                customerId: widget.initial!.id,
+                                currentBalanceCents: widget.initial!.balance,
+                                companyId: widget.initial!.companyId,
+                                mode: 'set',
+                              ),
+                              widthFraction: 0.86,
+                              heightFraction: 0.96,
+                            );
+                            if (ok == true && context.mounted) {
+                              Navigator.of(context).pop<bool>(true);
+                            }
+                          },
                           icon: const Icon(Icons.edit_outlined),
                           label: const Text('Définir le solde'),
-                        ),
-                      ],
+                        );
+                        if (narrow) {
+                          return Column(
+                            crossAxisAlignment: CrossAxisAlignment.stretch,
+                            children: [
+                              addBtn,
+                              const SizedBox(height: 8),
+                              setBtn,
+                            ],
+                          );
+                        }
+                        return Wrap(
+                          spacing: 8,
+                          runSpacing: 8,
+                          children: [addBtn, setBtn],
+                        );
+                      },
                     ),
                   ];
 

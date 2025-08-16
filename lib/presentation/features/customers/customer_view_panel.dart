@@ -1,7 +1,8 @@
-// Customer details panel with responsive cards, balance actions, and linked sections via right drawer.
+// Customer details panel with responsive cards, balance actions, and provider refresh on changes.
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'providers/customer_detail_providers.dart';
+import 'providers/customer_list_providers.dart';
 import 'widgets/customer_linked_section.dart';
 import 'package:money_pulse/presentation/widgets/right_drawer.dart';
 import 'package:money_pulse/presentation/shared/formatters.dart';
@@ -28,6 +29,8 @@ class CustomerViewPanel extends ConsumerWidget {
       );
       if (ok == true) {
         ref.invalidate(customerByIdProvider(customerId));
+        ref.invalidate(customerListProvider);
+        ref.invalidate(customerCountProvider);
         if (context.mounted) {
           ScaffoldMessenger.of(
             context,
@@ -185,6 +188,8 @@ class CustomerViewPanel extends ConsumerWidget {
                           );
                           if (ok == true) {
                             ref.invalidate(customerByIdProvider(customerId));
+                            ref.invalidate(customerListProvider);
+                            ref.invalidate(customerCountProvider);
                             if (context.mounted)
                               Navigator.of(context).pop(true);
                           }
@@ -207,6 +212,8 @@ class CustomerViewPanel extends ConsumerWidget {
                           );
                           if (ok == true) {
                             ref.invalidate(customerByIdProvider(customerId));
+                            ref.invalidate(customerListProvider);
+                            ref.invalidate(customerCountProvider);
                             if (context.mounted)
                               Navigator.of(context).pop(true);
                           }

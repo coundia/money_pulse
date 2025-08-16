@@ -1,4 +1,4 @@
-// Right-drawer panel to add to or set a customer's balance using CheckoutCartUseCase.
+// Right drawer to add or set customer balance; refreshes customer and list providers on success.
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -9,6 +9,9 @@ import 'package:money_pulse/presentation/widgets/right_drawer.dart';
 import 'package:money_pulse/presentation/features/transactions/providers/transaction_list_providers.dart';
 import 'package:money_pulse/presentation/app/providers/checkout_cart_usecase_provider.dart'
     hide checkoutCartUseCaseProvider;
+
+import '../providers/customer_detail_providers.dart';
+import '../providers/customer_list_providers.dart';
 
 class CustomerBalanceAdjustPanel extends ConsumerStatefulWidget {
   final String customerId;
@@ -109,8 +112,12 @@ class _CustomerBalanceAdjustPanelState
 
       await ref.read(transactionsProvider.notifier).load();
       await ref.read(balanceProvider.notifier).load();
+
       ref.invalidate(transactionListItemsProvider);
       ref.invalidate(selectedAccountProvider);
+      ref.invalidate(customerByIdProvider(widget.customerId));
+      ref.invalidate(customerListProvider);
+      ref.invalidate(customerCountProvider);
 
       if (mounted) Navigator.of(context).pop(true);
     } catch (e) {
@@ -193,11 +200,8 @@ class _CustomerBalanceAdjustPanelState
                         : 'Aperçu: ${Formatters.amountFromCents(_parseToCents(_amountCtrl.text))}',
                     isDense: true,
                   ),
-                  validator: (v) {
-                    final cents = _parseToCents(v ?? '');
-                    if (cents <= 0) return 'Montant invalide';
-                    return null;
-                  },
+                  validator: (v) =>
+                      _parseToCents(v ?? '') <= 0 ? 'Montant invalide' : null,
                   onChanged: (_) => setState(() {}),
                   textInputAction: TextInputAction.done,
                   onFieldSubmitted: (_) => _save(),
