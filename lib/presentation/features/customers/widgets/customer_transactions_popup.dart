@@ -1,10 +1,14 @@
-// Popup (right drawer) listing recent customer transactions with reverse-delete action and live refresh.
+// Popup listing a customer's recent transactions with filters, reverse-delete, and live refresh (SRP).
+
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:money_pulse/presentation/shared/formatters.dart';
-import '../providers/customer_linked_providers.dart';
+import '../providers/customer_linked_providers.dart'; // <-- provides LinkedTxnRow + providers
 import 'customer_linked_controller.dart';
 import 'package:money_pulse/presentation/widgets/right_drawer.dart';
+
+// NOTE: Do NOT import TransactionEntry here; this popup works with LinkedTxnRow.
 
 class CustomerTransactionsPopup extends ConsumerStatefulWidget {
   final String customerId;
@@ -15,25 +19,67 @@ class CustomerTransactionsPopup extends ConsumerStatefulWidget {
       _CustomerTransactionsPopupState();
 }
 
+class _TxFilter {
+  final String search;
+  final Set<String> types;
+  final DateTime? from;
+  final DateTime? to;
+  final int? minCents;
+  final int? maxCents;
+  const _TxFilter({
+    this.search = '',
+    this.types = const {},
+    this.from,
+    this.to,
+    this.minCents,
+    this.maxCents,
+  });
+
+  _TxFilter copyWith({
+    String? search,
+    Set<String>? types,
+    DateTime? from,
+    DateTime? to,
+    int? minCents,
+    int? maxCents,
+  }) {
+    return _TxFilter(
+      search: search ?? this.search,
+      types: types ?? this.types,
+      from: from ?? this.from,
+      to: to ?? this.to,
+      minCents: minCents ?? this.minCents,
+      maxCents: maxCents ?? this.maxCents,
+    );
+  }
+
+  bool get hasAny =>
+      search.trim().isNotEmpty ||
+      types.isNotEmpty ||
+      from != null ||
+      to != null ||
+      minCents != null ||
+      maxCents != null;
+
+  static _TxFilter empty() => const _TxFilter();
+}
+
 class _CustomerTransactionsPopupState
     extends ConsumerState<CustomerTransactionsPopup> {
   bool _dirty = false;
+  _TxFilter _filter = _TxFilter.empty();
+
+  static const Map<String, String> _typeLabels = {
+    'DEBIT': 'Dépense',
+    'CREDIT': 'Revenu',
+    'DEBT': 'Dette',
+    'REMBOURSEMENT': 'Remboursement',
+    'PRET': 'Prêt',
+  };
 
   String _typeLabel(String? t) {
-    switch ((t ?? '').toUpperCase()) {
-      case 'DEBIT':
-        return 'Dépense';
-      case 'CREDIT':
-        return 'Revenu';
-      case 'DEBT':
-        return 'Dette';
-      case 'REMBOURSEMENT':
-        return 'Remboursement';
-      case 'PRET':
-        return 'Prêt';
-      default:
-        return t ?? '—';
-    }
+    final k = (t ?? '').toUpperCase();
+    return _typeLabels[k] ?? (t ?? '—');
   }
 
   Future<void> _reverseOne(
@@ -70,6 +116,138 @@ class _CustomerTransactionsPopupState
     }
   }
 
+  // *************** FILTERS APPLY ON LinkedTxnRow ****************
+  List<LinkedTxnRow> _applyFilters(List<LinkedTxnRow> rows) {
+    Iterable<LinkedTxnRow> list = rows;
+    final f = _filter;
+
+    if (f.search.trim().isNotEmpty) {
+      final q = f.search.toLowerCase().trim();
+      list = list.where((r) {
+        final label =
+            (r.description?.isNotEmpty == true
+                    ? r.description!
+                    : _typeLabel(r.typeEntry))
+                .toLowerCase();
+        return label.contains(q);
+      });
+    }
+    if (f.types.isNotEmpty) {
+      list = list.where((r) => f.types.contains((r.typeEntry).toUpperCase()));
+    }
+    if (f.from != null) {
+      final start = DateTime(f.from!.year, f.from!.month, f.from!.day);
+      list = list.where((r) => !r.dateTransaction.isBefore(start));
+    }
+    if (f.to != null) {
+      final end = DateTime(f.to!.year, f.to!.month, f.to!.day, 23, 59, 59, 999);
+      list = list.where((r) => !r.dateTransaction.isAfter(end));
+    }
+    if (f.minCents != null) {
+      list = list.where((r) => r.amount >= f.minCents!);
+    }
+    if (f.maxCents != null) {
+      list = list.where((r) => r.amount <= f.maxCents!);
+    }
+
+    final out = list.toList()
+      ..sort((a, b) => b.dateTransaction.compareTo(a.dateTransaction));
+    return out;
+  }
+
+  Widget _activeFiltersBar() {
+    if (!_filter.hasAny) return const SizedBox.shrink();
+
+    final chips = <Widget>[];
+    if (_filter.search.trim().isNotEmpty) {
+      chips.add(
+        InputChip(
+          label: Text('Recherche: ${_filter.search.trim()}'),
+          onDeleted: () =>
+              setState(() => _filter = _filter.copyWith(search: '')),
+        ),
+      );
+    }
+    if (_filter.types.isNotEmpty) {
+      for (final t in _filter.types) {
+        chips.add(
+          InputChip(
+            label: Text(_typeLabels[t] ?? t),
+            onDeleted: () {
+              final next = Set<String>.from(_filter.types)..remove(t);
+              setState(() => _filter = _filter.copyWith(types: next));
+            },
+          ),
+        );
+      }
+    }
+    if (_filter.from != null) {
+      chips.add(
+        InputChip(
+          label: Text('Du: ${Formatters.dateFull(_filter.from!)}'),
+          onDeleted: () =>
+              setState(() => _filter = _filter.copyWith(from: null)),
+        ),
+      );
+    }
+    if (_filter.to != null) {
+      chips.add(
+        InputChip(
+          label: Text('Au: ${Formatters.dateFull(_filter.to!)}'),
+          onDeleted: () => setState(() => _filter = _filter.copyWith(to: null)),
+        ),
+      );
+    }
+    if (_filter.minCents != null) {
+      chips.add(
+        InputChip(
+          label: Text('Min: ${Formatters.amountFromCents(_filter.minCents!)}'),
+          onDeleted: () =>
+              setState(() => _filter = _filter.copyWith(minCents: null)),
+        ),
+      );
+    }
+    if (_filter.maxCents != null) {
+      chips.add(
+        InputChip(
+          label: Text('Max: ${Formatters.amountFromCents(_filter.maxCents!)}'),
+          onDeleted: () =>
+              setState(() => _filter = _filter.copyWith(maxCents: null)),
+        ),
+      );
+    }
+
+    return Material(
+      color: Theme.of(context).colorScheme.surface,
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(12, 6, 12, 6),
+        child: Row(
+          children: [
+            Expanded(child: Wrap(spacing: 8, runSpacing: -6, children: chips)),
+            const SizedBox(width: 8),
+            OutlinedButton.icon(
+              onPressed: () => setState(() => _filter = _TxFilter.empty()),
+              icon: const Icon(Icons.filter_alt_off_outlined),
+              label: const Text('Réinitialiser'),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Future<void> _openFilters() async {
+    final next = await showRightDrawer<_TxFilter>(
+      context,
+      child: _TxFiltersPanel(initial: _filter),
+      widthFraction: 0.86,
+      heightFraction: 0.96,
+    );
+    if (next != null) {
+      setState(() => _filter = next);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final txsAsync = ref.watch(
@@ -92,6 +270,11 @@ class _CustomerTransactionsPopupState
           ),
           actions: [
             IconButton(
+              tooltip: 'Filtrer',
+              icon: const Icon(Icons.filter_list),
+              onPressed: _openFilters,
+            ),
+            IconButton(
               tooltip: 'Rafraîchir',
               icon: const Icon(Icons.refresh),
               onPressed: () async {
@@ -101,73 +284,102 @@ class _CustomerTransactionsPopupState
             ),
           ],
         ),
-        body: txsAsync.when(
-          data: (rows) {
-            if (rows.isEmpty) {
-              return const Center(child: Text('Aucune transaction'));
-            }
-            return ListView.separated(
-              itemCount: rows.length,
-              separatorBuilder: (_, __) => const Divider(height: 1),
-              itemBuilder: (_, i) {
-                final r = rows[i];
-                final label = (r.description?.isNotEmpty ?? false)
-                    ? r.description!
-                    : _typeLabel(r.typeEntry);
-                return ListTile(
-                  dense: true,
-                  title: Text(
-                    label,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                  subtitle: Text(Formatters.dateFull(r.dateTransaction)),
-                  trailing: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Text(
-                        Formatters.amountFromCents(r.amount),
-                        style: Theme.of(context).textTheme.titleMedium,
-                      ),
-                      const SizedBox(width: 6),
-                      PopupMenuButton<String>(
-                        onSelected: (v) {
-                          if (v == 'delete') {
-                            _reverseOne(
-                              context,
-                              r.id,
-                              'Supprimer (annuler) ?',
-                              r.amount,
-                            );
-                          }
-                        },
-                        itemBuilder: (_) => const [
-                          PopupMenuItem(
-                            value: 'delete',
-                            child: Row(
-                              children: [
-                                Icon(Icons.delete_outline, size: 18),
-                                SizedBox(width: 8),
-                                Text('Supprimer (annuler)'),
-                              ],
+        body: Column(
+          children: [
+            _activeFiltersBar(),
+            Expanded(
+              child: txsAsync.when(
+                data: (List<LinkedTxnRow> rows) {
+                  final filtered = _applyFilters(rows);
+                  if (filtered.isEmpty) {
+                    return const Center(child: Text('Aucune transaction'));
+                  }
+                  final total = filtered.fold<int>(0, (p, e) => p + e.amount);
+                  return RefreshIndicator(
+                    onRefresh: () async {
+                      await controller.refreshAll(ref, widget.customerId);
+                      setState(() {});
+                    },
+                    child: ListView.separated(
+                      padding: const EdgeInsets.only(top: 8),
+                      itemCount: filtered.length + 1,
+                      separatorBuilder: (_, __) => const Divider(height: 1),
+                      itemBuilder: (_, i) {
+                        if (i == 0) {
+                          return ListTile(
+                            dense: true,
+                            leading: const Icon(Icons.summarize_outlined),
+                            title: const Text('Total filtré'),
+                            trailing: Text(
+                              Formatters.amountFromCents(total),
+                              style: Theme.of(context).textTheme.titleMedium,
                             ),
+                          );
+                        }
+                        final r = filtered[i - 1];
+                        final label = (r.description?.isNotEmpty ?? false)
+                            ? r.description!
+                            : _typeLabel(r.typeEntry);
+                        return ListTile(
+                          dense: true,
+                          title: Text(
+                            label,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
                           ),
-                        ],
-                      ),
-                    ],
-                  ),
-                  onLongPress: () => _reverseOne(
-                    context,
-                    r.id,
-                    'Supprimer (annuler) ?',
-                    r.amount,
-                  ),
-                );
-              },
-            );
-          },
-          loading: () => const Center(child: CircularProgressIndicator()),
-          error: (e, _) => Center(child: Text('Erreur: $e')),
+                          subtitle: Text(
+                            Formatters.dateFull(r.dateTransaction),
+                          ),
+                          trailing: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Text(
+                                Formatters.amountFromCents(r.amount),
+                                style: Theme.of(context).textTheme.titleMedium,
+                              ),
+                              const SizedBox(width: 6),
+                              PopupMenuButton<String>(
+                                onSelected: (v) {
+                                  if (v == 'delete') {
+                                    _reverseOne(
+                                      context,
+                                      r.id,
+                                      'Supprimer (annuler) ?',
+                                      r.amount,
+                                    );
+                                  }
+                                },
+                                itemBuilder: (_) => const [
+                                  PopupMenuItem(
+                                    value: 'delete',
+                                    child: Row(
+                                      children: [
+                                        Icon(Icons.delete_outline, size: 18),
+                                        SizedBox(width: 8),
+                                        Text('Supprimer (annuler)'),
+                                      ],
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ],
+                          ),
+                          onLongPress: () => _reverseOne(
+                            context,
+                            r.id,
+                            'Supprimer (annuler) ?',
+                            r.amount,
+                          ),
+                        );
+                      },
+                    ),
+                  );
+                },
+                loading: () => const Center(child: CircularProgressIndicator()),
+                error: (e, _) => Center(child: Text('Erreur: $e')),
+              ),
+            ),
+          ],
         ),
         bottomNavigationBar: SafeArea(
           top: false,
@@ -267,4 +479,253 @@ class _TxReverseConfirmPanelState extends State<_TxReverseConfirmPanel> {
       ),
     );
   }
+}
+
+class _TxFiltersPanel extends StatefulWidget {
+  final _TxFilter initial;
+  const _TxFiltersPanel({required this.initial});
+
+  @override
+  State<_TxFiltersPanel> createState() => _TxFiltersPanelState();
+}
+
+class _TxFiltersPanelState extends State<_TxFiltersPanel> {
+  late TextEditingController _search;
+  late TextEditingController _minCtrl;
+  late TextEditingController _maxCtrl;
+  DateTime? _from;
+  DateTime? _to;
+  Set<String> _types = {};
+
+  @override
+  void initState() {
+    super.initState();
+    _search = TextEditingController(text: widget.initial.search);
+    _minCtrl = TextEditingController(
+      text: widget.initial.minCents == null
+          ? ''
+          : (widget.initial.minCents! / 100).toStringAsFixed(2),
+    );
+    _maxCtrl = TextEditingController(
+      text: widget.initial.maxCents == null
+          ? ''
+          : (widget.initial.maxCents! / 100).toStringAsFixed(2),
+    );
+    _from = widget.initial.from;
+    _to = widget.initial.to;
+    _types = Set<String>.from(widget.initial.types);
+  }
+
+  @override
+  void dispose() {
+    _search.dispose();
+    _minCtrl.dispose();
+    _maxCtrl.dispose();
+    super.dispose();
+  }
+
+  int? _parseToCents(String v) {
+    final t = v.replaceAll(RegExp(r'\s'), '').replaceAll(',', '.').trim();
+    if (t.isEmpty) return null;
+    final d = double.tryParse(t);
+    if (d == null) return null;
+    final cents = (d * 100).round();
+    return cents < 0 ? 0 : cents;
+  }
+
+  Future<void> _pickFrom() async {
+    final picked = await showDatePicker(
+      context: context,
+      initialDate: _from ?? DateTime.now(),
+      firstDate: DateTime(2000),
+      lastDate: DateTime(2100),
+    );
+    if (picked != null) setState(() => _from = picked);
+  }
+
+  Future<void> _pickTo() async {
+    final picked = await showDatePicker(
+      context: context,
+      initialDate: _to ?? DateTime.now(),
+      firstDate: DateTime(2000),
+      lastDate: DateTime(2100),
+    );
+    if (picked != null) setState(() => _to = picked);
+  }
+
+  void _toggleType(String t) {
+    final k = t.toUpperCase();
+    setState(() {
+      if (_types.contains(k)) {
+        _types.remove(k);
+      } else {
+        _types.add(k);
+      }
+    });
+  }
+
+  void _apply() {
+    final minC = _parseToCents(_minCtrl.text);
+    final maxC = _parseToCents(_maxCtrl.text);
+    final out = _TxFilter(
+      search: _search.text,
+      types: _types,
+      from: _from,
+      to: _to,
+      minCents: minC,
+      maxCents: maxC,
+    );
+    Navigator.of(context).pop<_TxFilter>(out);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final chips = <Widget>[];
+    for (final e in _CustomerTransactionsPopupState._typeLabels.entries) {
+      chips.add(
+        FilterChip(
+          label: Text(e.value),
+          selected: _types.contains(e.key),
+          onSelected: (_) => _toggleType(e.key),
+        ),
+      );
+    }
+
+    return Shortcuts(
+      shortcuts: {
+        LogicalKeySet(LogicalKeyboardKey.enter): const _SubmitIntent(),
+        LogicalKeySet(LogicalKeyboardKey.numpadEnter): const _SubmitIntent(),
+      },
+      child: Actions(
+        actions: {
+          _SubmitIntent: CallbackAction<_SubmitIntent>(
+            onInvoke: (_) {
+              _apply();
+              return null;
+            },
+          ),
+        },
+        child: Scaffold(
+          appBar: AppBar(
+            title: const Text('Filtres'),
+            leading: IconButton(
+              tooltip: 'Fermer',
+              icon: const Icon(Icons.close),
+              onPressed: () => Navigator.of(context).maybePop(),
+            ),
+            actions: [
+              TextButton(
+                onPressed: () =>
+                    Navigator.of(context).pop<_TxFilter>(_TxFilter.empty()),
+                child: const Text('Réinitialiser'),
+              ),
+              const SizedBox(width: 4),
+              FilledButton.icon(
+                onPressed: _apply,
+                icon: const Icon(Icons.check),
+                label: const Text('Appliquer'),
+              ),
+              const SizedBox(width: 8),
+            ],
+          ),
+          body: ListView(
+            padding: const EdgeInsets.all(16),
+            children: [
+              TextField(
+                controller: _search,
+                decoration: const InputDecoration(
+                  labelText: 'Rechercher dans la description',
+                  prefixIcon: Icon(Icons.search),
+                  isDense: true,
+                  border: OutlineInputBorder(),
+                ),
+                textInputAction: TextInputAction.next,
+              ),
+              const SizedBox(height: 12),
+              Wrap(spacing: 8, runSpacing: 8, children: chips),
+              const SizedBox(height: 12),
+              Row(
+                children: [
+                  Expanded(
+                    child: TextField(
+                      controller: _minCtrl,
+                      keyboardType: const TextInputType.numberWithOptions(
+                        decimal: true,
+                      ),
+                      inputFormatters: [
+                        FilteringTextInputFormatter.allow(RegExp(r'[0-9,.\s]')),
+                      ],
+                      decoration: const InputDecoration(
+                        labelText: 'Montant min',
+                        prefixIcon: Icon(Icons.low_priority),
+                        isDense: true,
+                        border: OutlineInputBorder(),
+                      ),
+                      textInputAction: TextInputAction.next,
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: TextField(
+                      controller: _maxCtrl,
+                      keyboardType: const TextInputType.numberWithOptions(
+                        decimal: true,
+                      ),
+                      inputFormatters: [
+                        FilteringTextInputFormatter.allow(RegExp(r'[0-9,.\s]')),
+                      ],
+                      decoration: const InputDecoration(
+                        labelText: 'Montant max',
+                        prefixIcon: Icon(Icons.high_quality),
+                        isDense: true,
+                        border: OutlineInputBorder(),
+                      ),
+                      textInputAction: TextInputAction.next,
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 12),
+              Row(
+                children: [
+                  Expanded(
+                    child: OutlinedButton.icon(
+                      onPressed: _pickFrom,
+                      icon: const Icon(Icons.today_outlined),
+                      label: Text(
+                        _from == null ? 'Du —' : Formatters.dateFull(_from!),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: OutlinedButton.icon(
+                      onPressed: _pickTo,
+                      icon: const Icon(Icons.event_outlined),
+                      label: Text(
+                        _to == null ? 'Au —' : Formatters.dateFull(_to!),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 20),
+              SafeArea(
+                top: false,
+                child: FilledButton.icon(
+                  onPressed: _apply,
+                  icon: const Icon(Icons.check),
+                  label: const Text('Appliquer'),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _SubmitIntent extends Intent {
+  const _SubmitIntent();
 }
