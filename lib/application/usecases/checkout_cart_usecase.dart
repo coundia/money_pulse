@@ -1,4 +1,4 @@
-// Use case creating a transaction with stock and optional debt linkage; updates customer balanceDebt on DEBT/REMBOURSEMENT.
+// Use case creating a transaction with stock and optional debt linkage; updates customer balance and balanceDebt accordingly.
 import 'package:uuid/uuid.dart';
 import 'package:sqflite/sqflite.dart';
 import 'package:money_pulse/infrastructure/db/app_database.dart';
@@ -179,6 +179,13 @@ class CheckoutCartUseCase {
         await _incCustomerBalanceDebtTx(txn, customerId, debtDelta, nowIso);
       }
 
+      if (customerId != null &&
+          (t == 'DEBIT' || t == 'CREDIT') &&
+          status == null) {
+        final balDelta = (t == 'CREDIT') ? total : -total;
+        await _incCustomerBalanceTx(txn, customerId, balDelta, nowIso);
+      }
+
       if (needsAccount) {
         final delta = switch (t) {
           'DEBIT' => -total,
@@ -269,6 +276,21 @@ class CheckoutCartUseCase {
       'SELECT id FROM company WHERE isDefault=1 AND deletedAt IS NULL LIMIT 1',
     );
     return def.isEmpty ? null : (def.first['id'] as String?);
+  }
+
+  Future<void> _incCustomerBalanceTx(
+    Transaction txn,
+    String customerId,
+    int delta,
+    String nowIso,
+  ) async {
+    await txn.rawUpdate(
+      'UPDATE customer '
+      'SET balance = CASE WHEN COALESCE(balance,0) + ? < 0 THEN 0 ELSE COALESCE(balance,0) + ? END, '
+      'updatedAt = ?, isDirty = 1 '
+      'WHERE id = ?',
+      [delta, delta, nowIso, customerId],
+    );
   }
 
   Future<void> _incCustomerBalanceDebtTx(
