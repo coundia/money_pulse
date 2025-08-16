@@ -41,6 +41,8 @@ class AmountFieldQuickPad extends StatefulWidget {
     this.labelText = 'Montant',
     this.compact = true,
     this.startExpanded = false,
+    bool isRequired = false,
+    bool allowZero = false,
   });
 
   @override

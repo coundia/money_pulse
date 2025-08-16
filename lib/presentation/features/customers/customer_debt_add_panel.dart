@@ -1,14 +1,15 @@
-// Right drawer to add sale to customer's debt (simple amount or description).
+// Right drawer to add an amount to a customer's open debt using AmountFieldQuickPad with refresh.
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:money_pulse/presentation/shared/formatters.dart';
-import 'package:money_pulse/presentation/app/providers.dart';
-import 'package:money_pulse/presentation/app/providers/add_sale_to_debt_usecase_provider.dart';
-
-class SubmitFormIntent extends Intent {
-  const SubmitFormIntent();
-}
+import 'package:money_pulse/presentation/shared/amount_utils.dart';
+import 'package:money_pulse/presentation/features/transactions/widgets/amount_field_quickpad.dart';
+import 'package:money_pulse/presentation/app/providers/checkout_cart_usecase_provider.dart'
+    hide checkoutCartUseCaseProvider;
+import '../../app/providers.dart';
+import 'providers/customer_linked_providers.dart';
+import 'providers/customer_detail_providers.dart';
+import 'providers/customer_list_providers.dart';
 
 class CustomerDebtAddPanel extends ConsumerStatefulWidget {
   final String customerId;
@@ -22,8 +23,8 @@ class CustomerDebtAddPanel extends ConsumerStatefulWidget {
 class _CustomerDebtAddPanelState extends ConsumerState<CustomerDebtAddPanel> {
   final _formKey = GlobalKey<FormState>();
   final _amountCtrl = TextEditingController();
-  final _descCtrl = TextEditingController();
-  DateTime _when = DateTime.now();
+  final _descCtrl = TextEditingController(text: 'Ajout à dette');
+  bool _submitting = false;
 
   @override
   void dispose() {
@@ -32,57 +33,68 @@ class _CustomerDebtAddPanelState extends ConsumerState<CustomerDebtAddPanel> {
     super.dispose();
   }
 
-  int _parseAmountToCents(String v) {
-    final s = v.replaceAll(RegExp(r'\s'), '').replaceAll(',', '.');
-    final d = double.tryParse(s) ?? 0;
-    return (d * 100).round();
-  }
-
   Future<void> _save() async {
+    if (_submitting) return;
     if (!_formKey.currentState!.validate()) return;
-    final cents = _parseAmountToCents(_amountCtrl.text);
-    try {
-      await ref
-          .read(addSaleToDebtUseCaseProvider)
-          .execute(
-            customerId: widget.customerId,
-            companyId: null,
-            categoryId: null,
-            description: _descCtrl.text.trim().isEmpty
-                ? null
-                : _descCtrl.text.trim(),
-            when: _when,
-            lines: [
-              {
-                'productId': null,
-                'label': _descCtrl.text.trim().isEmpty
-                    ? 'Vente à crédit'
-                    : _descCtrl.text.trim(),
-                'quantity': 1,
-                'unitPrice': cents,
-              },
-            ],
-          );
-      if (mounted) Navigator.of(context).pop(true);
-    } catch (e) {
-      if (!mounted) return;
+
+    final amountCents = _amountCtrl.toCents();
+    if (amountCents <= 0) {
       ScaffoldMessenger.of(
         context,
-      ).showSnackBar(SnackBar(content: Text('Échec: $e')));
+      ).showSnackBar(const SnackBar(content: Text('Montant invalide')));
+      return;
+    }
+
+    setState(() => _submitting = true);
+    try {
+      final usecase = ref.read(checkoutCartUseCaseProvider);
+      await usecase.execute(
+        typeEntry: 'DEBT',
+        accountId: null,
+        companyId: null,
+        customerId: widget.customerId,
+        categoryId: null,
+        description: _descCtrl.text.trim().isEmpty
+            ? null
+            : _descCtrl.text.trim(),
+        when: DateTime.now(),
+        lines: [
+          {
+            'productId': null,
+            'label': 'Ajout à dette',
+            'quantity': 1,
+            'unitPrice': amountCents,
+          },
+        ],
+      );
+
+      ref.invalidate(openDebtByCustomerProvider(widget.customerId));
+      ref.invalidate(customerByIdProvider(widget.customerId));
+      ref.invalidate(customerListProvider);
+      ref.invalidate(customerCountProvider);
+
+      if (mounted) Navigator.of(context).pop(true);
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('Échec: $e')));
+      }
+    } finally {
+      if (mounted) setState(() => _submitting = false);
     }
   }
 
   @override
   Widget build(BuildContext context) {
-    final insets = MediaQuery.of(context).viewInsets.bottom;
     return Shortcuts(
       shortcuts: {
-        LogicalKeySet(LogicalKeyboardKey.enter): const SubmitFormIntent(),
-        LogicalKeySet(LogicalKeyboardKey.numpadEnter): const SubmitFormIntent(),
+        LogicalKeySet(LogicalKeyboardKey.enter): const ActivateIntent(),
+        LogicalKeySet(LogicalKeyboardKey.numpadEnter): const ActivateIntent(),
       },
       child: Actions(
         actions: {
-          SubmitFormIntent: CallbackAction<SubmitFormIntent>(
+          ActivateIntent: CallbackAction<ActivateIntent>(
             onInvoke: (_) {
               _save();
               return null;
@@ -97,64 +109,51 @@ class _CustomerDebtAddPanelState extends ConsumerState<CustomerDebtAddPanel> {
               icon: const Icon(Icons.close),
               onPressed: () => Navigator.of(context).maybePop(),
             ),
-            actions: [
-              IconButton(
-                tooltip: 'Enregistrer',
-                icon: const Icon(Icons.check),
-                onPressed: _save,
-              ),
-            ],
           ),
-          body: Padding(
-            padding: EdgeInsets.only(bottom: insets),
-            child: Form(
-              key: _formKey,
-              child: ListView(
-                padding: const EdgeInsets.all(16),
-                children: [
-                  TextFormField(
-                    controller: _amountCtrl,
-                    keyboardType: const TextInputType.numberWithOptions(
-                      decimal: true,
-                    ),
-                    decoration: InputDecoration(
-                      labelText: 'Montant',
-                      hintText: 'Ex: 25 000',
-                      border: const OutlineInputBorder(),
-                      helperText: _amountCtrl.text.isEmpty
-                          ? null
-                          : 'Aperçu: ${Formatters.amountFromCents(_parseAmountToCents(_amountCtrl.text))}',
-                    ),
-                    onChanged: (_) => setState(() {}),
-                    validator: (v) => _parseAmountToCents(v ?? '') <= 0
-                        ? 'Montant invalide'
-                        : null,
-                  ),
-                  const SizedBox(height: 12),
-                  TextFormField(
-                    controller: _descCtrl,
-                    decoration: const InputDecoration(
-                      labelText: 'Description (optionnel)',
-                      border: OutlineInputBorder(),
-                    ),
-                    textInputAction: TextInputAction.done,
-                    onFieldSubmitted: (_) => _save(),
-                  ),
-                ],
-              ),
-            ),
-          ),
-          bottomSheet: SafeArea(
-            top: false,
-            child: Padding(
-              padding: const EdgeInsets.all(12),
-              child: SizedBox(
-                width: double.infinity,
-                child: FilledButton(
-                  onPressed: _save,
-                  child: const Text('Enregistrer'),
+          body: Form(
+            key: _formKey,
+            child: ListView(
+              padding: const EdgeInsets.all(16),
+              children: [
+                AmountFieldQuickPad(
+                  controller: _amountCtrl,
+                  quickUnits: const [
+                    1000,
+                    2000,
+                    5000,
+                    10000,
+                    20000,
+                    50000,
+                    100000,
+                  ],
+                  labelText: 'Montant (CFA)',
+                  compact: true,
+                  startExpanded: true,
+                  isRequired: true,
+                  allowZero: false,
+                  onChanged: () => setState(() {}),
                 ),
-              ),
+                const SizedBox(height: 12),
+                TextFormField(
+                  controller: _descCtrl,
+                  decoration: const InputDecoration(
+                    labelText: 'Description (optionnel)',
+                    border: OutlineInputBorder(),
+                    isDense: true,
+                  ),
+                  textInputAction: TextInputAction.done,
+                  onFieldSubmitted: (_) => _save(),
+                ),
+                const SizedBox(height: 20),
+                SafeArea(
+                  top: false,
+                  child: FilledButton.icon(
+                    onPressed: _submitting ? null : _save,
+                    icon: const Icon(Icons.check),
+                    label: Text(_submitting ? 'Traitement...' : 'Valider'),
+                  ),
+                ),
+              ],
             ),
           ),
         ),

@@ -394,7 +394,8 @@ class CustomerViewPanel extends ConsumerWidget {
                       title: 'Dette',
                       value: detteValue,
                       color: Theme.of(context).colorScheme.error,
-                      onTapDefault: _onDebtPayment, // tap rapide => Paiement
+                      onTapDefault:
+                          _onDebtAdd, // tap rapide => Ajouter à la dette
                       contextItems: _detteMenu(),
                       onMenuSelected: _onDetteMenuSelected,
                     );
