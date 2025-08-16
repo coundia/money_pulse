@@ -1,15 +1,18 @@
+// lib/domain/transactions/entities/transaction_entry.dart
+
 class TransactionEntry {
   final String id;
   final String? remoteId;
   final String? code;
   final String? description;
   final int amount;
-  final String typeEntry;
+  final String
+  typeEntry; // 'DEBIT' | 'CREDIT' | 'DEBT' | 'REMBOURSEMENT' | 'PRET' ...
   final DateTime dateTransaction;
   final String? status;
   final String? entityName;
   final String? entityId;
-  final String accountId;
+  final String? accountId; // <-- nullable
   final String? categoryId;
 
   final String? companyId;
@@ -33,7 +36,7 @@ class TransactionEntry {
     this.status,
     this.entityName,
     this.entityId,
-    required this.accountId,
+    this.accountId, // <-- nullable
     this.categoryId,
     this.companyId,
     this.customerId,
@@ -45,38 +48,66 @@ class TransactionEntry {
     this.isDirty = true,
   });
 
+  // ------------------------ Helpers ------------------------
+
+  static String? _asString(Object? v) => v?.toString();
+
+  static int _asInt(Object? v, {int fallback = 0}) {
+    if (v == null) return fallback;
+    if (v is int) return v;
+    if (v is num) return v.toInt();
+    return int.tryParse(v.toString()) ?? fallback;
+  }
+
+  static bool _asBool(Object? v, {bool fallback = true}) {
+    if (v == null) return fallback;
+    if (v is bool) return v;
+    if (v is num) return v != 0;
+    final s = v.toString().toLowerCase().trim();
+    if (s == '1' || s == 'true') return true;
+    if (s == '0' || s == 'false') return false;
+    return fallback;
+  }
+
   static DateTime? _parseDate(dynamic v) {
     if (v == null) return null;
+    if (v is DateTime) return v;
     if (v is int) return DateTime.fromMillisecondsSinceEpoch(v);
     final s = v.toString();
-    if (s.contains('T')) return DateTime.parse(s);
-    return DateTime.parse(s.replaceFirst(' ', 'T'));
+    if (s.isEmpty) return null;
+    // Autoriser les formats "YYYY-MM-DD HH:MM:SS" en remplaçant l'espace par 'T'
+    final normalized = s.contains('T') ? s : s.replaceFirst(' ', 'T');
+    try {
+      return DateTime.parse(normalized);
+    } catch (_) {
+      return null;
+    }
   }
+
+  // ------------------------ Mapping ------------------------
 
   factory TransactionEntry.fromMap(Map<String, Object?> m) {
     return TransactionEntry(
-      id: m['id'] as String,
-      remoteId: m['remoteId'] as String?,
-      code: m['code'] as String?,
-      description: m['description'] as String?,
-      amount: (m['amount'] as int?) ?? 0,
-      typeEntry: m['typeEntry'] as String,
+      id: _asString(m['id'])!, // id doit exister
+      remoteId: _asString(m['remoteId']),
+      code: _asString(m['code']),
+      description: _asString(m['description']),
+      amount: _asInt(m['amount']),
+      typeEntry: _asString(m['typeEntry']) ?? 'DEBIT',
       dateTransaction: _parseDate(m['dateTransaction']) ?? DateTime.now(),
-      status: m['status'] as String?,
-      entityName: m['entityName'] as String?,
-      entityId: m['entityId'] as String?,
-      accountId: m['accountId'] as String,
-      categoryId: m['categoryId'] as String?,
-
-      companyId: m['companyId'] as String?,
-      customerId: m['customerId'] as String?,
-
+      status: _asString(m['status']),
+      entityName: _asString(m['entityName']),
+      entityId: _asString(m['entityId']),
+      accountId: _asString(m['accountId']), // ✅ nullable, plus de cast error
+      categoryId: _asString(m['categoryId']),
+      companyId: _asString(m['companyId']),
+      customerId: _asString(m['customerId']),
       createdAt: _parseDate(m['createdAt']) ?? DateTime.now(),
       updatedAt: _parseDate(m['updatedAt']) ?? DateTime.now(),
       deletedAt: _parseDate(m['deletedAt']),
       syncAt: _parseDate(m['syncAt']),
-      version: (m['version'] as int?) ?? 0,
-      isDirty: ((m['isDirty'] as int?) ?? 1) == 1,
+      version: _asInt(m['version']),
+      isDirty: _asBool(m['isDirty'], fallback: true),
     );
   }
 
@@ -93,12 +124,10 @@ class TransactionEntry {
       'status': status,
       'entityName': entityName,
       'entityId': entityId,
-      'accountId': accountId,
+      'accountId': accountId, // ✅ peut rester null
       'categoryId': categoryId,
-
       'companyId': companyId,
       'customerId': customerId,
-
       'createdAt': f(createdAt),
       'updatedAt': f(updatedAt),
       'deletedAt': f(deletedAt),
@@ -107,6 +136,8 @@ class TransactionEntry {
       'isDirty': isDirty ? 1 : 0,
     };
   }
+
+  // ------------------------ Copy ------------------------
 
   TransactionEntry copyWith({
     String? id,
@@ -119,7 +150,7 @@ class TransactionEntry {
     String? status,
     String? entityName,
     String? entityId,
-    String? accountId,
+    String? accountId, // <-- nullable
     String? categoryId,
     String? companyId,
     String? customerId,
@@ -141,12 +172,10 @@ class TransactionEntry {
       status: status ?? this.status,
       entityName: entityName ?? this.entityName,
       entityId: entityId ?? this.entityId,
-      accountId: accountId ?? this.accountId,
+      accountId: accountId ?? this.accountId, // ✅
       categoryId: categoryId ?? this.categoryId,
-
       companyId: companyId ?? this.companyId,
       customerId: customerId ?? this.customerId,
-
       createdAt: createdAt ?? this.createdAt,
       updatedAt: updatedAt ?? this.updatedAt,
       deletedAt: deletedAt ?? this.deletedAt,

@@ -295,17 +295,27 @@ class TransactionRepositorySqflite implements TransactionRepository {
     String? typeEntry,
   }) async {
     final where = StringBuffer(
-      'accountId=? AND deletedAt IS NULL AND dateTransaction >= ? AND dateTransaction < ?',
+      // Inclure les transactions du compte sélectionné
+      // OU les dettes (typeEntry='DEBT') sans compte (accountId IS NULL)
+      '(accountId = ? OR (accountId IS NULL AND typeEntry = "DEBT")) '
+      'AND deletedAt IS NULL '
+      'AND dateTransaction >= ? '
+      'AND dateTransaction < ?',
     );
+
     final args = <Object?>[
       accountId,
       from.toIso8601String(),
       to.toIso8601String(),
     ];
+
+    // Si un filtre de type est demandé (DEBIT/CREDIT/etc.), on l’applique.
+    // => Les dettes n’apparaîtront que si `typeEntry` est null (vue "Tous").
     if (typeEntry != null) {
       where.write(' AND typeEntry = ?');
       args.add(typeEntry);
     }
+
     final rows = await _db.db.query(
       'transaction_entry',
       where: where.toString(),
