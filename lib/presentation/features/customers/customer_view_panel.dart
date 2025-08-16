@@ -416,6 +416,10 @@ class CustomerViewPanel extends ConsumerWidget {
                     );
                   },
                 ),
+                const SizedBox(height: 16),
+
+                // Liens (dette + récentes) – déjà rafraîchis via invalidate dans les panneaux
+                CustomerLinkedSection(customerId: customerId),
 
                 const Divider(height: 24),
 
@@ -458,11 +462,6 @@ class CustomerViewPanel extends ConsumerWidget {
                     subtitle: Text('Erreur'),
                   ),
                 ),
-
-                const SizedBox(height: 16),
-
-                // Liens (dette + récentes) – déjà rafraîchis via invalidate dans les panneaux
-                CustomerLinkedSection(customerId: customerId),
               ],
             ),
           );
