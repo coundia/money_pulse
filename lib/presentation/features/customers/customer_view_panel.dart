@@ -1,4 +1,4 @@
-// Customer details panel with compact UI and actions accessible from app bar menu, refreshing providers after actions.
+// Customer details panel: minimalist list UI, responsive, balances are clickable (tap => action menu), full refresh after actions.
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'providers/customer_detail_providers.dart';
@@ -9,6 +9,8 @@ import 'package:money_pulse/presentation/shared/formatters.dart';
 import 'customer_form_panel.dart';
 import 'customer_delete_panel.dart';
 import 'widgets/customer_balance_adjust_panel.dart';
+import 'customer_debt_add_panel.dart';
+import 'customer_debt_payment_panel.dart';
 
 class CustomerViewPanel extends ConsumerWidget {
   final String customerId;
@@ -24,7 +26,8 @@ class CustomerViewPanel extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final async = ref.watch(customerByIdProvider(customerId));
 
-    Future<void> onEdit() async {
+    // ===== Actions =====
+    Future<void> _onEdit() async {
       final c = await ref.read(customerByIdProvider(customerId).future);
       if (c == null) return;
       final ok = await showRightDrawer<bool>(
@@ -35,11 +38,29 @@ class CustomerViewPanel extends ConsumerWidget {
       );
       if (ok == true) {
         await _refreshAll(ref);
-        if (context.mounted) Navigator.of(context).pop(true);
+        if (context.mounted) {
+          ScaffoldMessenger.of(
+            context,
+          ).showSnackBar(const SnackBar(content: Text('Client mis à jour')));
+          Navigator.of(context).pop(true); // ferme la vue si édition validée
+        }
       }
     }
 
-    Future<void> onAddBalance() async {
+    Future<void> _onDelete() async {
+      final ok = await showRightDrawer<bool>(
+        context,
+        child: CustomerDeletePanel(customerId: customerId),
+        widthFraction: 0.86,
+        heightFraction: 0.6,
+      );
+      if (ok == true && context.mounted) {
+        await _refreshAll(ref);
+        Navigator.of(context).pop(true);
+      }
+    }
+
+    Future<void> _onAddBalance() async {
       final c = await ref.read(customerByIdProvider(customerId).future);
       if (c == null) return;
       final ok = await showRightDrawer<bool>(
@@ -55,11 +76,15 @@ class CustomerViewPanel extends ConsumerWidget {
       );
       if (ok == true) {
         await _refreshAll(ref);
-        if (context.mounted) Navigator.of(context).pop(true);
+        if (context.mounted) {
+          ScaffoldMessenger.of(
+            context,
+          ).showSnackBar(const SnackBar(content: Text('Solde mis à jour')));
+        }
       }
     }
 
-    Future<void> onSetBalance() async {
+    Future<void> _onSetBalance() async {
       final c = await ref.read(customerByIdProvider(customerId).future);
       if (c == null) return;
       final ok = await showRightDrawer<bool>(
@@ -75,20 +100,96 @@ class CustomerViewPanel extends ConsumerWidget {
       );
       if (ok == true) {
         await _refreshAll(ref);
-        if (context.mounted) Navigator.of(context).pop(true);
+        if (context.mounted) {
+          ScaffoldMessenger.of(
+            context,
+          ).showSnackBar(const SnackBar(content: Text('Solde défini')));
+        }
       }
     }
 
-    Future<void> onDelete() async {
+    Future<void> _onDebtAdd() async {
       final ok = await showRightDrawer<bool>(
         context,
-        child: CustomerDeletePanel(customerId: customerId),
+        child: CustomerDebtAddPanel(customerId: customerId),
         widthFraction: 0.86,
-        heightFraction: 0.6,
+        heightFraction: 0.96,
       );
-      if (ok == true && context.mounted) {
+      if (ok == true) {
         await _refreshAll(ref);
-        Navigator.of(context).pop(true);
+        if (context.mounted) {
+          ScaffoldMessenger.of(
+            context,
+          ).showSnackBar(const SnackBar(content: Text('Dette mise à jour')));
+        }
+      }
+    }
+
+    Future<void> _onDebtPayment() async {
+      final ok = await showRightDrawer<bool>(
+        context,
+        child: CustomerDebtPaymentPanel(customerId: customerId),
+        widthFraction: 0.86,
+        heightFraction: 0.9,
+      );
+      if (ok == true) {
+        await _refreshAll(ref);
+        if (context.mounted) {
+          ScaffoldMessenger.of(
+            context,
+          ).showSnackBar(const SnackBar(content: Text('Paiement encaissé')));
+        }
+      }
+    }
+
+    List<PopupMenuEntry<String>> _menuItems() => const [
+      PopupMenuItem(
+        value: 'edit',
+        child: Row(
+          children: [
+            Icon(Icons.edit_outlined, size: 18),
+            SizedBox(width: 8),
+            Text('Modifier'),
+          ],
+        ),
+      ),
+      PopupMenuItem(
+        value: 'delete',
+        child: Row(
+          children: [
+            Icon(Icons.delete_outline, size: 18),
+            SizedBox(width: 8),
+            Text('Supprimer'),
+          ],
+        ),
+      ),
+    ];
+
+    Future<void> _handleMenuSelection(String v) async {
+      switch (v) {
+        case 'edit':
+          await _onEdit();
+          break;
+        case 'delete':
+          await _onDelete();
+          break;
+      }
+    }
+
+    // Menu contextuel utilisé par les cartes Solde / Dette
+    Future<void> _showCardMenu(
+      BuildContext ctx,
+      Offset pos, {
+      required List<PopupMenuEntry<String>> items,
+      required Future<void> Function(String) onSelected,
+    }) async {
+      final selected = await showMenu<String>(
+        context: ctx,
+        position: RelativeRect.fromLTRB(pos.dx, pos.dy, pos.dx, pos.dy),
+        items: items,
+      );
+      if (selected != null) {
+        await onSelected(selected);
       }
     }
 
@@ -102,204 +203,273 @@ class CustomerViewPanel extends ConsumerWidget {
         ),
         actions: [
           PopupMenuButton<String>(
-            onSelected: (v) {
-              switch (v) {
-                case 'edit':
-                  onEdit();
-                  break;
-                case 'add_balance':
-                  onAddBalance();
-                  break;
-                case 'set_balance':
-                  onSetBalance();
-                  break;
-                case 'delete':
-                  onDelete();
-                  break;
-              }
-            },
-            itemBuilder: (_) => const [
-              PopupMenuItem(
-                value: 'edit',
-                child: Row(
-                  children: [
-                    Icon(Icons.edit_outlined, size: 18),
-                    SizedBox(width: 8),
-                    Text('Modifier'),
-                  ],
-                ),
-              ),
-              PopupMenuItem(
-                value: 'add_balance',
-                child: Row(
-                  children: [
-                    Icon(Icons.add_circle_outline, size: 18),
-                    SizedBox(width: 8),
-                    Text('Ajouter au solde'),
-                  ],
-                ),
-              ),
-              PopupMenuItem(
-                value: 'set_balance',
-                child: Row(
-                  children: [
-                    Icon(Icons.edit_note_outlined, size: 18),
-                    SizedBox(width: 8),
-                    Text('Définir le solde'),
-                  ],
-                ),
-              ),
-              PopupMenuItem(
-                value: 'delete',
-                child: Row(
-                  children: [
-                    Icon(Icons.delete_outline, size: 18),
-                    SizedBox(width: 8),
-                    Text('Supprimer'),
-                  ],
-                ),
-              ),
-            ],
+            onSelected: _handleMenuSelection,
+            itemBuilder: (_) => _menuItems(),
           ),
         ],
       ),
       body: async.when(
         data: (c) {
-          if (c == null) return const Center(child: Text('Client introuvable'));
+          if (c == null) {
+            return const Center(child: Text('Client introuvable'));
+          }
           final companyAsync = ref.watch(
             companyOfCustomerProvider(c.companyId),
           );
 
-          return LayoutBuilder(
-            builder: (context, constraints) {
-              final isWide = constraints.maxWidth >= 680;
-              final cards = Row(
-                children: [
-                  Expanded(
-                    child: Card(
-                      child: Padding(
-                        padding: const EdgeInsets.all(12),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            const Text('Solde'),
-                            const SizedBox(height: 4),
-                            Text(
-                              Formatters.amountFromCents(c.balance),
-                              style: Theme.of(context).textTheme.titleLarge,
-                            ),
-                          ],
-                        ),
-                      ),
-                    ),
-                  ),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: Card(
-                      child: Padding(
-                        padding: const EdgeInsets.all(12),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            const Text('Dette'),
-                            const SizedBox(height: 4),
-                            Text(
-                              Formatters.amountFromCents(c.balanceDebt),
-                              style: Theme.of(context).textTheme.titleLarge
-                                  ?.copyWith(
-                                    color: Theme.of(context).colorScheme.error,
-                                  ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ),
-                  ),
-                ],
-              );
+          // ===== En-tête minimaliste =====
+          final header = ListTile(
+            leading: const CircleAvatar(child: Icon(Icons.person)),
+            title: Text(
+              c.fullName,
+              style: Theme.of(context).textTheme.titleLarge,
+            ),
+            subtitle: Text(
+              (c.phone ?? '').isNotEmpty ? c.phone! : (c.email ?? '—'),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+            ),
+            trailing: IconButton(
+              tooltip: 'Actions',
+              icon: const Icon(Icons.more_vert),
+              onPressed: () async {
+                final box = context.findRenderObject() as RenderBox?;
+                final pos = box?.localToGlobal(Offset.zero) ?? Offset.zero;
+                await _showCardMenu(
+                  context,
+                  pos.translate(0, 56),
+                  items: _menuItems(),
+                  onSelected: (v) => _handleMenuSelection(v),
+                );
+              },
+            ),
+          );
 
-              return ListView(
-                padding: const EdgeInsets.all(16),
+          // ===== Cards cliquables (Solde / Dette) =====
+          Widget _clickableStatCard({
+            required String title,
+            required String value,
+            Color? color,
+            required Future<void> Function() onTapDefault, // tap simple
+            required List<PopupMenuEntry<String>> contextItems, // menu
+            required Future<void> Function(String) onMenuSelected,
+          }) {
+            Offset tapPosition = Offset.zero;
+            return Card(
+              child: InkWell(
+                borderRadius: BorderRadius.circular(12),
+                onTapDown: (d) => tapPosition = d.globalPosition,
+                onTap: onTapDefault,
+                onLongPress: () async {
+                  await _showCardMenu(
+                    context,
+                    tapPosition,
+                    items: contextItems,
+                    onSelected: onMenuSelected,
+                  );
+                },
+                child: Padding(
+                  padding: const EdgeInsets.all(12),
+                  child: Row(
+                    children: [
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(title),
+                            const SizedBox(height: 4),
+                            AnimatedSwitcher(
+                              duration: const Duration(milliseconds: 180),
+                              child: Text(
+                                value,
+                                key: ValueKey(value),
+                                style: Theme.of(
+                                  context,
+                                ).textTheme.titleLarge?.copyWith(color: color),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      const Icon(Icons.touch_app, size: 20),
+                    ],
+                  ),
+                ),
+              ),
+            );
+          }
+
+          // Menu Solde (ajout / définir)
+          List<PopupMenuEntry<String>> _soldeMenu() => const [
+            PopupMenuItem(
+              value: 'add',
+              child: Row(
                 children: [
-                  ListTile(
-                    title: Text(
-                      c.fullName,
-                      style: Theme.of(context).textTheme.titleLarge,
-                    ),
-                    subtitle: Text(
-                      (c.phone ?? '').isNotEmpty
-                          ? (c.phone!)
-                          : (c.email ?? '—'),
-                    ),
-                    leading: const CircleAvatar(child: Icon(Icons.person)),
-                  ),
-                  const SizedBox(height: 8),
-                  if (isWide) cards else Column(children: [cards]),
-                  const Divider(height: 24),
-                  _Info('Téléphone', c.phone ?? '—'),
-                  _Info('Email', c.email ?? '—'),
-                  _Info('Statut', c.status ?? '—'),
-                  companyAsync.when(
-                    data: (co) =>
-                        _Info('Société', co == null ? '—' : '${co.name}'),
-                    loading: () => const _Info('Société', 'Chargement...'),
-                    error: (_, __) => const _Info('Société', 'Erreur'),
-                  ),
-                  const Divider(),
-                  _Info(
-                    'Adresse',
-                    _addr(
-                      c.addressLine1,
-                      c.addressLine2,
-                      c.city,
-                      c.region,
-                      c.country,
-                      c.postalCode,
-                    ),
-                  ),
-                  const SizedBox(height: 16),
-                  CustomerLinkedSection(customerId: customerId),
+                  Icon(Icons.add_circle_outline, size: 18),
+                  SizedBox(width: 8),
+                  Text('Ajouter au solde'),
                 ],
-              );
-            },
+              ),
+            ),
+            PopupMenuItem(
+              value: 'set',
+              child: Row(
+                children: [
+                  Icon(Icons.edit_note_outlined, size: 18),
+                  SizedBox(width: 8),
+                  Text('Définir le solde'),
+                ],
+              ),
+            ),
+          ];
+
+          Future<void> _onSoldeMenuSelected(String v) async {
+            switch (v) {
+              case 'add':
+                await _onAddBalance();
+                break;
+              case 'set':
+                await _onSetBalance();
+                break;
+            }
+          }
+
+          // Menu Dette (ajouter / encaisser)
+          List<PopupMenuEntry<String>> _detteMenu() => const [
+            PopupMenuItem(
+              value: 'addDebt',
+              child: Row(
+                children: [
+                  Icon(Icons.shopping_cart_checkout_outlined, size: 18),
+                  SizedBox(width: 8),
+                  Text('Ajouter à la dette'),
+                ],
+              ),
+            ),
+            PopupMenuItem(
+              value: 'payDebt',
+              child: Row(
+                children: [
+                  Icon(Icons.payments_outlined, size: 18),
+                  SizedBox(width: 8),
+                  Text('Encaisser un paiement'),
+                ],
+              ),
+            ),
+          ];
+
+          Future<void> _onDetteMenuSelected(String v) async {
+            switch (v) {
+              case 'addDebt':
+                await _onDebtAdd();
+                break;
+              case 'payDebt':
+                await _onDebtPayment();
+                break;
+            }
+          }
+
+          final soldeValue = '${Formatters.amountFromCents(c.balance)} CFA';
+          final detteValue = '${Formatters.amountFromCents(c.balanceDebt)} CFA';
+
+          // ===== Layout minimal / liste =====
+          return RefreshIndicator(
+            onRefresh: () => _refreshAll(ref),
+            child: ListView(
+              padding: const EdgeInsets.all(16),
+              children: [
+                header,
+                const SizedBox(height: 8),
+                LayoutBuilder(
+                  builder: (context, cs) {
+                    final isWide = cs.maxWidth >= 640;
+                    final soldeCard = _clickableStatCard(
+                      title: 'Solde',
+                      value: soldeValue,
+                      onTapDefault: _onAddBalance, // tap rapide => Ajouter
+                      contextItems: _soldeMenu(),
+                      onMenuSelected: _onSoldeMenuSelected,
+                    );
+                    final detteCard = _clickableStatCard(
+                      title: 'Dette',
+                      value: detteValue,
+                      color: Theme.of(context).colorScheme.error,
+                      onTapDefault: _onDebtPayment, // tap rapide => Paiement
+                      contextItems: _detteMenu(),
+                      onMenuSelected: _onDetteMenuSelected,
+                    );
+                    if (isWide) {
+                      return Row(
+                        children: [
+                          Expanded(child: soldeCard),
+                          const SizedBox(width: 8),
+                          Expanded(child: detteCard),
+                        ],
+                      );
+                    }
+                    return Column(
+                      children: [
+                        soldeCard,
+                        const SizedBox(height: 8),
+                        detteCard,
+                      ],
+                    );
+                  },
+                ),
+
+                const Divider(height: 24),
+
+                // Infos minimales
+                ListTile(
+                  dense: true,
+                  contentPadding: EdgeInsets.zero,
+                  title: const Text('Téléphone'),
+                  subtitle: Text(c.phone ?? '—'),
+                ),
+                ListTile(
+                  dense: true,
+                  contentPadding: EdgeInsets.zero,
+                  title: const Text('Email'),
+                  subtitle: Text(c.email ?? '—'),
+                ),
+                ListTile(
+                  dense: true,
+                  contentPadding: EdgeInsets.zero,
+                  title: const Text('Statut'),
+                  subtitle: Text(c.status ?? '—'),
+                ),
+                companyAsync.when(
+                  data: (co) => ListTile(
+                    dense: true,
+                    contentPadding: EdgeInsets.zero,
+                    title: const Text('Société'),
+                    subtitle: Text(co == null ? '—' : (co.name ?? '—')),
+                  ),
+                  loading: () => const ListTile(
+                    dense: true,
+                    contentPadding: EdgeInsets.zero,
+                    title: Text('Société'),
+                    subtitle: Text('Chargement...'),
+                  ),
+                  error: (_, __) => const ListTile(
+                    dense: true,
+                    contentPadding: EdgeInsets.zero,
+                    title: Text('Société'),
+                    subtitle: Text('Erreur'),
+                  ),
+                ),
+
+                const SizedBox(height: 16),
+
+                // Liens (dette + récentes) – déjà rafraîchis via invalidate dans les panneaux
+                CustomerLinkedSection(customerId: customerId),
+              ],
+            ),
           );
         },
         loading: () => const Center(child: CircularProgressIndicator()),
         error: (e, _) => Center(child: Text('Erreur: $e')),
       ),
-    );
-  }
-
-  static String _addr(
-    String? l1,
-    String? l2,
-    String? city,
-    String? region,
-    String? country,
-    String? pc,
-  ) {
-    final parts = <String>[
-      if ((l1 ?? '').trim().isNotEmpty) l1!.trim(),
-      if ((l2 ?? '').trim().isNotEmpty) l2!.trim(),
-      [city, region].where((e) => (e ?? '').trim().isNotEmpty).join(' ').trim(),
-      [pc, country].where((e) => (e ?? '').trim().isNotEmpty).join(' ').trim(),
-    ].where((e) => e.isNotEmpty).toList();
-    return parts.isEmpty ? '—' : parts.join('\n');
-  }
-}
-
-class _Info extends StatelessWidget {
-  final String title;
-  final String value;
-  const _Info(this.title, this.value);
-
-  @override
-  Widget build(BuildContext context) {
-    return ListTile(
-      dense: true,
-      title: Text(title),
-      subtitle: Text(value),
-      contentPadding: EdgeInsets.zero,
     );
   }
 }
