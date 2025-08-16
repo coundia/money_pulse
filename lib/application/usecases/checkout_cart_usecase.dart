@@ -1,4 +1,5 @@
-// Use case creating a transaction with stock and optional debt linkage (DEBIT, CREDIT, DEBT, REMBOURSEMENT, PRET).
+// Use case that creates a transaction (DEBIT/CREDIT/DEBT/REMBOURSEMENT/PRET),
+// adjusts stock, logs changes, and refreshes customer balances atomically.
 import 'package:uuid/uuid.dart';
 import 'package:sqflite/sqflite.dart';
 import 'package:money_pulse/infrastructure/db/app_database.dart';
@@ -28,21 +29,21 @@ class CheckoutCartUseCase {
       throw ArgumentError.value(
         typeEntry,
         'typeEntry',
-        "must be one of $allowed",
+        'must be one of $allowed',
       );
     }
     if (lines.isEmpty) {
       throw ArgumentError('lines cannot be empty');
     }
 
-    int asInt(Object? v) => (v is int) ? v : int.tryParse('${v ?? 0}') ?? 0;
+    int _i(Object? v) => v is int ? v : int.tryParse('${v ?? 0}') ?? 0;
 
-    final isDebt = t == 'DEBT';
-    if (isDebt && (customerId == null || customerId.isEmpty)) {
+    final isDebtTx = t == 'DEBT';
+    if (isDebtTx && (customerId == null || customerId.isEmpty)) {
       throw StateError('customerId is required for DEBT');
     }
 
-    final needsAccount = !isDebt;
+    final needsAccount = !isDebtTx;
     final acc = needsAccount
         ? (accountId != null
               ? await accountRepo.findById(accountId)
@@ -52,22 +53,25 @@ class CheckoutCartUseCase {
       throw StateError('No default account found');
     }
 
-    final total = lines.fold<int>(0, (p, e) {
-      final q = asInt(e['quantity']);
-      final up = asInt(e['unitPrice']);
-      return p + (q < 0 ? 0 : q) * (up < 0 ? 0 : up);
-    });
+    int total = 0;
+    for (final e in lines) {
+      final q = _i(e['quantity']);
+      final u = _i(e['unitPrice']);
+      final safeQ = q < 0 ? 0 : q;
+      final safeU = u < 0 ? 0 : u;
+      total += safeQ * safeU;
+    }
 
     final now = DateTime.now();
+    final nowIso = now.toIso8601String();
     final date = when ?? now;
     final txId = const Uuid().v4();
 
     await db.tx((txn) async {
       final resolvedCompany = await _resolveCompanyId(txn, companyId);
-      final nowIso = now.toIso8601String();
 
       Debt? openDebt;
-      if (isDebt) {
+      if (isDebtTx) {
         openDebt = await debtRepo.upsertOpenForCustomerTx(txn, customerId!);
       }
 
@@ -105,8 +109,8 @@ class CheckoutCartUseCase {
       final affectsStock = t == 'DEBIT' || t == 'CREDIT' || t == 'DEBT';
       for (final l in lines) {
         final itemId = const Uuid().v4();
-        final qty = asInt(l['quantity']);
-        final up = asInt(l['unitPrice']);
+        final qty = _i(l['quantity']);
+        final up = _i(l['unitPrice']);
         final safeQty = qty < 0 ? 0 : qty;
         final safeUp = up < 0 ? 0 : up;
         final tot = safeQty * safeUp;
@@ -114,10 +118,10 @@ class CheckoutCartUseCase {
         await txn.insert('transaction_item', {
           'id': itemId,
           'transactionId': txId,
-          'productId': l['productId'],
+          'productId': l['productId']?.toString(),
           'label': (l['label'] ?? '').toString(),
           'quantity': safeQty,
-          'unitId': l['unitId'],
+          'unitId': l['unitId']?.toString(),
           'unitPrice': safeUp,
           'total': tot,
           'notes': null,
@@ -146,11 +150,11 @@ class CheckoutCartUseCase {
               'updatedAt': nowIso,
             });
             await _upsertChangeLog(
-              txn,
-              'stock_movement',
-              '$movementId',
-              'INSERT',
-              nowIso,
+              txn: txn,
+              entityTable: 'stock_movement',
+              entityId: '$movementId',
+              operation: 'INSERT',
+              nowIso: nowIso,
             );
           }
         }
@@ -166,8 +170,8 @@ class CheckoutCartUseCase {
         );
       }
 
-      if (isDebt && openDebt != null) {
-        final newBalance = (openDebt.balance) + total;
+      if (isDebtTx && openDebt != null) {
+        final newBalance = openDebt.balance + total;
         await debtRepo.updateBalanceTx(txn, openDebt.id, newBalance);
       }
 
@@ -185,35 +189,58 @@ class CheckoutCartUseCase {
         );
       }
 
-      final idLog = const Uuid().v4();
-      await txn.rawInsert(
-        '''
-        INSERT INTO change_log(
-          id, entityTable, entityId, operation, payload, status, attempts, error, createdAt, updatedAt, processedAt
-        )
-        VALUES(?,?,?,?,?,?,?,?,?,?,?)
-        ON CONFLICT(entityTable, entityId, status) DO UPDATE SET
-          operation=excluded.operation,
-          payload=excluded.payload,
-          updatedAt=excluded.updatedAt
-        ''',
-        [
-          idLog,
-          'transaction_entry',
-          txId,
-          'INSERT',
-          null,
-          'PENDING',
-          0,
-          null,
-          nowIso,
-          nowIso,
-          null,
-        ],
+      await _upsertChangeLog(
+        txn: txn,
+        entityTable: 'transaction_entry',
+        entityId: txId,
+        operation: 'INSERT',
+        nowIso: nowIso,
       );
+
+      if ((customerId ?? '').isNotEmpty) {
+        await _recomputeCustomerBalances(txn, customerId!, nowIso);
+      }
     });
 
     return txId;
+  }
+
+  Future<void> _recomputeCustomerBalances(
+    Transaction txn,
+    String cid,
+    String nowIso,
+  ) async {
+    await txn.rawUpdate(
+      '''
+      UPDATE customer
+      SET balanceDebt = COALESCE((
+            SELECT SUM(COALESCE(d.balance,0))
+            FROM debt d
+            WHERE d.customerId = ?
+              AND d.deletedAt IS NULL
+              AND (d.statuses IS NULL OR d.statuses='OPEN')
+          ),0),
+          balance = COALESCE((
+            SELECT SUM(
+              CASE te.typeEntry
+                WHEN 'CREDIT' THEN COALESCE(te.amount,0)
+                WHEN 'DEBIT' THEN -COALESCE(te.amount,0)
+                WHEN 'REMBOURSEMENT' THEN -COALESCE(te.amount,0)
+                WHEN 'PRET' THEN COALESCE(te.amount,0)
+                WHEN 'DEBT' THEN COALESCE(te.amount,0)
+                ELSE 0
+              END
+            )
+            FROM transaction_entry te
+            WHERE te.customerId = ?
+              AND te.deletedAt IS NULL
+          ),0),
+          updatedAt = ?,
+          isDirty = 1
+      WHERE id = ?
+      ''',
+      [cid, cid, nowIso, cid],
+    );
   }
 
   Future<void> _applyStockAdjustments({
@@ -223,17 +250,17 @@ class CheckoutCartUseCase {
     required String? companyId,
     required String nowIso,
   }) async {
-    String? company = companyId;
-    if (company == null || company.isEmpty) return;
+    final company = (companyId ?? '').isEmpty ? null : companyId;
+    if (company == null) return;
 
     final Map<String, int> totalsByVariant = {};
     for (final l in lines) {
       final pid = l['productId']?.toString();
-      final qty = (l['quantity'] is int)
+      final qty = l['quantity'] is int
           ? l['quantity'] as int
           : int.tryParse('${l['quantity'] ?? 0}') ?? 0;
-      if (pid == null || pid.isEmpty || qty <= 0) continue;
-      totalsByVariant[pid] = (totalsByVariant[pid] ?? 0) + qty;
+      if ((pid ?? '').isEmpty || qty <= 0) continue;
+      totalsByVariant[pid!] = (totalsByVariant[pid] ?? 0) + qty;
     }
     if (totalsByVariant.isEmpty) return;
 
@@ -258,11 +285,11 @@ class CheckoutCartUseCase {
           'updatedAt': nowIso,
         }, conflictAlgorithm: ConflictAlgorithm.ignore);
         await _upsertChangeLog(
-          txn,
-          'stock_level',
-          '$pvId@$company',
-          'INSERT',
-          nowIso,
+          txn: txn,
+          entityTable: 'stock_level',
+          entityId: '$pvId@$company',
+          operation: 'INSERT',
+          nowIso: nowIso,
         );
       }
 
@@ -271,30 +298,30 @@ class CheckoutCartUseCase {
         [qty, nowIso, pvId, company],
       );
       await _upsertChangeLog(
-        txn,
-        'stock_level',
-        '$pvId@$company',
-        'UPDATE',
-        nowIso,
+        txn: txn,
+        entityTable: 'stock_level',
+        entityId: '$pvId@$company',
+        operation: 'UPDATE',
+        nowIso: nowIso,
       );
     }
   }
 
   Future<String?> _resolveCompanyId(Transaction txn, String? provided) async {
-    if (provided != null && provided.isNotEmpty) return provided;
+    if ((provided ?? '').isNotEmpty) return provided;
     final def = await txn.rawQuery(
       'SELECT id FROM company WHERE isDefault=1 AND deletedAt IS NULL LIMIT 1',
     );
     return def.isEmpty ? null : (def.first['id'] as String?);
   }
 
-  Future<void> _upsertChangeLog(
-    Transaction txn,
-    String entityTable,
-    String entityId,
-    String operation,
-    String nowIso,
-  ) async {
+  Future<void> _upsertChangeLog({
+    required Transaction txn,
+    required String entityTable,
+    required String entityId,
+    required String operation,
+    required String nowIso,
+  }) async {
     final idLog = const Uuid().v4();
     await txn.rawInsert(
       '''

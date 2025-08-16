@@ -1,9 +1,10 @@
-// Customer details panel with linked debt + transactions and cleaner UI (no codes/IDs on screen).
+// Customer details panel showing balances (Solde, Dette) and linked sections.
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'providers/customer_detail_providers.dart';
 import 'widgets/customer_linked_section.dart';
 import 'package:money_pulse/presentation/widgets/right_drawer.dart';
+import 'package:money_pulse/presentation/shared/formatters.dart';
 import 'customer_form_panel.dart';
 import 'customer_delete_panel.dart';
 
@@ -97,6 +98,7 @@ class CustomerViewPanel extends ConsumerWidget {
           final companyAsync = ref.watch(
             companyOfCustomerProvider(c.companyId),
           );
+
           return ListView(
             padding: const EdgeInsets.all(16),
             children: [
@@ -109,6 +111,51 @@ class CustomerViewPanel extends ConsumerWidget {
                   (c.phone ?? '').isNotEmpty ? (c.phone!) : (c.email ?? '—'),
                 ),
                 leading: const CircleAvatar(child: Icon(Icons.person)),
+              ),
+              const SizedBox(height: 8),
+              Row(
+                children: [
+                  Expanded(
+                    child: Card(
+                      child: Padding(
+                        padding: const EdgeInsets.all(12),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            const Text('Solde'),
+                            const SizedBox(height: 4),
+                            Text(
+                              Formatters.amountFromCents(c.balance),
+                              style: Theme.of(context).textTheme.titleLarge,
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Card(
+                      child: Padding(
+                        padding: const EdgeInsets.all(12),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            const Text('Dette'),
+                            const SizedBox(height: 4),
+                            Text(
+                              Formatters.amountFromCents(c.balanceDebt),
+                              style: Theme.of(context).textTheme.titleLarge
+                                  ?.copyWith(
+                                    color: Theme.of(context).colorScheme.error,
+                                  ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
               ),
               const Divider(),
               _Info('Téléphone', c.phone ?? '—'),

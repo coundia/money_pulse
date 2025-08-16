@@ -1,4 +1,4 @@
-// Customer list page with topbar refresh, filter button to open panel, a quick clear-filters button, and active filters bar.
+// Customer list page using compact CustomerTile, active filters bar, refresh and filter drawers.
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:money_pulse/presentation/widgets/right_drawer.dart';
@@ -6,10 +6,8 @@ import 'providers/customer_list_providers.dart';
 import 'providers/customer_filters_providers.dart';
 import 'widgets/customer_filters_panel.dart';
 import 'widgets/active_filters_bar.dart';
+import 'widgets/customer_tile.dart';
 import 'customer_form_panel.dart';
-import 'customer_view_panel.dart';
-import 'customer_delete_panel.dart';
-import 'widgets/customer_context_menu.dart';
 
 class CustomerListPage extends ConsumerStatefulWidget {
   const CustomerListPage({super.key});
@@ -141,64 +139,8 @@ class _CustomerListPageState extends ConsumerState<CustomerListPage> {
                     physics: const AlwaysScrollableScrollPhysics(),
                     itemCount: rows.length,
                     separatorBuilder: (_, __) => const Divider(height: 1),
-                    itemBuilder: (_, i) {
-                      final c = rows[i];
-                      return ListTile(
-                        onTap: () async {
-                          final ok = await showRightDrawer<bool>(
-                            context,
-                            child: CustomerViewPanel(customerId: c.id),
-                            widthFraction: 0.86,
-                            heightFraction: 0.96,
-                          );
-                          if (ok == true) _refresh();
-                        },
-                        leading: const CircleAvatar(child: Icon(Icons.person)),
-                        title: Text(
-                          c.fullName,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                        subtitle: Text(
-                          (c.phone ?? '').isNotEmpty
-                              ? c.phone!
-                              : (c.email ?? ''),
-                        ),
-                        trailing: CustomerContextMenu(
-                          onSelected: (a) async {
-                            switch (a) {
-                              case CustomerMenuAction.view:
-                                final ok = await showRightDrawer<bool>(
-                                  context,
-                                  child: CustomerViewPanel(customerId: c.id),
-                                  widthFraction: 0.86,
-                                  heightFraction: 0.96,
-                                );
-                                if (ok == true) _refresh();
-                                break;
-                              case CustomerMenuAction.edit:
-                                final ok = await showRightDrawer<bool>(
-                                  context,
-                                  child: CustomerFormPanel(initial: c),
-                                  widthFraction: 0.86,
-                                  heightFraction: 0.96,
-                                );
-                                if (ok == true) _refresh();
-                                break;
-                              case CustomerMenuAction.delete:
-                                final ok = await showRightDrawer<bool>(
-                                  context,
-                                  child: CustomerDeletePanel(customerId: c.id),
-                                  widthFraction: 0.86,
-                                  heightFraction: 0.6,
-                                );
-                                if (ok == true) _refresh();
-                                break;
-                            }
-                          },
-                        ),
-                      );
-                    },
+                    itemBuilder: (_, i) =>
+                        CustomerTile(customer: rows[i], onChanged: _refresh),
                   );
                 },
                 loading: () => const Center(child: CircularProgressIndicator()),

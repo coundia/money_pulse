@@ -1,4 +1,4 @@
-// Sqflite implementation with hasOpenDebt filter and updatedAt DESC ordering.
+// Sqflite repository keeping balances in create/update operations.
 import 'package:uuid/uuid.dart';
 import 'package:sqflite/sqflite.dart';
 import 'package:money_pulse/infrastructure/db/app_database.dart';
@@ -41,8 +41,6 @@ class CustomerRepositorySqflite implements CustomerRepository {
         final v = '%${q.search!.trim()}%';
         args.addAll([v, v, v, v]);
       }
-
-      // hasOpenDebt filter via EXISTS
       if (q.hasOpenDebt != null) {
         final existsSql = '''
           EXISTS(SELECT 1 FROM debt d
@@ -117,6 +115,7 @@ class CustomerRepositorySqflite implements CustomerRepository {
     final fullName = (c.fullName.trim().isEmpty)
         ? _joinName(c.firstName, c.lastName)
         : c.fullName;
+
     final data = c
         .copyWith(
           id: id,
@@ -144,6 +143,7 @@ class CustomerRepositorySqflite implements CustomerRepository {
     final fullName = (c.fullName.trim().isEmpty)
         ? _joinName(c.firstName, c.lastName)
         : c.fullName;
+
     final next = c.copyWith(
       fullName: fullName,
       updatedAt: now,

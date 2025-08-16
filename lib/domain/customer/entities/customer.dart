@@ -1,3 +1,4 @@
+// Customer entity with balances (amounts in cents) and mapping helpers.
 import 'package:equatable/equatable.dart';
 
 class Customer extends Equatable {
@@ -6,7 +7,9 @@ class Customer extends Equatable {
   final String? code;
   final String? firstName;
   final String? lastName;
-  final String fullName; // dénormalisé
+  final String fullName;
+  final int balance;
+  final int balanceDebt;
   final String? phone;
   final String? email;
   final String? notes;
@@ -32,6 +35,8 @@ class Customer extends Equatable {
     this.firstName,
     this.lastName,
     required this.fullName,
+    this.balance = 0,
+    this.balanceDebt = 0,
     this.phone,
     this.email,
     this.notes,
@@ -58,6 +63,8 @@ class Customer extends Equatable {
     String? firstName,
     String? lastName,
     String? fullName,
+    int? balance,
+    int? balanceDebt,
     String? phone,
     String? email,
     String? notes,
@@ -83,6 +90,8 @@ class Customer extends Equatable {
       firstName: firstName ?? this.firstName,
       lastName: lastName ?? this.lastName,
       fullName: fullName ?? this.fullName,
+      balance: balance ?? this.balance,
+      balanceDebt: balanceDebt ?? this.balanceDebt,
       phone: phone ?? this.phone,
       email: email ?? this.email,
       notes: notes ?? this.notes,
@@ -116,6 +125,8 @@ class Customer extends Equatable {
     fullName:
         (m['fullName'] as String?) ??
         _joinName(m['firstName'] as String?, m['lastName'] as String?),
+    balance: _i(m['balance']),
+    balanceDebt: _i(m['balanceDebt']),
     phone: m['phone'] as String?,
     email: m['email'] as String?,
     notes: m['notes'] as String?,
@@ -142,6 +153,8 @@ class Customer extends Equatable {
     'firstName': firstName,
     'lastName': lastName,
     'fullName': fullName,
+    'balance': balance,
+    'balanceDebt': balanceDebt,
     'phone': phone,
     'email': email,
     'notes': notes,
@@ -171,6 +184,8 @@ class Customer extends Equatable {
   List<Object?> get props => [
     id,
     fullName,
+    balance,
+    balanceDebt,
     phone,
     email,
     companyId,
