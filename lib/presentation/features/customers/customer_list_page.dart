@@ -1,14 +1,13 @@
-// Customer list page using await on right drawer to refresh list when details panel returns true.
+// Customer list page with search, active-filters bar (with onAnyChange), and right-drawer filter panel.
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import 'package:money_pulse/presentation/widgets/right_drawer.dart';
-import 'providers/customer_filters_providers.dart';
 import 'providers/customer_list_providers.dart';
+import 'widgets/customer_tile.dart';
 import 'customer_form_panel.dart';
-import 'customer_view_panel.dart';
-import 'customer_delete_panel.dart';
-import 'widgets/customer_context_menu.dart';
+import 'widgets/customer_filters_panel.dart';
+import 'widgets/active_filters_bar.dart';
+import 'package:money_pulse/presentation/widgets/right_drawer.dart';
 
 class CustomerListPage extends ConsumerStatefulWidget {
   const CustomerListPage({super.key});
@@ -43,7 +42,42 @@ class _CustomerListPageState extends ConsumerState<CustomerListPage> {
     final countAsync = ref.watch(customerCountProvider);
 
     return Scaffold(
-      appBar: AppBar(title: const Text('Clients')),
+      appBar: AppBar(
+        title: const Text('Clients'),
+        actions: [
+          IconButton(
+            tooltip: 'Actualiser',
+            onPressed: _refresh,
+            icon: const Icon(Icons.refresh),
+          ),
+          IconButton(
+            tooltip: 'Filtres',
+            onPressed: () async {
+              final changed = await showRightDrawer<bool>(
+                context,
+                child: const CustomerFiltersPanel(),
+                widthFraction: 0.86,
+                heightFraction: 0.96,
+              );
+              if (changed == true) _refresh();
+            },
+            icon: const Icon(Icons.filter_alt),
+          ),
+          IconButton(
+            tooltip: 'Ajouter',
+            icon: const Icon(Icons.add),
+            onPressed: () async {
+              final ok = await showRightDrawer<bool>(
+                context,
+                child: const CustomerFormPanel(),
+                widthFraction: 0.86,
+                heightFraction: 0.96,
+              );
+              if (ok == true) _refresh();
+            },
+          ),
+        ],
+      ),
       body: Column(
         children: [
           Padding(
@@ -56,6 +90,7 @@ class _CustomerListPageState extends ConsumerState<CustomerListPage> {
                     onSubmitted: (v) {
                       ref.read(customerSearchProvider.notifier).state = v;
                       ref.read(customerPageIndexProvider.notifier).state = 0;
+                      _refresh(); // refresh on search submit
                     },
                     decoration: InputDecoration(
                       prefixIcon: const Icon(Icons.search),
@@ -68,6 +103,7 @@ class _CustomerListPageState extends ConsumerState<CustomerListPage> {
                           ref.read(customerSearchProvider.notifier).state = '';
                           ref.read(customerPageIndexProvider.notifier).state =
                               0;
+                          _refresh();
                         },
                         icon: const Icon(Icons.clear),
                       ),
@@ -83,6 +119,10 @@ class _CustomerListPageState extends ConsumerState<CustomerListPage> {
               ],
             ),
           ),
+
+          // IMPORTANT: provide the required onAnyChange callback
+          ActiveFiltersBar(onAnyChange: _refresh),
+
           const Divider(height: 1),
           Expanded(
             child: listAsync.when(
@@ -93,62 +133,7 @@ class _CustomerListPageState extends ConsumerState<CustomerListPage> {
                 return ListView.separated(
                   itemCount: rows.length,
                   separatorBuilder: (_, __) => const Divider(height: 1),
-                  itemBuilder: (_, i) {
-                    final c = rows[i];
-                    return ListTile(
-                      onTap: () async {
-                        final changed = await showRightDrawer<bool>(
-                          context,
-                          child: CustomerViewPanel(customerId: c.id),
-                          widthFraction: 0.86,
-                          heightFraction: 0.96,
-                        );
-                        if (changed == true) _refresh();
-                      },
-                      leading: const CircleAvatar(child: Icon(Icons.person)),
-                      title: Text(
-                        c.fullName,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                      subtitle: Text(
-                        (c.phone ?? '').isNotEmpty ? c.phone! : (c.email ?? ''),
-                      ),
-                      trailing: CustomerContextMenu(
-                        onSelected: (a) async {
-                          switch (a) {
-                            case CustomerMenuAction.view:
-                              final changed = await showRightDrawer<bool>(
-                                context,
-                                child: CustomerViewPanel(customerId: c.id),
-                                widthFraction: 0.86,
-                                heightFraction: 0.96,
-                              );
-                              if (changed == true) _refresh();
-                              break;
-                            case CustomerMenuAction.edit:
-                              final ok = await showRightDrawer<bool>(
-                                context,
-                                child: CustomerFormPanel(initial: c),
-                                widthFraction: 0.86,
-                                heightFraction: 0.96,
-                              );
-                              if (ok == true) _refresh();
-                              break;
-                            case CustomerMenuAction.delete:
-                              final ok = await showRightDrawer<bool>(
-                                context,
-                                child: CustomerDeletePanel(customerId: c.id),
-                                widthFraction: 0.86,
-                                heightFraction: 0.6,
-                              );
-                              if (ok == true) _refresh();
-                              break;
-                          }
-                        },
-                      ),
-                    );
-                  },
+                  itemBuilder: (_, i) => CustomerTile(customer: rows[i]),
                 );
               },
               loading: () => const Center(child: CircularProgressIndicator()),
@@ -156,19 +141,6 @@ class _CustomerListPageState extends ConsumerState<CustomerListPage> {
             ),
           ),
         ],
-      ),
-      floatingActionButton: FloatingActionButton.extended(
-        onPressed: () async {
-          final ok = await showRightDrawer<bool>(
-            context,
-            child: const CustomerFormPanel(),
-            widthFraction: 0.86,
-            heightFraction: 0.96,
-          );
-          if (ok == true) _refresh();
-        },
-        icon: const Icon(Icons.add),
-        label: const Text('Ajouter'),
       ),
     );
   }

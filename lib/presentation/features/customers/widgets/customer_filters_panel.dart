@@ -1,13 +1,11 @@
-// Right-drawer panel to edit customer list filters with local state and apply/reset actions.
+// Right-drawer filter panel for customers (company, only-active, reset/apply).
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import '../providers/customer_filters_providers.dart';
-import '../providers/customer_filters_data_providers.dart';
-
-class SubmitFormIntent extends Intent {
-  const SubmitFormIntent();
-}
+import 'package:money_pulse/domain/company/entities/company.dart';
+import '../../../../domain/company/repositories/company_repository.dart';
+import '../../../app/providers/company_repo_provider.dart';
+import '../providers/customer_list_providers.dart';
 
 class CustomerFiltersPanel extends ConsumerStatefulWidget {
   const CustomerFiltersPanel({super.key});
@@ -18,58 +16,53 @@ class CustomerFiltersPanel extends ConsumerStatefulWidget {
 }
 
 class _CustomerFiltersPanelState extends ConsumerState<CustomerFiltersPanel> {
-  late final TextEditingController _searchCtrl;
   String? _companyId;
-  bool? _hasDebt;
-  late CustomerSortMode _sortMode;
+  bool _onlyActive = true;
 
   @override
   void initState() {
     super.initState();
-    _searchCtrl = TextEditingController(text: ref.read(customerSearchProvider));
     _companyId = ref.read(customerCompanyFilterProvider);
-    _hasDebt = ref.read(customerHasDebtFilterProvider);
-    _sortMode = ref.read(customerSortModeProvider);
+    _onlyActive = ref.read(customerOnlyActiveProvider);
   }
 
-  @override
-  void dispose() {
-    _searchCtrl.dispose();
-    super.dispose();
+  Future<List<Company>> _loadCompanies() async {
+    final repo = ref.read(companyRepoProvider);
+    return repo.findAll(const CompanyQuery(limit: 300, offset: 0));
   }
 
-  void _resetLocal() {
-    _searchCtrl.text = '';
-    _companyId = null;
-    _hasDebt = null;
-    _sortMode = CustomerSortMode.recent;
-    setState(() {});
-  }
-
-  void _applyAndClose() {
-    ref.read(customerSearchProvider.notifier).state = _searchCtrl.text;
-    ref.read(customerCompanyFilterProvider.notifier).state = _companyId;
-    ref.read(customerHasDebtFilterProvider.notifier).state = _hasDebt;
-    ref.read(customerSortModeProvider.notifier).state = _sortMode;
+  void _apply() {
+    ref.read(customerCompanyFilterProvider.notifier).state =
+        (_companyId ?? '').isEmpty ? null : _companyId;
+    ref.read(customerOnlyActiveProvider.notifier).state = _onlyActive;
     ref.read(customerPageIndexProvider.notifier).state = 0;
-    if (mounted) Navigator.of(context).pop(true);
+    Navigator.of(context).pop<bool>(true);
+  }
+
+  void _reset() {
+    setState(() {
+      _companyId = null;
+      _onlyActive = true;
+    });
+    ref.read(customerCompanyFilterProvider.notifier).state = null;
+    ref.read(customerOnlyActiveProvider.notifier).state = true;
+    ref.read(customerSearchProvider.notifier).state = '';
+    ref.read(customerPageIndexProvider.notifier).state = 0;
+    Navigator.of(context).pop<bool>(true);
   }
 
   @override
   Widget build(BuildContext context) {
-    final companiesAsync = ref.watch(companyFilterOptionsProvider);
-    final insets = MediaQuery.of(context).viewInsets.bottom;
-
     return Shortcuts(
       shortcuts: {
-        LogicalKeySet(LogicalKeyboardKey.enter): const SubmitFormIntent(),
-        LogicalKeySet(LogicalKeyboardKey.numpadEnter): const SubmitFormIntent(),
+        LogicalKeySet(LogicalKeyboardKey.enter): const _SubmitIntent(),
+        LogicalKeySet(LogicalKeyboardKey.numpadEnter): const _SubmitIntent(),
       },
       child: Actions(
         actions: {
-          SubmitFormIntent: CallbackAction<SubmitFormIntent>(
+          _SubmitIntent: CallbackAction<_SubmitIntent>(
             onInvoke: (_) {
-              _applyAndClose();
+              _apply();
               return null;
             },
           ),
@@ -83,145 +76,69 @@ class _CustomerFiltersPanelState extends ConsumerState<CustomerFiltersPanel> {
               onPressed: () => Navigator.of(context).maybePop(),
             ),
             actions: [
-              IconButton(
-                tooltip: 'Appliquer',
-                icon: const Icon(Icons.check),
-                onPressed: _applyAndClose,
+              TextButton.icon(
+                onPressed: _reset,
+                icon: const Icon(Icons.restore),
+                label: const Text('Réinitialiser'),
               ),
             ],
           ),
-          body: Padding(
-            padding: EdgeInsets.only(bottom: insets),
-            child: ListView(
-              padding: const EdgeInsets.all(16),
-              children: [
-                TextField(
-                  controller: _searchCtrl,
-                  textInputAction: TextInputAction.search,
-                  onSubmitted: (_) => _applyAndClose(),
-                  decoration: InputDecoration(
-                    labelText: 'Rechercher',
-                    hintText: 'Nom, téléphone, email',
-                    border: const OutlineInputBorder(),
-                    prefixIcon: const Icon(Icons.search),
-                    suffixIcon: IconButton(
-                      tooltip: 'Effacer',
-                      onPressed: () {
-                        _searchCtrl.clear();
-                        setState(() {});
-                      },
-                      icon: const Icon(Icons.clear),
+          body: FutureBuilder<List<Company>>(
+            future: _loadCompanies(),
+            builder: (context, snap) {
+              final companies = snap.data ?? const <Company>[];
+              return ListView(
+                padding: const EdgeInsets.all(16),
+                children: [
+                  DropdownButtonFormField<String?>(
+                    value: (_companyId ?? '').isEmpty ? null : _companyId,
+                    isDense: true,
+                    decoration: const InputDecoration(
+                      labelText: 'Société',
+                      prefixIcon: Icon(Icons.business),
+                      border: OutlineInputBorder(),
                     ),
-                  ),
-                ),
-                const SizedBox(height: 12),
-                companiesAsync.when(
-                  data: (companies) {
-                    final items = <DropdownMenuItem<String?>>[
-                      const DropdownMenuItem(
+                    items: [
+                      const DropdownMenuItem<String?>(
                         value: null,
-                        child: Text('Toutes sociétés'),
+                        child: Text('— Toutes —'),
                       ),
-                      ...companies.map((c) {
-                        final label = (c.name ?? '').isNotEmpty
-                            ? c.name!
-                            : (c.code ?? 'Société');
-                        return DropdownMenuItem(
+                      ...companies.map(
+                        (c) => DropdownMenuItem<String?>(
                           value: c.id,
-                          child: Text(label),
-                        );
-                      }),
-                    ];
-                    return InputDecorator(
-                      decoration: const InputDecoration(
-                        labelText: 'Société',
-                        border: OutlineInputBorder(),
-                        isDense: true,
-                      ),
-                      child: DropdownButtonHideUnderline(
-                        child: DropdownButton<String?>(
-                          value: _companyId,
-                          items: items,
-                          onChanged: (v) => setState(() => _companyId = v),
-                          isExpanded: true,
+                          child: Text('${c.name} (${c.code})'),
                         ),
                       ),
-                    );
-                  },
-                  loading: () => const LinearProgressIndicator(),
-                  error: (e, _) => Text('Erreur: $e'),
-                ),
-                const SizedBox(height: 12),
-                Text(
-                  'État de dette',
-                  style: Theme.of(context).textTheme.labelLarge,
-                ),
-                const SizedBox(height: 8),
-                Wrap(
-                  spacing: 8,
-                  children: [
-                    FilterChip(
-                      label: const Text('Tous'),
-                      selected: _hasDebt == null,
-                      onSelected: (_) => setState(() => _hasDebt = null),
+                    ],
+                    onChanged: (v) => setState(() => _companyId = v),
+                  ),
+                  const SizedBox(height: 16),
+                  SwitchListTile.adaptive(
+                    value: _onlyActive,
+                    onChanged: (v) => setState(() => _onlyActive = v),
+                    title: const Text('Actifs uniquement'),
+                    secondary: const Icon(Icons.verified_user_outlined),
+                    dense: true,
+                  ),
+                  const SizedBox(height: 24),
+                  SafeArea(
+                    top: false,
+                    child: FilledButton.icon(
+                      onPressed: _apply,
+                      icon: const Icon(Icons.filter_alt),
+                      label: const Text('Appliquer'),
                     ),
-                    FilterChip(
-                      label: const Text('Avec dette'),
-                      selected: _hasDebt == true,
-                      onSelected: (_) => setState(() => _hasDebt = true),
-                    ),
-                    FilterChip(
-                      label: const Text('Sans dette'),
-                      selected: _hasDebt == false,
-                      onSelected: (_) => setState(() => _hasDebt = false),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 12),
-                Text('Tri', style: Theme.of(context).textTheme.labelLarge),
-                const SizedBox(height: 8),
-                Wrap(
-                  spacing: 8,
-                  children: [
-                    ChoiceChip(
-                      label: const Text('Récents'),
-                      selected: _sortMode == CustomerSortMode.recent,
-                      onSelected: (_) =>
-                          setState(() => _sortMode = CustomerSortMode.recent),
-                    ),
-                    ChoiceChip(
-                      label: const Text('A–Z'),
-                      selected: _sortMode == CustomerSortMode.az,
-                      onSelected: (_) =>
-                          setState(() => _sortMode = CustomerSortMode.az),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 16),
-                Row(
-                  children: [
-                    Expanded(
-                      child: OutlinedButton.icon(
-                        onPressed: _resetLocal,
-                        icon: const Icon(Icons.filter_alt_off_outlined),
-                        label: const Text('Réinitialiser'),
-                      ),
-                    ),
-                    const SizedBox(width: 8),
-                    Expanded(
-                      child: FilledButton.icon(
-                        onPressed: _applyAndClose,
-                        icon: const Icon(Icons.check),
-                        label: const Text('Appliquer'),
-                      ),
-                    ),
-                  ],
-                ),
-              ],
-            ),
+                  ),
+                ],
+              );
+            },
           ),
         ),
       ),
     );
   }
+}
+
+class _SubmitIntent extends Intent {
+  const _SubmitIntent();
 }

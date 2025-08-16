@@ -1,4 +1,4 @@
-// Customer details panel with responsive cards, balance actions, and provider refresh on changes.
+// Customer details panel with compact UI and actions accessible from app bar menu, refreshing providers after actions.
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'providers/customer_detail_providers.dart';
@@ -14,6 +14,12 @@ class CustomerViewPanel extends ConsumerWidget {
   final String customerId;
   const CustomerViewPanel({super.key, required this.customerId});
 
+  Future<void> _refreshAll(WidgetRef ref) async {
+    ref.invalidate(customerByIdProvider(customerId));
+    ref.invalidate(customerListProvider);
+    ref.invalidate(customerCountProvider);
+  }
+
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final async = ref.watch(customerByIdProvider(customerId));
@@ -28,14 +34,48 @@ class CustomerViewPanel extends ConsumerWidget {
         heightFraction: 0.96,
       );
       if (ok == true) {
-        ref.invalidate(customerByIdProvider(customerId));
-        ref.invalidate(customerListProvider);
-        ref.invalidate(customerCountProvider);
-        if (context.mounted) {
-          ScaffoldMessenger.of(
-            context,
-          ).showSnackBar(const SnackBar(content: Text('Client mis à jour')));
-        }
+        await _refreshAll(ref);
+        if (context.mounted) Navigator.of(context).pop(true);
+      }
+    }
+
+    Future<void> onAddBalance() async {
+      final c = await ref.read(customerByIdProvider(customerId).future);
+      if (c == null) return;
+      final ok = await showRightDrawer<bool>(
+        context,
+        child: CustomerBalanceAdjustPanel(
+          customerId: c.id,
+          currentBalanceCents: c.balance,
+          companyId: c.companyId,
+          mode: 'add',
+        ),
+        widthFraction: 0.86,
+        heightFraction: 0.96,
+      );
+      if (ok == true) {
+        await _refreshAll(ref);
+        if (context.mounted) Navigator.of(context).pop(true);
+      }
+    }
+
+    Future<void> onSetBalance() async {
+      final c = await ref.read(customerByIdProvider(customerId).future);
+      if (c == null) return;
+      final ok = await showRightDrawer<bool>(
+        context,
+        child: CustomerBalanceAdjustPanel(
+          customerId: c.id,
+          currentBalanceCents: c.balance,
+          companyId: c.companyId,
+          mode: 'set',
+        ),
+        widthFraction: 0.86,
+        heightFraction: 0.96,
+      );
+      if (ok == true) {
+        await _refreshAll(ref);
+        if (context.mounted) Navigator.of(context).pop(true);
       }
     }
 
@@ -47,6 +87,7 @@ class CustomerViewPanel extends ConsumerWidget {
         heightFraction: 0.6,
       );
       if (ok == true && context.mounted) {
+        await _refreshAll(ref);
         Navigator.of(context).pop(true);
       }
     }
@@ -66,6 +107,12 @@ class CustomerViewPanel extends ConsumerWidget {
                 case 'edit':
                   onEdit();
                   break;
+                case 'add_balance':
+                  onAddBalance();
+                  break;
+                case 'set_balance':
+                  onSetBalance();
+                  break;
                 case 'delete':
                   onDelete();
                   break;
@@ -79,6 +126,26 @@ class CustomerViewPanel extends ConsumerWidget {
                     Icon(Icons.edit_outlined, size: 18),
                     SizedBox(width: 8),
                     Text('Modifier'),
+                  ],
+                ),
+              ),
+              PopupMenuItem(
+                value: 'add_balance',
+                child: Row(
+                  children: [
+                    Icon(Icons.add_circle_outline, size: 18),
+                    SizedBox(width: 8),
+                    Text('Ajouter au solde'),
+                  ],
+                ),
+              ),
+              PopupMenuItem(
+                value: 'set_balance',
+                child: Row(
+                  children: [
+                    Icon(Icons.edit_note_outlined, size: 18),
+                    SizedBox(width: 8),
+                    Text('Définir le solde'),
                   ],
                 ),
               ),
@@ -168,61 +235,6 @@ class CustomerViewPanel extends ConsumerWidget {
                   ),
                   const SizedBox(height: 8),
                   if (isWide) cards else Column(children: [cards]),
-                  const SizedBox(height: 8),
-                  Wrap(
-                    spacing: 8,
-                    runSpacing: 8,
-                    children: [
-                      FilledButton.icon(
-                        onPressed: () async {
-                          final ok = await showRightDrawer<bool>(
-                            context,
-                            child: CustomerBalanceAdjustPanel(
-                              customerId: customerId,
-                              currentBalanceCents: c.balance,
-                              companyId: c.companyId,
-                              mode: 'add',
-                            ),
-                            widthFraction: 0.86,
-                            heightFraction: 0.96,
-                          );
-                          if (ok == true) {
-                            ref.invalidate(customerByIdProvider(customerId));
-                            ref.invalidate(customerListProvider);
-                            ref.invalidate(customerCountProvider);
-                            if (context.mounted)
-                              Navigator.of(context).pop(true);
-                          }
-                        },
-                        icon: const Icon(Icons.add_circle_outline),
-                        label: const Text('Ajouter au solde'),
-                      ),
-                      OutlinedButton.icon(
-                        onPressed: () async {
-                          final ok = await showRightDrawer<bool>(
-                            context,
-                            child: CustomerBalanceAdjustPanel(
-                              customerId: customerId,
-                              currentBalanceCents: c.balance,
-                              companyId: c.companyId,
-                              mode: 'set',
-                            ),
-                            widthFraction: 0.86,
-                            heightFraction: 0.96,
-                          );
-                          if (ok == true) {
-                            ref.invalidate(customerByIdProvider(customerId));
-                            ref.invalidate(customerListProvider);
-                            ref.invalidate(customerCountProvider);
-                            if (context.mounted)
-                              Navigator.of(context).pop(true);
-                          }
-                        },
-                        icon: const Icon(Icons.edit_outlined),
-                        label: const Text('Définir le solde'),
-                      ),
-                    ],
-                  ),
                   const Divider(height: 24),
                   _Info('Téléphone', c.phone ?? '—'),
                   _Info('Email', c.email ?? '—'),
@@ -254,40 +266,6 @@ class CustomerViewPanel extends ConsumerWidget {
         },
         loading: () => const Center(child: CircularProgressIndicator()),
         error: (e, _) => Center(child: Text('Erreur: $e')),
-      ),
-      bottomNavigationBar: async.maybeWhen(
-        data: (c) {
-          if (c == null) return null;
-          return SafeArea(
-            top: false,
-            child: Padding(
-              padding: const EdgeInsets.all(12),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  SizedBox(
-                    width: double.infinity,
-                    child: FilledButton.icon(
-                      onPressed: onEdit,
-                      icon: const Icon(Icons.edit_outlined),
-                      label: const Text('Modifier'),
-                    ),
-                  ),
-                  const SizedBox(height: 8),
-                  SizedBox(
-                    width: double.infinity,
-                    child: FilledButton.tonalIcon(
-                      onPressed: onDelete,
-                      icon: const Icon(Icons.delete_outline),
-                      label: const Text('Supprimer'),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          );
-        },
-        orElse: () => null,
       ),
     );
   }
