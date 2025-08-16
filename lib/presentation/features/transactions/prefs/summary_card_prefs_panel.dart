@@ -1,4 +1,5 @@
-// Right-drawer panel to configure TransactionSummaryCard sections and extended nav shortcuts.
+// Right-drawer panel to configure SummaryCard sections and shortcuts, incl. debt/repayment/loan toggles.
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../prefs/summary_card_prefs_provider.dart';
@@ -26,7 +27,6 @@ class SummaryCardPrefsPanel extends ConsumerWidget {
             ),
             const SizedBox(height: 12),
 
-            // Quick actions
             SwitchListTile.adaptive(
               title: const Text('Afficher les actions rapides'),
               value: prefs.showQuickActions,
@@ -48,10 +48,33 @@ class SummaryCardPrefsPanel extends ConsumerWidget {
                   : null,
               subtitle: const Text('Dépend des actions rapides'),
             ),
+            SwitchListTile.adaptive(
+              title: const Text('Bouton Dette'),
+              value: prefs.showDebtButton,
+              onChanged: prefs.showQuickActions
+                  ? (v) => ctrl.setShowDebtButton(v)
+                  : null,
+              subtitle: const Text('Dépend des actions rapides'),
+            ),
+            SwitchListTile.adaptive(
+              title: const Text('Bouton Remboursement'),
+              value: prefs.showRepaymentButton,
+              onChanged: prefs.showQuickActions
+                  ? (v) => ctrl.setShowRepaymentButton(v)
+                  : null,
+              subtitle: const Text('Dépend des actions rapides'),
+            ),
+            SwitchListTile.adaptive(
+              title: const Text('Bouton Prêt'),
+              value: prefs.showLoanButton,
+              onChanged: prefs.showQuickActions
+                  ? (v) => ctrl.setShowLoanButton(v)
+                  : null,
+              subtitle: const Text('Dépend des actions rapides'),
+            ),
 
             const Divider(height: 24),
 
-            // Nav shortcuts group
             SwitchListTile.adaptive(
               title: const Text('Afficher les raccourcis de navigation'),
               value: prefs.showNavShortcuts,
@@ -61,7 +84,6 @@ class SummaryCardPrefsPanel extends ConsumerWidget {
               subtitle: const Text('Dépend des actions rapides'),
             ),
 
-            // Core
             SwitchListTile.adaptive(
               title: const Text('POS'),
               value: prefs.showNavPosButton,
@@ -77,7 +99,6 @@ class SummaryCardPrefsPanel extends ConsumerWidget {
                   : null,
             ),
 
-            // New extended shortcuts (all hidden by default)
             const Divider(height: 24),
             Text(
               'Raccourcis supplémentaires',
@@ -137,7 +158,6 @@ class SummaryCardPrefsPanel extends ConsumerWidget {
 
             const Divider(height: 24),
 
-            // Other sections
             SwitchListTile.adaptive(
               title: const Text('Afficher l’entête de période'),
               value: prefs.showPeriodHeader,

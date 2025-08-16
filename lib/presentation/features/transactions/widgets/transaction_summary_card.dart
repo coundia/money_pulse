@@ -1,4 +1,5 @@
-// Configurable summary card injecting quick actions and wiring onOpenSearch down to SummaryQuickActions.
+// Configurable summary card: period header, metrics, and quick actions including debt/repayment/loan.
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -49,13 +50,16 @@ class TransactionSummaryCard extends ConsumerWidget {
   final int netCents;
   final VoidCallback onOpenReport;
   final VoidCallback onOpenSettings;
+
   final VoidCallback? onAddExpense;
   final VoidCallback? onAddIncome;
+  final VoidCallback? onAddDebt;
+  final VoidCallback? onAddRepayment;
+  final VoidCallback? onAddLoan;
 
-  // Optional navigations
   final VoidCallback? onOpenTransactions;
   final VoidCallback? onOpenPos;
-  final VoidCallback? onOpenSearch; // <-- ajouté
+  final VoidCallback? onOpenSearch;
 
   const TransactionSummaryCard({
     super.key,
@@ -70,9 +74,12 @@ class TransactionSummaryCard extends ConsumerWidget {
     required this.onOpenSettings,
     this.onAddExpense,
     this.onAddIncome,
+    this.onAddDebt,
+    this.onAddRepayment,
+    this.onAddLoan,
     this.onOpenTransactions,
     this.onOpenPos,
-    this.onOpenSearch, // <-- ajouté
+    this.onOpenSearch,
   });
 
   @override
@@ -175,8 +182,14 @@ class TransactionSummaryCard extends ConsumerWidget {
                           ? onAddExpense
                           : null,
                       onAddIncome: prefs.showIncomeButton ? onAddIncome : null,
+                      onAddDebt: onAddDebt,
+                      onAddRepayment: onAddRepayment,
+                      onAddLoan: onAddLoan,
                       showExpenseButton: prefs.showExpenseButton,
                       showIncomeButton: prefs.showIncomeButton,
+                      showDebtButton: prefs.showDebtButton,
+                      showRepaymentButton: prefs.showRepaymentButton,
+                      showLoanButton: prefs.showLoanButton,
                       showNavShortcuts: prefs.showNavShortcuts,
                       showNavTransactionsButton:
                           prefs.showNavTransactionsButton,
@@ -192,7 +205,7 @@ class TransactionSummaryCard extends ConsumerWidget {
                       onOpenTransactions: onOpenTransactions,
                       onOpenPos: onOpenPos,
                       onOpenSettings: onOpenSettings,
-                      onOpenSearch: onOpenSearch, // <-- transmis
+                      onOpenSearch: onOpenSearch,
                     ),
                   if (prefs.showQuickActions) const SizedBox(height: 10),
                   if (prefs.showPeriodHeader)
@@ -237,10 +250,7 @@ class TransactionSummaryCard extends ConsumerWidget {
                                 tone: Theme.of(context).colorScheme.error,
                                 semanticsValue:
                                     '${Formatters.amountFromCents(expenseCents)} négatif',
-                                onTap: () {
-                                  HapticFeedback.selectionClick();
-                                  onOpenReport();
-                                },
+                                onTap: onOpenReport,
                                 tooltip: 'Voir le rapport des dépenses',
                               ),
                             ),
@@ -256,10 +266,7 @@ class TransactionSummaryCard extends ConsumerWidget {
                                 tone: Theme.of(context).colorScheme.tertiary,
                                 semanticsValue:
                                     '${Formatters.amountFromCents(incomeCents)} positif',
-                                onTap: () {
-                                  HapticFeedback.selectionClick();
-                                  onOpenReport();
-                                },
+                                onTap: onOpenReport,
                                 tooltip: 'Voir le rapport des revenus',
                               ),
                             ),
@@ -277,10 +284,7 @@ class TransactionSummaryCard extends ConsumerWidget {
                                     : Theme.of(context).colorScheme.error,
                                 semanticsValue:
                                     '${Formatters.amountFromCents(netAbs)} ${netIsPositive ? 'positif' : 'négatif'}',
-                                onTap: () {
-                                  HapticFeedback.selectionClick();
-                                  onOpenReport();
-                                },
+                                onTap: onOpenReport,
                                 tooltip: 'Voir le rapport global',
                               ),
                             ),

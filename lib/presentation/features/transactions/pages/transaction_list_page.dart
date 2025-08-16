@@ -73,8 +73,12 @@ class TransactionListPage extends ConsumerWidget {
               },
               onAddExpense: () => _onAdd(context, ref, 'DEBIT'),
               onAddIncome: () => _onAdd(context, ref, 'CREDIT'),
+              onAddDebt: () => _onAdd(context, ref, 'DEBT'),
+              onAddRepayment: () => _onAdd(context, ref, 'REMBOURSEMENT'),
+              onAddLoan: () => _onAdd(context, ref, 'PRET'),
               onOpenSearch: () => _openTxnSearch(context, txns),
             ),
+
             const SizedBox(height: 12),
             if (txns.isEmpty)
               const Padding(

@@ -1,4 +1,5 @@
-// Responsive quick actions grid with extended nav shortcuts; en petits écrans, force au moins 3 icônes par rangée.
+// Responsive quick actions grid including expense/income and debt/repayment/loan creation, plus nav shortcuts.
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
@@ -15,16 +16,21 @@ import 'package:money_pulse/presentation/features/stock/stock_level_list_page.da
 class SummaryQuickActions extends StatelessWidget {
   final VoidCallback? onAddExpense;
   final VoidCallback? onAddIncome;
+  final VoidCallback? onAddDebt;
+  final VoidCallback? onAddRepayment;
+  final VoidCallback? onAddLoan;
 
   final bool showExpenseButton;
   final bool showIncomeButton;
+  final bool showDebtButton;
+  final bool showRepaymentButton;
+  final bool showLoanButton;
 
   final bool showNavShortcuts;
   final bool showNavTransactionsButton;
   final bool showNavPosButton;
   final bool showNavSettingsButton;
 
-  // New flags
   final bool showNavSearchButton;
   final bool showNavStockButton;
   final bool showNavReportButton;
@@ -33,7 +39,6 @@ class SummaryQuickActions extends StatelessWidget {
   final bool showNavCategoriesButton;
   final bool showNavAccountsButton;
 
-  // Optional callbacks to override navigation (e.g., bottom nav tab switch or custom search)
   final VoidCallback? onOpenTransactions;
   final VoidCallback? onOpenPos;
   final VoidCallback? onOpenSettings;
@@ -49,8 +54,14 @@ class SummaryQuickActions extends StatelessWidget {
     super.key,
     required this.onAddExpense,
     required this.onAddIncome,
+    this.onAddDebt,
+    this.onAddRepayment,
+    this.onAddLoan,
     this.showExpenseButton = true,
     this.showIncomeButton = true,
+    this.showDebtButton = true,
+    this.showRepaymentButton = true,
+    this.showLoanButton = true,
     this.showNavShortcuts = true,
     this.showNavTransactionsButton = true,
     this.showNavPosButton = true,
@@ -80,7 +91,6 @@ class SummaryQuickActions extends StatelessWidget {
       builder: (ctx, c) {
         final buttons = <Widget>[];
 
-        // Add / Income
         if (showExpenseButton) {
           buttons.add(
             _btn(
@@ -103,8 +113,40 @@ class SummaryQuickActions extends StatelessWidget {
             ),
           );
         }
+        if (showDebtButton) {
+          buttons.add(
+            _btn(
+              context,
+              label: '+ Dette',
+              icon: Icons.receipt_long_rounded,
+              tone: Theme.of(context).colorScheme.primary,
+              onTap: onAddDebt,
+            ),
+          );
+        }
+        if (showRepaymentButton) {
+          buttons.add(
+            _btn(
+              context,
+              label: '+ Remboursement',
+              icon: Icons.payments_rounded,
+              tone: Theme.of(context).colorScheme.primary,
+              onTap: onAddRepayment,
+            ),
+          );
+        }
+        if (showLoanButton) {
+          buttons.add(
+            _btn(
+              context,
+              label: '+ Prêt',
+              icon: Icons.account_balance_rounded,
+              tone: Theme.of(context).colorScheme.secondary,
+              onTap: onAddLoan,
+            ),
+          );
+        }
 
-        // Nav shortcuts
         if (showNavShortcuts) {
           if (showNavTransactionsButton) {
             buttons.add(
@@ -162,8 +204,6 @@ class SummaryQuickActions extends StatelessWidget {
               ),
             );
           }
-
-          // Extended (all hidden by default)
           if (showNavSearchButton) {
             buttons.add(
               _btn(
@@ -306,11 +346,8 @@ class SummaryQuickActions extends StatelessWidget {
 
         if (buttons.isEmpty) return const SizedBox.shrink();
 
-        // --- Responsive grid: au moins 3 colonnes sur petits écrans ---
         final w = c.maxWidth;
-        final isSmall = w < 360;
-        final spacing = isSmall ? 8.0 : 12.0;
-
+        final spacing = w < 360 ? 8.0 : 12.0;
         final cols = _columnsForWidth(w, buttons.length);
         final calcWidth = (w - (spacing * (cols - 1))) / cols;
         final itemWidth = calcWidth.clamp(64.0, 360.0);
@@ -341,13 +378,11 @@ class SummaryQuickActions extends StatelessWidget {
     );
   }
 
-  // Force au moins 3 colonnes sur petits écrans si ≥ 3 boutons.
   static int _columnsForWidth(double w, int count) {
     if (w >= 1040) return 5;
     if (w >= 840) return 4;
     if (w >= 600) return 3;
-    if (w >= 360) return 3; // au lieu de 2 auparavant
-    // < 360 px : essai 3 colonnes si au moins 3 boutons, sinon s’adapte au nombre
+    if (w >= 360) return 3;
     return count >= 3 ? 3 : count;
   }
 }
@@ -450,8 +485,7 @@ class _TonedFilledButtonState extends State<_TonedFilledButton> {
                 child: LayoutBuilder(
                   builder: (context, constraints) {
                     final cw = constraints.maxWidth;
-                    final veryTight =
-                        cw < 96; // pour forcer 3 colonnes sur ultra petit
+                    final veryTight = cw < 96;
                     final tight = cw < 150;
                     final iconSize = veryTight
                         ? 28.0

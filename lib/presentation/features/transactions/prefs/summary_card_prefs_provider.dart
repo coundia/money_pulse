@@ -1,4 +1,5 @@
-// Riverpod state + persistence for TransactionSummaryCard preferences (quick actions + extended nav shortcuts).
+// Riverpod state + persistence for TransactionSummaryCard preferences, incl. debt/repayment/loan toggles.
+
 import 'dart:convert';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -8,12 +9,17 @@ class SummaryCardPrefs {
   final bool showExpenseButton;
   final bool showIncomeButton;
 
+  // New: entry buttons
+  final bool showDebtButton;
+  final bool showRepaymentButton;
+  final bool showLoanButton;
+
   final bool showNavShortcuts;
   final bool showNavTransactionsButton;
   final bool showNavPosButton;
   final bool showNavSettingsButton;
 
-  // New nav shortcuts (all hidden by default)
+  // Extended nav shortcuts
   final bool showNavSearchButton;
   final bool showNavStockButton;
   final bool showNavReportButton;
@@ -29,6 +35,9 @@ class SummaryCardPrefs {
     required this.showQuickActions,
     required this.showExpenseButton,
     required this.showIncomeButton,
+    required this.showDebtButton,
+    required this.showRepaymentButton,
+    required this.showLoanButton,
     required this.showNavShortcuts,
     required this.showNavTransactionsButton,
     required this.showNavPosButton,
@@ -48,11 +57,13 @@ class SummaryCardPrefs {
     showQuickActions: true,
     showExpenseButton: true,
     showIncomeButton: true,
+    showDebtButton: false,
+    showRepaymentButton: false,
+    showLoanButton: false,
     showNavShortcuts: true,
     showNavTransactionsButton: false,
     showNavPosButton: false,
     showNavSettingsButton: false,
-    // New defaults (masked)
     showNavSearchButton: false,
     showNavStockButton: false,
     showNavReportButton: false,
@@ -68,6 +79,9 @@ class SummaryCardPrefs {
     bool? showQuickActions,
     bool? showExpenseButton,
     bool? showIncomeButton,
+    bool? showDebtButton,
+    bool? showRepaymentButton,
+    bool? showLoanButton,
     bool? showNavShortcuts,
     bool? showNavTransactionsButton,
     bool? showNavPosButton,
@@ -86,6 +100,9 @@ class SummaryCardPrefs {
       showQuickActions: showQuickActions ?? this.showQuickActions,
       showExpenseButton: showExpenseButton ?? this.showExpenseButton,
       showIncomeButton: showIncomeButton ?? this.showIncomeButton,
+      showDebtButton: showDebtButton ?? this.showDebtButton,
+      showRepaymentButton: showRepaymentButton ?? this.showRepaymentButton,
+      showLoanButton: showLoanButton ?? this.showLoanButton,
       showNavShortcuts: showNavShortcuts ?? this.showNavShortcuts,
       showNavTransactionsButton:
           showNavTransactionsButton ?? this.showNavTransactionsButton,
@@ -112,6 +129,9 @@ class SummaryCardPrefs {
     'showQuickActions': showQuickActions,
     'showExpenseButton': showExpenseButton,
     'showIncomeButton': showIncomeButton,
+    'showDebtButton': showDebtButton,
+    'showRepaymentButton': showRepaymentButton,
+    'showLoanButton': showLoanButton,
     'showNavShortcuts': showNavShortcuts,
     'showNavTransactionsButton': showNavTransactionsButton,
     'showNavPosButton': showNavPosButton,
@@ -132,6 +152,9 @@ class SummaryCardPrefs {
       showQuickActions: (map['showQuickActions'] as bool?) ?? true,
       showExpenseButton: (map['showExpenseButton'] as bool?) ?? true,
       showIncomeButton: (map['showIncomeButton'] as bool?) ?? true,
+      showDebtButton: (map['showDebtButton'] as bool?) ?? false,
+      showRepaymentButton: (map['showRepaymentButton'] as bool?) ?? false,
+      showLoanButton: (map['showLoanButton'] as bool?) ?? false,
       showNavShortcuts: (map['showNavShortcuts'] as bool?) ?? true,
       showNavTransactionsButton:
           (map['showNavTransactionsButton'] as bool?) ?? false,
@@ -190,6 +213,21 @@ class SummaryCardPrefsController extends StateNotifier<SummaryCardPrefs> {
 
   Future<void> setShowIncomeButton(bool v) async {
     state = state.copyWith(showIncomeButton: v);
+    await _save();
+  }
+
+  Future<void> setShowDebtButton(bool v) async {
+    state = state.copyWith(showDebtButton: v);
+    await _save();
+  }
+
+  Future<void> setShowRepaymentButton(bool v) async {
+    state = state.copyWith(showRepaymentButton: v);
+    await _save();
+  }
+
+  Future<void> setShowLoanButton(bool v) async {
+    state = state.copyWith(showLoanButton: v);
     await _save();
   }
 
