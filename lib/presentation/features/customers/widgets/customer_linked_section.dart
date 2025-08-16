@@ -1,8 +1,10 @@
-// Linked debt and recent transactions section for customer view.
+// Linked debt & recent transactions for a customer, with post-action refresh & responsive buttons.
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:money_pulse/presentation/shared/formatters.dart';
 import '../providers/customer_linked_providers.dart';
+import '../providers/customer_detail_providers.dart';
+import '../providers/customer_list_providers.dart';
 import '../../transactions/transaction_quick_add_sheet.dart';
 import 'package:money_pulse/presentation/widgets/right_drawer.dart';
 import '../customer_debt_payment_panel.dart';
@@ -11,6 +13,16 @@ import '../customer_debt_add_panel.dart';
 class CustomerLinkedSection extends ConsumerWidget {
   final String customerId;
   const CustomerLinkedSection({super.key, required this.customerId});
+
+  Future<void> _refreshAll(WidgetRef ref) async {
+    ref.invalidate(openDebtByCustomerProvider(customerId));
+    ref.invalidate(recentTransactionsOfCustomerProvider(customerId));
+    ref.invalidate(
+      customerByIdProvider(customerId),
+    ); // met à jour les soldes dans la vue
+    ref.invalidate(customerListProvider); // met à jour la liste au retour
+    ref.invalidate(customerCountProvider);
+  }
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -22,7 +34,7 @@ class CustomerLinkedSection extends ConsumerWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        // Debt card
+        // Carte Dette
         Card(
           clipBehavior: Clip.antiAlias,
           child: Padding(
@@ -39,32 +51,57 @@ class CustomerLinkedSection extends ConsumerWidget {
                   Text(
                     d == null
                         ? 'Aucune dette active'
-                        : '${Formatters.amountFromCents(d.balance)}',
+                        : Formatters.amountFromCents(d.balance),
                     style: Theme.of(context).textTheme.headlineSmall,
                   ),
                   const SizedBox(height: 12),
-                  Row(
+                  Wrap(
+                    spacing: 12,
+                    runSpacing: 8,
                     children: [
                       FilledButton.icon(
-                        onPressed: () => showRightDrawer(
-                          context,
-                          child: CustomerDebtAddPanel(customerId: customerId),
-                          widthFraction: 0.86,
-                          heightFraction: 0.96,
-                        ),
+                        onPressed: () async {
+                          final ok = await showRightDrawer<bool>(
+                            context,
+                            child: CustomerDebtAddPanel(customerId: customerId),
+                            widthFraction: 0.86,
+                            heightFraction: 0.96,
+                          );
+                          if (ok == true) {
+                            await _refreshAll(ref);
+                            if (context.mounted) {
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                const SnackBar(
+                                  content: Text('Dette mise à jour'),
+                                ),
+                              );
+                            }
+                          }
+                        },
                         icon: const Icon(Icons.add_shopping_cart_outlined),
                         label: const Text('Ajouter à la dette'),
                       ),
-                      const SizedBox(width: 8),
                       FilledButton.tonalIcon(
-                        onPressed: () => showRightDrawer(
-                          context,
-                          child: CustomerDebtPaymentPanel(
-                            customerId: customerId,
-                          ),
-                          widthFraction: 0.86,
-                          heightFraction: 0.9,
-                        ),
+                        onPressed: () async {
+                          final ok = await showRightDrawer<bool>(
+                            context,
+                            child: CustomerDebtPaymentPanel(
+                              customerId: customerId,
+                            ),
+                            widthFraction: 0.86,
+                            heightFraction: 0.9,
+                          );
+                          if (ok == true) {
+                            await _refreshAll(ref);
+                            if (context.mounted) {
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                const SnackBar(
+                                  content: Text('Paiement enregistré'),
+                                ),
+                              );
+                            }
+                          }
+                        },
                         icon: const Icon(Icons.payments_outlined),
                         label: const Text('Encaisser un paiement'),
                       ),
@@ -83,8 +120,10 @@ class CustomerLinkedSection extends ConsumerWidget {
             ),
           ),
         ),
+
         const SizedBox(height: 12),
-        // Recent txs
+
+        // Transactions récentes
         Card(
           clipBehavior: Clip.antiAlias,
           child: Padding(
@@ -121,9 +160,11 @@ class CustomerLinkedSection extends ConsumerWidget {
                             return ListTile(
                               dense: true,
                               title: Text(
-                                r.description?.isNotEmpty == true
+                                (r.description?.isNotEmpty ?? false)
                                     ? r.description!
                                     : typeLabel,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
                               ),
                               subtitle: Text(
                                 Formatters.dateFull(r.dateTransaction),
@@ -142,12 +183,26 @@ class CustomerLinkedSection extends ConsumerWidget {
                 Align(
                   alignment: Alignment.centerRight,
                   child: TextButton.icon(
-                    onPressed: () => showRightDrawer(
-                      context,
-                      child: TransactionQuickAddSheet(initialIsDebit: true),
-                      widthFraction: 0.92,
-                      heightFraction: 0.98,
-                    ),
+                    onPressed: () async {
+                      final ok = await showRightDrawer<bool>(
+                        context,
+                        child: const TransactionQuickAddSheet(
+                          initialIsDebit: true,
+                        ),
+                        widthFraction: 0.92,
+                        heightFraction: 0.98,
+                      );
+                      if (ok == true) {
+                        await _refreshAll(ref);
+                        if (context.mounted) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(
+                              content: Text('Transaction ajoutée'),
+                            ),
+                          );
+                        }
+                      }
+                    },
                     icon: const Icon(Icons.add),
                     label: const Text('Nouvelle transaction'),
                   ),

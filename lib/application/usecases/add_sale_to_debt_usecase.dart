@@ -1,4 +1,4 @@
-// Use case that appends a sale to customer's open debt, records stock OUT, logs changes, and refreshes customer balances.
+// Use case to append a sale to customer's open debt; updates customer balanceDebt and stock OUT.
 import 'package:uuid/uuid.dart';
 import 'package:sqflite/sqflite.dart';
 import 'package:money_pulse/infrastructure/db/app_database.dart';
@@ -18,27 +18,22 @@ class AddSaleToDebtUseCase {
     required DateTime when,
     required List<Map<String, Object?>> lines,
   }) async {
-    if (lines.isEmpty) {
-      throw ArgumentError('lines cannot be empty');
-    }
-
-    int _i(Object? v) => v is int ? v : int.tryParse('${v ?? 0}') ?? 0;
-
-    int totalCents = 0;
-    for (final e in lines) {
-      final q = _i(e['quantity']);
-      final u = _i(e['unitPrice']);
-      final safeQ = q < 0 ? 0 : q;
-      final safeU = u < 0 ? 0 : u;
-      totalCents += safeQ * safeU;
-    }
-
     final txId = const Uuid().v4();
-    final now = DateTime.now();
-    final nowIso = now.toIso8601String();
+    final nowIso = DateTime.now().toIso8601String();
+
+    int total(List<Map<String, Object?>> ls) {
+      var sum = 0;
+      for (final e in ls) {
+        final q = (e['quantity'] as int?) ?? 1;
+        final u = (e['unitPrice'] as int?) ?? 0;
+        sum += q * u;
+      }
+      return sum;
+    }
+
+    final totalCents = total(lines);
 
     await db.tx((txn) async {
-      final resolvedCompany = await _resolveCompanyId(txn, companyId);
       final Debt open = await debtRepo.upsertOpenForCustomerTx(txn, customerId);
 
       await txn.insert('transaction_entry', {
@@ -54,7 +49,7 @@ class AddSaleToDebtUseCase {
         'entityId': customerId,
         'accountId': null,
         'categoryId': categoryId,
-        'companyId': resolvedCompany,
+        'companyId': companyId,
         'customerId': customerId,
         'debtId': open.id,
         'createdAt': nowIso,
@@ -67,21 +62,18 @@ class AddSaleToDebtUseCase {
 
       for (final e in lines) {
         final itemId = const Uuid().v4();
-        final qty = _i(e['quantity']);
-        final up = _i(e['unitPrice']);
-        final safeQty = qty < 0 ? 0 : qty;
-        final safeUp = up < 0 ? 0 : up;
-        final tot = safeQty * safeUp;
-
+        final qty = (e['quantity'] as int?) ?? 1;
+        final unit = (e['unitPrice'] as int?) ?? 0;
+        final total = qty * unit;
         await txn.insert('transaction_item', {
           'id': itemId,
           'transactionId': txId,
-          'productId': e['productId']?.toString(),
-          'label': (e['label'] ?? '').toString(),
-          'quantity': safeQty,
-          'unitId': e['unitId']?.toString(),
-          'unitPrice': safeUp,
-          'total': tot,
+          'productId': e['productId'] as String?,
+          'label': e['label'] as String?,
+          'quantity': qty,
+          'unitId': e['unitId'] as String?,
+          'unitPrice': unit,
+          'total': total,
           'notes': null,
           'createdAt': nowIso,
           'updatedAt': nowIso,
@@ -91,14 +83,12 @@ class AddSaleToDebtUseCase {
           'isDirty': 1,
         });
 
-        final pid = (e['productId']?.toString() ?? '');
-        if (pid.isNotEmpty &&
-            safeQty > 0 &&
-            (resolvedCompany ?? '').isNotEmpty) {
+        final pid = e['productId']?.toString() ?? '';
+        if (pid.isNotEmpty && qty > 0 && (companyId ?? '').isNotEmpty) {
           final movementId = await txn.insert('stock_movement', {
             'type_stock_movement': 'OUT',
-            'quantity': safeQty,
-            'companyId': resolvedCompany,
+            'quantity': qty,
+            'companyId': companyId,
             'productVariantId': pid,
             'orderLineId': itemId,
             'discriminator': 'TXN',
@@ -118,57 +108,24 @@ class AddSaleToDebtUseCase {
       await _applyStockAdjustments(
         txn: txn,
         lines: lines,
-        companyId: companyId ?? resolvedCompany,
+        companyId: companyId,
         nowIso: nowIso,
       );
 
       final newBalance = open.balance + totalCents;
       await debtRepo.updateBalanceTx(txn, open.id, newBalance);
 
-      await _upsertChangeLog(txn, 'transaction_entry', txId, 'INSERT', nowIso);
+      await txn.rawUpdate(
+        'UPDATE customer '
+        'SET balanceDebt = COALESCE(balanceDebt,0) + ?, updatedAt=?, isDirty=1 '
+        'WHERE id=?',
+        [totalCents, nowIso, customerId],
+      );
 
-      await _recomputeCustomerBalances(txn, customerId, nowIso);
+      await _upsertChangeLog(txn, 'transaction_entry', txId, 'INSERT', nowIso);
     });
 
     return txId;
-  }
-
-  Future<void> _recomputeCustomerBalances(
-    Transaction txn,
-    String cid,
-    String nowIso,
-  ) async {
-    await txn.rawUpdate(
-      '''
-      UPDATE customer
-      SET balanceDebt = COALESCE((
-            SELECT SUM(COALESCE(d.balance,0))
-            FROM debt d
-            WHERE d.customerId = ?
-              AND d.deletedAt IS NULL
-              AND (d.statuses IS NULL OR d.statuses='OPEN')
-          ),0),
-          balance = COALESCE((
-            SELECT SUM(
-              CASE te.typeEntry
-                WHEN 'CREDIT' THEN COALESCE(te.amount,0)
-                WHEN 'DEBIT' THEN -COALESCE(te.amount,0)
-                WHEN 'REMBOURSEMENT' THEN -COALESCE(te.amount,0)
-                WHEN 'PRET' THEN COALESCE(te.amount,0)
-                WHEN 'DEBT' THEN COALESCE(te.amount,0)
-                ELSE 0
-              END
-            )
-            FROM transaction_entry te
-            WHERE te.customerId = ?
-              AND te.deletedAt IS NULL
-          ),0),
-          updatedAt = ?,
-          isDirty = 1
-      WHERE id = ?
-      ''',
-      [cid, cid, nowIso, cid],
-    );
   }
 
   Future<void> _applyStockAdjustments({
@@ -177,17 +134,14 @@ class AddSaleToDebtUseCase {
     required String? companyId,
     required String nowIso,
   }) async {
-    final company = (companyId ?? '').isEmpty ? null : companyId;
-    if (company == null) return;
+    if ((companyId ?? '').isEmpty) return;
 
     final Map<String, int> totalsByVariant = {};
     for (final e in lines) {
       final pid = e['productId']?.toString();
-      final qty = e['quantity'] is int
-          ? e['quantity'] as int
-          : int.tryParse('${e['quantity'] ?? 0}') ?? 0;
-      if ((pid ?? '').isEmpty || qty <= 0) continue;
-      totalsByVariant[pid!] = (totalsByVariant[pid] ?? 0) + qty;
+      final qty = (e['quantity'] as int?) ?? 0;
+      if (pid == null || pid.isEmpty || qty <= 0) continue;
+      totalsByVariant[pid] = (totalsByVariant[pid] ?? 0) + qty;
     }
     if (totalsByVariant.isEmpty) return;
 
@@ -197,13 +151,13 @@ class AddSaleToDebtUseCase {
 
       final row = await txn.rawQuery(
         'SELECT id FROM stock_level WHERE productVariantId=? AND companyId=? LIMIT 1',
-        [pvId, company],
+        [pvId, companyId],
       );
 
       if (row.isEmpty) {
         await txn.insert('stock_level', {
           'productVariantId': pvId,
-          'companyId': company,
+          'companyId': companyId,
           'stockOnHand': 0,
           'stockAllocated': 0,
           'createdAt': nowIso,
@@ -212,7 +166,7 @@ class AddSaleToDebtUseCase {
         await _upsertChangeLog(
           txn,
           'stock_level',
-          '$pvId@$company',
+          '$pvId@$companyId',
           'INSERT',
           nowIso,
         );
@@ -220,24 +174,16 @@ class AddSaleToDebtUseCase {
 
       await txn.rawUpdate(
         'UPDATE stock_level SET stockOnHand = COALESCE(stockOnHand,0) + ?, updatedAt=? WHERE productVariantId=? AND companyId=?',
-        [qty, nowIso, pvId, company],
+        [qty, nowIso, pvId, companyId],
       );
       await _upsertChangeLog(
         txn,
         'stock_level',
-        '$pvId@$company',
+        '$pvId@$companyId',
         'UPDATE',
         nowIso,
       );
     }
-  }
-
-  Future<String?> _resolveCompanyId(Transaction txn, String? provided) async {
-    if ((provided ?? '').isNotEmpty) return provided;
-    final def = await txn.rawQuery(
-      'SELECT id FROM company WHERE isDefault=1 AND deletedAt IS NULL LIMIT 1',
-    );
-    return def.isEmpty ? null : (def.first['id'] as String?);
   }
 
   Future<void> _upsertChangeLog(
