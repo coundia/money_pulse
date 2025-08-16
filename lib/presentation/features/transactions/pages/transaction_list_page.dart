@@ -161,10 +161,12 @@ class TransactionListPage extends ConsumerWidget {
   }
 
   Future<void> _onAdd(BuildContext context, WidgetRef ref, String type) async {
-    final isDebit = type == 'DEBIT';
     final ok = await showRightDrawer<bool>(
       context,
-      child: TransactionQuickAddSheet(initialIsDebit: isDebit),
+      child: TransactionQuickAddSheet(
+        initialTypeEntry:
+            type, // 'DEBIT' | 'CREDIT' | 'DEBT' | 'REMBOURSEMENT' | 'PRET'
+      ),
       widthFraction: 0.86,
       heightFraction: 0.96,
     );

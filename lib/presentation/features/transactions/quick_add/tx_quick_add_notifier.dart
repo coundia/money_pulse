@@ -1,10 +1,12 @@
-// Riverpod notifier for loading data and saving quick transactions.
+// Riverpod notifier for loading and saving quick transactions with fixed kind from parent.
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:money_pulse/domain/categories/entities/category.dart';
 import 'package:money_pulse/domain/company/entities/company.dart';
 import 'package:money_pulse/domain/customer/entities/customer.dart';
 import 'package:money_pulse/presentation/app/providers/add_sale_to_debt_usecase_provider.dart';
+import 'package:money_pulse/presentation/app/providers/checkout_cart_usecase_provider.dart'
+    hide checkoutCartUseCaseProvider;
 import 'package:money_pulse/presentation/app/providers/company_repo_provider.dart';
 import 'package:money_pulse/presentation/app/providers/customer_repo_provider.dart';
 import 'package:money_pulse/presentation/features/transactions/providers/transaction_list_providers.dart';
@@ -14,6 +16,7 @@ import '../../../../domain/customer/repositories/customer_repository.dart';
 import '../../../app/providers.dart';
 import '../models/tx_item.dart';
 import '../widgets/type_selector.dart';
+import '../models/tx_item.dart';
 import 'tx_quick_add_state.dart';
 import 'tx_quick_utils.dart';
 
@@ -35,25 +38,20 @@ class TransactionQuickAddNotifier extends StateNotifier<TxQuickAddState> {
     : super(TxQuickAddState.initial(TxKind.debit));
 
   Future<void> init({
-    required bool initialIsDebit,
+    required String initialTypeEntry,
     String? initialCustomerId,
     String? initialCompanyId,
-    String? initialTypeEntry,
   }) async {
-    final kind =
-        mapTypeEntryToKind(initialTypeEntry) ??
-        (initialIsDebit ? TxKind.debit : TxKind.credit);
-    state = TxQuickAddState.initial(kind);
+    final fixedKind = mapTypeEntryToKind(initialTypeEntry) ?? TxKind.debit;
+    state = TxQuickAddState.initial(fixedKind);
 
     final coRepo = ref.read(companyRepoProvider);
     final cuRepo = ref.read(customerRepoProvider);
     final catRepo = ref.read(categoryRepoProvider);
 
-    List<Company> companies = const [];
-    List<Customer> customers = const [];
-    List<Category> categories = const [];
-
-    companies = await coRepo.findAll(const CompanyQuery(limit: 300, offset: 0));
+    List<Company> companies = await coRepo.findAll(
+      const CompanyQuery(limit: 300, offset: 0),
+    );
     final Company? defaultCo =
         companies.where((e) => e.isDefault == true).isNotEmpty
         ? companies.firstWhere((e) => e.isDefault == true)
@@ -69,6 +67,7 @@ class TransactionQuickAddNotifier extends StateNotifier<TxQuickAddState> {
       } catch (_) {}
     }
 
+    List<Customer> customers = const [];
     if (companyId != null) {
       customers = await cuRepo.findAll(
         CustomerQuery(companyId: companyId, limit: 300, offset: 0),
@@ -81,7 +80,7 @@ class TransactionQuickAddNotifier extends StateNotifier<TxQuickAddState> {
       } catch (_) {}
     }
 
-    categories = await catRepo.findAllActive();
+    final categories = await catRepo.findAllActive();
 
     state = state.copyWith(
       companies: companies,
@@ -96,10 +95,6 @@ class TransactionQuickAddNotifier extends StateNotifier<TxQuickAddState> {
               : state.customerId),
       setSelectedCategoryNull: true,
     );
-  }
-
-  void setKind(TxKind k) {
-    state = state.copyWith(kind: k);
   }
 
   void setCompany(String? id) async {

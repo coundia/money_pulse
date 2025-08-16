@@ -20,19 +20,18 @@ import 'widgets/date_row.dart';
 import 'widgets/items_section.dart';
 import 'widgets/party_section.dart';
 import 'widgets/type_selector.dart';
+// UI orchestration for quick add transaction with fixed, non-editable entry type provided by parent.
 
 class TransactionQuickAddSheet extends ConsumerStatefulWidget {
-  final bool initialIsDebit;
+  final String initialTypeEntry;
   final String? initialCustomerId;
   final String? initialCompanyId;
-  final String? initialTypeEntry;
 
   const TransactionQuickAddSheet({
     super.key,
-    this.initialIsDebit = true,
+    required this.initialTypeEntry,
     this.initialCustomerId,
     this.initialCompanyId,
-    this.initialTypeEntry,
   });
 
   @override
@@ -54,10 +53,9 @@ class _TransactionQuickAddSheetState
       ref
           .read(txQuickAddProvider.notifier)
           .init(
-            initialIsDebit: widget.initialIsDebit,
+            initialTypeEntry: widget.initialTypeEntry,
             initialCustomerId: widget.initialCustomerId,
             initialCompanyId: widget.initialCompanyId,
-            initialTypeEntry: widget.initialTypeEntry,
           );
     });
   }
@@ -317,20 +315,17 @@ class _TransactionQuickAddSheetState
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    TypeSelector(
-                      value: s.kind,
-                      onChanged: (k) {
-                        ref.read(txQuickAddProvider.notifier).setKind(k);
-                        if (!showItems) {
-                          ref.read(txQuickAddProvider.notifier).clearItems();
-                        } else if (s.items.isNotEmpty) {
-                          final cat = ref
-                              .read(txQuickAddProvider.notifier)
-                              .autoSelectCategoryForProducts();
-                          if (cat != null) _categoryCtrl.text = cat.code;
-                        }
-                        setState(() {});
-                      },
+                    Align(
+                      alignment: Alignment.centerLeft,
+                      child: Chip(
+                        label: Text(switch (s.kind) {
+                          TxKind.debit => 'Type : Dépense',
+                          TxKind.credit => 'Type : Revenu',
+                          TxKind.debt => 'Type : Dette',
+                          TxKind.remboursement => 'Type : Remboursement',
+                          TxKind.pret => 'Type : Prêt',
+                        }),
+                      ),
                     ),
                     const SizedBox(height: 12),
                     AmountFieldQuickPad(
@@ -416,7 +411,6 @@ class _TransactionQuickAddSheetState
                         setState(() {});
                       },
                       onCreateCustomer: () async {
-                        // Tu peux garder ici ton flux existant pour créer un client si nécessaire.
                         return null;
                       },
                     ),
