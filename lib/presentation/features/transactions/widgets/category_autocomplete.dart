@@ -1,4 +1,5 @@
-// lib/presentation/features/transactions/widgets/category_autocomplete.dart
+// Minimal autocomplete for categories with dynamic popup height and focus handoff.
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:uuid/uuid.dart';
@@ -13,17 +14,12 @@ import '../../categories/widgets/category_form_panel.dart';
 class CategoryAutocomplete extends ConsumerStatefulWidget {
   final TextEditingController controller;
   final Category? initialSelected;
-
-  /// Builds options (you already filter by type in the caller)
   final List<Category> Function(String query) optionsBuilder;
-
   final void Function(Category) onSelected;
   final VoidCallback onClear;
   final String labelText;
   final String emptyHint;
-
-  /// Tell the widget which type we’re in so new category creation is locked to it.
-  final String typeEntry; // 'DEBIT' or 'CREDIT'
+  final String typeEntry;
 
   const CategoryAutocomplete({
     super.key,
@@ -52,7 +48,6 @@ class _CategoryAutocompleteState extends ConsumerState<CategoryAutocomplete> {
     );
     if (form == null) return;
 
-    // Persist
     final repo = ref.read(categoryRepoProvider);
     final now = DateTime.now();
     final cat = Category(
@@ -70,22 +65,20 @@ class _CategoryAutocompleteState extends ConsumerState<CategoryAutocomplete> {
     );
     await repo.create(cat);
 
-    // Update UI selection
     widget.controller.text = cat.code;
     widget.onSelected(cat);
     if (!mounted) return;
     ScaffoldMessenger.of(
       context,
     ).showSnackBar(const SnackBar(content: Text('Catégorie créée')));
+    FocusScope.of(context).nextFocus();
   }
 
   @override
   Widget build(BuildContext context) {
     return Autocomplete<Category>(
-      optionsBuilder: (textEditingValue) {
-        final q = textEditingValue.text;
-        return widget.optionsBuilder(q);
-      },
+      optionsBuilder: (textEditingValue) =>
+          widget.optionsBuilder(textEditingValue.text),
       displayStringForOption: (c) =>
           c.code +
           ((c.description?.isNotEmpty ?? false) ? ' — ${c.description}' : ''),
@@ -126,18 +119,23 @@ class _CategoryAutocompleteState extends ConsumerState<CategoryAutocomplete> {
                     ),
                   ),
                   textInputAction: TextInputAction.next,
+                  onFieldSubmitted: (_) => FocusScope.of(context).nextFocus(),
                 );
               },
             );
           },
       optionsViewBuilder: (context, onSelectedCb, options) {
         final opts = options.toList();
+        final size = MediaQuery.of(context).size;
+        final maxH = (size.height * 0.40).clamp(200.0, 420.0) as double;
+        final maxW = (size.width * 0.96).clamp(280.0, 520.0) as double;
+
         return Align(
           alignment: Alignment.topLeft,
           child: Material(
             elevation: 4,
             child: ConstrainedBox(
-              constraints: const BoxConstraints(maxHeight: 320, maxWidth: 520),
+              constraints: BoxConstraints(maxHeight: maxH, maxWidth: maxW),
               child: opts.isEmpty
                   ? ListView(
                       padding: EdgeInsets.zero,
@@ -153,18 +151,18 @@ class _CategoryAutocompleteState extends ConsumerState<CategoryAutocomplete> {
                           onTap: () => _createCategory(context),
                         ),
                         const Divider(height: 1),
-                        Padding(
-                          padding: const EdgeInsets.all(12),
+                        const Padding(
+                          padding: EdgeInsets.all(12),
                           child: Text(
-                            widget.emptyHint,
-                            style: const TextStyle(color: Colors.black54),
+                            'Aucun résultat',
+                            style: TextStyle(color: Colors.black54),
                           ),
                         ),
                       ],
                     )
                   : ListView.separated(
                       padding: EdgeInsets.zero,
-                      itemCount: opts.length + 1, // +1 for "Créer" shortcut
+                      itemCount: opts.length + 1,
                       separatorBuilder: (_, __) =>
                           const Divider(height: 1, thickness: 0.5),
                       itemBuilder: (_, i) {
@@ -197,7 +195,10 @@ class _CategoryAutocompleteState extends ConsumerState<CategoryAutocomplete> {
                             c.typeEntry == 'DEBIT' ? 'Débit' : 'Crédit',
                             style: const TextStyle(fontSize: 12),
                           ),
-                          onTap: () => onSelectedCb(c),
+                          onTap: () {
+                            onSelectedCb(c);
+                            FocusScope.of(context).nextFocus();
+                          },
                         );
                       },
                     ),
@@ -208,6 +209,7 @@ class _CategoryAutocompleteState extends ConsumerState<CategoryAutocomplete> {
       onSelected: (c) {
         widget.controller.text = c.code;
         widget.onSelected(c);
+        FocusScope.of(context).nextFocus();
       },
     );
   }

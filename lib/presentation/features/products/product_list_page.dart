@@ -1,4 +1,5 @@
-// Product list page: loads, searches, filters, shows view drawer, add/edit/delete/duplicate, and handles safe drawer navigation.
+// Product list page with no autofocus on open, top filters, refresh, and stock refresh after mutations.
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -35,6 +36,10 @@ class _ProductListPageState extends ConsumerState<ProductListPage> {
   String _query = '';
   ProductFilters _filters = const ProductFilters();
 
+  void _unfocus() {
+    FocusManager.instance.primaryFocus?.unfocus();
+  }
+
   @override
   void initState() {
     super.initState();
@@ -42,12 +47,20 @@ class _ProductListPageState extends ConsumerState<ProductListPage> {
       if (!mounted) return;
       setState(() => _query = _searchCtrl.text);
     });
+    WidgetsBinding.instance.addPostFrameCallback((_) => _unfocus());
   }
 
   @override
   void dispose() {
     _searchCtrl.dispose();
     super.dispose();
+  }
+
+  Future<void> _refresh() async {
+    _unfocus();
+    if (!mounted) return;
+    setState(() {});
+    await Future<void>.delayed(const Duration(milliseconds: 150));
   }
 
   Future<List<Product>> _load() async {
@@ -60,13 +73,12 @@ class _ProductListPageState extends ConsumerState<ProductListPage> {
   Future<void> _share(Product p) async {
     final text = [
       'Produit: ${p.name ?? p.code ?? '—'}',
+      if ((p.description ?? '').isNotEmpty) 'Description: ${p.description}',
       if ((p.code ?? '').isNotEmpty) 'Code: ${p.code}',
       if ((p.barcode ?? '').isNotEmpty) 'EAN: ${p.barcode}',
       'Prix: ${(p.defaultPrice / 100).toStringAsFixed(0)}',
       if (p.purchasePrice > 0)
         'Coût: ${(p.purchasePrice / 100).toStringAsFixed(0)}',
-      'Statut: ${p.statuses}',
-      'ID: ${p.id}',
     ].join('\n');
     await Clipboard.setData(ClipboardData(text: text));
     if (!mounted) return;
@@ -76,6 +88,7 @@ class _ProductListPageState extends ConsumerState<ProductListPage> {
   }
 
   Future<void> _openAdjust(Product p) async {
+    _unfocus();
     final changed = await showRightDrawer<bool>(
       context,
       child: ProductStockAdjustPanel(product: p),
@@ -86,10 +99,12 @@ class _ProductListPageState extends ConsumerState<ProductListPage> {
       ScaffoldMessenger.of(
         context,
       ).showSnackBar(const SnackBar(content: Text('Stock ajusté.')));
+      setState(() {});
     }
   }
 
   Future<void> _addOrEdit({Product? existing}) async {
+    _unfocus();
     final categories = await ref.read(categoryRepoProvider).findAllActive();
     if (!mounted) return;
 
@@ -138,10 +153,12 @@ class _ProductListPageState extends ConsumerState<ProductListPage> {
       );
       await _repo.update(updated);
     }
-    if (mounted) setState(() {});
+    if (!mounted) return;
+    setState(() {});
   }
 
   Future<void> _duplicate(Product p) async {
+    _unfocus();
     final categories = await ref.read(categoryRepoProvider).findAllActive();
     if (!mounted) return;
 
@@ -158,7 +175,7 @@ class _ProductListPageState extends ConsumerState<ProductListPage> {
       id: const Uuid().v4(),
       remoteId: null,
       code: res.code,
-      name: res.name + " duplicate",
+      name: res.name,
       description: res.description,
       barcode: res.barcode,
       unitId: p.unitId,
@@ -174,10 +191,12 @@ class _ProductListPageState extends ConsumerState<ProductListPage> {
       isDirty: 1,
     );
     await _repo.create(copy);
-    if (mounted) setState(() {});
+    if (!mounted) return;
+    setState(() {});
   }
 
   Future<void> _confirmDelete(Product p) async {
+    _unfocus();
     if (!mounted) return;
     final ok = await showRightDrawer<bool>(
       context,
@@ -193,6 +212,7 @@ class _ProductListPageState extends ConsumerState<ProductListPage> {
   }
 
   Future<void> _view(Product p) async {
+    _unfocus();
     String? catLabel;
     if (p.categoryId != null) {
       final cat = await ref.read(categoryRepoProvider).findById(p.categoryId!);
@@ -315,6 +335,7 @@ class _ProductListPageState extends ConsumerState<ProductListPage> {
   }
 
   Future<void> _openFiltersSheet() async {
+    _unfocus();
     final res = await showModalBottomSheet<ProductFilters>(
       context: context,
       isScrollControlled: true,
@@ -338,109 +359,38 @@ class _ProductListPageState extends ConsumerState<ProductListPage> {
         return FutureBuilder<List<Product>>(
           future: _load(),
           builder: (context, snap) {
+            if (snap.connectionState == ConnectionState.waiting) {
+              return Scaffold(
+                appBar: AppBar(
+                  title: const Text('Produits'),
+                  actions: [
+                    IconButton(
+                      tooltip: 'Rafraîchir',
+                      onPressed: _refresh,
+                      icon: const Icon(Icons.refresh),
+                    ),
+                    IconButton(
+                      tooltip: 'Ajouter',
+                      onPressed: () => _addOrEdit(),
+                      icon: const Icon(Icons.add),
+                    ),
+                  ],
+                ),
+                body: const Center(child: CircularProgressIndicator()),
+              );
+            }
+
             final items = snap.data ?? const <Product>[];
             final stockFuture = _computeStockMap(items);
-
-            final body = switch (snap.connectionState) {
-              ConnectionState.waiting => const Center(
-                child: CircularProgressIndicator(),
-              ),
-              _ => FutureBuilder<Map<String, int>>(
-                future: stockFuture,
-                builder: (context, stockSnap) {
-                  final stockMap = stockSnap.data ?? const <String, int>{};
-                  final filtered = _applyLocalFilters(
-                    items,
-                    stockByProduct: stockMap,
-                  );
-
-                  if (items.isEmpty) {
-                    return _EmptySection(onAdd: () => _addOrEdit());
-                  }
-
-                  return Padding(
-                    padding: EdgeInsets.symmetric(horizontal: sidePadding),
-                    child: ListView.separated(
-                      padding: const EdgeInsets.fromLTRB(12, 12, 12, 96),
-                      itemCount: filtered.length + 1,
-                      separatorBuilder: (_, i) => i == 0
-                          ? const SizedBox.shrink()
-                          : const Divider(height: 1),
-                      itemBuilder: (_, i) {
-                        if (i == 0) {
-                          return _HeaderBar(
-                            total: items.length,
-                            searchCtrl: _searchCtrl,
-                            filters: _filters,
-                            onOpenFilters: _openFiltersSheet,
-                            onClearFilters: () => setState(
-                              () => _filters = const ProductFilters(),
-                            ),
-                          );
-                        }
-
-                        final p = filtered[i - 1];
-                        final title = p.name?.isNotEmpty == true
-                            ? p.name!
-                            : (p.code ?? 'Produit');
-                        final subParts = <String>[];
-                        if ((p.code ?? '').isNotEmpty)
-                          subParts.add('Code: ${p.code}');
-                        if ((p.barcode ?? '').isNotEmpty)
-                          subParts.add('EAN: ${p.barcode}');
-                        if ((p.description ?? '').isNotEmpty)
-                          subParts.add(p.description!);
-                        if (p.statuses != null)
-                          subParts.add('Statut: ${p.statuses}');
-                        final sub = subParts.join('  •  ');
-                        final qty = stockMap[p.id] ?? 0;
-
-                        return ProductTile(
-                          title: title,
-                          subtitle: sub.isEmpty ? null : sub,
-                          priceCents: p.defaultPrice,
-                          stockQty: qty,
-                          onTap: () => _view(p),
-                          onMenuAction: (action) async {
-                            await Future.delayed(Duration.zero);
-                            if (!mounted) return;
-                            switch (action) {
-                              case 'view':
-                                await _view(p);
-                                break;
-                              case 'edit':
-                                await _addOrEdit(existing: p);
-                                break;
-                              case 'duplicate':
-                                await _duplicate(p);
-                                break;
-                              case 'adjust':
-                                await _openAdjust(p);
-                                break;
-                              case 'delete':
-                                await _confirmDelete(p);
-                                break;
-                              case 'share':
-                                await _share(p);
-                                break;
-                            }
-                          },
-                        );
-                      },
-                    ),
-                  );
-                },
-              ),
-            };
 
             return Scaffold(
               appBar: AppBar(
                 title: const Text('Produits'),
                 actions: [
                   IconButton(
-                    tooltip: 'Filtres',
-                    onPressed: _openFiltersSheet,
-                    icon: const Icon(Icons.filter_list),
+                    tooltip: 'Rafraîchir',
+                    onPressed: _refresh,
+                    icon: const Icon(Icons.refresh),
                   ),
                   IconButton(
                     tooltip: 'Ajouter',
@@ -454,7 +404,100 @@ class _ProductListPageState extends ConsumerState<ProductListPage> {
                 icon: const Icon(Icons.add),
                 label: const Text('Nouveau produit'),
               ),
-              body: body,
+              body: FutureBuilder<Map<String, int>>(
+                future: stockFuture,
+                builder: (context, stockSnap) {
+                  final stockMap = stockSnap.data ?? const <String, int>{};
+                  final filtered = _applyLocalFilters(
+                    items,
+                    stockByProduct: stockMap,
+                  );
+
+                  if (items.isEmpty) {
+                    return RefreshIndicator(
+                      onRefresh: _refresh,
+                      child: ListView(
+                        physics: const AlwaysScrollableScrollPhysics(),
+                        children: [const SizedBox(height: 60)],
+                      ),
+                    );
+                  }
+
+                  return RefreshIndicator(
+                    onRefresh: _refresh,
+                    child: Padding(
+                      padding: EdgeInsets.symmetric(horizontal: sidePadding),
+                      child: ListView.separated(
+                        padding: const EdgeInsets.fromLTRB(12, 12, 12, 96),
+                        physics: const AlwaysScrollableScrollPhysics(),
+                        itemCount: filtered.length + 1,
+                        separatorBuilder: (_, i) => i == 0
+                            ? const SizedBox.shrink()
+                            : const Divider(height: 1),
+                        itemBuilder: (_, i) {
+                          if (i == 0) {
+                            return _TopBar(
+                              total: items.length,
+                              searchCtrl: _searchCtrl,
+                              filters: _filters,
+                              onOpenFilters: _openFiltersSheet,
+                              onClearFilters: () => setState(
+                                () => _filters = const ProductFilters(),
+                              ),
+                              onRefresh: _refresh,
+                              onUnfocus: _unfocus,
+                            );
+                          }
+
+                          final p = filtered[i - 1];
+                          final title = p.name?.isNotEmpty == true
+                              ? p.name!
+                              : (p.code ?? 'Produit');
+                          final subParts = <String>[];
+                          if ((p.description ?? '').isNotEmpty)
+                            subParts.add(p.description!);
+                          if (p.statuses != null && p.statuses!.isNotEmpty)
+                            subParts.add(p.statuses!);
+                          final sub = subParts.join('  •  ');
+                          final qty = stockMap[p.id] ?? 0;
+
+                          return ProductTile(
+                            title: title,
+                            subtitle: sub.isEmpty ? null : sub,
+                            priceCents: p.defaultPrice,
+                            stockQty: qty,
+                            onTap: () => _view(p),
+                            onMenuAction: (action) async {
+                              await Future.delayed(Duration.zero);
+                              if (!mounted) return;
+                              switch (action) {
+                                case 'view':
+                                  await _view(p);
+                                  break;
+                                case 'edit':
+                                  await _addOrEdit(existing: p);
+                                  break;
+                                case 'duplicate':
+                                  await _duplicate(p);
+                                  break;
+                                case 'adjust':
+                                  await _openAdjust(p);
+                                  break;
+                                case 'delete':
+                                  await _confirmDelete(p);
+                                  break;
+                                case 'share':
+                                  await _share(p);
+                                  break;
+                              }
+                            },
+                          );
+                        },
+                      ),
+                    ),
+                  );
+                },
+              ),
             );
           },
         );
@@ -464,63 +507,68 @@ class _ProductListPageState extends ConsumerState<ProductListPage> {
 }
 
 class _EmptySection extends StatelessWidget {
-  final VoidCallback onAdd;
+  final VoidCallback? onAdd;
   const _EmptySection({required this.onAdd});
+
+  const _EmptySection.placeholder() : onAdd = null;
 
   @override
   Widget build(BuildContext context) {
-    return Center(
-      child: Padding(
-        padding: const EdgeInsets.all(24),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            const Icon(Icons.inventory_2_outlined, size: 72),
-            const SizedBox(height: 12),
-            const Text(
-              'Aucun produit',
-              style: TextStyle(fontSize: 18, fontWeight: FontWeight.w600),
-            ),
-            const SizedBox(height: 6),
-            const Text(
-              'Ajoutez votre premier produit pour détailler vos achats.',
-            ),
-            const SizedBox(height: 16),
-            FilledButton.icon(
-              onPressed: onAdd,
-              icon: const Icon(Icons.add),
-              label: const Text('Nouveau produit'),
-            ),
-          ],
+    final content = Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        const Icon(Icons.inventory_2_outlined, size: 72),
+        const SizedBox(height: 12),
+        const Text(
+          'Aucun produit',
+          style: TextStyle(fontSize: 18, fontWeight: FontWeight.w600),
         ),
-      ),
+        const SizedBox(height: 6),
+        const Text('Ajoutez votre premier produit pour détailler vos achats.'),
+        const SizedBox(height: 16),
+        if (onAdd != null)
+          FilledButton.icon(
+            onPressed: onAdd,
+            icon: const Icon(Icons.add),
+            label: const Text('Nouveau produit'),
+          ),
+      ],
+    );
+
+    return Center(
+      child: Padding(padding: const EdgeInsets.all(24), child: content),
     );
   }
 }
 
-class _HeaderBar extends StatelessWidget {
+class _TopBar extends StatelessWidget {
   final int total;
   final TextEditingController searchCtrl;
   final ProductFilters filters;
   final VoidCallback onOpenFilters;
   final VoidCallback onClearFilters;
+  final Future<void> Function() onRefresh;
+  final VoidCallback onUnfocus;
 
-  const _HeaderBar({
+  const _TopBar({
     required this.total,
     required this.searchCtrl,
     required this.filters,
     required this.onOpenFilters,
     required this.onClearFilters,
+    required this.onRefresh,
+    required this.onUnfocus,
   });
 
   @override
   Widget build(BuildContext context) {
     final isFiltered = filters != const ProductFilters();
+    final theme = Theme.of(context);
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         const SizedBox(height: 8),
-        Text('Produits', style: Theme.of(context).textTheme.headlineSmall),
+        Text('Produits', style: theme.textTheme.headlineSmall),
         const SizedBox(height: 8),
         Wrap(
           spacing: 8,
@@ -530,12 +578,31 @@ class _HeaderBar extends StatelessWidget {
               avatar: const Icon(Icons.inventory_2_outlined, size: 18),
               label: Text('Total: $total'),
             ),
+            ActionChip(
+              avatar: const Icon(Icons.tune),
+              label: const Text('Filtres'),
+              onPressed: () {
+                onUnfocus();
+                onOpenFilters();
+              },
+            ),
             if (isFiltered)
               ActionChip(
                 avatar: const Icon(Icons.filter_alt_off),
                 label: const Text('Effacer les filtres'),
-                onPressed: onClearFilters,
+                onPressed: () {
+                  onUnfocus();
+                  onClearFilters();
+                },
               ),
+            ActionChip(
+              avatar: const Icon(Icons.refresh),
+              label: const Text('Rafraîchir'),
+              onPressed: () {
+                onUnfocus();
+                onRefresh();
+              },
+            ),
           ],
         ),
         const SizedBox(height: 12),
@@ -544,14 +611,27 @@ class _HeaderBar extends StatelessWidget {
             Expanded(
               child: TextField(
                 controller: searchCtrl,
+                autofocus: false,
+                onTapOutside: (_) => onUnfocus(),
                 decoration: InputDecoration(
-                  hintText: 'Rechercher par nom, code ou EAN',
+                  hintText: 'Rechercher par nom',
                   prefixIcon: const Icon(Icons.search),
+                  suffixIcon: searchCtrl.text.isNotEmpty
+                      ? IconButton(
+                          icon: const Icon(Icons.clear),
+                          onPressed: () {
+                            searchCtrl.clear();
+                            onUnfocus();
+                          },
+                        )
+                      : null,
                   border: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(12),
                   ),
                   isDense: true,
                 ),
+                textInputAction: TextInputAction.search,
+                onSubmitted: (_) => onUnfocus(),
               ),
             ),
           ],

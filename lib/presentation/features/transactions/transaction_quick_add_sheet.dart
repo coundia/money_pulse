@@ -1,16 +1,16 @@
-// UI orchestration for quick add transaction using Riverpod notifier and reusable widgets.
+// Orchestrates the quick add transaction form with keyboard-safe padding and focus flow.
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:money_pulse/domain/customer/entities/customer.dart';
 import 'package:uuid/uuid.dart';
 
-import '../../../domain/products/entities/product.dart';
-import '../../widgets/right_drawer.dart';
-import '../products/product_picker_panel.dart';
-import '../products/product_repo_provider.dart';
-import '../products/widgets/product_form_panel.dart';
+import 'package:money_pulse/domain/customer/entities/customer.dart';
+import 'package:money_pulse/domain/products/entities/product.dart';
+import 'package:money_pulse/presentation/widgets/right_drawer.dart';
+import 'package:money_pulse/presentation/features/products/product_picker_panel.dart';
+import 'package:money_pulse/presentation/features/products/product_repo_provider.dart';
+import 'package:money_pulse/presentation/features/products/widgets/product_form_panel.dart';
 import 'models/tx_item.dart';
 import 'quick_add/tx_quick_add_notifier.dart';
 import 'quick_add/tx_quick_utils.dart';
@@ -19,9 +19,7 @@ import 'widgets/bottom_bar.dart';
 import 'widgets/category_autocomplete.dart';
 import 'widgets/date_row.dart';
 import 'widgets/items_section.dart';
-// ⬇️ on N'UTILISE plus PartySection ici
-// import 'widgets/party_section.dart';
-import '../../features/customers/customer_form_panel.dart'; // pour _quickCreateCustomer
+import 'package:money_pulse/presentation/features/customers/customer_form_panel.dart';
 import 'widgets/customer_autocomplete.dart';
 import 'widgets/type_selector.dart';
 
@@ -48,7 +46,7 @@ class _TransactionQuickAddSheetState
   final _amountCtrl = TextEditingController();
   final _descCtrl = TextEditingController();
   final _categoryCtrl = TextEditingController();
-  final _customerCtrl = TextEditingController(); // ⬅️ nouveau
+  final _customerCtrl = TextEditingController();
 
   @override
   void initState() {
@@ -69,7 +67,7 @@ class _TransactionQuickAddSheetState
     _amountCtrl.dispose();
     _descCtrl.dispose();
     _categoryCtrl.dispose();
-    _customerCtrl.dispose(); // ⬅️ nouveau
+    _customerCtrl.dispose();
     super.dispose();
   }
 
@@ -229,9 +227,8 @@ class _TransactionQuickAddSheetState
   @override
   Widget build(BuildContext context) {
     final s = ref.watch(txQuickAddProvider);
-    final insets = MediaQuery.of(context).viewInsets.bottom;
+    final hasKeyboard = MediaQuery.of(context).viewInsets.bottom > 0.0;
 
-    // hydrate le champ client si on a déjà une sélection
     if (_customerCtrl.text.isEmpty && s.customerId != null) {
       final match = s.customers.where((c) => c.id == s.customerId).toList();
       if (match.isNotEmpty) _customerCtrl.text = match.first.fullName;
@@ -287,7 +284,6 @@ class _TransactionQuickAddSheetState
         s.kind == TxKind.credit ||
         s.kind == TxKind.debt;
 
-    // helpers locaux pour les labels
     String? companyLabel() {
       final sel = s.companies.where((co) => co.id == s.companyId).toList();
       return sel.isEmpty ? null : sel.first.name;
@@ -308,6 +304,7 @@ class _TransactionQuickAddSheetState
           ),
         },
         child: Scaffold(
+          resizeToAvoidBottomInset: true,
           appBar: AppBar(
             title: Text(title),
             leading: IconButton(
@@ -323,238 +320,216 @@ class _TransactionQuickAddSheetState
               ),
             ],
           ),
-          body: Padding(
-            padding: EdgeInsets.only(bottom: insets),
-            child: Form(
-              key: _formKey,
-              child: SingleChildScrollView(
-                padding: const EdgeInsets.all(16),
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Align(
-                      alignment: Alignment.centerLeft,
-                      child: Chip(
-                        label: Text(switch (s.kind) {
-                          TxKind.debit => 'Type : Dépense',
-                          TxKind.credit => 'Type : Revenu',
-                          TxKind.debt => 'Type : Dette',
-                          TxKind.remboursement => 'Type : Remboursement',
-                          TxKind.pret => 'Type : Prêt',
-                        }),
-                      ),
+          body: Form(
+            key: _formKey,
+            child: SingleChildScrollView(
+              padding: EdgeInsets.fromLTRB(16, 16, 16, hasKeyboard ? 8 : 88),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Align(
+                    alignment: Alignment.centerLeft,
+                    child: Chip(
+                      label: Text(switch (s.kind) {
+                        TxKind.debit => 'Type : Dépense',
+                        TxKind.credit => 'Type : Revenu',
+                        TxKind.debt => 'Type : Dette',
+                        TxKind.remboursement => 'Type : Remboursement',
+                        TxKind.pret => 'Type : Prêt',
+                      }),
                     ),
-                    const SizedBox(height: 12),
-                    AmountFieldQuickPad(
-                      controller: _amountCtrl,
-                      quickUnits: const [
-                        0,
-                        2000,
-                        5000,
-                        10000,
-                        20000,
-                        50000,
-                        100000,
-                        200000,
-                        300000,
-                        400000,
-                        500000,
-                        1000000,
-                      ],
-                      lockToItems:
-                          showItems &&
-                          s.items.isNotEmpty &&
-                          s.lockAmountToItems,
-                      onToggleLock: (!showItems || s.items.isEmpty)
-                          ? null
-                          : (v) {
+                  ),
+                  const SizedBox(height: 12),
+                  AmountFieldQuickPad(
+                    controller: _amountCtrl,
+                    quickUnits: const [
+                      0,
+                      2000,
+                      5000,
+                      10000,
+                      20000,
+                      50000,
+                      100000,
+                      200000,
+                      300000,
+                      400000,
+                      500000,
+                      1000000,
+                    ],
+                    lockToItems:
+                        showItems && s.items.isNotEmpty && s.lockAmountToItems,
+                    onToggleLock: (!showItems || s.items.isEmpty)
+                        ? null
+                        : (v) {
+                            ref
+                                .read(txQuickAddProvider.notifier)
+                                .setItems(s.items, lockToItems: v);
+                            if (v) {
+                              final total = s.items.fold<int>(
+                                0,
+                                (sum, it) =>
+                                    sum + (it.unitPriceCents * it.quantity),
+                              );
+                              _amountCtrl.text = (total / 100).toStringAsFixed(
+                                2,
+                              );
+                              setState(() {});
+                            }
+                          },
+                    onChanged: () => setState(() {}),
+                  ),
+                  const SizedBox(height: 12),
+                  if (showCategory)
+                    CategoryAutocomplete(
+                      controller: _categoryCtrl,
+                      initialSelected: s.selectedCategory,
+                      optionsBuilder: (q) => ref
+                          .read(txQuickAddProvider.notifier)
+                          .filterCategories(q),
+                      onSelected: (c) {
+                        ref
+                            .read(txQuickAddProvider.notifier)
+                            .setSelectedCategory(c);
+                        setState(() {});
+                        FocusScope.of(context).nextFocus();
+                      },
+                      onClear: () {
+                        ref
+                            .read(txQuickAddProvider.notifier)
+                            .setSelectedCategory(null);
+                        _categoryCtrl.clear();
+                        setState(() {});
+                      },
+                      labelText: 'Catégorie',
+                      emptyHint: categoryType == 'DEBIT'
+                          ? 'Aucune catégorie Débit'
+                          : 'Aucune catégorie Crédit',
+                      typeEntry: categoryType ?? 'CREDIT',
+                    ),
+                  const SizedBox(height: 12),
+                  Card(
+                    clipBehavior: Clip.antiAlias,
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 12,
+                        vertical: 12,
+                      ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: [
+                          Text(
+                            'Tiers',
+                            style: Theme.of(context).textTheme.titleMedium,
+                          ),
+                          const SizedBox(height: 8),
+                          DropdownButtonFormField<String?>(
+                            value: s.companyId,
+                            isDense: true,
+                            items: [
+                              const DropdownMenuItem<String?>(
+                                value: null,
+                                child: Text('— Aucune société —'),
+                              ),
+                              ...s.companies.map(
+                                (co) => DropdownMenuItem<String?>(
+                                  value: co.id,
+                                  child: Text(co.name),
+                                ),
+                              ),
+                            ],
+                            onChanged: (v) async {
                               ref
                                   .read(txQuickAddProvider.notifier)
-                                  .setItems(s.items, lockToItems: v);
-                              if (v) {
-                                final total = s.items.fold<int>(
-                                  0,
-                                  (sum, it) =>
-                                      sum + (it.unitPriceCents * it.quantity),
-                                );
-                                _amountCtrl.text = (total / 100)
-                                    .toStringAsFixed(2);
-                                setState(() {});
-                              }
+                                  .setCompany(v);
+                              setState(() {});
                             },
-                      onChanged: () => setState(() {}),
-                    ),
-                    const SizedBox(height: 12),
-
-                    // Catégorie
-                    if (showCategory)
-                      CategoryAutocomplete(
-                        controller: _categoryCtrl,
-                        initialSelected: s.selectedCategory,
-                        optionsBuilder: (q) => ref
-                            .read(txQuickAddProvider.notifier)
-                            .filterCategories(q),
-                        onSelected: (c) {
-                          ref
-                              .read(txQuickAddProvider.notifier)
-                              .setSelectedCategory(c);
-                          setState(() {});
-                        },
-                        onClear: () {
-                          ref
-                              .read(txQuickAddProvider.notifier)
-                              .setSelectedCategory(null);
-                          _categoryCtrl.clear();
-                          setState(() {});
-                        },
-                        labelText: 'Catégorie',
-                        emptyHint: categoryType == 'DEBIT'
-                            ? 'Aucune catégorie Débit'
-                            : 'Aucune catégorie Crédit',
-                        typeEntry: categoryType ?? 'CREDIT',
-                      ),
-
-                    const SizedBox(height: 12),
-
-                    // ——— Company + CustomerAutocomplete (remplace PartySection) ———
-                    Card(
-                      clipBehavior: Clip.antiAlias,
-                      child: Padding(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 12,
-                          vertical: 12,
-                        ),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.stretch,
-                          children: [
-                            Text(
-                              'Tiers',
-                              style: Theme.of(context).textTheme.titleMedium,
-                            ),
-                            const SizedBox(height: 8),
-
-                            // Company
-                            DropdownButtonFormField<String?>(
-                              value: s.companyId,
+                            decoration: const InputDecoration(
+                              border: OutlineInputBorder(),
+                              labelText: 'Société',
                               isDense: true,
-                              items: [
-                                const DropdownMenuItem<String?>(
-                                  value: null,
-                                  child: Text('— Aucune société —'),
-                                ),
-                                ...s.companies.map(
-                                  (co) => DropdownMenuItem<String?>(
-                                    value: co.id,
-                                    child: Text(
-                                      '${co.name} (${co.code})',
-                                      maxLines: 1,
-                                      overflow: TextOverflow.ellipsis,
-                                    ),
-                                  ),
-                                ),
-                              ],
-                              onChanged: (v) async {
-                                // met à jour la société ET rafraîchit la liste de clients côté notifier
-                                ref
-                                    .read(txQuickAddProvider.notifier)
-                                    .setCompany(v);
-                                // on garde la sélection côté champ si le même client existe après filtrage
-                                setState(() {});
-                              },
-                              decoration: const InputDecoration(
-                                border: OutlineInputBorder(),
-                                labelText: 'Société',
-                                isDense: true,
-                              ),
                             ),
-
-                            const SizedBox(height: 8),
-
-                            // Customer
-                            CustomerAutocomplete(
-                              controller: _customerCtrl,
-                              initialSelected: s.customers
-                                  .where((c) => c.id == s.customerId)
-                                  .toList()
-                                  .let((lst) => lst.isEmpty ? null : lst.first),
-                              companyLabel: companyLabel(),
-                              onCreate:
-                                  _quickCreateCustomer, // ouvre le panel + sélectionne
-                              optionsBuilder: (query) {
-                                final q = query.toLowerCase().trim();
-                                Iterable<Customer> base = s.customers;
-                                if ((s.companyId ?? '').isNotEmpty) {
-                                  base = base.where(
-                                    (c) => c.companyId == s.companyId,
-                                  );
-                                }
-                                if (q.isEmpty) return base.toList();
-                                return base.where((c) {
-                                  final code = (c.code ?? '').toLowerCase();
-                                  final full = c.fullName.toLowerCase();
-                                  final phone = (c.phone ?? '').toLowerCase();
-                                  final email = (c.email ?? '').toLowerCase();
-                                  return full.contains(q) ||
-                                      code.contains(q) ||
-                                      phone.contains(q) ||
-                                      email.contains(q);
-                                }).toList();
-                              },
-                              onSelected: (c) {
-                                ref
-                                    .read(txQuickAddProvider.notifier)
-                                    .setCustomer(c.id);
-                                // assure l’affichage même si la liste se met à jour
-                                _customerCtrl.text = c.fullName;
-                                setState(() {});
-                              },
-                              onClear: () {
-                                ref
-                                    .read(txQuickAddProvider.notifier)
-                                    .setCustomer(null);
-                                _customerCtrl.clear();
-                                setState(() {});
-                              },
-                              labelText: 'Client',
-                              emptyHint: 'Aucun client dans cette société',
-                            ),
-                          ],
-                        ),
+                          ),
+                          const SizedBox(height: 8),
+                          CustomerAutocomplete(
+                            controller: _customerCtrl,
+                            initialSelected: s.customers
+                                .where((c) => c.id == s.customerId)
+                                .toList()
+                                .let((lst) => lst.isEmpty ? null : lst.first),
+                            companyLabel: companyLabel(),
+                            onCreate: _quickCreateCustomer,
+                            optionsBuilder: (query) {
+                              final q = query.toLowerCase().trim();
+                              Iterable<Customer> base = s.customers;
+                              if ((s.companyId ?? '').isNotEmpty) {
+                                base = base.where(
+                                  (c) => c.companyId == s.companyId,
+                                );
+                              }
+                              if (q.isEmpty) return base.toList();
+                              return base.where((c) {
+                                final code = (c.code ?? '').toLowerCase();
+                                final full = c.fullName.toLowerCase();
+                                final phone = (c.phone ?? '').toLowerCase();
+                                final email = (c.email ?? '').toLowerCase();
+                                return full.contains(q) ||
+                                    code.contains(q) ||
+                                    phone.contains(q) ||
+                                    email.contains(q);
+                              }).toList();
+                            },
+                            onSelected: (c) {
+                              ref
+                                  .read(txQuickAddProvider.notifier)
+                                  .setCustomer(c.id);
+                              _customerCtrl.text = c.fullName;
+                              setState(() {});
+                              FocusScope.of(context).nextFocus();
+                            },
+                            onClear: () {
+                              ref
+                                  .read(txQuickAddProvider.notifier)
+                                  .setCustomer(null);
+                              _customerCtrl.clear();
+                              setState(() {});
+                            },
+                            labelText: 'Client',
+                            emptyHint: 'Aucun client dans cette société',
+                          ),
+                        ],
                       ),
                     ),
-
-                    if (showItems) ...[
-                      const SizedBox(height: 12),
-                      ItemsSection(
-                        items: s.items,
-                        totalCents: s.items.fold(
-                          0,
-                          (sum, it) => sum + (it.unitPriceCents * it.quantity),
-                        ),
-                        onPick: _openProductPicker,
-                        onClear: () {
-                          ref.read(txQuickAddProvider.notifier).clearItems();
-                          setState(() {});
-                        },
-                        onTapItem: _openProductPicker,
-                        onCreateProduct: _createProductAndAddLine,
-                      ),
-                    ],
+                  ),
+                  if (showItems) ...[
                     const SizedBox(height: 12),
-                    DateRow(when: s.when, onPick: _pickDate),
-                    const SizedBox(height: 12),
-                    TextFormField(
-                      controller: _descCtrl,
-                      decoration: const InputDecoration(
-                        border: OutlineInputBorder(),
-                        labelText: 'Description (optionnel)',
+                    ItemsSection(
+                      items: s.items,
+                      totalCents: s.items.fold(
+                        0,
+                        (sum, it) => sum + (it.unitPriceCents * it.quantity),
                       ),
-                      textInputAction: TextInputAction.done,
-                      onFieldSubmitted: (_) => _save(),
+                      onPick: _openProductPicker,
+                      onClear: () {
+                        ref.read(txQuickAddProvider.notifier).clearItems();
+                        setState(() {});
+                      },
+                      onTapItem: _openProductPicker,
+                      onCreateProduct: _createProductAndAddLine,
                     ),
-                    const SizedBox(height: 80),
                   ],
-                ),
+                  const SizedBox(height: 12),
+                  DateRow(when: s.when, onPick: _pickDate),
+                  const SizedBox(height: 12),
+                  TextFormField(
+                    controller: _descCtrl,
+                    decoration: const InputDecoration(
+                      border: OutlineInputBorder(),
+                      labelText: 'Description (optionnel)',
+                    ),
+                    textInputAction: TextInputAction.done,
+                    onFieldSubmitted: (_) => _save(),
+                  ),
+                ],
               ),
             ),
           ),
@@ -568,10 +543,6 @@ class _TransactionQuickAddSheetState
     );
   }
 
-  // ————————————————————————————
-  // Créer un client rapidement (drawer natif), sélectionner, et
-  // synchroniser la sélection/notifier + champ de saisie.
-  // ————————————————————————————
   Future<Customer?> _quickCreateCustomer() async {
     final created = await showRightDrawer<Customer?>(
       context,
@@ -581,27 +552,20 @@ class _TransactionQuickAddSheetState
     );
     if (created == null) return null;
 
-    // Si aucune société n'est sélectionnée et que le client en a une, lier la société.
     final currentCompanyId = ref.read(txQuickAddProvider).companyId;
     if ((currentCompanyId ?? '').isEmpty &&
         (created.companyId ?? '').isNotEmpty) {
       ref.read(txQuickAddProvider.notifier).setCompany(created.companyId);
     }
 
-    // Sélectionner le client pour la transaction en cours.
     ref.read(txQuickAddProvider.notifier).setCustomer(created.id);
-
-    // Afficher le nom dans le champ immédiatement
     _customerCtrl.text = created.fullName;
-
-    // Optionnel : si ton notifier expose une méthode d'upsert pour garder la
-    // liste en phase, appelle-la ici (sinon ce n’est pas bloquant pour l’UI) :
-    // ref.read(txQuickAddProvider.notifier).upsertCustomerAndSelect(created);
 
     if (!mounted) return created;
     ScaffoldMessenger.of(
       context,
     ).showSnackBar(const SnackBar(content: Text('Client créé et sélectionné')));
+    FocusScope.of(context).nextFocus();
     return created;
   }
 }
@@ -610,7 +574,6 @@ class SubmitFormIntent extends Intent {
   const SubmitFormIntent();
 }
 
-// petite extension utilitaire
 extension _LetExt<T> on T {
   R let<R>(R Function(T it) fn) => fn(this);
 }
