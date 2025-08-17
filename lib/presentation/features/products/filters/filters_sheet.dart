@@ -193,7 +193,7 @@ class _FiltersSheetState extends State<FiltersSheet> {
                           FilteringTextInputFormatter.digitsOnly,
                         ],
                         decoration: const InputDecoration(
-                          labelText: 'Prix max (€)',
+                          labelText: 'Prix max ',
                           border: OutlineInputBorder(),
                           isDense: true,
                         ),
