@@ -1,4 +1,4 @@
-// Compact CTA card to open transaction search quickly.
+// Compact CTA card to open transaction search quickly; French label and neutral hint color.
 
 import 'package:flutter/material.dart';
 
@@ -9,7 +9,7 @@ class TxnSearchCta extends StatelessWidget {
   const TxnSearchCta({
     super.key,
     required this.onTap,
-    this.text = 'Rechercher une transaction',
+    this.text = 'Rechercher des transactions',
   });
 
   @override

@@ -1,4 +1,4 @@
-// Bottom sheet to configure transaction search filters, with Enter-to-apply and amount quick pad.
+// Bottom sheet to configure transaction search filters; proactive unfocus before pickers; Enter-to-apply; amount quick pad.
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -167,6 +167,7 @@ Future<TxnFilterState?> openTxnFilterSheet(
                                 prefixIcon: Icon(Icons.event),
                               ),
                               onTap: () async {
+                                FocusManager.instance.primaryFocus?.unfocus();
                                 final picked = await showDatePicker(
                                   context: ctx,
                                   initialDate: from ?? DateTime.now(),
@@ -195,6 +196,7 @@ Future<TxnFilterState?> openTxnFilterSheet(
                                 prefixIcon: Icon(Icons.event_available),
                               ),
                               onTap: () async {
+                                FocusManager.instance.primaryFocus?.unfocus();
                                 final picked = await showDatePicker(
                                   context: ctx,
                                   initialDate: to ?? DateTime.now(),

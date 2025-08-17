@@ -1,4 +1,4 @@
-// Search delegate with compact UI: segmented type filter, single overflow menu, range chip, net summary, and no auto-focus on search field.
+// Search delegate with compact, French UI; rounded filled search field; no auto-focus; segmented type filter; overflow menu; range chip; net summary.
 
 import 'package:flutter/material.dart';
 import 'package:money_pulse/domain/transactions/entities/transaction_entry.dart';
@@ -16,6 +16,45 @@ class TxnSearchDelegate extends SearchDelegate<TransactionEntry?> {
 
   TxnSearchDelegate(this.items)
     : _filter = ValueNotifier<TxnFilterState>(_todayFilter());
+
+  // ---- French placeholder & compact look for the search input
+  @override
+  String get searchFieldLabel => 'Rechercher des transactions';
+
+  @override
+  TextStyle? get searchFieldStyle => const TextStyle(fontSize: 16);
+
+  @override
+  ThemeData appBarTheme(BuildContext context) {
+    final theme = Theme.of(context);
+    final hintColor = theme.colorScheme.onSurfaceVariant;
+    return theme.copyWith(
+      inputDecorationTheme: InputDecorationTheme(
+        isDense: true,
+        filled: true,
+        fillColor: theme.colorScheme.surfaceVariant.withOpacity(.6),
+        hintStyle: TextStyle(color: hintColor),
+        contentPadding: const EdgeInsets.symmetric(
+          horizontal: 12,
+          vertical: 12,
+        ),
+        border: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(12),
+          borderSide: BorderSide(color: theme.colorScheme.outlineVariant),
+        ),
+        enabledBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(12),
+          borderSide: BorderSide(color: theme.colorScheme.outlineVariant),
+        ),
+        focusedBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(12),
+          borderSide: BorderSide(color: theme.colorScheme.primary),
+        ),
+      ),
+      textTheme: theme.textTheme,
+      appBarTheme: theme.appBarTheme,
+    );
+  }
 
   static DateTime _strip(DateTime d) => DateTime(d.year, d.month, d.day);
 
@@ -244,14 +283,17 @@ class TxnSearchDelegate extends SearchDelegate<TransactionEntry?> {
                             ButtonSegment(
                               value: TxnTypeFilter.all,
                               label: Text('Tous'),
+                              icon: Icon(Icons.all_inclusive),
                             ),
                             ButtonSegment(
                               value: TxnTypeFilter.expense,
                               label: Text('Dépenses'),
+                              icon: Icon(Icons.south),
                             ),
                             ButtonSegment(
                               value: TxnTypeFilter.income,
                               label: Text('Revenus'),
+                              icon: Icon(Icons.north),
                             ),
                           ],
                           selected: {
@@ -262,11 +304,12 @@ class TxnSearchDelegate extends SearchDelegate<TransactionEntry?> {
                                 : f.type,
                           },
                           onSelectionChanged: (set) {
+                            FocusManager.instance.primaryFocus?.unfocus();
                             final sel = set.first;
                             _filter.value = f.copyWith(type: sel);
                           },
                           showSelectedIcon: false,
-                          style: ButtonStyle(
+                          style: const ButtonStyle(
                             visualDensity: VisualDensity.compact,
                           ),
                         ),
@@ -276,6 +319,7 @@ class TxnSearchDelegate extends SearchDelegate<TransactionEntry?> {
                         icon: const Icon(Icons.tune, size: 18),
                         label: const Text('Filtres…'),
                         onPressed: () async {
+                          FocusManager.instance.primaryFocus?.unfocus();
                           final updated = await openTxnFilterSheet(
                             context,
                             _filter.value,
@@ -295,6 +339,7 @@ class TxnSearchDelegate extends SearchDelegate<TransactionEntry?> {
                         avatar: const Icon(Icons.calendar_month, size: 18),
                         label: Text(_rangeLabel(f)),
                         onPressed: () async {
+                          FocusManager.instance.primaryFocus?.unfocus();
                           final picked = await showDatePicker(
                             context: context,
                             initialDate: f.from ?? DateTime.now(),
@@ -316,6 +361,7 @@ class TxnSearchDelegate extends SearchDelegate<TransactionEntry?> {
                         }),
                         selected: true,
                         onSelected: (_) {
+                          FocusManager.instance.primaryFocus?.unfocus();
                           final order = {
                             TxnSortBy.dateDesc: TxnSortBy.dateAsc,
                             TxnSortBy.dateAsc: TxnSortBy.amountDesc,
@@ -428,6 +474,7 @@ class TxnSearchDelegate extends SearchDelegate<TransactionEntry?> {
       icon: const Icon(Icons.more_vert),
       onSelected: (v) async {
         final f = _filter.value;
+        FocusManager.instance.primaryFocus?.unfocus();
         if (v == 1) {
           final updated = await openTxnFilterSheet(context, f);
           if (updated != null) _filter.value = updated;
