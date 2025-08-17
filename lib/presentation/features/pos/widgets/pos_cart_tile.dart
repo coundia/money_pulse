@@ -1,12 +1,15 @@
-// POS product grid tile with price, stock badge and context menu for quick actions.
+// POS product tile: minimalist UI with tap flash, added checkmark overlay, optional stock badge (only if > 0), and context menu.
+import 'package:characters/characters.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:money_pulse/presentation/shared/formatters.dart';
 
-class PosProductTile extends StatelessWidget {
+class PosProductTile extends StatefulWidget {
   final String title;
   final String? subtitle;
   final int priceCents;
   final int? stockQty;
+  final bool isAdded;
   final VoidCallback? onTap;
   final VoidCallback? onLongPress;
   final Future<void> Function(String action)? onMenuAction;
@@ -17,21 +20,30 @@ class PosProductTile extends StatelessWidget {
     this.subtitle,
     required this.priceCents,
     this.stockQty,
+    this.isAdded = false,
     this.onTap,
     this.onLongPress,
     this.onMenuAction,
   });
 
-  String get _price => Formatters.amountFromCents(priceCents);
+  @override
+  State<PosProductTile> createState() => _PosProductTileState();
+}
+
+class _PosProductTileState extends State<PosProductTile> {
+  bool _flash = false;
+  bool _hover = false;
+
+  String get _price => Formatters.amountFromCents(widget.priceCents);
 
   Color _stockBg(int qty, ColorScheme cs) =>
-      qty > 0 ? cs.primaryContainer : cs.errorContainer.withOpacity(.35);
+      qty > 0 ? cs.primaryContainer : cs.surface;
 
   Color _stockFg(int qty, ColorScheme cs) =>
-      qty > 0 ? cs.onPrimaryContainer : cs.onErrorContainer;
+      qty > 0 ? cs.onPrimaryContainer : cs.onSurfaceVariant;
 
-  Future<void> _showMenu(BuildContext context, Offset globalPos) async {
-    if (onMenuAction == null) return;
+  Future<void> _showMenuAtOffset(BuildContext context, Offset globalPos) async {
+    if (widget.onMenuAction == null) return;
     final overlay = Overlay.of(context).context.findRenderObject() as RenderBox;
     final result = await showMenu<String>(
       context: context,
@@ -67,93 +79,191 @@ class PosProductTile extends StatelessWidget {
       ],
     );
     if (result != null) {
-      await onMenuAction!(result);
+      await widget.onMenuAction!(result);
     }
+  }
+
+  void _flashOnce() {
+    setState(() => _flash = true);
+    Future.delayed(const Duration(milliseconds: 220), () {
+      if (mounted) setState(() => _flash = false);
+    });
+  }
+
+  void _handleTap() {
+    _flashOnce();
+    widget.onTap?.call();
   }
 
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
-    final qty = stockQty ?? 0;
+    final qty = widget.stockQty ?? 0;
 
-    final stockBadge = Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-      decoration: BoxDecoration(
-        color: _stockBg(qty, cs),
-        borderRadius: BorderRadius.circular(8),
-      ),
-      child: Text(
-        qty > 0 ? 'Stock: $qty' : 'Rupture',
-        style: TextStyle(
-          color: _stockFg(qty, cs),
-          fontWeight: FontWeight.w700,
-          fontSize: 12,
+    final bgBase = cs.surface;
+    final flashBg = cs.primaryContainer.withOpacity(.22);
+    final hoverBg = cs.surfaceVariant.withOpacity(.14);
+    final addedBg = cs.primaryContainer.withOpacity(.28);
+
+    final bgColor = _flash
+        ? flashBg
+        : widget.isAdded
+        ? addedBg
+        : _hover
+        ? hoverBg
+        : bgBase;
+
+    final borderColor = widget.isAdded
+        ? cs.primary.withOpacity(.48)
+        : cs.outlineVariant.withOpacity(.5);
+
+    final initial =
+        (widget.title.isNotEmpty ? widget.title.characters.first : '?')
+            .toUpperCase();
+
+    final stockBadge = qty > 0
+        ? Container(
+            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+            decoration: BoxDecoration(
+              color: _stockBg(qty, cs),
+              borderRadius: BorderRadius.circular(999),
+            ),
+            child: Text(
+              'Stock: $qty',
+              style: TextStyle(
+                color: _stockFg(qty, cs),
+                fontWeight: FontWeight.w700,
+                fontSize: 11,
+              ),
+            ),
+          )
+        : const SizedBox.shrink();
+
+    return FocusableActionDetector(
+      mouseCursor: SystemMouseCursors.click,
+      onShowHoverHighlight: (v) => setState(() => _hover = v),
+      shortcuts: {
+        LogicalKeySet(LogicalKeyboardKey.enter): const ActivateIntent(),
+        LogicalKeySet(LogicalKeyboardKey.numpadEnter): const ActivateIntent(),
+        LogicalKeySet(LogicalKeyboardKey.space): const ActivateIntent(),
+      },
+      actions: {
+        ActivateIntent: CallbackAction<ActivateIntent>(
+          onInvoke: (_) {
+            _handleTap();
+            return null;
+          },
         ),
-      ),
-    );
-
-    return GestureDetector(
-      behavior: HitTestBehavior.opaque,
-      onTap: onTap,
-      onLongPress: onLongPress,
-      onSecondaryTapDown: (d) => _showMenu(context, d.globalPosition),
-      onLongPressStart: (d) => _showMenu(context, d.globalPosition),
-      child: Card(
-        clipBehavior: Clip.antiAlias,
-        elevation: 1,
-        child: Padding(
-          padding: const EdgeInsets.all(10),
-          child: Column(
-            children: [
-              Row(
-                children: [
-                  CircleAvatar(
-                    child: Text(
-                      (title.isNotEmpty ? title.characters.first : '?')
-                          .toUpperCase(),
+      },
+      child: GestureDetector(
+        onSecondaryTapDown: (d) => _showMenuAtOffset(context, d.globalPosition),
+        onLongPressStart: (d) => _showMenuAtOffset(context, d.globalPosition),
+        onLongPress: widget.onLongPress,
+        child: Stack(
+          children: [
+            Card(
+              margin: EdgeInsets.zero,
+              elevation: 1,
+              clipBehavior: Clip.antiAlias,
+              child: Material(
+                type: MaterialType.transparency,
+                child: InkWell(
+                  onTap: _handleTap,
+                  child: AnimatedContainer(
+                    duration: const Duration(milliseconds: 160),
+                    curve: Curves.easeOut,
+                    decoration: BoxDecoration(
+                      color: bgColor,
+                      border: Border.all(color: borderColor),
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    padding: const EdgeInsets.all(10),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          children: [
+                            CircleAvatar(radius: 18, child: Text(initial)),
+                            const SizedBox(width: 8),
+                            Expanded(
+                              child: Text(
+                                _price,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: const TextStyle(
+                                  fontWeight: FontWeight.w800,
+                                  fontSize: 16,
+                                ),
+                              ),
+                            ),
+                            IconButton(
+                              tooltip: 'Actions',
+                              icon: const Icon(Icons.more_vert),
+                              onPressed: () {
+                                final box =
+                                    context.findRenderObject() as RenderBox?;
+                                if (box == null) return;
+                                final pos = box.localToGlobal(
+                                  Offset(box.size.width - 8, 36),
+                                );
+                                _showMenuAtOffset(context, pos);
+                              },
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 8),
+                        Text(
+                          widget.title,
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                          style: Theme.of(context).textTheme.titleMedium,
+                        ),
+                        if (widget.subtitle != null &&
+                            widget.subtitle!.isNotEmpty) ...[
+                          const SizedBox(height: 2),
+                          Text(
+                            widget.subtitle!,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: Theme.of(context).textTheme.bodySmall,
+                          ),
+                        ],
+                        const Spacer(),
+                        if (qty > 0) stockBadge,
+                      ],
                     ),
                   ),
-                  const SizedBox(width: 8),
-
-                  Text(
-                    _price,
-                    style: const TextStyle(fontWeight: FontWeight.w800),
+                ),
+              ),
+            ),
+            Positioned(
+              right: 8,
+              top: 8,
+              child: AnimatedScale(
+                duration: const Duration(milliseconds: 160),
+                scale: widget.isAdded ? 1.0 : 0.0,
+                child: Container(
+                  decoration: BoxDecoration(
+                    color: cs.primary,
+                    shape: BoxShape.circle,
+                    boxShadow: [
+                      BoxShadow(
+                        color: cs.primary.withOpacity(.35),
+                        blurRadius: 8,
+                        offset: const Offset(0, 2),
+                      ),
+                    ],
                   ),
-                ],
-              ),
-              const SizedBox(height: 8),
-              Align(
-                alignment: Alignment.centerLeft,
-                child: Text(
-                  title,
-                  maxLines: 2,
-                  overflow: TextOverflow.ellipsis,
-                  style: Theme.of(context).textTheme.titleMedium,
-                ),
-              ),
-              if (subtitle != null && subtitle!.isNotEmpty) ...[
-                const SizedBox(height: 4),
-                Align(
-                  alignment: Alignment.centerLeft,
-                  child: Text(
-                    subtitle!,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: Theme.of(context).textTheme.bodySmall,
+                  padding: const EdgeInsets.all(6),
+                  child: Icon(
+                    Icons.check_rounded,
+                    size: 16,
+                    color: cs.onPrimary,
                   ),
                 ),
-              ],
-              const Spacer(),
-              SizedBox(
-                width: double.infinity,
-                child: FilledButton.icon(
-                  onPressed: onTap,
-                  icon: const Icon(Icons.add_shopping_cart),
-                  label: const Text('Ajouter'),
-                ),
               ),
-            ],
-          ),
+            ),
+          ],
         ),
       ),
     );
