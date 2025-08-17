@@ -114,8 +114,7 @@ class PosProductTile extends StatelessWidget {
                     ),
                   ),
                   const SizedBox(width: 8),
-                  Expanded(child: stockBadge),
-                  const SizedBox(width: 8),
+
                   Text(
                     _price,
                     style: const TextStyle(fontWeight: FontWeight.w800),
