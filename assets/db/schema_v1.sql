@@ -1,6 +1,6 @@
 PRAGMA foreign_keys = OFF;
 
-CREATE TABLE account (
+CREATE TABLE IF NOT EXISTS  account (
   id TEXT PRIMARY KEY,
   remoteId TEXT,
   balance INTEGER DEFAULT 0,
@@ -23,7 +23,7 @@ CREATE INDEX idx_account_code ON account(code);
 CREATE INDEX idx_account_dirty ON account(isDirty);
 CREATE INDEX idx_account_deleted ON account(deletedAt);
 
-CREATE TABLE category (
+CREATE TABLE IF NOT EXISTS  category (
   id TEXT PRIMARY KEY,
   remoteId TEXT,
   code TEXT,
@@ -41,7 +41,7 @@ CREATE INDEX idx_category_code ON category(code);
 CREATE INDEX idx_category_dirty ON category(isDirty);
 CREATE INDEX idx_category_deleted ON category(deletedAt);
 
-CREATE TABLE transaction_entry (
+CREATE TABLE IF NOT EXISTS  transaction_entry (
   id TEXT PRIMARY KEY,
   remoteId TEXT,
   code TEXT,
@@ -73,7 +73,7 @@ CREATE INDEX IF NOT EXISTS idx_txn_customer ON transaction_entry(customerId);
 CREATE INDEX idx_txn_dirty ON transaction_entry(isDirty);
 CREATE INDEX idx_txn_deleted ON transaction_entry(deletedAt);
  
-CREATE TABLE change_log (
+CREATE TABLE  IF NOT EXISTS change_log (
   id TEXT PRIMARY KEY,
   entityTable TEXT NOT NULL,
   entityId TEXT NOT NULL,
@@ -92,7 +92,7 @@ CREATE INDEX idx_changelog_status ON change_log(status);
 CREATE INDEX idx_changelog_entity ON change_log(entityTable, entityId);
  
 
-CREATE TABLE sync_state (
+CREATE TABLE IF NOT EXISTS  sync_state (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   entityTable TEXT NOT NULL UNIQUE,
   lastSyncAt TEXT,
@@ -321,3 +321,23 @@ CREATE TABLE IF NOT EXISTS debt (
 
 CREATE INDEX IF NOT EXISTS uq_debt_code_active ON debt(code) WHERE deletedAt IS NULL;
  
+
+ CREATE TABLE IF NOT EXISTS saving_goal (
+  id TEXT PRIMARY KEY,
+  remoteId TEXT,
+  name TEXT NOT NULL,
+  description TEXT,
+  targetCents INTEGER NOT NULL DEFAULT 0,
+  savedCents INTEGER NOT NULL DEFAULT 0,
+  dueDate TEXT,
+  accountId TEXT,
+  companyId TEXT,
+  priority INTEGER NOT NULL DEFAULT 3,
+  isArchived INTEGER NOT NULL DEFAULT 0,
+  createdAt TEXT NOT NULL DEFAULT (datetime('now')),
+  updatedAt TEXT NOT NULL DEFAULT (datetime('now')),
+  deletedAt TEXT,
+  syncAt TEXT,
+  version INTEGER NOT NULL DEFAULT 0,
+  isDirty INTEGER NOT NULL DEFAULT 1
+);

@@ -1,4 +1,4 @@
-// POS page: orchestrates grid, search, filters, actions, and product drawers.
+// POS page orchestrating grid, search, filters, actions, and product drawers with added mark and quantity on tiles.
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -74,14 +74,17 @@ class _PosPageState extends ConsumerState<PosPage> {
     base.sort((a, b) => b.updatedAt.compareTo(a.updatedAt));
     if (!_hasFilters) return base;
     return base.where((p) {
-      if (_filters.categoryId != null && p.categoryId != _filters.categoryId)
+      if (_filters.categoryId != null && p.categoryId != _filters.categoryId) {
         return false;
+      }
       if (_filters.minPriceCents != null &&
-          p.defaultPrice < _filters.minPriceCents!)
+          p.defaultPrice < _filters.minPriceCents!) {
         return false;
+      }
       if (_filters.maxPriceCents != null &&
-          p.defaultPrice > _filters.maxPriceCents!)
+          p.defaultPrice > _filters.maxPriceCents!) {
         return false;
+      }
       return true;
     }).toList();
   }
@@ -399,6 +402,7 @@ class _PosPageState extends ConsumerState<PosPage> {
                         stockByProduct: stockMap,
                         inStockOnly: _filters.inStockOnly,
                       );
+
                       final infoBar = Padding(
                         padding: const EdgeInsets.fromLTRB(12, 4, 12, 4),
                         child: Row(
@@ -421,6 +425,8 @@ class _PosPageState extends ConsumerState<PosPage> {
                           ],
                         ),
                       );
+
+                      final cartSnap = _cart.snapshot();
 
                       return Column(
                         children: [
@@ -451,12 +457,15 @@ class _PosPageState extends ConsumerState<PosPage> {
                                     ? null
                                     : p.description!.trim();
                                 final stockQty = stockMap[p.id] ?? 0;
+                                final addedQty = cartSnap[p.id]?.quantity ?? 0;
 
                                 return PosProductTile(
                                   title: title,
                                   subtitle: subtitle,
                                   priceCents: p.defaultPrice,
                                   stockQty: stockQty,
+                                  isAdded: addedQty > 0,
+                                  addedQty: addedQty,
                                   onTap: () {
                                     _cart.addProduct(p, qty: 1);
                                     setState(() {});

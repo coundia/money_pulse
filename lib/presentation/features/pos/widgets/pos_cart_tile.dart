@@ -1,4 +1,4 @@
-// POS product tile: minimalist UI with tap flash, added checkmark overlay, optional stock badge (only if > 0), and context menu.
+// Minimal POS product tile with tap flash, top-left added check, bottom-left quantity badge, bottom-right decrement button, and safe menu placement.
 import 'package:characters/characters.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -10,8 +10,10 @@ class PosProductTile extends StatefulWidget {
   final int priceCents;
   final int? stockQty;
   final bool isAdded;
+  final int addedQty;
   final VoidCallback? onTap;
   final VoidCallback? onLongPress;
+  final VoidCallback? onDecrement;
   final Future<void> Function(String action)? onMenuAction;
 
   const PosProductTile({
@@ -21,8 +23,10 @@ class PosProductTile extends StatefulWidget {
     required this.priceCents,
     this.stockQty,
     this.isAdded = false,
+    this.addedQty = 0,
     this.onTap,
     this.onLongPress,
+    this.onDecrement,
     this.onMenuAction,
   });
 
@@ -139,13 +143,16 @@ class _PosProductTileState extends State<PosProductTile> {
           )
         : const SizedBox.shrink();
 
+    final needsBottomControls =
+        (widget.addedQty > 0) || (widget.onDecrement != null);
+
     return FocusableActionDetector(
       mouseCursor: SystemMouseCursors.click,
       onShowHoverHighlight: (v) => setState(() => _hover = v),
       shortcuts: {
-        LogicalKeySet(LogicalKeyboardKey.enter): const ActivateIntent(),
-        LogicalKeySet(LogicalKeyboardKey.numpadEnter): const ActivateIntent(),
-        LogicalKeySet(LogicalKeyboardKey.space): const ActivateIntent(),
+        LogicalKeySet(LogicalKeyboardKey.enter): ActivateIntent(),
+        LogicalKeySet(LogicalKeyboardKey.numpadEnter): ActivateIntent(),
+        LogicalKeySet(LogicalKeyboardKey.space): ActivateIntent(),
       },
       actions: {
         ActivateIntent: CallbackAction<ActivateIntent>(
@@ -160,6 +167,7 @@ class _PosProductTileState extends State<PosProductTile> {
         onLongPressStart: (d) => _showMenuAtOffset(context, d.globalPosition),
         onLongPress: widget.onLongPress,
         child: Stack(
+          clipBehavior: Clip.none,
           children: [
             Card(
               margin: EdgeInsets.zero,
@@ -177,7 +185,12 @@ class _PosProductTileState extends State<PosProductTile> {
                       border: Border.all(color: borderColor),
                       borderRadius: BorderRadius.circular(12),
                     ),
-                    padding: const EdgeInsets.all(10),
+                    padding: EdgeInsets.fromLTRB(
+                      10,
+                      10,
+                      10,
+                      needsBottomControls ? 48 : 10,
+                    ),
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
@@ -236,8 +249,9 @@ class _PosProductTileState extends State<PosProductTile> {
                 ),
               ),
             ),
+
             Positioned(
-              right: 8,
+              left: 8,
               top: 8,
               child: AnimatedScale(
                 duration: const Duration(milliseconds: 160),
@@ -263,6 +277,61 @@ class _PosProductTileState extends State<PosProductTile> {
                 ),
               ),
             ),
+
+            if (widget.addedQty > 0)
+              Positioned(
+                left: 10,
+                bottom: 10,
+                child: Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 8,
+                    vertical: 3,
+                  ),
+                  decoration: BoxDecoration(
+                    color: cs.surface,
+                    borderRadius: BorderRadius.circular(999),
+                    border: Border.all(color: cs.primary, width: 1),
+                    boxShadow: [
+                      BoxShadow(
+                        color: cs.primary.withOpacity(.12),
+                        blurRadius: 6,
+                        offset: const Offset(0, 2),
+                      ),
+                    ],
+                  ),
+                  child: Text(
+                    '×${widget.addedQty}',
+                    style: TextStyle(
+                      fontSize: 11,
+                      fontWeight: FontWeight.w800,
+                      color: cs.primary,
+                    ),
+                  ),
+                ),
+              ),
+
+            if (widget.onDecrement != null)
+              Positioned(
+                right: 8,
+                bottom: 6,
+                child: IconButton.filledTonal(
+                  onPressed: widget.onDecrement,
+                  tooltip: 'Retirer 1',
+                  icon: const Icon(Icons.remove),
+                  constraints: const BoxConstraints.tightFor(
+                    width: 36,
+                    height: 36,
+                  ),
+                  style: ButtonStyle(
+                    padding: const WidgetStatePropertyAll(EdgeInsets.zero),
+                    shape: WidgetStatePropertyAll(
+                      RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(18),
+                      ),
+                    ),
+                  ),
+                ),
+              ),
           ],
         ),
       ),

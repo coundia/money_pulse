@@ -10,6 +10,7 @@ import 'package:money_pulse/presentation/features/categories/category_list_page.
 import 'package:money_pulse/presentation/features/accounts/account_page.dart';
 import 'package:money_pulse/presentation/features/companies/company_list_page.dart';
 import 'package:money_pulse/presentation/features/customers/customer_list_page.dart';
+import 'package:money_pulse/presentation/features/goals/saving_goal_list_page.dart';
 import 'package:money_pulse/presentation/features/stock/stock_level_list_page.dart';
 import 'package:money_pulse/presentation/features/stock_movement/stock_movement_list_page.dart';
 import 'package:money_pulse/presentation/features/sync/change_log_list_page.dart';
@@ -204,6 +205,16 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
                   MaterialPageRoute(
                     builder: (_) => const StockMovementListPage(),
                   ),
+                ),
+              ),
+
+              _divider(),
+              _tile(
+                icon: Icons.swap_horiz_rounded,
+                title: 'Budget',
+                subtitle: 'Gerer le budget',
+                onTap: () => Navigator.of(context).push(
+                  MaterialPageRoute(builder: (_) => const SavingGoalListPage()),
                 ),
               ),
             ],
