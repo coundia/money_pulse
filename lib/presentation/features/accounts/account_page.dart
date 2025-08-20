@@ -53,7 +53,7 @@ class _AccountListPageState extends ConsumerState<AccountListPage> {
     return code == null ? a : '$a $code';
   }
 
-  String _fmtDate(DateTime? d) => d == null ? '—' : Formatters.dateFull(d);
+  String _fmtDate(DateTime? d) => d == null ? '—' : Formatters.dateShort(d);
 
   Future<void> _addOrEdit({Account? existing}) async {
     final res = await showRightDrawer<AccountFormResult>(
@@ -334,7 +334,7 @@ class _AccountListPageState extends ConsumerState<AccountListPage> {
                   child: AccountTile(
                     account: a,
                     balanceText: _fmtMoney(a.balance, a.currency),
-                    updatedAtText: 'Mis à jour ${_fmtDate(a.updatedAt)}',
+                    updatedAtText: '${_fmtDate(a.updatedAt)}',
                     onView: () => _view(a),
                   ),
                 );

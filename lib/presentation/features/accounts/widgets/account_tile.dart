@@ -101,6 +101,11 @@ class AccountTile extends StatelessWidget {
       return cur.isEmpty ? n : '$n $cur';
     }
 
+    String _fmtOnly(int cents) {
+      final n = Formatters.amountFromCents(cents);
+      return n;
+    }
+
     final bool hasRemaining = remainingCents != null;
     final bool isOver = (remainingCents ?? 0) < 0;
     final int absRemain = (remainingCents ?? 0).abs();
@@ -180,7 +185,7 @@ class AccountTile extends StatelessWidget {
             if (hasSavingsGoal) ...[
               const SizedBox(height: 6),
               Text(
-                '${_fmt(goal!)}',
+                '$remainingLabel: ${_fmtOnly(absRemain)}',
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
                 style: Theme.of(context).textTheme.labelSmall,
@@ -223,7 +228,7 @@ class AccountTile extends StatelessWidget {
                     Text(
                       isOver
                           ? 'Dépassé de ${_fmt(absRemain)}'
-                          : '$remainingLabel: ${_fmt(absRemain)}',
+                          : '${_fmt(goal!)}',
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                       style: Theme.of(context).textTheme.labelMedium?.copyWith(
