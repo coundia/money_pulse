@@ -93,4 +93,6 @@ class AppDatabase {
     }
     await batch.commit(noResult: true);
   }
+
+  Future<void> upgradeSchemas() async {}
 }

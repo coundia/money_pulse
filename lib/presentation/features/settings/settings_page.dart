@@ -1,11 +1,10 @@
-// Settings page with improved UI sections and right-drawer confirmations, plus a "Close app" action.
+/// Settings page with a schema upgrade action using right-drawer confirmation.
+
 import 'dart:io' show Platform;
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:money_pulse/presentation/app/restart_app.dart';
 import 'package:money_pulse/infrastructure/db/app_database.dart';
-
 import 'package:money_pulse/presentation/features/categories/category_list_page.dart';
 import 'package:money_pulse/presentation/features/accounts/account_page.dart';
 import 'package:money_pulse/presentation/features/companies/company_list_page.dart';
@@ -15,10 +14,8 @@ import 'package:money_pulse/presentation/features/stock/stock_level_list_page.da
 import 'package:money_pulse/presentation/features/stock_movement/stock_movement_list_page.dart';
 import 'package:money_pulse/presentation/features/sync/change_log_list_page.dart';
 import 'package:money_pulse/presentation/features/sync/sync_state_list_page.dart';
-
 import 'package:money_pulse/presentation/shared/formatters.dart';
 import 'package:money_pulse/presentation/widgets/right_drawer.dart';
-
 import '../../app/app_exit/app_exit.dart';
 import '../products/product_list_page.dart';
 import 'widgets/confirm_panel.dart';
@@ -54,14 +51,40 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
     return ok == true;
   }
 
+  Future<void> _upgradeDbSchema() async {
+    if (!mounted) return;
+    final messenger = ScaffoldMessenger.maybeOf(context);
+    final ok = await _confirm(
+      icon: Icons.system_update_alt_rounded,
+      title: 'Mettre à niveau le schéma ?',
+      message:
+          'Créer les tables et index manquants sans supprimer les données.',
+      confirmLabel: 'Mettre à niveau',
+      cancelLabel: 'Annuler',
+    );
+    if (!ok || !mounted) return;
+    setState(() => _busy = true);
+    try {
+      await AppDatabase.I.upgradeSchemas();
+      messenger?.showSnackBar(
+        const SnackBar(content: Text('Schéma mis à niveau avec succès.')),
+      );
+    } catch (e) {
+      messenger?.showSnackBar(
+        SnackBar(content: Text('Échec de la mise à niveau : $e')),
+      );
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
   Future<void> _resetDb() async {
     if (!mounted) return;
     final messenger = ScaffoldMessenger.maybeOf(context);
     final ok = await _confirm(
       icon: Icons.delete_forever_rounded,
       title: 'Réinitialiser la base de données ?',
-      message:
-          'Toutes les données locales seront supprimées puis recréées. Cette action est irréversible.',
+      message: 'Toutes les données locales seront supprimées puis recréées.',
       confirmLabel: 'Réinitialiser',
       cancelLabel: 'Annuler',
     );
@@ -70,12 +93,10 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
     try {
       await AppDatabase.I.recreate(version: 1);
     } catch (e) {
-      if (mounted) {
-        messenger?.showSnackBar(
-          SnackBar(content: Text('Échec de la réinitialisation : $e')),
-        );
-        setState(() => _busy = false);
-      }
+      messenger?.showSnackBar(
+        SnackBar(content: Text('Échec de la réinitialisation : $e')),
+      );
+      setState(() => _busy = false);
       return;
     }
     if (!mounted) return;
@@ -98,9 +119,7 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
       cancelLabel: 'Annuler',
     );
     if (!ok) return;
-
     final res = await AppExit.requestClose(context);
-
     if (!mounted) return;
     if (res.success) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -133,8 +152,6 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
 
   @override
   Widget build(BuildContext context) {
-    final titleStyle = Theme.of(context).textTheme.titleMedium;
-
     return Scaffold(
       appBar: AppBar(title: const Text('Profil')),
       body: ListView(
@@ -207,12 +224,11 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
                   ),
                 ),
               ),
-
               _divider(),
               _tile(
-                icon: Icons.swap_horiz_rounded,
+                icon: Icons.savings_rounded,
                 title: 'Budget',
-                subtitle: 'Gerer le budget',
+                subtitle: 'Gérer le budget',
                 onTap: () => Navigator.of(context).push(
                   MaterialPageRoute(builder: (_) => const SavingGoalListPage()),
                 ),
@@ -223,6 +239,14 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
           _SectionCard(
             title: 'Données',
             children: [
+              _tile(
+                icon: Icons.system_update_alt_rounded,
+                title: 'Mettre à niveau le schéma',
+                subtitle:
+                    'Créer les tables/index manquants sans supprimer les données',
+                onTap: _busy ? null : _upgradeDbSchema,
+              ),
+              _divider(),
               _tile(
                 icon: Icons.storage_rounded,
                 title: 'État de synchronisation',
@@ -286,13 +310,19 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
     required IconData icon,
     required String title,
     required String subtitle,
-    required VoidCallback onTap,
+    required VoidCallback? onTap,
   }) {
     return ListTile(
       leading: Icon(icon),
       title: Text(title),
       subtitle: Text(subtitle),
-      trailing: const Icon(Icons.chevron_right),
+      trailing: _busy
+          ? const SizedBox(
+              height: 20,
+              width: 20,
+              child: CircularProgressIndicator(strokeWidth: 2),
+            )
+          : const Icon(Icons.chevron_right),
       onTap: onTap,
     );
   }
