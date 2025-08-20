@@ -1,4 +1,4 @@
-// App bar title with animated balance and adaptive goal/limit chips; scroll-safe, accessible, and compact on small widths (FR labels, EN code).
+// App bar title with animated balance and goal/limit chips that signal reached/exceeded states (FR labels, EN code).
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:money_pulse/domain/accounts/entities/account.dart';
@@ -51,10 +51,26 @@ class HomeAppBarTitle extends StatelessWidget {
             error: (_, __) => _error(),
             data: (acc) {
               final currency = acc?.currency ?? 'XOF';
+              final balance = acc?.balance ?? 0;
               final goal = (acc?.balanceGoal ?? 0);
               final limit = (acc?.balanceLimit ?? 0);
               final hasGoal = goal > 0;
               final hasLimit = limit > 0;
+
+              // Status computation
+              final GoalLimitStatus goalStatus = hasGoal
+                  ? (balance >= goal
+                        ? GoalLimitStatus.reached
+                        : GoalLimitStatus.normal)
+                  : GoalLimitStatus.normal;
+
+              final GoalLimitStatus limitStatus = hasLimit
+                  ? (balance > limit
+                        ? GoalLimitStatus.exceeded
+                        : (balance == limit
+                              ? GoalLimitStatus.reached
+                              : GoalLimitStatus.normal))
+                  : GoalLimitStatus.normal;
 
               final label = (acc?.description?.trim().isNotEmpty ?? false)
                   ? acc!.description!.trim()
@@ -64,6 +80,7 @@ class HomeAppBarTitle extends StatelessWidget {
                 if (hasGoal)
                   GoalLimitChip(
                     kind: GoalLimitChipKind.goal,
+                    status: goalStatus,
                     amountCents: goal,
                     currency: currency,
                     label: 'Objectif',
@@ -72,6 +89,7 @@ class HomeAppBarTitle extends StatelessWidget {
                 if (hasLimit)
                   GoalLimitChip(
                     kind: GoalLimitChipKind.limit,
+                    status: limitStatus,
                     amountCents: limit,
                     currency: currency,
                     label: 'Plafond',
@@ -90,8 +108,8 @@ class HomeAppBarTitle extends StatelessWidget {
                         switchInCurve: Curves.easeOut,
                         switchOutCurve: Curves.easeIn,
                         child: MoneyText(
-                          key: ValueKey('${acc?.balance ?? 0}-$currency'),
-                          amountCents: acc?.balance ?? 0,
+                          key: ValueKey('$balance-$currency'),
+                          amountCents: balance,
                           currency: currency,
                           style: textTheme.titleLarge,
                         ),
@@ -106,18 +124,11 @@ class HomeAppBarTitle extends StatelessWidget {
                             if (!isTight)
                               Row(
                                 mainAxisSize: MainAxisSize.min,
-                                children: const [SizedBox(width: 2)],
-                              ),
-                            if (!isTight)
-                              Row(
-                                mainAxisSize: MainAxisSize.min,
                                 children: [
                                   Text(
                                     label,
                                     style: const TextStyle(fontSize: 12),
                                   ),
-                                  const SizedBox(width: 4),
-                                  const Icon(Icons.expand_more, size: 16),
                                 ],
                               ),
                             if ((hasGoal || hasLimit) && !isTight)
@@ -127,7 +138,7 @@ class HomeAppBarTitle extends StatelessWidget {
                                 duration: const Duration(milliseconds: 180),
                                 child: Row(
                                   key: ValueKey(
-                                    '${hasGoal}_${hasLimit} $goal $limit',
+                                    '${hasGoal}_${hasLimit}_ $goal $limit _${goalStatus.name}_${limitStatus.name}',
                                   ),
                                   mainAxisSize: MainAxisSize.min,
                                   children: [
