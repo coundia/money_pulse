@@ -1,4 +1,4 @@
-// Account list tile with type-aware visuals, remaining amount, and savings goal progress moved into subtitle to avoid bottom overflow.
+// Account list row with custom layout to prevent bottom overflow, showing balance, remaining, and goal/limit based on account type (FR labels, EN code).
 import 'package:flutter/material.dart';
 import 'package:money_pulse/domain/accounts/entities/account.dart';
 import 'package:money_pulse/presentation/shared/formatters.dart';
@@ -87,12 +87,12 @@ class AccountTile extends StatelessWidget {
 
     int? remainingCents;
     String remainingLabel = 'Restant';
-    if (limit != null && limit > 0) {
-      remainingCents = limit - balanceCents;
+    if ((limit ?? 0) > 0) {
+      remainingCents = limit! - balanceCents;
       remainingLabel = 'Restant';
-    } else if (goal != null && goal > 0) {
-      remainingCents = goal - balanceCents;
-      remainingLabel = 'Objectif';
+    } else if ((goal ?? 0) > 0) {
+      remainingCents = goal! - balanceCents;
+      remainingLabel = 'Vers objectif';
     }
 
     String _fmt(int cents) {
@@ -101,23 +101,20 @@ class AccountTile extends StatelessWidget {
       return cur.isEmpty ? n : '$n $cur';
     }
 
-    String _fmtOnly(int cents) {
-      final n = Formatters.amountFromCents(cents);
-      return n;
-    }
-
     final bool hasRemaining = remainingCents != null;
     final bool isOver = (remainingCents ?? 0) < 0;
     final int absRemain = (remainingCents ?? 0).abs();
 
     final bool isSavings = type == 'SAVINGS';
-    final bool hasSavingsGoal = isSavings && (goal != null && goal > 0);
+    final bool isCreditOrBudget = type == 'CREDIT' || type == 'BUDGET_MAX';
+
+    final bool showGoalChip = isSavings && (goal ?? 0) > 0;
+    final bool showLimitChip = isCreditOrBudget && (limit ?? 0) > 0;
+
+    final bool hasSavingsGoal = isSavings && (goal ?? 0) > 0;
     final double goalRatio = hasSavingsGoal
         ? (balanceCents.toDouble() / goal!.toDouble()).clamp(0.0, 1.0)
         : 0.0;
-    final int goalPercent = hasSavingsGoal
-        ? ((balanceCents / (goal!.toDouble())) * 100).clamp(0, 100).round()
-        : 0;
 
     final hasMenu =
         onMenuAction != null ||
@@ -130,186 +127,266 @@ class AccountTile extends StatelessWidget {
     return Card(
       margin: EdgeInsets.zero,
       elevation: 0,
-      color: Theme.of(context).colorScheme.surface,
       shape: RoundedRectangleBorder(
         side: BorderSide(color: cs.outlineVariant.withOpacity(.6)),
         borderRadius: BorderRadius.circular(12),
       ),
-      child: ListTile(
-        isThreeLine: hasSavingsGoal,
-        onTap: onView,
-        contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-        leading: Stack(
-          clipBehavior: Clip.none,
-          children: [
-            CircleAvatar(
-              backgroundColor: avatarBg,
-              foregroundColor: avatarFg,
-              child: Icon(icon),
-            ),
-            if (account.isDefault == 1)
-              Positioned(
-                right: -4,
-                bottom: -4,
-                child: Container(
-                  padding: const EdgeInsets.all(2),
-                  decoration: BoxDecoration(
-                    color: cs.primary,
-                    shape: BoxShape.circle,
-                    boxShadow: [
-                      BoxShadow(
-                        color: cs.primary.withOpacity(.25),
-                        blurRadius: 6,
-                        offset: const Offset(0, 2),
+      child: Material(
+        color: Theme.of(context).colorScheme.surface,
+        borderRadius: BorderRadius.circular(12),
+        child: InkWell(
+          borderRadius: BorderRadius.circular(12),
+          onTap: onView,
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.center,
+              children: [
+                Stack(
+                  clipBehavior: Clip.none,
+                  children: [
+                    CircleAvatar(
+                      backgroundColor: avatarBg,
+                      foregroundColor: avatarFg,
+                      child: Icon(icon),
+                    ),
+                    if (account.isDefault == 1)
+                      Positioned(
+                        right: -4,
+                        bottom: -4,
+                        child: Container(
+                          padding: const EdgeInsets.all(2),
+                          decoration: BoxDecoration(
+                            color: cs.primary,
+                            shape: BoxShape.circle,
+                            boxShadow: [
+                              BoxShadow(
+                                color: cs.primary.withOpacity(.25),
+                                blurRadius: 6,
+                                offset: const Offset(0, 2),
+                              ),
+                            ],
+                          ),
+                          child: Icon(
+                            Icons.star,
+                            size: 12,
+                            color: cs.onPrimary,
+                          ),
+                        ),
                       ),
+                  ],
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        children: [
+                          Expanded(
+                            child: Text(
+                              title,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: Theme.of(context).textTheme.titleMedium
+                                  ?.copyWith(fontWeight: FontWeight.w700),
+                            ),
+                          ),
+                          if (hasMenu)
+                            PopupMenuButton<String>(
+                              tooltip: 'Actions',
+                              padding: EdgeInsets.zero,
+                              onSelected: (v) async {
+                                if (onMenuAction != null) {
+                                  await onMenuAction!(v);
+                                  return;
+                                }
+                                switch (v) {
+                                  case 'view':
+                                    onView?.call();
+                                    break;
+                                  case 'adjust':
+                                    onAdjust?.call();
+                                    break;
+                                  case 'default':
+                                    onMakeDefault?.call();
+                                    break;
+                                  case 'share':
+                                    onShare?.call();
+                                    break;
+                                  case 'delete':
+                                    onDelete?.call();
+                                    break;
+                                }
+                              },
+                              itemBuilder: (_) => const [
+                                PopupMenuItem(
+                                  value: 'view',
+                                  child: ListTile(
+                                    leading: Icon(Icons.visibility_outlined),
+                                    title: Text('Voir'),
+                                  ),
+                                ),
+                                PopupMenuItem(
+                                  value: 'adjust',
+                                  child: ListTile(
+                                    leading: Icon(Icons.tune),
+                                    title: Text('Ajuster le solde'),
+                                  ),
+                                ),
+                                PopupMenuItem(
+                                  value: 'default',
+                                  child: ListTile(
+                                    leading: Icon(Icons.star),
+                                    title: Text('Définir par défaut'),
+                                  ),
+                                ),
+                                PopupMenuItem(
+                                  value: 'share',
+                                  child: ListTile(
+                                    leading: Icon(Icons.ios_share),
+                                    title: Text('Partager'),
+                                  ),
+                                ),
+                                PopupMenuDivider(),
+                                PopupMenuItem(
+                                  value: 'delete',
+                                  child: ListTile(
+                                    leading: Icon(Icons.delete_outline),
+                                    title: Text('Supprimer'),
+                                  ),
+                                ),
+                              ],
+                            ),
+                        ],
+                      ),
+                      const SizedBox(height: 2),
+
+                      if (hasSavingsGoal) ...[
+                        const SizedBox(height: 6),
+                        ClipRRect(
+                          borderRadius: BorderRadius.circular(999),
+                          child: LinearProgressIndicator(
+                            value: goalRatio,
+                            minHeight: 6,
+                            backgroundColor: cs.surfaceVariant.withOpacity(.5),
+                            color: cs.tertiary,
+                          ),
+                        ),
+                      ],
                     ],
                   ),
-                  child: Icon(Icons.star, size: 12, color: cs.onPrimary),
                 ),
-              ),
-          ],
-        ),
-        title: Text(
-          title,
-          maxLines: 1,
-          overflow: TextOverflow.ellipsis,
-          style: Theme.of(
-            context,
-          ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700),
-        ),
-        subtitle: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(subtitleLine, maxLines: 1, overflow: TextOverflow.ellipsis),
-            if (hasSavingsGoal) ...[
-              const SizedBox(height: 6),
-              Text(
-                '$remainingLabel: ${_fmtOnly(absRemain)}',
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: Theme.of(context).textTheme.labelSmall,
-              ),
-              const SizedBox(height: 4),
-              Semantics(
-                label: '$goalPercent%',
-                child: ClipRRect(
-                  borderRadius: BorderRadius.circular(999),
-                  child: LinearProgressIndicator(
-                    value: goalRatio,
-                    minHeight: 6,
-                    backgroundColor: cs.surfaceVariant.withOpacity(.5),
-                    color: cs.tertiary,
-                  ),
-                ),
-              ),
-            ],
-          ],
-        ),
-        trailing: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            ConstrainedBox(
-              constraints: const BoxConstraints(maxWidth: 180),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.end,
-                children: [
-                  Text(
-                    balanceText,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                      fontWeight: FontWeight.w800,
+                const SizedBox(width: 12),
+                Flexible(
+                  fit: FlexFit.loose,
+                  child: ConstrainedBox(
+                    constraints: const BoxConstraints(maxWidth: 220),
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      crossAxisAlignment: CrossAxisAlignment.end,
+                      children: [
+                        Text(
+                          balanceText,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: Theme.of(context).textTheme.titleMedium
+                              ?.copyWith(fontWeight: FontWeight.w800),
+                        ),
+                        const SizedBox(height: 2),
+                        if (hasRemaining)
+                          Text(
+                            isOver
+                                ? 'Dépassé de ${_fmt(absRemain)}'
+                                : '$remainingLabel: ${_fmt(absRemain)}',
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: Theme.of(context).textTheme.labelMedium
+                                ?.copyWith(
+                                  color: isOver
+                                      ? cs.error
+                                      : cs.onSurfaceVariant,
+                                  fontWeight: isOver
+                                      ? FontWeight.w700
+                                      : FontWeight.w500,
+                                ),
+                          )
+                        else
+                          Text(
+                            '—',
+                            style: Theme.of(context).textTheme.labelMedium,
+                          ),
+                        const SizedBox(height: 4),
+                        Wrap(
+                          spacing: 6,
+                          runSpacing: 4,
+                          alignment: WrapAlignment.end,
+                          children: [
+                            if (showGoalChip)
+                              _MiniChip(
+                                icon: Icons.flag_outlined,
+                                label: 'Objectif ${_fmt(goal!)}',
+                                bg: cs.tertiaryContainer,
+                                fg: cs.onTertiaryContainer,
+                              ),
+                            if (showLimitChip)
+                              _MiniChip(
+                                icon: Icons.speed_rounded,
+                                label: 'Plafond ${_fmt(limit!)}',
+                                bg: cs.primaryContainer,
+                                fg: cs.onPrimaryContainer,
+                              ),
+                          ],
+                        ),
+                      ],
                     ),
                   ),
-                  const SizedBox(height: 2),
-                  if (hasRemaining)
-                    Text(
-                      isOver
-                          ? 'Dépassé de ${_fmt(absRemain)}'
-                          : '${_fmt(goal!)}',
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: Theme.of(context).textTheme.labelMedium?.copyWith(
-                        color: isOver ? cs.error : cs.onSurfaceVariant,
-                        fontWeight: isOver ? FontWeight.w700 : FontWeight.w500,
-                      ),
-                    )
-                  else
-                    Text('—', style: Theme.of(context).textTheme.labelMedium),
-                ],
-              ),
+                ),
+              ],
             ),
-            if (hasMenu) ...[
-              const SizedBox(width: 6),
-              PopupMenuButton<String>(
-                tooltip: 'Actions',
-                onSelected: (v) async {
-                  if (onMenuAction != null) {
-                    await onMenuAction!(v);
-                    return;
-                  }
-                  switch (v) {
-                    case 'view':
-                      onView?.call();
-                      break;
-                    case 'adjust':
-                      onAdjust?.call();
-                      break;
-                    case 'default':
-                      onMakeDefault?.call();
-                      break;
-                    case 'share':
-                      onShare?.call();
-                      break;
-                    case 'delete':
-                      onDelete?.call();
-                      break;
-                  }
-                },
-                itemBuilder: (_) => const [
-                  PopupMenuItem(
-                    value: 'view',
-                    child: ListTile(
-                      leading: Icon(Icons.visibility_outlined),
-                      title: Text('Voir'),
-                    ),
-                  ),
-                  PopupMenuItem(
-                    value: 'adjust',
-                    child: ListTile(
-                      leading: Icon(Icons.tune),
-                      title: Text('Ajuster le solde'),
-                    ),
-                  ),
-                  PopupMenuItem(
-                    value: 'default',
-                    child: ListTile(
-                      leading: Icon(Icons.star),
-                      title: Text('Définir par défaut'),
-                    ),
-                  ),
-                  PopupMenuItem(
-                    value: 'share',
-                    child: ListTile(
-                      leading: Icon(Icons.ios_share),
-                      title: Text('Partager'),
-                    ),
-                  ),
-                  PopupMenuDivider(),
-                  PopupMenuItem(
-                    value: 'delete',
-                    child: ListTile(
-                      leading: Icon(Icons.delete_outline),
-                      title: Text('Supprimer'),
-                    ),
-                  ),
-                ],
-              ),
-            ],
-          ],
+          ),
         ),
+      ),
+    );
+  }
+}
+
+class _MiniChip extends StatelessWidget {
+  final IconData icon;
+  final String label;
+  final Color bg;
+  final Color fg;
+  const _MiniChip({
+    required this.icon,
+    required this.label,
+    required this.bg,
+    required this.fg,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+      decoration: BoxDecoration(
+        color: bg,
+        borderRadius: BorderRadius.circular(999),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 14, color: fg),
+          const SizedBox(width: 4),
+          Text(
+            label,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: Theme.of(context).textTheme.labelSmall?.copyWith(
+              color: fg,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+        ],
       ),
     );
   }
