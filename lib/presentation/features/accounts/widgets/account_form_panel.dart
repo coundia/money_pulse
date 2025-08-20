@@ -1,5 +1,4 @@
-// Right-drawer form to add/edit an account; controllers keep cents (x100), preview shows major units.
-
+// Right-drawer form to add/edit an account; edit in major units, save in cents (x100), preview consistent in FR.
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:money_pulse/domain/accounts/entities/account.dart';
@@ -48,21 +47,29 @@ class _AccountFormPanelState extends State<AccountFormPanel> {
     text: widget.existing?.currency ?? 'XOF',
   );
 
-  // IMPORTANT: on garde les champs en CENTS (x100)
   late final TextEditingController _initCtrl = TextEditingController(
     text: (widget.existing?.balanceInit ?? 0) == 0
         ? ''
-        : (widget.existing?.balanceInit ?? 0).toString(),
+        : Formatters.majorRawFromMinor(
+            widget.existing!.balanceInit!,
+            decimals: 0,
+          ),
   );
   late final TextEditingController _goalCtrl = TextEditingController(
     text: (widget.existing?.balanceGoal ?? 0) == 0
         ? ''
-        : (widget.existing?.balanceGoal ?? 0).toString(),
+        : Formatters.majorRawFromMinor(
+            widget.existing!.balanceGoal!,
+            decimals: 0,
+          ),
   );
   late final TextEditingController _limitCtrl = TextEditingController(
     text: (widget.existing?.balanceLimit ?? 0) == 0
         ? ''
-        : (widget.existing?.balanceLimit ?? 0).toString(),
+        : Formatters.majorRawFromMinor(
+            widget.existing!.balanceLimit!,
+            decimals: 0,
+          ),
   );
 
   static const _types = [
@@ -96,7 +103,6 @@ class _AccountFormPanelState extends State<AccountFormPanel> {
   String? _type;
   DateTime? _dateStart;
   DateTime? _dateEnd;
-
   bool _useInit = false;
   bool _useGoal = false;
   bool _useLimit = false;
@@ -123,11 +129,11 @@ class _AccountFormPanelState extends State<AccountFormPanel> {
     }
   }
 
-  int? _parseMinorOpt(TextEditingController c, bool enabled) {
+  int? _toMinorOpt(TextEditingController c, bool enabled) {
     if (!enabled) return null;
     final t = c.text.trim();
     if (t.isEmpty) return null;
-    return int.tryParse(t.replaceAll(' ', '')) ?? 0;
+    return Formatters.toMinorFromMajorString(t);
   }
 
   Future<void> _pickStart() async {
@@ -143,8 +149,9 @@ class _AccountFormPanelState extends State<AccountFormPanel> {
       confirmText: 'Choisir',
       locale: const Locale('fr', 'FR'),
     );
-    if (d != null)
+    if (d != null) {
       setState(() => _dateStart = DateTime(d.year, d.month, d.day, 0, 0));
+    }
   }
 
   Future<void> _pickEnd() async {
@@ -160,8 +167,9 @@ class _AccountFormPanelState extends State<AccountFormPanel> {
       confirmText: 'Choisir',
       locale: const Locale('fr', 'FR'),
     );
-    if (d != null)
+    if (d != null) {
       setState(() => _dateEnd = DateTime(d.year, d.month, d.day, 23, 59));
+    }
   }
 
   void _save() {
@@ -172,9 +180,9 @@ class _AccountFormPanelState extends State<AccountFormPanel> {
         code: _code.text.trim(),
         description: _desc.text.trim().isEmpty ? null : _desc.text.trim(),
         currency: _curr.text.trim().isEmpty ? null : _curr.text.trim(),
-        balanceInit: _parseMinorOpt(_initCtrl, _useInit),
-        balanceGoal: _parseMinorOpt(_goalCtrl, _useGoal),
-        balanceLimit: _parseMinorOpt(_limitCtrl, _useLimit),
+        balanceInit: _toMinorOpt(_initCtrl, _useInit),
+        balanceGoal: _toMinorOpt(_goalCtrl, _useGoal),
+        balanceLimit: _toMinorOpt(_limitCtrl, _useLimit),
         typeAccount: _type,
         dateStart: _dateStart,
         dateEnd: _dateEnd,
@@ -202,8 +210,8 @@ class _AccountFormPanelState extends State<AccountFormPanel> {
     bool forceOn = false,
     String? currency,
   }) {
-    final cents = int.tryParse(controller.text.replaceAll(' ', '')) ?? 0;
-    final preview = Formatters.amountFromCents(cents);
+    final centsPreview = Formatters.toMinorFromMajorString(controller.text);
+    final preview = Formatters.amountFromCents(centsPreview);
     return Card(
       child: Padding(
         padding: const EdgeInsets.all(12),
@@ -302,8 +310,8 @@ class _AccountFormPanelState extends State<AccountFormPanel> {
       ),
       body: Shortcuts(
         shortcuts: {
-          LogicalKeySet(LogicalKeyboardKey.enter): const ActivateIntent(),
-          LogicalKeySet(LogicalKeyboardKey.numpadEnter): const ActivateIntent(),
+          LogicalKeySet(LogicalKeyboardKey.enter): ActivateIntent(),
+          LogicalKeySet(LogicalKeyboardKey.numpadEnter): ActivateIntent(),
         },
         child: Actions(
           actions: {

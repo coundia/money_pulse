@@ -1,5 +1,4 @@
-// Right-drawer details panel to view an account with type-aware chips, budget/limit alerts and x100 amount display.
-
+// Right-drawer details panel for an account; shows balances in major units using Formatters (save x100, show /100), FR labels, EN code.
 import 'package:flutter/material.dart';
 import 'package:money_pulse/domain/accounts/entities/account.dart';
 import 'package:money_pulse/presentation/shared/formatters.dart';
@@ -10,6 +9,8 @@ class AccountDetailsPanel extends StatelessWidget {
   final VoidCallback? onMakeDefault;
   final VoidCallback? onDelete;
   final VoidCallback? onShare;
+  final VoidCallback? onAdjust;
+
   const AccountDetailsPanel({
     super.key,
     required this.account,
@@ -17,140 +18,93 @@ class AccountDetailsPanel extends StatelessWidget {
     this.onMakeDefault,
     this.onDelete,
     this.onShare,
+    this.onAdjust,
   });
 
-  static const _typeLabelsFr = {
-    'CASH': 'Espèces',
-    'BANK': 'Banque',
-    'MOBILE': 'Mobile money',
-    'SAVINGS': 'Épargne',
-    'CREDIT': 'Crédit',
-    'BUDGET_MAX': 'Budget maximum',
-    'OTHER': 'Autre',
-  };
-
-  String _fmtMoney(int cents, String? currency) {
-    final v = Formatters.amountFromCents(cents);
-    return currency == null ? v : '$v ${currency.toUpperCase()}';
+  String _money(int cents, {String? currency}) {
+    if (currency != null && currency.isNotEmpty) {
+      return Formatters.amountWithCurrencyFromCents(
+        cents,
+        symbol: currency,
+        fractionDigits: 0,
+      );
+    }
+    return Formatters.amountFromCents(cents);
   }
-
-  String _date(DateTime? d) => d == null ? '—' : Formatters.dateFull(d);
 
   @override
   Widget build(BuildContext context) {
-    final a = account;
-    final typeFr = _typeLabelsFr[a.typeAccount] ?? (a.typeAccount ?? '—');
-
-    final isBudgetMax = a.typeAccount == 'BUDGET_MAX';
-    final isCredit = a.typeAccount == 'CREDIT';
-    final limit = a.balanceLimit;
-    final overLimit = limit > 0 && a.balance > limit;
-    final remaining = limit > 0 ? (limit - a.balance) : 0;
-
-    final chips = <Widget>[];
-    if (isBudgetMax) {
-      chips.add(
-        Chip(
-          avatar: const Icon(Icons.flag_circle_outlined),
-          label: Text('Budget max: ${_fmtMoney(a.balanceLimit, a.currency)}'),
-        ),
-      );
-      chips.add(
-        Chip(
-          avatar: const Icon(Icons.account_balance_wallet_outlined),
-          label: Text(
-            remaining >= 0
-                ? 'Reste: ${_fmtMoney(remaining, a.currency)}'
-                : 'Dépassement: ${_fmtMoney(remaining.abs(), a.currency)}',
-          ),
-        ),
-      );
-      if (overLimit) {
-        chips.add(
-          Chip(
-            avatar: const Icon(Icons.warning_amber),
-            label: const Text('Dépassement du budget'),
-            backgroundColor: Theme.of(context).colorScheme.errorContainer,
-            labelStyle: TextStyle(
-              color: Theme.of(context).colorScheme.onErrorContainer,
-            ),
-          ),
-        );
-      }
-    } else {
-      if (a.balanceInit > 0) {
-        chips.add(
-          Chip(
-            avatar: const Icon(Icons.flag),
-            label: Text('Initial: ${_fmtMoney(a.balanceInit, a.currency)}'),
-          ),
-        );
-      }
-      if (a.balanceGoal > 0) {
-        chips.add(
-          Chip(
-            avatar: const Icon(Icons.track_changes),
-            label: Text('Objectif: ${_fmtMoney(a.balanceGoal, a.currency)}'),
-          ),
-        );
-      }
-      if (a.balanceLimit > 0) {
-        chips.add(
-          Chip(
-            avatar: const Icon(Icons.warning_amber),
-            label: Text('Limite: ${_fmtMoney(a.balanceLimit, a.currency)}'),
-          ),
-        );
-      }
-      if (isCredit && overLimit) {
-        chips.add(
-          Chip(
-            avatar: const Icon(Icons.priority_high),
-            label: const Text('Au-delà du plafond'),
-            backgroundColor: Theme.of(context).colorScheme.errorContainer,
-            labelStyle: TextStyle(
-              color: Theme.of(context).colorScheme.onErrorContainer,
-            ),
-          ),
-        );
-      }
-    }
-
-    final amountStyle = overLimit
-        ? Theme.of(context).textTheme.titleLarge?.copyWith(
-            color: Theme.of(context).colorScheme.error,
-          )
-        : Theme.of(context).textTheme.titleLarge;
-
-    final showGoalProgress = !isBudgetMax && a.balanceGoal > 0;
-    final progress = showGoalProgress
-        ? (a.balance / a.balanceGoal).clamp(0, 1).toDouble()
-        : 0.0;
+    final cs = Theme.of(context).colorScheme;
+    final title = (account.description?.isNotEmpty ?? false)
+        ? account.description!
+        : (account.code?.isNotEmpty ?? false)
+        ? account.code!
+        : 'Compte';
+    final subtitle = [
+      if ((account.code ?? '').isNotEmpty) account.code!,
+      if ((account.currency ?? '').isNotEmpty) account.currency!,
+      account.isDefault == 1 ? 'Par défaut' : null,
+    ].whereType<String>().join(' • ');
 
     return Scaffold(
       appBar: AppBar(
         title: const Text('Détails du compte'),
         actions: [
-          IconButton(
-            onPressed: onShare,
-            icon: const Icon(Icons.share),
-            tooltip: 'Partager',
-          ),
-          IconButton(
-            onPressed: onEdit,
-            icon: const Icon(Icons.edit),
-            tooltip: 'Modifier',
-          ),
-          if (onMakeDefault != null)
+          if (onShare != null)
             IconButton(
-              onPressed: onMakeDefault,
-              icon: const Icon(Icons.star),
-              tooltip: 'Définir par défaut',
+              tooltip: 'Partager',
+              onPressed: onShare,
+              icon: const Icon(Icons.ios_share),
             ),
-          IconButton(
-            onPressed: onDelete,
-            icon: const Icon(Icons.delete_outline),
-            tooltip: 'Supprimer',
+          PopupMenuButton<String>(
+            tooltip: 'Actions',
+            onSelected: (v) {
+              switch (v) {
+                case 'edit':
+                  onEdit?.call();
+                  break;
+                case 'default':
+                  onMakeDefault?.call();
+                  break;
+                case 'adjust':
+                  onAdjust?.call();
+                  break;
+                case 'delete':
+                  onDelete?.call();
+                  break;
+              }
+            },
+            itemBuilder: (_) => [
+              const PopupMenuItem(
+                value: 'edit',
+                child: ListTile(
+                  leading: Icon(Icons.edit),
+                  title: Text('Modifier'),
+                ),
+              ),
+              const PopupMenuItem(
+                value: 'default',
+                child: ListTile(
+                  leading: Icon(Icons.star),
+                  title: Text('Définir par défaut'),
+                ),
+              ),
+              const PopupMenuItem(
+                value: 'adjust',
+                child: ListTile(
+                  leading: Icon(Icons.tune),
+                  title: Text('Ajuster le solde'),
+                ),
+              ),
+              const PopupMenuDivider(),
+              const PopupMenuItem(
+                value: 'delete',
+                child: ListTile(
+                  leading: Icon(Icons.delete_outline),
+                  title: Text('Supprimer'),
+                ),
+              ),
+            ],
           ),
         ],
       ),
@@ -158,49 +112,133 @@ class AccountDetailsPanel extends StatelessWidget {
         padding: const EdgeInsets.all(16),
         children: [
           ListTile(
-            title: Text(
-              a.description?.isNotEmpty == true
-                  ? a.description!
-                  : (a.code ?? 'Compte'),
+            contentPadding: EdgeInsets.zero,
+            leading: CircleAvatar(
+              backgroundColor: cs.primaryContainer,
+              foregroundColor: cs.onPrimaryContainer,
+              child: const Icon(Icons.account_balance_wallet),
             ),
-            subtitle: Text(typeFr),
-            trailing: Text(
-              _fmtMoney(a.balance, a.currency),
-              style: amountStyle,
+            title: Text(title, style: Theme.of(context).textTheme.titleLarge),
+            subtitle: subtitle.isEmpty ? null : Text(subtitle),
+            trailing: FilledButton.icon(
+              onPressed: onAdjust,
+              icon: const Icon(Icons.tune),
+              label: const Text('Ajuster'),
             ),
           ),
-          const Divider(),
-          if (chips.isNotEmpty)
-            Wrap(runSpacing: 8, spacing: 8, children: chips),
-          if (showGoalProgress) ...[
-            const SizedBox(height: 12),
-            Text(
-              'Progression vers objectif',
-              style: Theme.of(context).textTheme.bodyMedium,
-            ),
-            const SizedBox(height: 6),
-            ClipRRect(
-              borderRadius: BorderRadius.circular(8),
-              child: LinearProgressIndicator(value: progress, minHeight: 10),
-            ),
-            const SizedBox(height: 6),
-            Text('${(progress * 100).toStringAsFixed(0)} %'),
-          ],
           const SizedBox(height: 12),
-          ListTile(
-            leading: const Icon(Icons.date_range),
-            title: const Text('Période'),
-            subtitle: Text(
-              '${_date(a.dateStartAccount)} → ${_date(a.dateEndAccount)}',
-            ),
+          Wrap(
+            spacing: 10,
+            runSpacing: 10,
+            children: [
+              _Metric(
+                label: 'Solde actuel',
+                value: _money(account.balance, currency: account.currency),
+                emphasis: true,
+              ),
+              _Metric(
+                label: 'Solde précédent',
+                value: _money(
+                  account.balancePrev ?? 0,
+                  currency: account.currency,
+                ),
+              ),
+              _Metric(
+                label: 'Bloqué',
+                value: _money(
+                  account.balanceBlocked ?? 0,
+                  currency: account.currency,
+                ),
+              ),
+              _Metric(
+                label: 'Mise à jour',
+                value: Formatters.dateFull(account.updatedAt),
+              ),
+            ],
           ),
-          ListTile(
-            leading: const Icon(Icons.update),
-            title: const Text('Mis à jour'),
-            subtitle: Text(_date(a.updatedAt)),
+          const SizedBox(height: 20),
+          Card(
+            child: Column(
+              children: [
+                ListTile(
+                  leading: const Icon(Icons.info_outline),
+                  title: const Text('Informations'),
+                ),
+                const Divider(height: 1),
+                _KvRow(label: 'Code', value: account.code ?? '—'),
+                _KvRow(label: 'Devise', value: account.currency ?? '—'),
+                _KvRow(
+                  label: 'Statut',
+                  value: (account.status ?? '').isEmpty ? '—' : account.status!,
+                ),
+                _KvRow(
+                  label: 'Par défaut',
+                  value: account.isDefault == 1 ? 'Oui' : 'Non',
+                ),
+                _KvRow(
+                  label: 'Créé le',
+                  value: Formatters.dateFull(account.createdAt),
+                ),
+                _KvRow(
+                  label: 'Dernière maj',
+                  value: Formatters.dateFull(account.updatedAt),
+                ),
+              ],
+            ),
           ),
         ],
       ),
     );
+  }
+}
+
+class _Metric extends StatelessWidget {
+  final String label;
+  final String value;
+  final bool emphasis;
+  const _Metric({
+    required this.label,
+    required this.value,
+    this.emphasis = false,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final style = emphasis
+        ? Theme.of(
+            context,
+          ).textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.w800)
+        : Theme.of(context).textTheme.titleMedium;
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: Theme.of(context).colorScheme.outlineVariant),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            label,
+            style: Theme.of(context).textTheme.labelMedium?.copyWith(
+              color: Theme.of(context).hintColor,
+            ),
+          ),
+          const SizedBox(height: 4),
+          Text(value, style: style),
+        ],
+      ),
+    );
+  }
+}
+
+class _KvRow extends StatelessWidget {
+  final String label;
+  final String value;
+  const _KvRow({required this.label, required this.value});
+
+  @override
+  Widget build(BuildContext context) {
+    return ListTile(dense: true, title: Text(label), trailing: Text(value));
   }
 }
