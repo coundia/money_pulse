@@ -1,5 +1,4 @@
-// Right-drawer panel to adjust account balance; controller keeps cents (x100), preview shows major units.
-
+// Right-drawer panel to adjust account balance; edit in major units, save in cents (x100), preview consistent.
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:money_pulse/domain/accounts/entities/account.dart';
@@ -22,7 +21,9 @@ class AccountAdjustBalancePanel extends StatefulWidget {
 
 class _AccountAdjustBalancePanelState extends State<AccountAdjustBalancePanel> {
   late final TextEditingController _amountCtrl = TextEditingController(
-    text: widget.account.balance == 0 ? '' : widget.account.balance.toString(),
+    text: widget.account.balance == 0
+        ? ''
+        : Formatters.majorRawFromMinor(widget.account.balance, decimals: 0),
   );
 
   @override
@@ -32,16 +33,16 @@ class _AccountAdjustBalancePanelState extends State<AccountAdjustBalancePanel> {
   }
 
   void _save() {
-    final v = int.tryParse(_amountCtrl.text.replaceAll(' ', '')) ?? 0;
+    final v = Formatters.toMinorFromMajorString(_amountCtrl.text);
     Navigator.pop(context, AccountAdjustBalanceResult(v));
   }
 
   @override
   Widget build(BuildContext context) {
     final a = widget.account;
-    final preview = Formatters.amountFromCents(
-      int.tryParse(_amountCtrl.text.replaceAll(' ', '')) ?? 0,
-    );
+    final centsPreview = Formatters.toMinorFromMajorString(_amountCtrl.text);
+    final preview = Formatters.amountFromCents(centsPreview);
+
     return Scaffold(
       appBar: AppBar(
         title: const Text('Ajuster le solde'),
@@ -51,8 +52,8 @@ class _AccountAdjustBalancePanelState extends State<AccountAdjustBalancePanel> {
       ),
       body: Shortcuts(
         shortcuts: {
-          LogicalKeySet(LogicalKeyboardKey.enter): const ActivateIntent(),
-          LogicalKeySet(LogicalKeyboardKey.numpadEnter): const ActivateIntent(),
+          LogicalKeySet(LogicalKeyboardKey.enter): ActivateIntent(),
+          LogicalKeySet(LogicalKeyboardKey.numpadEnter): ActivateIntent(),
         },
         child: Actions(
           actions: {
