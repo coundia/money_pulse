@@ -257,7 +257,9 @@ class _HomePageState extends ConsumerState<HomePage> {
                   case 'manageAccounts':
                     if (!mounted) break;
                     await Navigator.of(context).push(
-                      MaterialPageRoute(builder: (_) => const AccountPage()),
+                      MaterialPageRoute(
+                        builder: (_) => const AccountListPage(),
+                      ),
                     );
                     break;
                   case 'clients':

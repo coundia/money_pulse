@@ -6,6 +6,16 @@ CREATE TABLE IF NOT EXISTS  account (
   balance INTEGER DEFAULT 0,
   balance_prev INTEGER DEFAULT 0,
   balance_blocked INTEGER DEFAULT 0,
+
+balance_init   INTEGER DEFAULT 0,
+balance_goal   INTEGER DEFAULT 0,
+balance_limit  INTEGER DEFAULT 0,
+
+dateStartAccount TEXT,
+dateEndAccount   TEXT,
+
+typeAccount TEXT,
+
   code TEXT,
   description TEXT,
   status TEXT,
@@ -320,24 +330,4 @@ CREATE TABLE IF NOT EXISTS debt (
 );
 
 CREATE INDEX IF NOT EXISTS uq_debt_code_active ON debt(code) WHERE deletedAt IS NULL;
- 
-
- CREATE TABLE IF NOT EXISTS saving_goal (
-  id TEXT PRIMARY KEY,
-  remoteId TEXT,
-  name TEXT NOT NULL,
-  description TEXT,
-  targetCents INTEGER NOT NULL DEFAULT 0,
-  savedCents INTEGER NOT NULL DEFAULT 0,
-  dueDate TEXT,
-  accountId TEXT,
-  companyId TEXT,
-  priority INTEGER NOT NULL DEFAULT 3,
-  isArchived INTEGER NOT NULL DEFAULT 0,
-  createdAt TEXT NOT NULL DEFAULT (datetime('now')),
-  updatedAt TEXT NOT NULL DEFAULT (datetime('now')),
-  deletedAt TEXT,
-  syncAt TEXT,
-  version INTEGER NOT NULL DEFAULT 0,
-  isDirty INTEGER NOT NULL DEFAULT 1
-);
+  

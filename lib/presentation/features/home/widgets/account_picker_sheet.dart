@@ -53,7 +53,7 @@ Future<Account?> showAccountPickerSheet({
                             Future.microtask(() {
                               Navigator.of(context).push(
                                 MaterialPageRoute(
-                                  builder: (_) => const AccountPage(),
+                                  builder: (_) => const AccountListPage(),
                                 ),
                               );
                             });
@@ -165,7 +165,7 @@ Future<Account?> showAccountPickerSheet({
                                         beforeBalanceCents: before,
                                         afterBalanceCents:
                                             result.newBalanceCents,
-                                        userNote: result.note,
+                                        userNote: "result.note",
                                       );
 
                                       final ix = all.indexWhere(
@@ -248,7 +248,7 @@ Future<Account?> showAccountPickerSheet({
                                 Future.microtask(() {
                                   Navigator.of(context).push(
                                     MaterialPageRoute(
-                                      builder: (_) => const AccountPage(),
+                                      builder: (_) => const AccountListPage(),
                                     ),
                                   );
                                 });

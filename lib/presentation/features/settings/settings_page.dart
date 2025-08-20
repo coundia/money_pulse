@@ -9,7 +9,6 @@ import 'package:money_pulse/presentation/features/categories/category_list_page.
 import 'package:money_pulse/presentation/features/accounts/account_page.dart';
 import 'package:money_pulse/presentation/features/companies/company_list_page.dart';
 import 'package:money_pulse/presentation/features/customers/customer_list_page.dart';
-import 'package:money_pulse/presentation/features/goals/saving_goal_list_page.dart';
 import 'package:money_pulse/presentation/features/stock/stock_level_list_page.dart';
 import 'package:money_pulse/presentation/features/stock_movement/stock_movement_list_page.dart';
 import 'package:money_pulse/presentation/features/sync/change_log_list_page.dart';
@@ -173,9 +172,9 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
                 icon: Icons.account_balance_wallet_outlined,
                 title: 'Gérer les comptes',
                 subtitle: 'Ajouter, définir par défaut, modifier, supprimer',
-                onTap: () => Navigator.of(
-                  context,
-                ).push(MaterialPageRoute(builder: (_) => const AccountPage())),
+                onTap: () => Navigator.of(context).push(
+                  MaterialPageRoute(builder: (_) => const AccountListPage()),
+                ),
               ),
               _divider(),
               _tile(
@@ -222,15 +221,6 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
                   MaterialPageRoute(
                     builder: (_) => const StockMovementListPage(),
                   ),
-                ),
-              ),
-              _divider(),
-              _tile(
-                icon: Icons.savings_rounded,
-                title: 'Budget',
-                subtitle: 'Gérer le budget',
-                onTap: () => Navigator.of(context).push(
-                  MaterialPageRoute(builder: (_) => const SavingGoalListPage()),
                 ),
               ),
             ],

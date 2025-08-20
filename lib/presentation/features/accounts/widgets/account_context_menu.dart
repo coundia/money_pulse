@@ -1,154 +1,94 @@
-// Context menu for account items with optional header, adjust-balance action and safe deletes.
+// Context menu for account tile with common actions.
+
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
-import 'package:money_pulse/presentation/shared/formatters.dart';
 
 Future<void> showAccountContextMenu(
   BuildContext context,
-  Offset globalPosition, {
+  Offset position, {
   required bool canMakeDefault,
   required VoidCallback onView,
-  VoidCallback? onMakeDefault,
+  required VoidCallback onMakeDefault,
   required VoidCallback onEdit,
   required VoidCallback onDelete,
   required VoidCallback onShare,
-  VoidCallback? onAdjustBalance, // <— NEW
-  bool confirmDelete = true,
+  required VoidCallback onAdjustBalance,
   String? accountLabel,
   int? balanceCents,
   String? currency,
   DateTime? updatedAt,
 }) async {
-  final overlayBox =
-      Overlay.of(context).context.findRenderObject() as RenderBox;
-
-  final header =
-      (accountLabel != null || balanceCents != null || updatedAt != null)
-      ? PopupMenuItem<String>(
-          enabled: false,
-          child: ListTile(
-            dense: true,
-            contentPadding: EdgeInsets.zero,
-            title: Text(accountLabel ?? 'Compte'),
-            subtitle: updatedAt == null
-                ? null
-                : Text('Mis à jour: ${Formatters.dateFull(updatedAt)}'),
-            trailing: (balanceCents == null)
-                ? null
-                : Text(
-                    Formatters.amountFromCents(balanceCents) +
-                        (currency != null ? ' $currency' : ''),
-                    style: const TextStyle(fontWeight: FontWeight.w700),
-                  ),
-          ),
-        )
-      : null;
-
-  final items = <PopupMenuEntry<String>>[
-    if (header != null) header,
-    if (header != null) const PopupMenuDivider(height: 6),
-    const PopupMenuItem(
-      value: 'view',
-      child: ListTile(
-        leading: Icon(Icons.info_outline),
-        title: Text('Voir les détails'),
-      ),
+  final overlay = Overlay.of(context).context.findRenderObject() as RenderBox;
+  final selected = await showMenu<String>(
+    context: context,
+    position: RelativeRect.fromLTRB(
+      position.dx,
+      position.dy,
+      overlay.size.width - position.dx,
+      overlay.size.height - position.dy,
     ),
-    if (onAdjustBalance != null)
-      const PopupMenuItem(
+    items: [
+      const PopupMenuItem<String>(
+        value: 'view',
+        child: ListTile(
+          leading: Icon(Icons.visibility_outlined),
+          title: Text('Ouvrir'),
+        ),
+      ),
+      if (canMakeDefault)
+        const PopupMenuItem<String>(
+          value: 'default',
+          child: ListTile(
+            leading: Icon(Icons.star),
+            title: Text('Définir par défaut'),
+          ),
+        ),
+      const PopupMenuItem<String>(
+        value: 'edit',
+        child: ListTile(
+          leading: Icon(Icons.edit_outlined),
+          title: Text('Modifier'),
+        ),
+      ),
+      const PopupMenuItem<String>(
         value: 'adjust',
         child: ListTile(
-          leading: Icon(Icons.toll_outlined),
+          leading: Icon(Icons.balance),
           title: Text('Ajuster le solde'),
         ),
       ),
-    if (canMakeDefault)
-      const PopupMenuItem(
-        value: 'default',
+      const PopupMenuItem<String>(
+        value: 'share',
+        child: ListTile(leading: Icon(Icons.share), title: Text('Partager')),
+      ),
+      const PopupMenuItem<String>(
+        value: 'delete',
         child: ListTile(
-          leading: Icon(Icons.star_border),
-          title: Text('Définir par défaut'),
+          leading: Icon(Icons.delete_outline),
+          title: Text('Supprimer'),
         ),
       ),
-    const PopupMenuItem(
-      value: 'edit',
-      child: ListTile(
-        leading: Icon(Icons.edit_outlined),
-        title: Text('Modifier'),
-      ),
-    ),
-    const PopupMenuItem(
-      value: 'share',
-      child: ListTile(
-        leading: Icon(Icons.copy_all_outlined),
-        title: Text('Copier les détails'),
-      ),
-    ),
-    const PopupMenuItem(
-      value: 'delete',
-      child: ListTile(
-        leading: Icon(Icons.delete_outline),
-        title: Text('Supprimer'),
-      ),
-    ),
-  ];
-
-  final result = await showMenu<String>(
-    context: context,
-    position: RelativeRect.fromLTRB(
-      globalPosition.dx,
-      globalPosition.dy,
-      overlayBox.size.width - globalPosition.dx,
-      overlayBox.size.height - globalPosition.dy,
-    ),
-    items: items,
+    ],
   );
-
-  if (result == null) return;
-
-  HapticFeedback.selectionClick();
-
-  switch (result) {
+  switch (selected) {
     case 'view':
       onView();
       break;
-    case 'adjust':
-      onAdjustBalance?.call();
-      break;
     case 'default':
-      onMakeDefault?.call();
+      onMakeDefault();
       break;
     case 'edit':
       onEdit();
       break;
+    case 'delete':
+      onDelete();
+      break;
     case 'share':
       onShare();
       break;
-    case 'delete':
-      if (!confirmDelete) {
-        onDelete();
-        break;
-      }
-      final ok = await showDialog<bool>(
-        context: context,
-        builder: (ctx) => AlertDialog(
-          title: const Text('Confirmer la suppression'),
-          content: const Text(
-            'Supprimer ce compte ? Cette action est irréversible.',
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(ctx, false),
-              child: const Text('Annuler'),
-            ),
-            FilledButton.tonal(
-              onPressed: () => Navigator.pop(ctx, true),
-              child: const Text('Supprimer'),
-            ),
-          ],
-        ),
-      );
-      if (ok == true) onDelete();
+    case 'adjust':
+      onAdjustBalance();
+      break;
+    default:
       break;
   }
 }

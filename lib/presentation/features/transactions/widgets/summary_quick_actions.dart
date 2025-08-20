@@ -336,7 +336,9 @@ class SummaryQuickActions extends StatelessWidget {
                     () {
                       HapticFeedback.selectionClick();
                       Navigator.of(context).push(
-                        MaterialPageRoute(builder: (_) => const AccountPage()),
+                        MaterialPageRoute(
+                          builder: (_) => const AccountListPage(),
+                        ),
                       );
                     },
               ),

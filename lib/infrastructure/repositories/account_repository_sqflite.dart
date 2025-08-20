@@ -1,4 +1,5 @@
-// Sqflite repository for accounts with change-log tracking and updatedAt-desc ordering.
+// Sqflite repository for accounts with change-log tracking.
+
 import 'package:uuid/uuid.dart';
 import 'package:sqflite/sqflite.dart';
 import 'package:money_pulse/infrastructure/db/app_database.dart';
@@ -23,7 +24,8 @@ class AccountRepositorySqflite implements AccountRepository {
       );
       final idLog = const Uuid().v4();
       await txn.rawInsert(
-        'INSERT INTO change_log(id, entityTable, entityId, operation, payload, status, createdAt, updatedAt) VALUES(?,?,?,?,?,?,?,?) '
+        'INSERT INTO change_log(id, entityTable, entityId, operation, payload, status, createdAt, updatedAt) '
+        'VALUES(?,?,?,?,?,?,?,?) '
         'ON CONFLICT(entityTable, entityId, status) DO UPDATE SET operation=excluded.operation, updatedAt=excluded.updatedAt, payload=excluded.payload',
         [
           idLog,
@@ -58,7 +60,8 @@ class AccountRepositorySqflite implements AccountRepository {
       );
       final idLog = const Uuid().v4();
       await txn.rawInsert(
-        'INSERT INTO change_log(id, entityTable, entityId, operation, payload, status, createdAt, updatedAt) VALUES(?,?,?,?,?,?,?,?) '
+        'INSERT INTO change_log(id, entityTable, entityId, operation, payload, status, createdAt, updatedAt) '
+        'VALUES(?,?,?,?,?,?,?,?) '
         'ON CONFLICT(entityTable, entityId, status) DO UPDATE SET operation=excluded.operation, updatedAt=excluded.updatedAt, payload=excluded.payload',
         [
           idLog,
@@ -127,7 +130,8 @@ class AccountRepositorySqflite implements AccountRepository {
           );
           final idLogPrev = const Uuid().v4();
           await txn.rawInsert(
-            'INSERT INTO change_log(id, entityTable, entityId, operation, payload, status, createdAt, updatedAt) VALUES(?,?,?,?,?,?,?,?) '
+            'INSERT INTO change_log(id, entityTable, entityId, operation, payload, status, createdAt, updatedAt) '
+            'VALUES(?,?,?,?,?,?,?,?) '
             'ON CONFLICT(entityTable, entityId, status) DO UPDATE SET operation=excluded.operation, updatedAt=excluded.updatedAt, payload=excluded.payload',
             [
               idLogPrev,
@@ -148,7 +152,8 @@ class AccountRepositorySqflite implements AccountRepository {
       );
       final idLog = const Uuid().v4();
       await txn.rawInsert(
-        'INSERT INTO change_log(id, entityTable, entityId, operation, payload, status, createdAt, updatedAt) VALUES(?,?,?,?,?,?,?,?) '
+        'INSERT INTO change_log(id, entityTable, entityId, operation, payload, status, createdAt, updatedAt) '
+        'VALUES(?,?,?,?,?,?,?,?) '
         'ON CONFLICT(entityTable, entityId, status) DO UPDATE SET operation=excluded.operation, updatedAt=excluded.updatedAt, payload=excluded.payload',
         [idLog, 'account', id, 'UPDATE', null, 'PENDING', nowIso, nowIso],
       );
@@ -165,7 +170,8 @@ class AccountRepositorySqflite implements AccountRepository {
       );
       final idLog = const Uuid().v4();
       await txn.rawInsert(
-        'INSERT INTO change_log(id, entityTable, entityId, operation, payload, status, createdAt, updatedAt) VALUES(?,?,?,?,?,?,?,?) '
+        'INSERT INTO change_log(id, entityTable, entityId, operation, payload, status, createdAt, updatedAt) '
+        'VALUES(?,?,?,?,?,?,?,?) '
         'ON CONFLICT(entityTable, entityId, status) DO UPDATE SET operation=excluded.operation, updatedAt=excluded.updatedAt, payload=excluded.payload',
         [idLog, 'account', id, 'DELETE', null, 'PENDING', nowIso, nowIso],
       );

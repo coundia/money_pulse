@@ -1,3 +1,5 @@
+// Repository contract for accounts.
+
 import '../entities/account.dart';
 
 abstract class AccountRepository {
