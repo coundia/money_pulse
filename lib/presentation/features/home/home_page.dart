@@ -1,13 +1,11 @@
-// Home page with header showing current balance plus goal/limit chips, horizontally scrollable to avoid overflow (FR labels, EN code).
+// Home page scaffold using HomeAppBarTitle to show balance + goal/limit chips; split into widgets for cleaner SRP (FR labels, EN code).
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'package:money_pulse/presentation/app/providers.dart';
 import 'package:money_pulse/presentation/app/account_selection.dart';
-import 'package:money_pulse/presentation/widgets/money_text.dart';
 import 'package:money_pulse/presentation/widgets/right_drawer.dart';
-import 'package:money_pulse/presentation/shared/formatters.dart';
 
 import 'package:money_pulse/presentation/features/settings/settings_page.dart';
 import 'package:money_pulse/presentation/features/transactions/transaction_form_sheet.dart';
@@ -35,6 +33,8 @@ import 'widgets/share_account_dialog.dart';
 
 import 'prefs/home_ui_prefs_provider.dart';
 import 'prefs/home_ui_prefs_panel.dart';
+
+import 'widgets/home_app_bar_title.dart';
 
 class HomePage extends ConsumerStatefulWidget {
   const HomePage({super.key});
@@ -125,135 +125,12 @@ class _HomePageState extends ConsumerState<HomePage> {
     final accAsync = ref.watch(selectedAccountProvider);
     final uiPrefs = ref.watch(homeUiPrefsProvider);
 
-    Widget _goalLimitChip({
-      required IconData icon,
-      required String label,
-      required int cents,
-      required Color bg,
-      required Color fg,
-      String? currency,
-    }) {
-      final txt =
-          '${Formatters.amountFromCents(cents)}${(currency ?? '').isNotEmpty ? ' $currency' : ''}';
-      return Container(
-        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-        decoration: BoxDecoration(
-          color: bg,
-          borderRadius: BorderRadius.circular(999),
-        ),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(icon, size: 14, color: fg),
-            const SizedBox(width: 4),
-            Text(
-              '$label: $txt',
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                color: fg,
-                fontWeight: FontWeight.w600,
-              ),
-            ),
-          ],
-        ),
-      );
-    }
-
     return Scaffold(
       appBar: AppBar(
         centerTitle: true,
-        title: InkWell(
-          borderRadius: BorderRadius.circular(6),
+        title: HomeAppBarTitle(
+          accountAsync: accAsync,
           onTap: _showAccountPicker,
-          child: accAsync.when(
-            loading: () => Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                MoneyText(
-                  amountCents: 0,
-                  currency: 'XOF',
-                  style: Theme.of(context).textTheme.titleLarge,
-                ),
-                const SizedBox(height: 2),
-                const Text('…', style: TextStyle(fontSize: 12)),
-              ],
-            ),
-            error: (_, __) => Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                MoneyText(
-                  amountCents: 0,
-                  currency: 'XOF',
-                  style: Theme.of(context).textTheme.titleLarge,
-                ),
-                const SizedBox(height: 2),
-                const Text('Compte', style: TextStyle(fontSize: 12)),
-              ],
-            ),
-            data: (acc) {
-              final cur = acc?.currency ?? 'XOF';
-              final goal = (acc?.balanceGoal ?? 0);
-              final limit = (acc?.balanceLimit ?? 0);
-              final hasGoal = goal > 0;
-              final hasLimit = limit > 0;
-              final cs = Theme.of(context).colorScheme;
-
-              final chips = <Widget>[
-                if (hasGoal)
-                  _goalLimitChip(
-                    icon: Icons.flag_outlined,
-                    label: 'Objectif',
-                    cents: goal,
-                    currency: cur,
-                    bg: cs.tertiaryContainer,
-                    fg: cs.onTertiaryContainer,
-                  ),
-                if (hasLimit)
-                  _goalLimitChip(
-                    icon: Icons.speed_rounded,
-                    label: 'Plafond',
-                    cents: limit,
-                    currency: cur,
-                    bg: cs.primaryContainer,
-                    fg: cs.onPrimaryContainer,
-                  ),
-              ];
-
-              return Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  MoneyText(
-                    amountCents: acc?.balance ?? 0,
-                    currency: cur,
-                    style: Theme.of(context).textTheme.titleLarge,
-                  ),
-                  const SizedBox(height: 2),
-                  SingleChildScrollView(
-                    scrollDirection: Axis.horizontal,
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Text(
-                              acc?.code ?? 'Compte',
-                              style: const TextStyle(fontSize: 12),
-                            ),
-                            const SizedBox(width: 4),
-                            const Icon(Icons.expand_more, size: 16),
-                          ],
-                        ),
-                        if (chips.isNotEmpty) const SizedBox(width: 8),
-                        if (chips.isNotEmpty) Wrap(spacing: 6, children: chips),
-                      ],
-                    ),
-                  ),
-                ],
-              );
-            },
-          ),
         ),
         actions: [
           if (pageIdx == 0)
@@ -286,9 +163,6 @@ class _HomePageState extends ConsumerState<HomePage> {
                   case 'period':
                     await _showPeriodSheet();
                     break;
-                  case 'changeAccount':
-                    await _showAccountPicker();
-                    break;
                   case 'sync':
                     if (!mounted) break;
                     ScaffoldMessenger.of(context).showSnackBar(
@@ -306,12 +180,6 @@ class _HomePageState extends ConsumerState<HomePage> {
                     final acc = await ref.read(selectedAccountProvider.future);
                     if (!mounted || acc == null) break;
                     await _showShareDialog(acc);
-                    break;
-                  case 'settings':
-                    if (!mounted) break;
-                    await Navigator.of(context).push(
-                      MaterialPageRoute(builder: (_) => const SettingsPage()),
-                    );
                     break;
                   case 'personnalisation':
                     if (!mounted) break;
@@ -351,6 +219,12 @@ class _HomePageState extends ConsumerState<HomePage> {
                       MaterialPageRoute(
                         builder: (_) => const ProductListPage(),
                       ),
+                    );
+                    break;
+                  case 'settings':
+                    if (!mounted) break;
+                    await Navigator.of(context).push(
+                      MaterialPageRoute(builder: (_) => const SettingsPage()),
                     );
                     break;
                 }
