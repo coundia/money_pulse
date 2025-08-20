@@ -1,10 +1,9 @@
-// Right-drawer form to add/edit an account with budgets, dates and type.
+// Right-drawer form to add/edit an account; controllers keep cents (x100), preview shows major units.
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:money_pulse/domain/accounts/entities/account.dart';
 import 'package:money_pulse/presentation/shared/formatters.dart';
-
 import '../../transactions/widgets/amount_field_quickpad.dart';
 
 class AccountFormResult {
@@ -48,14 +47,22 @@ class _AccountFormPanelState extends State<AccountFormPanel> {
   late final TextEditingController _curr = TextEditingController(
     text: widget.existing?.currency ?? 'XOF',
   );
+
+  // IMPORTANT: on garde les champs en CENTS (x100)
   late final TextEditingController _initCtrl = TextEditingController(
-    text: (widget.existing?.balanceInit ?? 0).toString(),
+    text: (widget.existing?.balanceInit ?? 0) == 0
+        ? ''
+        : (widget.existing?.balanceInit ?? 0).toString(),
   );
   late final TextEditingController _goalCtrl = TextEditingController(
-    text: (widget.existing?.balanceGoal ?? 0).toString(),
+    text: (widget.existing?.balanceGoal ?? 0) == 0
+        ? ''
+        : (widget.existing?.balanceGoal ?? 0).toString(),
   );
   late final TextEditingController _limitCtrl = TextEditingController(
-    text: (widget.existing?.balanceLimit ?? 0).toString(),
+    text: (widget.existing?.balanceLimit ?? 0) == 0
+        ? ''
+        : (widget.existing?.balanceLimit ?? 0).toString(),
   );
 
   static const _types = [
@@ -64,11 +71,35 @@ class _AccountFormPanelState extends State<AccountFormPanel> {
     'MOBILE',
     'SAVINGS',
     'CREDIT',
+    'BUDGET_MAX',
     'OTHER',
   ];
+  static const _typeIcons = {
+    'CASH': Icons.payments_outlined,
+    'BANK': Icons.account_balance,
+    'MOBILE': Icons.smartphone,
+    'SAVINGS': Icons.savings_outlined,
+    'CREDIT': Icons.credit_card,
+    'BUDGET_MAX': Icons.flag_circle_outlined,
+    'OTHER': Icons.wallet_outlined,
+  };
+  static const _typeLabelsFr = {
+    'CASH': 'Espèces',
+    'BANK': 'Banque',
+    'MOBILE': 'Mobile money',
+    'SAVINGS': 'Épargne',
+    'CREDIT': 'Crédit',
+    'BUDGET_MAX': 'Budget maximum',
+    'OTHER': 'Autre',
+  };
+
   String? _type;
   DateTime? _dateStart;
   DateTime? _dateEnd;
+
+  bool _useInit = false;
+  bool _useGoal = false;
+  bool _useLimit = false;
 
   @override
   void initState() {
@@ -76,21 +107,28 @@ class _AccountFormPanelState extends State<AccountFormPanel> {
     _type = widget.existing?.typeAccount;
     _dateStart = widget.existing?.dateStartAccount;
     _dateEnd = widget.existing?.dateEndAccount;
+    _useInit = (widget.existing?.balanceInit ?? 0) > 0;
+    _useGoal = (widget.existing?.balanceGoal ?? 0) > 0;
+    _useLimit = (widget.existing?.balanceLimit ?? 0) > 0;
+    _applyTypeDefaults(force: true);
   }
 
-  @override
-  void dispose() {
-    _code.dispose();
-    _desc.dispose();
-    _curr.dispose();
-    _initCtrl.dispose();
-    _goalCtrl.dispose();
-    _limitCtrl.dispose();
-    super.dispose();
+  void _applyTypeDefaults({bool force = false}) {
+    if (_type == 'BUDGET_MAX') {
+      _useInit = false;
+      _useGoal = false;
+      _useLimit = true;
+    } else if (_type == 'CREDIT') {
+      _useLimit = true;
+    }
   }
 
-  int _parseAmount(TextEditingController c) =>
-      int.tryParse(c.text.replaceAll(' ', '')) ?? 0;
+  int? _parseMinorOpt(TextEditingController c, bool enabled) {
+    if (!enabled) return null;
+    final t = c.text.trim();
+    if (t.isEmpty) return null;
+    return int.tryParse(t.replaceAll(' ', '')) ?? 0;
+  }
 
   Future<void> _pickStart() async {
     final now = DateTime.now();
@@ -134,9 +172,9 @@ class _AccountFormPanelState extends State<AccountFormPanel> {
         code: _code.text.trim(),
         description: _desc.text.trim().isEmpty ? null : _desc.text.trim(),
         currency: _curr.text.trim().isEmpty ? null : _curr.text.trim(),
-        balanceInit: _parseAmount(_initCtrl),
-        balanceGoal: _parseAmount(_goalCtrl),
-        balanceLimit: _parseAmount(_limitCtrl),
+        balanceInit: _parseMinorOpt(_initCtrl, _useInit),
+        balanceGoal: _parseMinorOpt(_goalCtrl, _useGoal),
+        balanceLimit: _parseMinorOpt(_limitCtrl, _useLimit),
         typeAccount: _type,
         dateStart: _dateStart,
         dateEnd: _dateEnd,
@@ -144,9 +182,110 @@ class _AccountFormPanelState extends State<AccountFormPanel> {
     );
   }
 
+  String _goalLabel() {
+    if (_type == 'SAVINGS') return 'Objectif d’épargne';
+    if (_type == 'CREDIT') return 'Objectif de remboursement';
+    return 'Objectif de solde';
+  }
+
+  String _limitLabel() {
+    if (_type == 'CREDIT') return 'Plafond de crédit';
+    if (_type == 'BUDGET_MAX') return 'Budget maximum';
+    return 'Limite de solde';
+  }
+
+  Widget _amountBlock({
+    required String title,
+    required TextEditingController controller,
+    required bool enabled,
+    required ValueChanged<bool> onToggle,
+    bool forceOn = false,
+    String? currency,
+  }) {
+    final cents = int.tryParse(controller.text.replaceAll(' ', '')) ?? 0;
+    final preview = Formatters.amountFromCents(cents);
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(12),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            SwitchListTile(
+              value: enabled || forceOn,
+              onChanged: forceOn ? null : (v) => onToggle(v),
+              title: Text(title),
+            ),
+            AnimatedOpacity(
+              duration: const Duration(milliseconds: 160),
+              opacity: (enabled || forceOn) ? 1 : 0.35,
+              child: IgnorePointer(
+                ignoring: !(enabled || forceOn),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    AmountFieldQuickPad(
+                      controller: controller,
+                      quickUnits: const [
+                        0,
+                        2000,
+                        5000,
+                        10000,
+                        20000,
+                        50000,
+                        100000,
+                        200000,
+                        300000,
+                        400000,
+                        500000,
+                        1000000,
+                      ],
+                      lockToItems: false,
+                      onToggleLock: null,
+                      onChanged: () => setState(() {}),
+                    ),
+                    const SizedBox(height: 6),
+                    Text(
+                      'Aperçu: $preview ${currency ?? ''}'.trim(),
+                      style: Theme.of(context).textTheme.bodySmall,
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final isEdit = widget.existing != null;
+
+    final typeChips = Wrap(
+      spacing: 8,
+      runSpacing: 8,
+      children: _types
+          .map(
+            (t) => ChoiceChip(
+              selected: _type == t,
+              onSelected: (sel) {
+                setState(() {
+                  _type = sel ? t : null;
+                  _applyTypeDefaults();
+                });
+              },
+              avatar: Icon(_typeIcons[t], size: 18),
+              label: Text(_typeLabelsFr[t]!),
+            ),
+          )
+          .toList(),
+    );
+
+    final showInit = _type != 'BUDGET_MAX';
+    final showGoal = _type != 'BUDGET_MAX';
+    final forceLimit = _type == 'CREDIT' || _type == 'BUDGET_MAX';
+
     return Scaffold(
       appBar: AppBar(
         leading: IconButton(
@@ -211,82 +350,48 @@ class _AccountFormPanelState extends State<AccountFormPanel> {
                 ),
                 const SizedBox(height: 16),
                 Text(
+                  'Type de compte',
+                  style: Theme.of(context).textTheme.titleMedium,
+                ),
+                const SizedBox(height: 8),
+                typeChips,
+                const SizedBox(height: 16),
+                Text(
                   'Budgets & limites',
                   style: Theme.of(context).textTheme.titleMedium,
                 ),
                 const SizedBox(height: 8),
-                Card(
-                  child: Padding(
-                    padding: const EdgeInsets.all(12),
-                    child: Column(
-                      children: [
-                        Row(children: [Expanded(child: Text('Solde initial'))]),
-                        AmountFieldQuickPad(
-                          controller: _initCtrl,
-                          quickUnits: const [
-                            0,
-                            2000,
-                            5000,
-                            10000,
-                            20000,
-                            50000,
-                            100000,
-                            200000,
-                            300000,
-                            400000,
-                            500000,
-                            1000000,
-                          ],
-                          lockToItems: false,
-                          onToggleLock: null,
-                          onChanged: () => setState(() {}),
-                        ),
-                        const SizedBox(height: 10),
-                        Row(
-                          children: [
-                            Expanded(child: Text('Objectif de solde')),
-                          ],
-                        ),
-                        AmountFieldQuickPad(
-                          controller: _goalCtrl,
-                          quickUnits: const [
-                            0,
-                            50000,
-                            100000,
-                            200000,
-                            300000,
-                            500000,
-                            1000000,
-                            2000000,
-                          ],
-                          lockToItems: false,
-                          onToggleLock: null,
-                          onChanged: () => setState(() {}),
-                        ),
-                        const SizedBox(height: 10),
-                        Row(
-                          children: [Expanded(child: Text('Limite de solde'))],
-                        ),
-                        AmountFieldQuickPad(
-                          controller: _limitCtrl,
-                          quickUnits: const [
-                            0,
-                            5000,
-                            10000,
-                            20000,
-                            50000,
-                            100000,
-                            200000,
-                            300000,
-                            500000,
-                          ],
-                          lockToItems: false,
-                          onToggleLock: null,
-                          onChanged: () => setState(() {}),
-                        ),
-                      ],
-                    ),
+                if (showInit)
+                  _amountBlock(
+                    title: 'Solde initial',
+                    controller: _initCtrl,
+                    enabled: _useInit,
+                    onToggle: (v) => setState(() => _useInit = v),
+                    currency: _curr.text.trim().isEmpty
+                        ? null
+                        : _curr.text.trim(),
                   ),
+                if (showInit) const SizedBox(height: 8),
+                if (showGoal)
+                  _amountBlock(
+                    title: _goalLabel(),
+                    controller: _goalCtrl,
+                    enabled: _useGoal,
+                    onToggle: (v) => setState(() => _useGoal = v),
+                    currency: _curr.text.trim().isEmpty
+                        ? null
+                        : _curr.text.trim(),
+                  ),
+                if (showGoal) const SizedBox(height: 8),
+                _amountBlock(
+                  title: _limitLabel(),
+                  controller: _limitCtrl,
+                  enabled: _useLimit,
+                  onToggle: (v) => setState(() => _useLimit = v),
+                  forceOn: forceLimit,
+                  currency: _curr.text.trim().isEmpty
+                      ? null
+                      : _curr.text.trim(),
                 ),
                 const SizedBox(height: 16),
                 Text(
@@ -324,37 +429,6 @@ class _AccountFormPanelState extends State<AccountFormPanel> {
                       ),
                     ),
                   ],
-                ),
-                const SizedBox(height: 16),
-                Text(
-                  'Type de compte',
-                  style: Theme.of(context).textTheme.titleMedium,
-                ),
-                const SizedBox(height: 8),
-                DropdownButtonFormField<String>(
-                  value: _type,
-                  items: _types
-                      .map(
-                        (t) => DropdownMenuItem<String>(
-                          value: t,
-                          child: Text(
-                            {
-                              'CASH': 'Espèces',
-                              'BANK': 'Banque',
-                              'MOBILE': 'Mobile money',
-                              'SAVINGS': 'Épargne',
-                              'CREDIT': 'Crédit',
-                              'OTHER': 'Autre',
-                            }[t]!,
-                          ),
-                        ),
-                      )
-                      .toList(),
-                  decoration: const InputDecoration(
-                    border: OutlineInputBorder(),
-                    hintText: 'Sélectionner',
-                  ),
-                  onChanged: (v) => setState(() => _type = v),
                 ),
                 const SizedBox(height: 16),
                 FilledButton.icon(

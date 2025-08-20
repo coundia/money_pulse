@@ -1,4 +1,4 @@
-// Orchestrates accounts list: search/filter, actions, and right-drawer panels.
+// Orchestrates accounts list: search/filter, actions, and right-drawer panels with provider refresh.
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -110,6 +110,7 @@ class _AccountListPageState extends ConsumerState<AccountListPage> {
       );
       await _repo.update(updated);
     }
+    ref.invalidate(accountListProvider);
     if (mounted) setState(() {});
   }
 
@@ -122,6 +123,7 @@ class _AccountListPageState extends ConsumerState<AccountListPage> {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString(kLastAccountIdKey, acc.id);
     ref.read(selectedAccountIdProvider.notifier).state = acc.id;
+    ref.invalidate(accountListProvider);
     if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
@@ -152,6 +154,7 @@ class _AccountListPageState extends ConsumerState<AccountListPage> {
     );
     if (ok == true) {
       await _repo.softDelete(acc.id);
+      ref.invalidate(accountListProvider);
       if (mounted) setState(() {});
     }
   }
@@ -181,6 +184,7 @@ class _AccountListPageState extends ConsumerState<AccountListPage> {
       isDirty: true,
     );
     await _repo.update(updated);
+    ref.invalidate(accountListProvider);
     if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
@@ -238,14 +242,15 @@ class _AccountListPageState extends ConsumerState<AccountListPage> {
                 ref.read(accountTypeFilterProvider.notifier).state = v == 'ALL'
                 ? null
                 : v,
-            itemBuilder: (_) => [
-              const PopupMenuItem(value: 'ALL', child: Text('Tous les types')),
-              const PopupMenuItem(value: 'CASH', child: Text('Espèces')),
-              const PopupMenuItem(value: 'BANK', child: Text('Banque')),
-              const PopupMenuItem(value: 'MOBILE', child: Text('Mobile money')),
-              const PopupMenuItem(value: 'SAVINGS', child: Text('Épargne')),
-              const PopupMenuItem(value: 'CREDIT', child: Text('Crédit')),
-              const PopupMenuItem(value: 'OTHER', child: Text('Autre')),
+            itemBuilder: (_) => const [
+              PopupMenuItem(value: 'ALL', child: Text('Tous les types')),
+              PopupMenuItem(value: 'CASH', child: Text('Espèces')),
+              PopupMenuItem(value: 'BANK', child: Text('Banque')),
+              PopupMenuItem(value: 'MOBILE', child: Text('Mobile money')),
+              PopupMenuItem(value: 'SAVINGS', child: Text('Épargne')),
+              PopupMenuItem(value: 'CREDIT', child: Text('Crédit')),
+              PopupMenuItem(value: 'BUDGET_MAX', child: Text('Budget maximum')),
+              PopupMenuItem(value: 'OTHER', child: Text('Autre')),
             ],
             child: Chip(label: Text('Filtres (${count.toString()})')),
           ),
@@ -263,7 +268,7 @@ class _AccountListPageState extends ConsumerState<AccountListPage> {
             tooltip: 'Ajouter un compte',
           ),
           IconButton(
-            onPressed: () => setState(() {}),
+            onPressed: () => ref.invalidate(accountListProvider),
             icon: const Icon(Icons.refresh),
             tooltip: 'Rafraîchir',
           ),
@@ -282,7 +287,7 @@ class _AccountListPageState extends ConsumerState<AccountListPage> {
             return ListView(children: [header, _empty()]);
           }
           return RefreshIndicator(
-            onRefresh: () async => setState(() {}),
+            onRefresh: () async => ref.invalidate(accountListProvider),
             child: ListView.separated(
               padding: const EdgeInsets.only(bottom: 120),
               itemCount: items.length + 1,

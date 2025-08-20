@@ -1,4 +1,4 @@
-// Right-drawer panel to adjust account balance.
+// Right-drawer panel to adjust account balance; controller keeps cents (x100), preview shows major units.
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -22,7 +22,7 @@ class AccountAdjustBalancePanel extends StatefulWidget {
 
 class _AccountAdjustBalancePanelState extends State<AccountAdjustBalancePanel> {
   late final TextEditingController _amountCtrl = TextEditingController(
-    text: widget.account.balance.toString(),
+    text: widget.account.balance == 0 ? '' : widget.account.balance.toString(),
   );
 
   @override
@@ -32,15 +32,16 @@ class _AccountAdjustBalancePanelState extends State<AccountAdjustBalancePanel> {
   }
 
   void _save() {
-    final v =
-        int.tryParse(_amountCtrl.text.replaceAll(' ', '')) ??
-        widget.account.balance;
+    final v = int.tryParse(_amountCtrl.text.replaceAll(' ', '')) ?? 0;
     Navigator.pop(context, AccountAdjustBalanceResult(v));
   }
 
   @override
   Widget build(BuildContext context) {
     final a = widget.account;
+    final preview = Formatters.amountFromCents(
+      int.tryParse(_amountCtrl.text.replaceAll(' ', '')) ?? 0,
+    );
     return Scaffold(
       appBar: AppBar(
         title: const Text('Ajuster le solde'),
@@ -72,7 +73,10 @@ class _AccountAdjustBalancePanelState extends State<AccountAdjustBalancePanel> {
                       : (a.code ?? 'Compte'),
                 ),
                 subtitle: Text(a.currency ?? '—'),
-                trailing: Text(Formatters.amountFromCents(a.balance)),
+                trailing: Text(
+                  Formatters.amountFromCents(a.balance) +
+                      (a.currency == null ? '' : ' ${a.currency}'),
+                ),
               ),
               const SizedBox(height: 12),
               AmountFieldQuickPad(
@@ -94,6 +98,11 @@ class _AccountAdjustBalancePanelState extends State<AccountAdjustBalancePanel> {
                 lockToItems: false,
                 onToggleLock: null,
                 onChanged: () => setState(() {}),
+              ),
+              const SizedBox(height: 8),
+              Text(
+                'Aperçu: $preview ${a.currency ?? ''}'.trim(),
+                style: Theme.of(context).textTheme.bodySmall,
               ),
               const SizedBox(height: 16),
               FilledButton.icon(
