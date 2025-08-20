@@ -1,4 +1,4 @@
-// Home page with bottom navigation visibility preference and interface right-drawer panel.
+// Home page with header showing current balance plus goal/limit chips, horizontally scrollable to avoid overflow (FR labels, EN code).
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -7,9 +7,9 @@ import 'package:money_pulse/presentation/app/providers.dart';
 import 'package:money_pulse/presentation/app/account_selection.dart';
 import 'package:money_pulse/presentation/widgets/money_text.dart';
 import 'package:money_pulse/presentation/widgets/right_drawer.dart';
+import 'package:money_pulse/presentation/shared/formatters.dart';
 
 import 'package:money_pulse/presentation/features/settings/settings_page.dart';
-import 'package:money_pulse/presentation/features/transactions/transaction_quick_add_sheet.dart';
 import 'package:money_pulse/presentation/features/transactions/transaction_form_sheet.dart';
 import 'package:money_pulse/presentation/features/transactions/pages/transaction_list_page.dart';
 import 'package:money_pulse/presentation/features/transactions/search/txn_search_delegate.dart';
@@ -125,6 +125,41 @@ class _HomePageState extends ConsumerState<HomePage> {
     final accAsync = ref.watch(selectedAccountProvider);
     final uiPrefs = ref.watch(homeUiPrefsProvider);
 
+    Widget _goalLimitChip({
+      required IconData icon,
+      required String label,
+      required int cents,
+      required Color bg,
+      required Color fg,
+      String? currency,
+    }) {
+      final txt =
+          '${Formatters.amountFromCents(cents)}${(currency ?? '').isNotEmpty ? ' $currency' : ''}';
+      return Container(
+        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+        decoration: BoxDecoration(
+          color: bg,
+          borderRadius: BorderRadius.circular(999),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(icon, size: 14, color: fg),
+            const SizedBox(width: 4),
+            Text(
+              '$label: $txt',
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                color: fg,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+
     return Scaffold(
       appBar: AppBar(
         centerTitle: true,
@@ -156,28 +191,68 @@ class _HomePageState extends ConsumerState<HomePage> {
                 const Text('Compte', style: TextStyle(fontSize: 12)),
               ],
             ),
-            data: (acc) => Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                MoneyText(
-                  amountCents: acc?.balance ?? 0,
-                  currency: acc?.currency ?? 'XOF',
-                  style: Theme.of(context).textTheme.titleLarge,
-                ),
-                const SizedBox(height: 2),
-                Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Text(
-                      acc?.code ?? 'Compte',
-                      style: const TextStyle(fontSize: 12),
+            data: (acc) {
+              final cur = acc?.currency ?? 'XOF';
+              final goal = (acc?.balanceGoal ?? 0);
+              final limit = (acc?.balanceLimit ?? 0);
+              final hasGoal = goal > 0;
+              final hasLimit = limit > 0;
+              final cs = Theme.of(context).colorScheme;
+
+              final chips = <Widget>[
+                if (hasGoal)
+                  _goalLimitChip(
+                    icon: Icons.flag_outlined,
+                    label: 'Objectif',
+                    cents: goal,
+                    currency: cur,
+                    bg: cs.tertiaryContainer,
+                    fg: cs.onTertiaryContainer,
+                  ),
+                if (hasLimit)
+                  _goalLimitChip(
+                    icon: Icons.speed_rounded,
+                    label: 'Plafond',
+                    cents: limit,
+                    currency: cur,
+                    bg: cs.primaryContainer,
+                    fg: cs.onPrimaryContainer,
+                  ),
+              ];
+
+              return Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  MoneyText(
+                    amountCents: acc?.balance ?? 0,
+                    currency: cur,
+                    style: Theme.of(context).textTheme.titleLarge,
+                  ),
+                  const SizedBox(height: 2),
+                  SingleChildScrollView(
+                    scrollDirection: Axis.horizontal,
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Text(
+                              acc?.code ?? 'Compte',
+                              style: const TextStyle(fontSize: 12),
+                            ),
+                            const SizedBox(width: 4),
+                            const Icon(Icons.expand_more, size: 16),
+                          ],
+                        ),
+                        if (chips.isNotEmpty) const SizedBox(width: 8),
+                        if (chips.isNotEmpty) Wrap(spacing: 6, children: chips),
+                      ],
                     ),
-                    const SizedBox(width: 4),
-                    const Icon(Icons.expand_more, size: 16),
-                  ],
-                ),
-              ],
-            ),
+                  ),
+                ],
+              );
+            },
           ),
         ),
         actions: [
@@ -347,7 +422,6 @@ class _HomePageState extends ConsumerState<HomePage> {
                     title: Text('Personnalisation'),
                   ),
                 ),
-
                 PopupMenuItem(
                   value: 'settings',
                   child: ListTile(
@@ -385,7 +459,6 @@ class _HomePageState extends ConsumerState<HomePage> {
               ],
             )
           : null,
-
       floatingActionButtonLocation: FloatingActionButtonLocation.endFloat,
     );
   }
