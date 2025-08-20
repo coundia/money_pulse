@@ -1,4 +1,4 @@
-// Right-drawer form to add/edit an account; edit in major units, save in cents (x100), preview consistent in FR.
+// Right-drawer form to add/edit an account with major-units editing, cents saving (x100), live preview, and quick period presets (1w/1m/6m/1y).
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:money_pulse/domain/accounts/entities/account.dart';
@@ -27,6 +27,8 @@ class AccountFormResult {
     this.dateEnd,
   });
 }
+
+enum _PeriodPreset { week, month1, month6, year1 }
 
 class AccountFormPanel extends StatefulWidget {
   final Account? existing;
@@ -103,6 +105,7 @@ class _AccountFormPanelState extends State<AccountFormPanel> {
   String? _type;
   DateTime? _dateStart;
   DateTime? _dateEnd;
+  _PeriodPreset? _selectedPreset;
   bool _useInit = false;
   bool _useGoal = false;
   bool _useLimit = false;
@@ -136,6 +139,52 @@ class _AccountFormPanelState extends State<AccountFormPanel> {
     return Formatters.toMinorFromMajorString(t);
   }
 
+  DateTime _startOfDay(DateTime d) => DateTime(d.year, d.month, d.day, 0, 0);
+  DateTime _endOfDay(DateTime d) => DateTime(d.year, d.month, d.day, 23, 59);
+
+  void _applyPreset(_PeriodPreset p) {
+    final now = DateTime.now();
+    final s = _startOfDay(now);
+    DateTime e;
+    switch (p) {
+      case _PeriodPreset.week:
+        e = _endOfDay(s.add(const Duration(days: 6)));
+        break;
+      case _PeriodPreset.month1:
+        e = _endOfDay(
+          DateTime(
+            s.year,
+            s.month + 1,
+            s.day,
+          ).subtract(const Duration(days: 1)),
+        );
+        break;
+      case _PeriodPreset.month6:
+        e = _endOfDay(
+          DateTime(
+            s.year,
+            s.month + 6,
+            s.day,
+          ).subtract(const Duration(days: 1)),
+        );
+        break;
+      case _PeriodPreset.year1:
+        e = _endOfDay(
+          DateTime(
+            s.year + 1,
+            s.month,
+            s.day,
+          ).subtract(const Duration(days: 1)),
+        );
+        break;
+    }
+    setState(() {
+      _selectedPreset = p;
+      _dateStart = s;
+      _dateEnd = e;
+    });
+  }
+
   Future<void> _pickStart() async {
     final now = DateTime.now();
     final base = _dateStart ?? now;
@@ -150,13 +199,19 @@ class _AccountFormPanelState extends State<AccountFormPanel> {
       locale: const Locale('fr', 'FR'),
     );
     if (d != null) {
-      setState(() => _dateStart = DateTime(d.year, d.month, d.day, 0, 0));
+      setState(() {
+        _dateStart = _startOfDay(d);
+        if (_dateEnd == null || _dateEnd!.isBefore(_dateStart!)) {
+          _dateEnd = _endOfDay(d);
+        }
+        _selectedPreset = null;
+      });
     }
   }
 
   Future<void> _pickEnd() async {
     final now = DateTime.now();
-    final base = _dateEnd ?? now;
+    final base = _dateEnd ?? _dateStart ?? now;
     final d = await showDatePicker(
       context: context,
       firstDate: DateTime(now.year - 20),
@@ -168,8 +223,22 @@ class _AccountFormPanelState extends State<AccountFormPanel> {
       locale: const Locale('fr', 'FR'),
     );
     if (d != null) {
-      setState(() => _dateEnd = DateTime(d.year, d.month, d.day, 23, 59));
+      setState(() {
+        _dateEnd = _endOfDay(d);
+        if (_dateStart != null && _dateEnd!.isBefore(_dateStart!)) {
+          _dateStart = _startOfDay(d);
+        }
+        _selectedPreset = null;
+      });
     }
+  }
+
+  void _clearPeriod() {
+    setState(() {
+      _dateStart = null;
+      _dateEnd = null;
+      _selectedPreset = null;
+    });
   }
 
   void _save() {
@@ -263,6 +332,78 @@ class _AccountFormPanelState extends State<AccountFormPanel> {
           ],
         ),
       ),
+    );
+  }
+
+  Widget _periodPresets() {
+    final cs = Theme.of(context).colorScheme;
+    final Map<_PeriodPreset, (String, IconData)> items = {
+      _PeriodPreset.week: ('1 semaine', Icons.date_range),
+      _PeriodPreset.month1: ('1 mois', Icons.calendar_today),
+      _PeriodPreset.month6: ('6 mois', Icons.event_repeat),
+      _PeriodPreset.year1: ('1 année', Icons.event_available),
+    };
+    return Wrap(
+      spacing: 8,
+      runSpacing: 8,
+      children: items.entries.map((e) {
+        final selected = _selectedPreset == e.key;
+        return ChoiceChip(
+          selected: selected,
+          onSelected: (_) => _applyPreset(e.key),
+          avatar: Icon(
+            e.value.$2,
+            size: 18,
+            color: selected ? cs.onPrimary : cs.primary,
+          ),
+          label: Text(e.value.$1),
+          labelStyle: TextStyle(color: selected ? cs.onPrimary : null),
+          selectedColor: cs.primary,
+          backgroundColor: cs.surfaceVariant.withOpacity(.35),
+        );
+      }).toList(),
+    );
+  }
+
+  Widget _periodPickers() {
+    final s = _dateStart == null
+        ? 'Date de début'
+        : Formatters.dateFull(_dateStart!);
+    final e = _dateEnd == null ? 'Date de fin' : Formatters.dateFull(_dateEnd!);
+    return Row(
+      children: [
+        Expanded(
+          child: OutlinedButton.icon(
+            onPressed: _pickStart,
+            icon: const Icon(Icons.today),
+            label: Align(
+              alignment: Alignment.centerLeft,
+              child: Text(s, overflow: TextOverflow.ellipsis),
+            ),
+          ),
+        ),
+        const SizedBox(width: 8),
+        Expanded(
+          child: OutlinedButton.icon(
+            onPressed: _pickEnd,
+            icon: const Icon(Icons.event),
+            label: Align(
+              alignment: Alignment.centerLeft,
+              child: Text(e, overflow: TextOverflow.ellipsis),
+            ),
+          ),
+        ),
+        const SizedBox(width: 8),
+        Tooltip(
+          message: 'Effacer',
+          child: IconButton(
+            onPressed: (_dateStart != null || _dateEnd != null)
+                ? _clearPeriod
+                : null,
+            icon: const Icon(Icons.clear),
+          ),
+        ),
+      ],
     );
   }
 
@@ -407,37 +548,16 @@ class _AccountFormPanelState extends State<AccountFormPanel> {
                   style: Theme.of(context).textTheme.titleMedium,
                 ),
                 const SizedBox(height: 8),
-                Row(
-                  children: [
-                    Expanded(
-                      child: OutlinedButton(
-                        onPressed: _pickStart,
-                        child: Align(
-                          alignment: Alignment.centerLeft,
-                          child: Text(
-                            _dateStart == null
-                                ? 'Date de début'
-                                : Formatters.dateFull(_dateStart!),
-                          ),
-                        ),
-                      ),
-                    ),
-                    const SizedBox(width: 8),
-                    Expanded(
-                      child: OutlinedButton(
-                        onPressed: _pickEnd,
-                        child: Align(
-                          alignment: Alignment.centerLeft,
-                          child: Text(
-                            _dateEnd == null
-                                ? 'Date de fin'
-                                : Formatters.dateFull(_dateEnd!),
-                          ),
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
+                _periodPresets(),
+                const SizedBox(height: 8),
+                _periodPickers(),
+                if (_dateStart != null && _dateEnd != null) ...[
+                  const SizedBox(height: 8),
+                  Text(
+                    'Du ${Formatters.dateFull(_dateStart!)} au ${Formatters.dateFull(_dateEnd!)}',
+                    style: Theme.of(context).textTheme.bodyMedium,
+                  ),
+                ],
                 const SizedBox(height: 16),
                 FilledButton.icon(
                   onPressed: _save,
