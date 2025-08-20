@@ -1,4 +1,4 @@
-// Reusable account tile with savings goal progress; fixes bottom overflow by allowing taller tile and compact trailing layout.
+// Account list tile with type-aware visuals, remaining amount, and savings goal progress moved into subtitle to avoid bottom overflow.
 import 'package:flutter/material.dart';
 import 'package:money_pulse/domain/accounts/entities/account.dart';
 import 'package:money_pulse/presentation/shared/formatters.dart';
@@ -76,12 +76,11 @@ class AccountTile extends StatelessWidget {
       _ => cs.onSurfaceVariant,
     };
 
-    final subtitle = [
+    final subtitleLine = [
       typeFr,
       if (updatedAtText.isNotEmpty) updatedAtText,
     ].join(' · ');
 
-    // Remaining logic
     final int balanceCents = account.balance;
     final int? limit = account.balanceLimit;
     final int? goal = account.balanceGoal;
@@ -93,7 +92,7 @@ class AccountTile extends StatelessWidget {
       remainingLabel = 'Restant';
     } else if (goal != null && goal > 0) {
       remainingCents = goal - balanceCents;
-      remainingLabel = 'Vers objectif';
+      remainingLabel = 'Objectif';
     }
 
     String _fmt(int cents) {
@@ -106,7 +105,6 @@ class AccountTile extends StatelessWidget {
     final bool isOver = (remainingCents ?? 0) < 0;
     final int absRemain = (remainingCents ?? 0).abs();
 
-    // Savings progress
     final bool isSavings = type == 'SAVINGS';
     final bool hasSavingsGoal = isSavings && (goal != null && goal > 0);
     final double goalRatio = hasSavingsGoal
@@ -133,13 +131,9 @@ class AccountTile extends StatelessWidget {
         borderRadius: BorderRadius.circular(12),
       ),
       child: ListTile(
-        // Allow taller tile when progress bar is visible to avoid bottom overflow
         isThreeLine: hasSavingsGoal,
         onTap: onView,
-        contentPadding: const EdgeInsets.symmetric(
-          horizontal: 12,
-          vertical: 10,
-        ),
+        contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
         leading: Stack(
           clipBehavior: Clip.none,
           children: [
@@ -178,13 +172,40 @@ class AccountTile extends StatelessWidget {
             context,
           ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700),
         ),
-        subtitle: Text(subtitle, maxLines: 1, overflow: TextOverflow.ellipsis),
+        subtitle: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(subtitleLine, maxLines: 1, overflow: TextOverflow.ellipsis),
+            if (hasSavingsGoal) ...[
+              const SizedBox(height: 6),
+              Text(
+                '${_fmt(goal!)}',
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: Theme.of(context).textTheme.labelSmall,
+              ),
+              const SizedBox(height: 4),
+              Semantics(
+                label: '$goalPercent%',
+                child: ClipRRect(
+                  borderRadius: BorderRadius.circular(999),
+                  child: LinearProgressIndicator(
+                    value: goalRatio,
+                    minHeight: 6,
+                    backgroundColor: cs.surfaceVariant.withOpacity(.5),
+                    color: cs.tertiary,
+                  ),
+                ),
+              ),
+            ],
+          ],
+        ),
         trailing: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            // Make trailing column compact and let tile grow vertically if needed
             ConstrainedBox(
-              constraints: const BoxConstraints(maxWidth: 200),
+              constraints: const BoxConstraints(maxWidth: 180),
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 crossAxisAlignment: CrossAxisAlignment.end,
@@ -212,32 +233,6 @@ class AccountTile extends StatelessWidget {
                     )
                   else
                     Text('—', style: Theme.of(context).textTheme.labelMedium),
-                  if (hasSavingsGoal) ...[
-                    const SizedBox(height: 6),
-                    Text(
-                      'Objectif: ${_fmt(goal!)}',
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: Theme.of(context).textTheme.labelSmall,
-                    ),
-                    const SizedBox(height: 4),
-                    Semantics(
-                      label: 'Progression épargne $goalPercent%',
-                      child: SizedBox(
-                        width: 200,
-                        height: 6, // compact height to reduce risk of overflow
-                        child: ClipRRect(
-                          borderRadius: BorderRadius.circular(999),
-                          child: LinearProgressIndicator(
-                            value: goalRatio,
-                            backgroundColor: cs.surfaceVariant.withOpacity(.5),
-                            color: cs.tertiary,
-                            minHeight: 6,
-                          ),
-                        ),
-                      ),
-                    ),
-                  ],
                 ],
               ),
             ),
