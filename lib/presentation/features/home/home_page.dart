@@ -36,6 +36,7 @@ import 'prefs/home_ui_prefs_provider.dart';
 import 'prefs/home_ui_prefs_panel.dart';
 
 import 'widgets/home_app_bar_title.dart';
+import 'widgets/sync_waitlist_panel.dart';
 
 class HomePage extends ConsumerStatefulWidget {
   const HomePage({super.key});
@@ -176,17 +177,25 @@ class _HomePageState extends ConsumerState<HomePage> {
                     break;
                   case 'sync':
                     if (!mounted) break;
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(
-                        content: Text('Synchronisation démarrée…'),
-                      ),
+                    final res = await showRightDrawer<SyncWaitlistResult?>(
+                      context,
+                      child: const SyncWaitlistPanel(),
+                      widthFraction: 0.86,
+                      heightFraction: 0.9,
                     );
-                    await Future.delayed(const Duration(milliseconds: 800));
-                    if (!mounted) break;
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(content: Text('Synchronisation terminée')),
-                    );
+                    if (res != null) {
+                      if (!mounted) break;
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(
+                          content: Text(
+                            'Merci ${res.email}, vous êtes inscrit sur la liste d’attente',
+                          ),
+                        ),
+                      );
+                      // TODO: envoyer à ton backend (API waitlist)
+                    }
                     break;
+
                   case 'share':
                     final acc = await ref.read(selectedAccountProvider.future);
                     if (!mounted || acc == null) break;
