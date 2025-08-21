@@ -22,12 +22,14 @@ import 'package:money_pulse/presentation/features/categories/category_list_page.
 import 'package:money_pulse/domain/accounts/entities/account.dart';
 import 'package:money_pulse/domain/transactions/entities/transaction_entry.dart';
 
+import '../../../domain/waitlist/entities/waitlist_entry.dart';
 import '../transactions/controllers/transaction_list_controller.dart';
 import '../transactions/prefs/summary_card_prefs_panel.dart';
 import '../transactions/providers/transaction_list_providers.dart'
     show transactionListItemsProvider;
 
 import 'prefs/home_privacy_prefs_provider.dart';
+import 'providers/waitlist_repo_provider.dart';
 import 'widgets/account_picker_sheet.dart';
 import 'widgets/period_picker_sheet.dart';
 import 'widgets/share_account_dialog.dart';
@@ -176,25 +178,40 @@ class _HomePageState extends ConsumerState<HomePage> {
                     await _showPeriodSheet();
                     break;
                   case 'sync':
-                    if (!mounted) break;
-                    final res = await showRightDrawer<SyncWaitlistResult?>(
-                      context,
-                      child: const SyncWaitlistPanel(),
-                      widthFraction: 0.86,
-                      heightFraction: 0.9,
-                    );
-                    if (res != null) {
+                    {
                       if (!mounted) break;
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        SnackBar(
-                          content: Text(
-                            'Merci ${res.email}, vous êtes inscrit sur la liste d’attente',
-                          ),
-                        ),
+                      final repo = ref.read(waitlistRepoProvider);
+                      final previous = await repo.load();
+                      final res = await showRightDrawer<SyncWaitlistResult?>(
+                        context,
+                        child: SyncWaitlistPanel(initial: previous),
+                        widthFraction: 0.86,
+                        heightFraction: 0.9,
                       );
-                      // TODO: envoyer à ton backend (API waitlist)
+                      if (res != null) {
+                        final entry = WaitlistEntry(
+                          email: res.email,
+                          phone: res.phone,
+                          message: res.message,
+                          savedAt: DateTime.now(),
+                        );
+                        await repo.save(entry);
+                        if (!mounted) break;
+                        final who = entry.email?.isNotEmpty == true
+                            ? entry.email
+                            : (entry.phone?.isNotEmpty == true
+                                  ? entry.phone
+                                  : 'utilisateur');
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(
+                            content: Text(
+                              'Merci $who, vous êtes inscrit sur la liste d’attente',
+                            ),
+                          ),
+                        );
+                      }
+                      break;
                     }
-                    break;
 
                   case 'share':
                     final acc = await ref.read(selectedAccountProvider.future);

@@ -1,6 +1,8 @@
-/* Right-drawer waitlist form requiring at least one contact, with responsive layout, accessible fields, and Enter-to-submit. */
+/* Right-drawer waitlist form with responsive layout, prefill from previous entry, at-least-one-contact validation, and Enter-to-submit. */
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:money_pulse/domain/waitlist/entities/waitlist_entry.dart';
+import 'package:money_pulse/presentation/shared/formatters.dart';
 
 class SyncWaitlistResult {
   final String? email;
@@ -10,7 +12,8 @@ class SyncWaitlistResult {
 }
 
 class SyncWaitlistPanel extends StatefulWidget {
-  const SyncWaitlistPanel({super.key});
+  final WaitlistEntry? initial;
+  const SyncWaitlistPanel({super.key, this.initial});
 
   @override
   State<SyncWaitlistPanel> createState() => _SyncWaitlistPanelState();
@@ -29,6 +32,11 @@ class _SyncWaitlistPanelState extends State<SyncWaitlistPanel> {
   @override
   void initState() {
     super.initState();
+    if (widget.initial != null) {
+      _emailCtrl.text = widget.initial!.email ?? '';
+      _phoneCtrl.text = widget.initial!.phone ?? '';
+      _msgCtrl.text = widget.initial!.message ?? '';
+    }
     _emailCtrl.addListener(_onChanged);
     _phoneCtrl.addListener(_onChanged);
     _msgCtrl.addListener(_onChanged);
@@ -71,9 +79,8 @@ class _SyncWaitlistPanelState extends State<SyncWaitlistPanel> {
   bool get _canSubmit => _hasAnyContact && _emailValid && _phoneValid;
 
   void _submit() {
-    final valid = _formKey.currentState?.validate() ?? false;
-    if (!valid) return;
-    if (!_canSubmit) {
+    final ok = _formKey.currentState?.validate() ?? false;
+    if (!ok || !_canSubmit) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
           content: Text('Entrez au moins un e-mail ou un téléphone'),
@@ -88,62 +95,6 @@ class _SyncWaitlistPanelState extends State<SyncWaitlistPanel> {
         _msgCtrl.text.trim().isEmpty ? null : _msgCtrl.text.trim(),
       ),
     );
-  }
-
-  Widget _contactFields(bool isWide) {
-    final email = TextFormField(
-      controller: _emailCtrl,
-      focusNode: _emailFocus,
-      decoration: InputDecoration(
-        labelText: 'Adresse e-mail',
-        hintText: 'exemple@domaine.com',
-        prefixIcon: const Icon(Icons.email_outlined),
-        border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
-        errorText: _emailValid ? null : 'E-mail invalide',
-      ),
-      textInputAction: TextInputAction.next,
-      keyboardType: TextInputType.emailAddress,
-      onFieldSubmitted: (_) => _phoneFocus.requestFocus(),
-      validator: (_) {
-        if (!_hasAnyContact && _dirty)
-          return 'Entrez au moins un e-mail ou un téléphone';
-        if (!_emailValid) return 'E-mail invalide';
-        return null;
-      },
-    );
-
-    final phone = TextFormField(
-      controller: _phoneCtrl,
-      focusNode: _phoneFocus,
-      decoration: InputDecoration(
-        labelText: 'Numéro de téléphone',
-        hintText: '770000000',
-        prefixIcon: const Icon(Icons.phone_android),
-        border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
-        errorText: _phoneValid ? null : 'Numéro invalide',
-      ),
-      textInputAction: TextInputAction.next,
-      keyboardType: TextInputType.phone,
-      inputFormatters: [FilteringTextInputFormatter.digitsOnly],
-      onFieldSubmitted: (_) => _msgFocus.requestFocus(),
-      validator: (_) {
-        if (!_hasAnyContact && _dirty)
-          return 'Entrez au moins un téléphone ou un e-mail';
-        if (!_phoneValid) return 'Numéro invalide';
-        return null;
-      },
-    );
-
-    if (isWide) {
-      return Row(
-        children: [
-          Expanded(child: email),
-          const SizedBox(width: 16),
-          Expanded(child: phone),
-        ],
-      );
-    }
-    return Column(children: [email, const SizedBox(height: 16), phone]);
   }
 
   @override
@@ -179,6 +130,7 @@ class _SyncWaitlistPanelState extends State<SyncWaitlistPanel> {
             child: LayoutBuilder(
               builder: (context, constraints) {
                 final isWide = constraints.maxWidth >= 560;
+
                 return Form(
                   key: _formKey,
                   autovalidateMode: AutovalidateMode.onUserInteraction,
@@ -190,12 +142,37 @@ class _SyncWaitlistPanelState extends State<SyncWaitlistPanel> {
                         child: Column(
                           mainAxisSize: MainAxisSize.min,
                           children: [
+                            if (widget.initial?.hasAnyContact == true)
+                              Container(
+                                width: double.infinity,
+                                padding: const EdgeInsets.all(12),
+                                margin: const EdgeInsets.only(bottom: 12),
+                                decoration: BoxDecoration(
+                                  color: theme.colorScheme.surfaceVariant,
+                                  borderRadius: BorderRadius.circular(12),
+                                ),
+                                child: Row(
+                                  children: [
+                                    const Icon(Icons.check_circle_outline),
+                                    const SizedBox(width: 8),
+                                    Expanded(
+                                      child: Text(
+                                        'Déjà inscrit le ${Formatters.dateFull(widget.initial!.savedAt)}.',
+                                      ),
+                                    ),
+                                    TextButton(
+                                      onPressed: () {},
+                                      child: const Text('Modifier'),
+                                    ),
+                                  ],
+                                ),
+                              ),
                             Text(
                               'Laissez vos coordonnées pour être averti dès que la synchronisation sera disponible.',
                               style: theme.textTheme.bodyMedium,
                               textAlign: TextAlign.center,
                             ),
-                            const SizedBox(height: 12),
+                            const SizedBox(height: 16),
                             AnimatedSwitcher(
                               duration: const Duration(milliseconds: 180),
                               child: (!_hasAnyContact && _dirty)
@@ -233,23 +210,23 @@ class _SyncWaitlistPanelState extends State<SyncWaitlistPanel> {
                                   : const SizedBox.shrink(),
                             ),
                             const SizedBox(height: 16),
-                            _contactFields(isWide),
+                            isWide
+                                ? Row(
+                                    children: [
+                                      Expanded(child: _emailField()),
+                                      const SizedBox(width: 16),
+                                      Expanded(child: _phoneField()),
+                                    ],
+                                  )
+                                : Column(
+                                    children: [
+                                      _emailField(),
+                                      const SizedBox(height: 16),
+                                      _phoneField(),
+                                    ],
+                                  ),
                             const SizedBox(height: 16),
-                            TextFormField(
-                              controller: _msgCtrl,
-                              focusNode: _msgFocus,
-                              decoration: InputDecoration(
-                                labelText: 'Message (optionnel)',
-                                hintText: 'Ajoutez un commentaire…',
-                                prefixIcon: const Icon(Icons.message_outlined),
-                                border: OutlineInputBorder(
-                                  borderRadius: BorderRadius.circular(12),
-                                ),
-                              ),
-                              maxLines: 3,
-                              textInputAction: TextInputAction.done,
-                              onFieldSubmitted: (_) => _submit(),
-                            ),
+                            _messageField(),
                           ],
                         ),
                       ),
@@ -296,16 +273,13 @@ class _SyncWaitlistPanelState extends State<SyncWaitlistPanel> {
                       ),
                     ),
                     const SizedBox(height: 8),
-                    Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 6),
-                      child: Text(
-                        'Vos informations ne seront utilisées que pour vous prévenir.',
-                        textAlign: TextAlign.center,
-                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                          color: Theme.of(
-                            context,
-                          ).textTheme.bodySmall?.color?.withOpacity(0.7),
-                        ),
+                    Text(
+                      'Vos informations ne seront utilisées que pour vous prévenir.',
+                      textAlign: TextAlign.center,
+                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                        color: Theme.of(
+                          context,
+                        ).textTheme.bodySmall?.color?.withOpacity(0.7),
                       ),
                     ),
                   ],
@@ -315,6 +289,69 @@ class _SyncWaitlistPanelState extends State<SyncWaitlistPanel> {
           ),
         ),
       ),
+    );
+  }
+
+  Widget _emailField() {
+    return TextFormField(
+      controller: _emailCtrl,
+      focusNode: _emailFocus,
+      decoration: InputDecoration(
+        labelText: 'Adresse e-mail',
+        hintText: 'exemple@domaine.com',
+        prefixIcon: const Icon(Icons.email_outlined),
+        border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+        errorText: _emailValid ? null : 'E-mail invalide',
+      ),
+      textInputAction: TextInputAction.next,
+      keyboardType: TextInputType.emailAddress,
+      onFieldSubmitted: (_) => _phoneFocus.requestFocus(),
+      validator: (_) {
+        if (!_hasAnyContact && _dirty)
+          return 'Entrez au moins un e-mail ou un téléphone';
+        if (!_emailValid) return 'E-mail invalide';
+        return null;
+      },
+    );
+  }
+
+  Widget _phoneField() {
+    return TextFormField(
+      controller: _phoneCtrl,
+      focusNode: _phoneFocus,
+      decoration: InputDecoration(
+        labelText: 'Numéro de téléphone',
+        hintText: '770000000',
+        prefixIcon: const Icon(Icons.phone_android),
+        border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+        errorText: _phoneValid ? null : 'Numéro invalide',
+      ),
+      textInputAction: TextInputAction.next,
+      keyboardType: TextInputType.phone,
+      inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+      onFieldSubmitted: (_) => _msgFocus.requestFocus(),
+      validator: (_) {
+        if (!_hasAnyContact && _dirty)
+          return 'Entrez au moins un téléphone ou un e-mail';
+        if (!_phoneValid) return 'Numéro invalide';
+        return null;
+      },
+    );
+  }
+
+  Widget _messageField() {
+    return TextFormField(
+      controller: _msgCtrl,
+      focusNode: _msgFocus,
+      decoration: InputDecoration(
+        labelText: 'Message (optionnel)',
+        hintText: 'Ajoutez un commentaire…',
+        prefixIcon: const Icon(Icons.message_outlined),
+        border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+      ),
+      maxLines: 3,
+      textInputAction: TextInputAction.done,
+      onFieldSubmitted: (_) => _submit(),
     );
   }
 }
