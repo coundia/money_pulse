@@ -12,4 +12,9 @@ abstract class AuthRepository {
   Future<void> logout();
   Future<AuthUser> me({String? accessToken});
   Future<AuthSession> refresh({required String refreshToken});
+  Future<void> requestPasswordReset({required String email});
+  Future<void> resetPassword({
+    required String token,
+    required String newPassword,
+  });
 }

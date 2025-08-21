@@ -29,17 +29,9 @@ final tokenStoreProvider = Provider<SecureTokenStore>((ref) {
   return SecureTokenStoreSecureStorage();
 });
 
-final refreshUseCaseProvider = Provider<RefreshTokenUseCase>((ref) {
-  return RefreshTokenUseCase(
-    ref.watch(authRepositoryProvider),
-    ref.watch(tokenStoreProvider),
-  );
-});
-
 final authHttpGuardProvider = Provider<AuthHttpGuard>((ref) {
   return AuthHttpGuard(
     tokenStore: ref.watch(tokenStoreProvider),
-    refreshUseCase: ref.watch(refreshUseCaseProvider),
     api: ref.watch(authApiClientProvider),
   );
 });
@@ -66,6 +58,13 @@ final registerUseCaseProvider = Provider<RegisterUseCase>((ref) {
 
 final logoutUseCaseProvider = Provider<LogoutUseCase>((ref) {
   return LogoutUseCase(
+    ref.watch(authRepositoryProvider),
+    ref.watch(tokenStoreProvider),
+  );
+});
+
+final refreshUseCaseProvider = Provider<RefreshTokenUseCase>((ref) {
+  return RefreshTokenUseCase(
     ref.watch(authRepositoryProvider),
     ref.watch(tokenStoreProvider),
   );

@@ -1,4 +1,4 @@
-/// HTTP implementation of the AuthRepository with auto-refresh guard for authed calls.
+/// HTTP AuthRepository implementation with guarded authed calls and reset flows.
 import '../../domain/repositories/auth_repository.dart';
 import '../../domain/entities/auth_user.dart';
 import '../../domain/entities/auth_session.dart';
