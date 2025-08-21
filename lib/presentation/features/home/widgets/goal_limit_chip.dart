@@ -54,16 +54,14 @@ class GoalLimitChip extends StatelessWidget {
     // Human label when reached/exceeded
     String stateLabel;
     if (status == GoalLimitStatus.reached) {
-      stateLabel = kind == GoalLimitChipKind.goal
-          ? 'Objectif atteint'
-          : 'Plafond atteint';
+      stateLabel = kind == GoalLimitChipKind.goal ? 'Objectif ' : 'Plafond ';
     } else if (status == GoalLimitStatus.exceeded) {
-      stateLabel = 'Plafond dépassé';
+      stateLabel = 'Plafond';
     } else {
       stateLabel = label; // 'Objectif' | 'Plafond'
     }
 
-    final text = '$stateLabel: $money${cur.isNotEmpty ? ' $cur' : ''}';
+    final text = '$stateLabel: $money';
 
     return Semantics(
       label: text,

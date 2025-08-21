@@ -189,7 +189,7 @@ class HomeAppBarTitle extends StatelessWidget {
                     status: goalStatus,
                     amountCents: goal,
                     currency: currency,
-                    label: 'Objectif',
+                    label: 'Obj.',
                     icon: Icons.flag_outlined,
                   ),
                 if (hasLimit)
@@ -211,8 +211,8 @@ class HomeAppBarTitle extends StatelessWidget {
                       remainBadge(
                         icon: Icons.flag,
                         text: tight
-                            ? 'Reste ${Formatters.amountFromCents(goalRemain)}'
-                            : 'Reste: ${Formatters.amountFromCents(goalRemain)}',
+                            ? '- ${Formatters.amountFromCents(goalRemain)}'
+                            : '- ${Formatters.amountFromCents(goalRemain)}',
                         bg: cs.tertiaryContainer,
                         fg: cs.onTertiaryContainer,
                       ),
@@ -221,7 +221,7 @@ class HomeAppBarTitle extends StatelessWidget {
                     pills.add(
                       remainBadge(
                         icon: Icons.check_circle,
-                        text: 'Objectif atteint',
+                        text: 'Atteint',
                         bg: cs.tertiaryContainer.withOpacity(.55),
                         fg: cs.onTertiaryContainer,
                       ),
@@ -245,8 +245,8 @@ class HomeAppBarTitle extends StatelessWidget {
                       remainBadge(
                         icon: Icons.warning_amber_rounded,
                         text: tight
-                            ? 'Dépassé ${Formatters.amountFromCents((-limitRemain))}'
-                            : 'Dépassé de ${Formatters.amountFromCents((-limitRemain))}',
+                            ? '+ ${Formatters.amountFromCents((-limitRemain))}'
+                            : '+ ${Formatters.amountFromCents((-limitRemain))}',
                         bg: cs.errorContainer,
                         fg: cs.onErrorContainer,
                       ),
