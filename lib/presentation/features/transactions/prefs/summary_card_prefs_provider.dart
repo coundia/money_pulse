@@ -66,7 +66,7 @@ class SummaryCardPrefs {
     showNavSettingsButton: false,
     showNavSearchButton: false,
     showNavStockButton: false,
-    showNavReportButton: false,
+    showNavReportButton: true,
     showNavProductsButton: false,
     showNavCustomersButton: false,
     showNavCategoriesButton: false,
@@ -162,7 +162,7 @@ class SummaryCardPrefs {
       showNavSettingsButton: (map['showNavSettingsButton'] as bool?) ?? false,
       showNavSearchButton: (map['showNavSearchButton'] as bool?) ?? false,
       showNavStockButton: (map['showNavStockButton'] as bool?) ?? false,
-      showNavReportButton: (map['showNavReportButton'] as bool?) ?? false,
+      showNavReportButton: (map['showNavReportButton'] as bool?) ?? true,
       showNavProductsButton: (map['showNavProductsButton'] as bool?) ?? false,
       showNavCustomersButton: (map['showNavCustomersButton'] as bool?) ?? false,
       showNavCategoriesButton:

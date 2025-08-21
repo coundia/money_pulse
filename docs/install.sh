@@ -6,6 +6,7 @@ flutter pub add flutter_riverpod go_router sqflite path_provider uuid intl share
 flutter pub add share_plus
 flutter pub add path_provider printing pdf 
 flutter pub add flutter_svg
+flutter pub add flutter_secure_storage
 
 mkdir -p assets/db
 mkdir -p lib/domain/accounts/entities lib/domain/accounts/repositories

@@ -171,12 +171,11 @@ class SummaryCardPrefsPanel extends ConsumerWidget {
 
             const Divider(height: 24),
 
-            SwitchListTile.adaptive(
-              title: const Text('Afficher la barre de navigation en bas'),
-              value: uiPrefs.showBottomNav,
-              onChanged: (v) => uiCtrl.setShowBottomNav(v),
-            ),
-
+            // SwitchListTile.adaptive(
+            //   title: const Text('Afficher la barre de navigation en bas'),
+            //   value: uiPrefs.showBottomNav,
+            //   onChanged: (v) => uiCtrl.setShowBottomNav(v),
+            // ),
             const SizedBox(height: 16),
             FilledButton.tonal(
               onPressed: () async {
