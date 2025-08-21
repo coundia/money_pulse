@@ -1,4 +1,4 @@
-// Account list row with custom layout to prevent bottom overflow, showing balance, remaining, and goal/limit based on account type (FR labels, EN code).
+// Account list row with custom layout; context menu removed inline to ensure it opens via long-press only (handled by parent). FR labels, EN code.
 import 'package:flutter/material.dart';
 import 'package:money_pulse/domain/accounts/entities/account.dart';
 import 'package:money_pulse/presentation/shared/formatters.dart';
@@ -8,11 +8,11 @@ class AccountTile extends StatelessWidget {
   final String balanceText;
   final String updatedAtText;
   final VoidCallback? onView;
-  final VoidCallback? onAdjust;
-  final VoidCallback? onMakeDefault;
-  final VoidCallback? onDelete;
-  final VoidCallback? onShare;
-  final Future<void> Function(String action)? onMenuAction;
+  final VoidCallback? onAdjust; // kept for API compatibility (unused here)
+  final VoidCallback? onMakeDefault; // kept for API compatibility (unused here)
+  final VoidCallback? onDelete; // kept for API compatibility (unused here)
+  final VoidCallback? onShare; // kept for API compatibility (unused here)
+  final Future<void> Function(String action)? onMenuAction; // kept (unused)
 
   const AccountTile({
     super.key,
@@ -76,11 +76,6 @@ class AccountTile extends StatelessWidget {
       _ => cs.onSurfaceVariant,
     };
 
-    final subtitleLine = [
-      typeFr,
-      if (updatedAtText.isNotEmpty) updatedAtText,
-    ].join(' · ');
-
     final int balanceCents = account.balance;
     final int? limit = account.balanceLimit;
     final int? goal = account.balanceGoal;
@@ -115,14 +110,6 @@ class AccountTile extends StatelessWidget {
     final double goalRatio = hasSavingsGoal
         ? (balanceCents.toDouble() / goal!.toDouble()).clamp(0.0, 1.0)
         : 0.0;
-
-    final hasMenu =
-        onMenuAction != null ||
-        onAdjust != null ||
-        onMakeDefault != null ||
-        onDelete != null ||
-        onShare != null ||
-        onView != null;
 
     return Card(
       margin: EdgeInsets.zero,
@@ -177,92 +164,28 @@ class AccountTile extends StatelessWidget {
                   ],
                 ),
                 const SizedBox(width: 12),
+                // Title + optional progress (no inline menu here)
                 Expanded(
                   child: Column(
                     mainAxisSize: MainAxisSize.min,
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Row(
-                        children: [
-                          Expanded(
-                            child: Text(
-                              title,
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                              style: Theme.of(context).textTheme.titleMedium
-                                  ?.copyWith(fontWeight: FontWeight.w700),
-                            ),
-                          ),
-                          if (hasMenu)
-                            PopupMenuButton<String>(
-                              tooltip: 'Actions',
-                              padding: EdgeInsets.zero,
-                              onSelected: (v) async {
-                                if (onMenuAction != null) {
-                                  await onMenuAction!(v);
-                                  return;
-                                }
-                                switch (v) {
-                                  case 'view':
-                                    onView?.call();
-                                    break;
-                                  case 'adjust':
-                                    onAdjust?.call();
-                                    break;
-                                  case 'default':
-                                    onMakeDefault?.call();
-                                    break;
-                                  case 'share':
-                                    onShare?.call();
-                                    break;
-                                  case 'delete':
-                                    onDelete?.call();
-                                    break;
-                                }
-                              },
-                              itemBuilder: (_) => const [
-                                PopupMenuItem(
-                                  value: 'view',
-                                  child: ListTile(
-                                    leading: Icon(Icons.visibility_outlined),
-                                    title: Text('Voir'),
-                                  ),
-                                ),
-                                PopupMenuItem(
-                                  value: 'adjust',
-                                  child: ListTile(
-                                    leading: Icon(Icons.tune),
-                                    title: Text('Ajuster le solde'),
-                                  ),
-                                ),
-                                PopupMenuItem(
-                                  value: 'default',
-                                  child: ListTile(
-                                    leading: Icon(Icons.star),
-                                    title: Text('Définir par défaut'),
-                                  ),
-                                ),
-                                PopupMenuItem(
-                                  value: 'share',
-                                  child: ListTile(
-                                    leading: Icon(Icons.ios_share),
-                                    title: Text('Partager'),
-                                  ),
-                                ),
-                                PopupMenuDivider(),
-                                PopupMenuItem(
-                                  value: 'delete',
-                                  child: ListTile(
-                                    leading: Icon(Icons.delete_outline),
-                                    title: Text('Supprimer'),
-                                  ),
-                                ),
-                              ],
-                            ),
-                        ],
+                      Text(
+                        title,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: Theme.of(context).textTheme.titleMedium
+                            ?.copyWith(fontWeight: FontWeight.w700),
                       ),
                       const SizedBox(height: 2),
-
+                      Text(
+                        [
+                          _typeLabelsFr[type]!,
+                          if (updatedAtText.isNotEmpty) updatedAtText,
+                        ].join(' · '),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
                       if (hasSavingsGoal) ...[
                         const SizedBox(height: 6),
                         ClipRRect(
@@ -279,6 +202,7 @@ class AccountTile extends StatelessWidget {
                   ),
                 ),
                 const SizedBox(width: 12),
+                // Right block with amounts (no ellipsis/menu)
                 Flexible(
                   fit: FlexFit.loose,
                   child: ConstrainedBox(

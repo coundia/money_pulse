@@ -1,5 +1,4 @@
-// Sqflite repository for accounts with change-log tracking.
-
+// Sqflite repository for accounts with change-log tracking and optional DatabaseExecutor for atomic operations.
 import 'package:uuid/uuid.dart';
 import 'package:sqflite/sqflite.dart';
 import 'package:money_pulse/infrastructure/db/app_database.dart';
@@ -13,17 +12,18 @@ class AccountRepositorySqflite implements AccountRepository {
   String _nowIso() => DateTime.now().toIso8601String();
 
   @override
-  Future<Account> create(Account account) async {
+  Future<Account> create(Account account, {DatabaseExecutor? exec}) async {
     final now = DateTime.now();
     final a = account.copyWith(updatedAt: now, version: 0, isDirty: true);
-    await _database.tx((txn) async {
-      await txn.insert(
+
+    Future<void> _do(DatabaseExecutor e) async {
+      await e.insert(
         'account',
         a.toMap(),
         conflictAlgorithm: ConflictAlgorithm.abort,
       );
       final idLog = const Uuid().v4();
-      await txn.rawInsert(
+      await e.rawInsert(
         'INSERT INTO change_log(id, entityTable, entityId, operation, payload, status, createdAt, updatedAt) '
         'VALUES(?,?,?,?,?,?,?,?) '
         'ON CONFLICT(entityTable, entityId, status) DO UPDATE SET operation=excluded.operation, updatedAt=excluded.updatedAt, payload=excluded.payload',
@@ -38,20 +38,27 @@ class AccountRepositorySqflite implements AccountRepository {
           _nowIso(),
         ],
       );
-    });
+    }
+
+    if (exec != null) {
+      await _do(exec);
+    } else {
+      await _database.tx((txn) async => _do(txn));
+    }
     return a;
   }
 
   @override
-  Future<void> update(Account account) async {
+  Future<void> update(Account account, {DatabaseExecutor? exec}) async {
     final now = DateTime.now();
     final a = account.copyWith(
       updatedAt: now,
       version: account.version + 1,
       isDirty: true,
     );
-    await _database.tx((txn) async {
-      await txn.update(
+
+    Future<void> _do(DatabaseExecutor e) async {
+      await e.update(
         'account',
         a.toMap(),
         where: 'id=?',
@@ -59,7 +66,7 @@ class AccountRepositorySqflite implements AccountRepository {
         conflictAlgorithm: ConflictAlgorithm.abort,
       );
       final idLog = const Uuid().v4();
-      await txn.rawInsert(
+      await e.rawInsert(
         'INSERT INTO change_log(id, entityTable, entityId, operation, payload, status, createdAt, updatedAt) '
         'VALUES(?,?,?,?,?,?,?,?) '
         'ON CONFLICT(entityTable, entityId, status) DO UPDATE SET operation=excluded.operation, updatedAt=excluded.updatedAt, payload=excluded.payload',
@@ -74,7 +81,13 @@ class AccountRepositorySqflite implements AccountRepository {
           _nowIso(),
         ],
       );
-    });
+    }
+
+    if (exec != null) {
+      await _do(exec);
+    } else {
+      await _database.tx((txn) async => _do(txn));
+    }
   }
 
   @override
@@ -112,10 +125,11 @@ class AccountRepositorySqflite implements AccountRepository {
   }
 
   @override
-  Future<void> setDefault(String id) async {
+  Future<void> setDefault(String id, {DatabaseExecutor? exec}) async {
     final nowIso = _nowIso();
-    await _database.tx((txn) async {
-      final prev = await txn.query(
+
+    Future<void> _do(DatabaseExecutor e) async {
+      final prev = await e.query(
         'account',
         columns: ['id'],
         where: 'isDefault=1 AND deletedAt IS NULL',
@@ -124,12 +138,12 @@ class AccountRepositorySqflite implements AccountRepository {
       if (prev.isNotEmpty) {
         final prevId = prev.first['id'] as String;
         if (prevId != id) {
-          await txn.rawUpdate(
+          await e.rawUpdate(
             'UPDATE account SET isDefault=0, isDirty=1, version=version+1, updatedAt=? WHERE id=?',
             [nowIso, prevId],
           );
           final idLogPrev = const Uuid().v4();
-          await txn.rawInsert(
+          await e.rawInsert(
             'INSERT INTO change_log(id, entityTable, entityId, operation, payload, status, createdAt, updatedAt) '
             'VALUES(?,?,?,?,?,?,?,?) '
             'ON CONFLICT(entityTable, entityId, status) DO UPDATE SET operation=excluded.operation, updatedAt=excluded.updatedAt, payload=excluded.payload',
@@ -146,35 +160,48 @@ class AccountRepositorySqflite implements AccountRepository {
           );
         }
       }
-      await txn.rawUpdate(
+      await e.rawUpdate(
         'UPDATE account SET isDefault=1, isDirty=1, version=version+1, updatedAt=? WHERE id=?',
         [nowIso, id],
       );
       final idLog = const Uuid().v4();
-      await txn.rawInsert(
+      await e.rawInsert(
         'INSERT INTO change_log(id, entityTable, entityId, operation, payload, status, createdAt, updatedAt) '
         'VALUES(?,?,?,?,?,?,?,?) '
         'ON CONFLICT(entityTable, entityId, status) DO UPDATE SET operation=excluded.operation, updatedAt=excluded.updatedAt, payload=excluded.payload',
         [idLog, 'account', id, 'UPDATE', null, 'PENDING', nowIso, nowIso],
       );
-    });
+    }
+
+    if (exec != null) {
+      await _do(exec);
+    } else {
+      await _database.tx((txn) async => _do(txn));
+    }
   }
 
   @override
-  Future<void> softDelete(String id) async {
+  Future<void> softDelete(String id, {DatabaseExecutor? exec}) async {
     final nowIso = _nowIso();
-    await _database.tx((txn) async {
-      await txn.rawUpdate(
+
+    Future<void> _do(DatabaseExecutor e) async {
+      await e.rawUpdate(
         'UPDATE account SET deletedAt=?, isDirty=1, version=version+1, updatedAt=? WHERE id=?',
         [nowIso, nowIso, id],
       );
       final idLog = const Uuid().v4();
-      await txn.rawInsert(
+      await e.rawInsert(
         'INSERT INTO change_log(id, entityTable, entityId, operation, payload, status, createdAt, updatedAt) '
         'VALUES(?,?,?,?,?,?,?,?) '
         'ON CONFLICT(entityTable, entityId, status) DO UPDATE SET operation=excluded.operation, updatedAt=excluded.updatedAt, payload=excluded.payload',
         [idLog, 'account', id, 'DELETE', null, 'PENDING', nowIso, nowIso],
       );
-    });
+    }
+
+    if (exec != null) {
+      await _do(exec);
+    } else {
+      await _database.tx((txn) async => _do(txn));
+    }
   }
 }

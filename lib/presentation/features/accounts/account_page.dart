@@ -1,5 +1,4 @@
-// Orchestrates accounts list: search/filter, actions, and right-drawer panels with provider refresh.
-
+// Orchestrates accounts list; context menu opens on long-press only (no secondary tap). FR labels, EN code.
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -314,27 +313,10 @@ class _AccountListPageState extends ConsumerState<AccountListPage> {
                       updatedAt: a.updatedAt,
                     );
                   },
-                  onSecondaryTapDown: (d) {
-                    showAccountContextMenu(
-                      context,
-                      d.globalPosition,
-                      canMakeDefault: !a.isDefault,
-                      onView: () => _view(a),
-                      onMakeDefault: () => _setDefault(a),
-                      onEdit: () => _addOrEdit(existing: a),
-                      onDelete: () => _delete(a),
-                      onShare: () => _share(a),
-                      onAdjustBalance: () => _adjustBalance(a),
-                      accountLabel: a.code,
-                      balanceCents: a.balance,
-                      currency: a.currency,
-                      updatedAt: a.updatedAt,
-                    );
-                  },
                   child: AccountTile(
                     account: a,
                     balanceText: _fmtMoney(a.balance, a.currency),
-                    updatedAtText: '${_fmtDate(a.updatedAt)}',
+                    updatedAtText: _fmtDate(a.updatedAt),
                     onView: () => _view(a),
                   ),
                 );
