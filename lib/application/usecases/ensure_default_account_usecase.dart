@@ -36,6 +36,7 @@ class EnsureDefaultAccountUseCase {
         syncAt: null,
         version: 0,
         isDirty: true,
+        typeAccount: 'CASH',
       );
       await repo.create(a);
       await repo.setDefault(a.id);

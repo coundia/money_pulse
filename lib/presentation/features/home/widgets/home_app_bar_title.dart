@@ -1,4 +1,5 @@
-// App bar title with richer info: animated balance, delta vs previous, type chip, goal/limit chips, remaining pills, last update; all horizontally scrollable.
+// App bar title with richer info + privacy toggle: eye icon to show/hide amounts.
+// When hidden, amounts are obfuscated (•••) consistently across the row.
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:money_pulse/domain/accounts/entities/account.dart';
@@ -10,10 +11,18 @@ class HomeAppBarTitle extends StatelessWidget {
   final AsyncValue<Account?> accountAsync;
   final VoidCallback onTap;
 
+  /// NEW: obfuscate all money amounts
+  final bool hideAmounts;
+
+  /// NEW: toggle callback (persisted by caller via provider)
+  final VoidCallback onToggleHide;
+
   const HomeAppBarTitle({
     super.key,
     required this.accountAsync,
     required this.onTap,
+    required this.hideAmounts, // NEW
+    required this.onToggleHide, // NEW
   });
 
   static const Map<String, String> _typeFr = {
@@ -33,7 +42,12 @@ class HomeAppBarTitle extends StatelessWidget {
     Widget loading() => Column(
       mainAxisSize: MainAxisSize.min,
       children: [
-        MoneyText(amountCents: 0, currency: 'XOF', style: textTheme.titleLarge),
+        _ObscurableMoney(
+          hide: hideAmounts,
+          cents: 0,
+          currency: 'XOF',
+          style: textTheme.titleLarge,
+        ),
         const SizedBox(height: 2),
         const Text('…', style: TextStyle(fontSize: 12)),
       ],
@@ -42,7 +56,12 @@ class HomeAppBarTitle extends StatelessWidget {
     Widget error() => Column(
       mainAxisSize: MainAxisSize.min,
       children: [
-        MoneyText(amountCents: 0, currency: 'XOF', style: textTheme.titleLarge),
+        _ObscurableMoney(
+          hide: hideAmounts,
+          cents: 0,
+          currency: 'XOF',
+          style: textTheme.titleLarge,
+        ),
         const SizedBox(height: 2),
         const Text('Compte', style: TextStyle(fontSize: 12)),
       ],
@@ -81,7 +100,7 @@ class HomeAppBarTitle extends StatelessWidget {
 
     Widget typeChip(BuildContext context, String? typeKey) {
       final cs = Theme.of(context).colorScheme;
-      final label = _typeFr[typeKey] ?? _typeFr['OTHER']!;
+      // final label = _typeFr[typeKey] ?? _typeFr['OTHER']!;
       return Container(
         padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
         decoration: BoxDecoration(
@@ -89,7 +108,7 @@ class HomeAppBarTitle extends StatelessWidget {
           borderRadius: BorderRadius.circular(999),
         ),
         child: Text(
-          label,
+          typeKey!,
           style: Theme.of(context).textTheme.labelSmall?.copyWith(
             color: cs.onSurfaceVariant,
             fontWeight: FontWeight.w600,
@@ -100,6 +119,23 @@ class HomeAppBarTitle extends StatelessWidget {
 
     Widget deltaBadge(BuildContext context, int deltaCents, String currency) {
       final cs = Theme.of(context).colorScheme;
+      if (hideAmounts) {
+        return Container(
+          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+          decoration: BoxDecoration(
+            color: cs.surfaceVariant.withOpacity(.6),
+            borderRadius: BorderRadius.circular(999),
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Icon(Icons.remove_red_eye_outlined, size: 12),
+              const SizedBox(width: 4),
+              Text('•••', style: Theme.of(context).textTheme.labelSmall),
+            ],
+          ),
+        );
+      }
       final up = deltaCents > 0;
       final eq = deltaCents == 0;
       final fg = eq
@@ -111,7 +147,10 @@ class HomeAppBarTitle extends StatelessWidget {
       final icon = eq
           ? Icons.horizontal_rule_rounded
           : (up ? Icons.trending_up : Icons.trending_down);
-      final txt = eq ? 'Égal' : Formatters.amountFromCents(deltaCents.abs());
+      final txt = eq
+          ? 'Égal'
+          : Formatters.amountFromCents(deltaCents.abs()) +
+                (currency.isEmpty ? '' : ' $currency');
       return Container(
         padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
         decoration: BoxDecoration(
@@ -124,7 +163,7 @@ class HomeAppBarTitle extends StatelessWidget {
             Icon(icon, size: 12, color: fg),
             const SizedBox(width: 4),
             Text(
-              '$txt ${currency.isEmpty ? '' : currency}'.trim(),
+              txt,
               style: Theme.of(context).textTheme.labelSmall?.copyWith(
                 color: fg,
                 fontWeight: FontWeight.w700,
@@ -136,7 +175,7 @@ class HomeAppBarTitle extends StatelessWidget {
     }
 
     return Tooltip(
-      message: 'Changer de compte',
+      message: hideAmounts ? 'Afficher les montants' : 'Masquer les montants',
       child: Semantics(
         button: true,
         label: 'En-tête du compte: appuyer pour changer',
@@ -164,7 +203,6 @@ class HomeAppBarTitle extends StatelessWidget {
                         ? GoalLimitStatus.reached
                         : GoalLimitStatus.normal)
                   : GoalLimitStatus.normal;
-
               final limitStatus = hasLimit
                   ? (balance > limit
                         ? GoalLimitStatus.exceeded
@@ -182,7 +220,7 @@ class HomeAppBarTitle extends StatelessWidget {
               final lastUpdate = acc?.updatedAt;
 
               final chips = <Widget>[
-                typeChip(context, acc?.typeAccount),
+                typeChip(context, acc?.code),
                 if (hasGoal)
                   GoalLimitChip(
                     kind: GoalLimitChipKind.goal,
@@ -191,6 +229,7 @@ class HomeAppBarTitle extends StatelessWidget {
                     currency: currency,
                     label: 'Obj.',
                     icon: Icons.flag_outlined,
+                    obscure: hideAmounts, // mask inside chip
                   ),
                 if (hasLimit)
                   GoalLimitChip(
@@ -200,10 +239,13 @@ class HomeAppBarTitle extends StatelessWidget {
                     currency: currency,
                     label: 'Plafond',
                     icon: Icons.speed_rounded,
+                    obscure: hideAmounts, // mask inside chip
                   ),
               ];
 
               List<Widget> remainPills(bool tight) {
+                String amt(int cents) =>
+                    hideAmounts ? '•••' : Formatters.amountFromCents(cents);
                 final pills = <Widget>[];
                 if (hasGoal) {
                   if (goalRemain > 0) {
@@ -211,8 +253,8 @@ class HomeAppBarTitle extends StatelessWidget {
                       remainBadge(
                         icon: Icons.flag,
                         text: tight
-                            ? '- ${Formatters.amountFromCents(goalRemain)}'
-                            : '- ${Formatters.amountFromCents(goalRemain)}',
+                            ? '- ${amt(goalRemain)}'
+                            : '- ${amt(goalRemain)}',
                         bg: cs.tertiaryContainer,
                         fg: cs.onTertiaryContainer,
                       ),
@@ -234,8 +276,8 @@ class HomeAppBarTitle extends StatelessWidget {
                       remainBadge(
                         icon: Icons.stacked_bar_chart,
                         text: tight
-                            ? '${Formatters.amountFromCents(limitRemain)} restants'
-                            : 'Capacité: ${Formatters.amountFromCents(limitRemain)}',
+                            ? '${amt(limitRemain)} restants'
+                            : 'Capacité: ${amt(limitRemain)}',
                         bg: cs.primaryContainer,
                         fg: cs.onPrimaryContainer,
                       ),
@@ -245,8 +287,8 @@ class HomeAppBarTitle extends StatelessWidget {
                       remainBadge(
                         icon: Icons.warning_amber_rounded,
                         text: tight
-                            ? '+ ${Formatters.amountFromCents((-limitRemain))}'
-                            : '+ ${Formatters.amountFromCents((-limitRemain))}',
+                            ? '+ ${amt((-limitRemain))}'
+                            : '+ ${amt((-limitRemain))}',
                         bg: cs.errorContainer,
                         fg: cs.onErrorContainer,
                       ),
@@ -262,25 +304,45 @@ class HomeAppBarTitle extends StatelessWidget {
                   return Column(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      AnimatedSwitcher(
-                        duration: const Duration(milliseconds: 220),
-                        switchInCurve: Curves.easeOut,
-                        switchOutCurve: Curves.easeIn,
-                        child: Row(
-                          key: ValueKey('$balance-$currency-$delta'),
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            MoneyText(
-                              amountCents: balance,
+                      // Row with balance + delta + eye toggle
+                      Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          AnimatedSwitcher(
+                            duration: const Duration(milliseconds: 220),
+                            switchInCurve: Curves.easeOut,
+                            switchOutCurve: Curves.easeIn,
+                            child: _ObscurableMoney(
+                              key: ValueKey(
+                                '$balance-$currency-${hideAmounts}',
+                              ),
+                              hide: hideAmounts,
+                              cents: balance,
                               currency: currency,
                               style: textTheme.titleLarge,
                             ),
-                            const SizedBox(width: 6),
-                            if (!isTight) deltaBadge(context, delta, currency),
-                          ],
-                        ),
+                          ),
+                          const SizedBox(width: 6),
+                          if (!isTight) deltaBadge(context, delta, currency),
+                          const SizedBox(width: 6),
+                          IconButton(
+                            iconSize: 18,
+                            padding: EdgeInsets.zero,
+                            constraints: const BoxConstraints(),
+                            tooltip: hideAmounts
+                                ? 'Afficher les montants'
+                                : 'Masquer les montants',
+                            onPressed: onToggleHide,
+                            icon: Icon(
+                              hideAmounts
+                                  ? Icons.visibility_off_outlined
+                                  : Icons.visibility_outlined,
+                            ),
+                          ),
+                        ],
                       ),
                       const SizedBox(height: 2),
+                      // Secondary row: label + chips + remain + last update
                       SingleChildScrollView(
                         scrollDirection: Axis.horizontal,
                         physics: const BouncingScrollPhysics(),
@@ -308,7 +370,7 @@ class HomeAppBarTitle extends StatelessWidget {
                               duration: const Duration(milliseconds: 180),
                               child: Row(
                                 key: ValueKey(
-                                  '${acc?.typeAccount}_${hasGoal}_ $goal _${hasLimit}_$limit',
+                                  '${acc?.typeAccount}_${hasGoal}_ $goal _ ${hasLimit}_ $limit _${hideAmounts}',
                                 ),
                                 mainAxisSize: MainAxisSize.min,
                                 children: [
@@ -340,6 +402,7 @@ class HomeAppBarTitle extends StatelessWidget {
                           ],
                         ),
                       ),
+                      const SizedBox(height: 10),
                     ],
                   );
                 },
@@ -349,5 +412,31 @@ class HomeAppBarTitle extends StatelessWidget {
         ),
       ),
     );
+  }
+}
+
+class _ObscurableMoney extends StatelessWidget {
+  final bool hide;
+  final int cents;
+  final String currency;
+  final TextStyle? style;
+
+  const _ObscurableMoney({
+    super.key,
+    required this.hide,
+    required this.cents,
+    required this.currency,
+    this.style,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    if (hide) {
+      return Text(
+        '••• ${currency.isEmpty ? '' : currency}'.trim(),
+        style: style,
+      );
+    }
+    return MoneyText(amountCents: cents, currency: currency, style: style);
   }
 }

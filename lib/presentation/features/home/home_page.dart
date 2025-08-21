@@ -27,6 +27,7 @@ import '../transactions/prefs/summary_card_prefs_panel.dart';
 import '../transactions/providers/transaction_list_providers.dart'
     show transactionListItemsProvider;
 
+import 'prefs/home_privacy_prefs_provider.dart';
 import 'widgets/account_picker_sheet.dart';
 import 'widgets/period_picker_sheet.dart';
 import 'widgets/share_account_dialog.dart';
@@ -125,12 +126,22 @@ class _HomePageState extends ConsumerState<HomePage> {
     final accAsync = ref.watch(selectedAccountProvider);
     final uiPrefs = ref.watch(homeUiPrefsProvider);
 
+    final privacyAsync = ref.watch(homePrivacyPrefsProvider);
+
+    final hide = privacyAsync.maybeWhen(
+      data: (p) => p.hideBalance,
+      orElse: () => false,
+    );
+
     return Scaffold(
       appBar: AppBar(
         centerTitle: true,
         title: HomeAppBarTitle(
           accountAsync: accAsync,
           onTap: _showAccountPicker,
+          hideAmounts: hide,
+          onToggleHide: () =>
+              ref.read(homePrivacyPrefsProvider.notifier).toggleHideBalance(),
         ),
         actions: [
           if (pageIdx == 0)

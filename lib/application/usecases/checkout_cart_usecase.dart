@@ -194,8 +194,18 @@ class CheckoutCartUseCase {
           'PRET' => -total,
           _ => 0,
         };
+        // Updates only balances atomically: balance_prev gets the previous balance, then balance is incremented.
         await txn.rawUpdate(
-          'UPDATE account SET balance = COALESCE(balance,0) + ?, updatedAt=?, isDirty=1, version=COALESCE(version,0)+1 WHERE id=?',
+          '''
+          UPDATE account
+          SET
+            balance_prev = COALESCE(balance, 0),
+            balance      = COALESCE(balance, 0) + ?,
+            updatedAt    = ?,
+            isDirty      = 1,
+            version      = COALESCE(version, 0) + 1
+          WHERE id = ?
+          ''',
           [delta, nowIso, acc!.id],
         );
       }
