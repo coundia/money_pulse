@@ -1,4 +1,4 @@
-// Home page scaffold using HomeAppBarTitle to show balance + goal/limit chips; split into widgets for cleaner SRP (FR labels, EN code).
+// Home page scaffold using HomeAppBarTitle and gating Sync/Share behind access verification.
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -22,14 +22,12 @@ import 'package:money_pulse/presentation/features/categories/category_list_page.
 import 'package:money_pulse/domain/accounts/entities/account.dart';
 import 'package:money_pulse/domain/transactions/entities/transaction_entry.dart';
 
-import '../../../domain/waitlist/entities/waitlist_entry.dart';
 import '../transactions/controllers/transaction_list_controller.dart';
 import '../transactions/prefs/summary_card_prefs_panel.dart';
 import '../transactions/providers/transaction_list_providers.dart'
     show transactionListItemsProvider;
 
 import 'prefs/home_privacy_prefs_provider.dart';
-import 'providers/waitlist_repo_provider.dart';
 import 'widgets/account_picker_sheet.dart';
 import 'widgets/period_picker_sheet.dart';
 import 'widgets/share_account_dialog.dart';
@@ -38,7 +36,8 @@ import 'prefs/home_ui_prefs_provider.dart';
 import 'prefs/home_ui_prefs_panel.dart';
 
 import 'widgets/home_app_bar_title.dart';
-import 'widgets/sync_waitlist_panel.dart';
+
+import 'package:money_pulse/onboarding/presentation/providers/access_session_provider.dart';
 
 class HomePage extends ConsumerStatefulWidget {
   const HomePage({super.key});
@@ -59,6 +58,7 @@ class _HomePageState extends ConsumerState<HomePage> {
       await ref.read(ensureSelectedAccountProvider.future);
       ref.invalidate(selectedAccountProvider);
       ref.invalidate(transactionListItemsProvider);
+      await ref.read(accessSessionProvider.notifier).restore();
     });
   }
 
@@ -179,45 +179,28 @@ class _HomePageState extends ConsumerState<HomePage> {
                     break;
                   case 'sync':
                     {
-                      if (!mounted) break;
-                      final repo = ref.read(waitlistRepoProvider);
-                      final previous = await repo.load();
-                      final res = await showRightDrawer<SyncWaitlistResult?>(
-                        context,
-                        child: SyncWaitlistPanel(initial: previous),
-                        widthFraction: 0.86,
-                        heightFraction: 0.9,
-                      );
-                      if (res != null) {
-                        final entry = WaitlistEntry(
-                          email: res.email,
-                          phone: res.phone,
-                          message: res.message,
-                          savedAt: DateTime.now(),
-                        );
-                        await repo.save(entry);
-                        if (!mounted) break;
-                        final who = entry.email?.isNotEmpty == true
-                            ? entry.email
-                            : (entry.phone?.isNotEmpty == true
-                                  ? entry.phone
-                                  : 'utilisateur');
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          SnackBar(
-                            content: Text(
-                              'Merci $who, vous êtes inscrit sur la liste d’attente',
-                            ),
+                      final ok = await requireAccess(context, ref);
+                      if (!mounted || !ok) break;
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(
+                          content: Text(
+                            'Accès vérifié. Synchronisation activée.',
                           ),
-                        );
-                      }
+                        ),
+                      );
                       break;
                     }
-
                   case 'share':
-                    final acc = await ref.read(selectedAccountProvider.future);
-                    if (!mounted || acc == null) break;
-                    await _showShareDialog(acc);
-                    break;
+                    {
+                      final ok = await requireAccess(context, ref);
+                      if (!mounted || !ok) break;
+                      final acc = await ref.read(
+                        selectedAccountProvider.future,
+                      );
+                      if (!mounted || acc == null) break;
+                      await _showShareDialog(acc);
+                      break;
+                    }
                   case 'personnalisation':
                     if (!mounted) break;
                     await openSummaryPrefs();
