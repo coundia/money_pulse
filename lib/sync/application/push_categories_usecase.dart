@@ -22,11 +22,12 @@ class PushCategoriesUseCase implements PushPort {
           .map(
             (c) => CategoryDeltaDto.fromEntity(
               c,
-              c.deletedAt != null ? SyncDeltaType.delete : SyncDeltaType.update,
+              c.remoteId != null ? SyncDeltaType.update : SyncDeltaType.create,
               now,
             ).toJson(),
           )
           .toList();
+
       final res = await api.postCategoryDeltas(deltas);
       if (res.statusCode < 200 || res.statusCode >= 300) {
         throw StateError('Category sync failed with status ${res.statusCode}');

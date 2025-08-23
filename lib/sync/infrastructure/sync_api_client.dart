@@ -1,15 +1,17 @@
-/* Minimal HTTP client for pushing deltas to remote sync endpoints. */
+/* Minimal HTTP client for pushing deltas with auth headers from providers. */
 import 'dart:convert';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:http/http.dart' as http;
+import 'package:money_pulse/sync/infrastructure/sync_headers_provider.dart';
 
 typedef Json = Map<String, Object?>;
 
 class SyncApiClient {
   final String baseUri;
   final http.Client _http;
+  final HeaderBuilder _headers;
 
-  SyncApiClient(this.baseUri, this._http);
+  SyncApiClient(this.baseUri, this._http, this._headers);
 
   Future<http.Response> postCategoryDeltas(List<Json> deltas) => _post(
     Uri.parse('$baseUri/api/v1/commands/category/sync'),
@@ -17,7 +19,7 @@ class SyncApiClient {
   );
 
   Future<http.Response> postAccountDeltas(List<Json> deltas) => _post(
-    Uri.parse('$baseUri/api/v1/commands/balance/sync'),
+    Uri.parse('$baseUri/api/v1/commands/account/sync'),
     {'deltas': deltas},
   );
 
@@ -37,7 +39,7 @@ class SyncApiClient {
   );
 
   Future<http.Response> postTransactionItemDeltas(List<Json> deltas) => _post(
-    Uri.parse('$baseUri/api/v1/commands/transaction-item/sync'),
+    Uri.parse('$baseUri/api/v1/commands/transactionItem/sync'),
     {'deltas': deltas},
   );
 
@@ -57,21 +59,17 @@ class SyncApiClient {
   );
 
   Future<http.Response> postStockLevelDeltas(List<Json> deltas) => _post(
-    Uri.parse('$baseUri/api/v1/commands/stock-level/sync'),
+    Uri.parse('$baseUri/api/v1/commands/stockLevel/sync'),
     {'deltas': deltas},
   );
 
   Future<http.Response> postStockMovementDeltas(List<Json> deltas) => _post(
-    Uri.parse('$baseUri/api/v1/commands/stock-movement/sync'),
+    Uri.parse('$baseUri/api/v1/commands/stockMovement/sync'),
     {'deltas': deltas},
   );
 
   Future<http.Response> _post(Uri uri, Json body) {
-    return _http.post(
-      uri,
-      headers: {'Content-Type': 'application/json', 'accept': '*/*'},
-      body: jsonEncode(body),
-    );
+    return _http.post(uri, headers: _headers(), body: jsonEncode(body));
   }
 }
 
@@ -82,5 +80,6 @@ final syncApiClientProvider = Provider.family<SyncApiClient, String>((
   baseUri,
 ) {
   final client = ref.read(httpClientProvider);
-  return SyncApiClient(baseUri, client);
+  final headers = ref.read(syncHeaderBuilderProvider);
+  return SyncApiClient(baseUri, client, headers);
 });

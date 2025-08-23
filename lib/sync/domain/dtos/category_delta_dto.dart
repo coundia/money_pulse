@@ -35,6 +35,7 @@ class CategoryDeltaDto {
     'typeEntry': typeEntry,
     'version': version,
     'syncAt': syncAt,
+    'is_active': true,
   };
 
   static CategoryDeltaDto fromEntity(
