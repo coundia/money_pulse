@@ -1,4 +1,4 @@
-/* Orchestrates all push use cases, consults SyncPolicy, logs steps, returns a summary. */
+/* Orchestrates all push use cases in FK-safe order, consults SyncPolicy, logs, returns a summary. */
 import 'push_port.dart';
 import '../infrastructure/sync_logger.dart';
 import 'sync_policy.dart';
@@ -94,33 +94,25 @@ class SyncAllUseCase {
   Future<SyncSummary> syncAll({int batchSize = 200}) async {
     logger.info('Sync start');
 
-    final cats = await _maybe(
-      SyncDomain.categories,
-      () => categories.execute(batchSize: batchSize),
-    );
     final accs = await _maybe(
       SyncDomain.accounts,
       () => accounts.execute(batchSize: batchSize),
     );
-    final txs = await _maybe(
-      SyncDomain.transactions,
-      () => transactions.execute(batchSize: batchSize),
+    final cats = await _maybe(
+      SyncDomain.categories,
+      () => categories.execute(batchSize: batchSize),
     );
     final uts = await _maybe(
       SyncDomain.units,
       () => units.execute(batchSize: batchSize),
     );
-    final prods = await _maybe(
-      SyncDomain.products,
-      () => products.execute(batchSize: batchSize),
-    );
-    final itms = await _maybe(
-      SyncDomain.items,
-      () => items.execute(batchSize: batchSize),
-    );
     final comps = await _maybe(
       SyncDomain.companies,
       () => companies.execute(batchSize: batchSize),
+    );
+    final prods = await _maybe(
+      SyncDomain.products,
+      () => products.execute(batchSize: batchSize),
     );
     final custs = await _maybe(
       SyncDomain.customers,
@@ -137,6 +129,14 @@ class SyncAllUseCase {
     final sms = await _maybe(
       SyncDomain.stockMovements,
       () => stockMovements.execute(batchSize: batchSize),
+    );
+    final txs = await _maybe(
+      SyncDomain.transactions,
+      () => transactions.execute(batchSize: batchSize),
+    );
+    final itms = await _maybe(
+      SyncDomain.items,
+      () => items.execute(batchSize: batchSize),
     );
 
     logger.info('Sync done');

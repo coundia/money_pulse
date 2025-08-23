@@ -50,6 +50,7 @@ class AccountDeltaDto {
     'type': type,
     'remoteId': remoteId,
     'code': code,
+    'name': code,
     'description': description,
     'status': status,
     'currency': currency,

@@ -1,4 +1,4 @@
-// Bootstraps the app, initializes locale and seeds default data (account, categories, company, customer).
+/* App bootstrap with ProviderScope overrides; disables product sync via SyncPolicy. */
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -11,6 +11,11 @@ import 'package:money_pulse/presentation/app/app.dart';
 import 'package:money_pulse/presentation/app/providers.dart';
 import 'package:money_pulse/presentation/app/restart_app.dart';
 import 'package:money_pulse/presentation/app/seed_bootstrap.dart';
+
+// ⬇️ imports for sync policy override
+import 'package:money_pulse/sync/application/sync_policy.dart';
+import 'package:money_pulse/sync/infrastructure/sync_policy_provider.dart';
+import 'package:money_pulse/sync/domain/sync_domain.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -26,8 +31,26 @@ Future<void> main() async {
   ]);
   Intl.defaultLocale = 'fr_FR';
   await AppDatabase.I.init();
+
   runZonedGuarded(() {
-    runApp(RestartApp(child: const ProviderScope(child: Bootstrap())));
+    runApp(
+      RestartApp(
+        child: ProviderScope(
+          overrides: [
+            // ⬇️ Skip "products" sync globally (change the set to disable others too)
+            syncPolicyProvider.overrideWithValue(
+              const DisabledSetSyncPolicy({
+                SyncDomain.products,
+                SyncDomain.debts,
+                SyncDomain.stockLevels,
+                SyncDomain.stockMovements,
+              }),
+            ),
+          ],
+          child: const Bootstrap(),
+        ),
+      ),
+    );
   }, (error, stack) {});
 }
 

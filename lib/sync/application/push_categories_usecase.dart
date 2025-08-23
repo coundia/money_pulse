@@ -29,8 +29,8 @@ class PushCategoriesUseCase implements PushPort {
     final items = await port.findDirty(limit: batchSize);
     final now = DateTime.now();
     final envelopes = items.map((c) {
-      final type = c.deletedAt != null
-          ? SyncDeltaType.delete
+      final type = c.remoteId == null
+          ? SyncDeltaType.create
           : SyncDeltaType.update;
       final dto = CategoryDeltaDto.fromEntity(c, type, now).toJson();
       return DeltaEnvelope(
