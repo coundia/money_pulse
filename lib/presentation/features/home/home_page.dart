@@ -1,4 +1,4 @@
-// Home page scaffold using HomeAppBarTitle and gating Sync/Share behind access verification.
+// Home page scaffold using HomeAppBarTitle and gating Sync/Share behind access verification + login/logout actions.
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -128,8 +128,8 @@ class _HomePageState extends ConsumerState<HomePage> {
   Widget build(BuildContext context) {
     final accAsync = ref.watch(selectedAccountProvider);
     final uiPrefs = ref.watch(homeUiPrefsProvider);
-
     final privacyAsync = ref.watch(homePrivacyPrefsProvider);
+    final accessGrant = ref.watch(accessSessionProvider);
 
     final hide = privacyAsync.maybeWhen(
       data: (p) => p.hideBalance,
@@ -152,28 +152,48 @@ class _HomePageState extends ConsumerState<HomePage> {
               tooltip: 'Plus',
               onSelected: (action) async {
                 switch (action) {
-                  case 'search':
-                    final items = await ref.read(
-                      transactionListItemsProvider.future,
-                    );
-                    final result = await showSearch<TransactionEntry?>(
-                      context: context,
-                      delegate: TxnSearchDelegate(items),
-                    );
-                    if (result != null) {
-                      final ok = await showModalBottomSheet<bool>(
-                        context: context,
-                        isScrollControlled: true,
-                        builder: (_) => TransactionFormSheet(entry: result),
+                  case 'login':
+                    {
+                      final ok = await requireAccess(context, ref);
+                      if (!mounted || !ok) break;
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(content: Text('Connecté avec succès.')),
                       );
-                      if (ok == true) {
-                        await ref.read(balanceProvider.notifier).load();
-                        await ref.read(transactionsProvider.notifier).load();
-                        ref.invalidate(selectedAccountProvider);
-                        ref.invalidate(transactionListItemsProvider);
-                      }
+                      break;
                     }
-                    break;
+                  case 'logout':
+                    {
+                      await ref.read(accessSessionProvider.notifier).clear();
+                      if (!mounted) break;
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(content: Text('Déconnecté.')),
+                      );
+                      break;
+                    }
+                  case 'search':
+                    {
+                      final items = await ref.read(
+                        transactionListItemsProvider.future,
+                      );
+                      final result = await showSearch<TransactionEntry?>(
+                        context: context,
+                        delegate: TxnSearchDelegate(items),
+                      );
+                      if (result != null) {
+                        final ok = await showModalBottomSheet<bool>(
+                          context: context,
+                          isScrollControlled: true,
+                          builder: (_) => TransactionFormSheet(entry: result),
+                        );
+                        if (ok == true) {
+                          await ref.read(balanceProvider.notifier).load();
+                          await ref.read(transactionsProvider.notifier).load();
+                          ref.invalidate(selectedAccountProvider);
+                          ref.invalidate(transactionListItemsProvider);
+                        }
+                      }
+                      break;
+                    }
                   case 'period':
                     await _showPeriodSheet();
                     break;
@@ -249,81 +269,101 @@ class _HomePageState extends ConsumerState<HomePage> {
                     break;
                 }
               },
-              itemBuilder: (context) => const [
-                PopupMenuItem(
-                  value: 'search',
-                  child: ListTile(
-                    leading: Icon(Icons.search),
-                    title: Text('Rechercher'),
+              itemBuilder: (context) {
+                final items = <PopupMenuEntry<String>>[];
+
+                items.addAll(const [
+                  PopupMenuItem(
+                    value: 'search',
+                    child: ListTile(
+                      leading: Icon(Icons.search),
+                      title: Text('Rechercher'),
+                    ),
                   ),
-                ),
-                PopupMenuDivider(),
-                PopupMenuItem(
-                  value: 'period',
-                  child: ListTile(
-                    leading: Icon(Icons.filter_alt),
-                    title: Text('Sélectionner la période'),
+                  PopupMenuDivider(),
+                  PopupMenuItem(
+                    value: 'period',
+                    child: ListTile(
+                      leading: Icon(Icons.filter_alt),
+                      title: Text('Sélectionner la période'),
+                    ),
                   ),
-                ),
-                PopupMenuItem(
-                  value: 'sync',
-                  child: ListTile(
-                    leading: Icon(Icons.sync),
-                    title: Text('Synchroniser '),
+                  PopupMenuItem(
+                    value: 'sync',
+                    child: ListTile(
+                      leading: Icon(Icons.sync),
+                      title: Text('Synchroniser '),
+                    ),
                   ),
-                ),
-                PopupMenuItem(
-                  value: 'share',
-                  child: ListTile(
-                    leading: Icon(Icons.ios_share),
-                    title: Text('Partager le compte'),
+                  PopupMenuItem(
+                    value: 'share',
+                    child: ListTile(
+                      leading: Icon(Icons.ios_share),
+                      title: Text('Partager le compte'),
+                    ),
                   ),
-                ),
-                PopupMenuDivider(),
-                PopupMenuItem(
-                  value: 'produits',
-                  child: ListTile(
-                    leading: Icon(Icons.shop),
-                    title: Text('Produits'),
+                  PopupMenuDivider(),
+                  PopupMenuItem(
+                    value: 'produits',
+                    child: ListTile(
+                      leading: Icon(Icons.shop),
+                      title: Text('Produits'),
+                    ),
                   ),
-                ),
-                PopupMenuItem(
-                  value: 'manageCategories',
-                  child: ListTile(
-                    leading: Icon(Icons.category_outlined),
-                    title: Text('Catégories'),
+                  PopupMenuItem(
+                    value: 'manageCategories',
+                    child: ListTile(
+                      leading: Icon(Icons.category_outlined),
+                      title: Text('Catégories'),
+                    ),
                   ),
-                ),
-                PopupMenuItem(
-                  value: 'manageAccounts',
-                  child: ListTile(
-                    leading: Icon(Icons.wallet_giftcard),
-                    title: Text('Comptes'),
+                  PopupMenuItem(
+                    value: 'manageAccounts',
+                    child: ListTile(
+                      leading: Icon(Icons.wallet_giftcard),
+                      title: Text('Comptes'),
+                    ),
                   ),
-                ),
-                PopupMenuItem(
-                  value: 'clients',
-                  child: ListTile(
-                    leading: Icon(Icons.person),
-                    title: Text('Clients'),
+                  PopupMenuItem(
+                    value: 'clients',
+                    child: ListTile(
+                      leading: Icon(Icons.person),
+                      title: Text('Clients'),
+                    ),
                   ),
-                ),
-                PopupMenuDivider(),
-                PopupMenuItem(
-                  value: 'personnalisation',
-                  child: ListTile(
-                    leading: Icon(Icons.dashboard_customize),
-                    title: Text('Personnalisation'),
+                  PopupMenuDivider(),
+                  PopupMenuItem(
+                    value: 'personnalisation',
+                    child: ListTile(
+                      leading: Icon(Icons.dashboard_customize),
+                      title: Text('Personnalisation'),
+                    ),
                   ),
-                ),
-                PopupMenuItem(
-                  value: 'settings',
-                  child: ListTile(
-                    leading: Icon(Icons.settings),
-                    title: Text('Paramètres'),
+                  PopupMenuItem(
+                    value: 'settings',
+                    child: ListTile(
+                      leading: Icon(Icons.settings),
+                      title: Text('Paramètres'),
+                    ),
                   ),
-                ),
-              ],
+                ]);
+                items.add(const PopupMenuDivider());
+                items.add(
+                  PopupMenuItem(
+                    value: accessGrant == null ? 'login' : 'logout',
+                    child: ListTile(
+                      leading: Icon(
+                        accessGrant == null ? Icons.login : Icons.logout,
+                      ),
+                      title: Text(
+                        accessGrant == null ? 'Se connecter' : 'Se déconnecter',
+                      ),
+                    ),
+                  ),
+                );
+
+                return items;
+              },
             ),
         ],
       ),

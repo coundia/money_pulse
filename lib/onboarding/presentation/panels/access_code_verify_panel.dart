@@ -1,13 +1,14 @@
-// Right-drawer: code verification form with resend, responsive layout, and Enter-to-verify.
+// Right-drawer to verify code with Enter-to-validate and resend support.
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../domain/entities/access_grant.dart';
 import '../providers/access_repo_provider.dart';
+import '../../domain/models/access_identity.dart';
 
 class AccessCodeVerifyPanel extends ConsumerStatefulWidget {
-  final String email;
-  const AccessCodeVerifyPanel({super.key, required this.email});
+  final AccessIdentity identity;
+  const AccessCodeVerifyPanel({super.key, required this.identity});
 
   @override
   ConsumerState<AccessCodeVerifyPanel> createState() =>
@@ -40,7 +41,7 @@ class _AccessCodeVerifyPanelState extends ConsumerState<AccessCodeVerifyPanel> {
     setState(() => _verifying = true);
     try {
       final uc = ref.read(verifyAccessUseCaseProvider);
-      final grant = await uc.execute(widget.email, _codeCtrl.text);
+      final grant = await uc.execute(widget.identity, _codeCtrl.text);
       if (!mounted) return;
       Navigator.of(context).pop<AccessGrant>(grant);
     } catch (_) {
@@ -58,7 +59,7 @@ class _AccessCodeVerifyPanelState extends ConsumerState<AccessCodeVerifyPanel> {
     setState(() => _resending = true);
     try {
       final uc = ref.read(requestAccessUseCaseProvider);
-      await uc.execute(widget.email);
+      await uc.execute(widget.identity);
       if (!mounted) return;
       ScaffoldMessenger.of(
         context,
@@ -71,6 +72,13 @@ class _AccessCodeVerifyPanelState extends ConsumerState<AccessCodeVerifyPanel> {
     } finally {
       if (mounted) setState(() => _resending = false);
     }
+  }
+
+  String _who() {
+    if ((widget.identity.email ?? '').isNotEmpty) {
+      return widget.identity.email!;
+    }
+    return widget.identity.username;
   }
 
   @override
@@ -116,7 +124,7 @@ class _AccessCodeVerifyPanelState extends ConsumerState<AccessCodeVerifyPanel> {
                           mainAxisSize: MainAxisSize.min,
                           children: [
                             Text(
-                              'Un code a été envoyé à ${widget.email}. Entrez-le pour valider votre accès.',
+                              'Un code a été envoyé à ${_who()}. Entrez-le pour valider votre accès.',
                               textAlign: TextAlign.center,
                             ),
                             const SizedBox(height: 16),

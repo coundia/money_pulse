@@ -1,4 +1,4 @@
-// Flow orchestration: open email panel then code panel with right_drawer.
+// Flow: collect identity then enter code; both in right-drawers.
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../presentation/widgets/right_drawer.dart';
@@ -21,7 +21,7 @@ Future<AccessGrant?> startAccessFlow(
 
   final grant = await showRightDrawer<AccessGrant?>(
     context,
-    child: AccessCodeVerifyPanel(email: emailRes.email),
+    child: AccessCodeVerifyPanel(identity: emailRes.identity),
     widthFraction: 0.86,
     heightFraction: 1.0,
   );

@@ -1,7 +1,11 @@
-// Domain abstraction: access repository for requesting and verifying codes.
+// Repository interface for requesting and verifying access codes.
 import '../entities/access_grant.dart';
+import '../models/access_identity.dart';
 
 abstract class AccessRepository {
-  Future<void> requestCode({required String email});
-  Future<AccessGrant> verifyCode({required String email, required String code});
+  Future<void> requestCode({required AccessIdentity identity});
+  Future<AccessGrant> verifyCode({
+    required AccessIdentity identity,
+    required String code,
+  });
 }
