@@ -85,7 +85,7 @@ class _AccessEmailRequestPanelState
         email: email.isEmpty ? null : email,
         phone: phone.isEmpty ? null : phone,
         name: _nameCtrl.text.trim().isEmpty ? null : _nameCtrl.text.trim(),
-        message: _messageCtrl.text.trim().isEmpty
+        notes: _messageCtrl.text.trim().isEmpty
             ? null
             : _messageCtrl.text.trim(),
       );
@@ -279,7 +279,7 @@ class _AccessEmailRequestPanelState
       focusNode: _phoneFocus,
       decoration: InputDecoration(
         labelText: 'Téléphone',
-        hintText: '+221 77 000 00 00',
+        hintText: '221 77 000 00 00',
         prefixIcon: const Icon(Icons.phone_outlined),
         border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
         errorText: _phoneCtrl.text.isEmpty

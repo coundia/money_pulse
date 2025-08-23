@@ -1,5 +1,4 @@
-/// Settings page with a schema upgrade action using right-drawer confirmation.
-
+/// Settings page including schema upgrade, and login/logout using right-drawer flow.
 import 'dart:io' show Platform;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -15,6 +14,7 @@ import 'package:money_pulse/presentation/features/sync/change_log_list_page.dart
 import 'package:money_pulse/presentation/features/sync/sync_state_list_page.dart';
 import 'package:money_pulse/presentation/shared/formatters.dart';
 import 'package:money_pulse/presentation/widgets/right_drawer.dart';
+import 'package:money_pulse/onboarding/presentation/providers/access_session_provider.dart';
 import '../../app/app_exit/app_exit.dart';
 import '../products/product_list_page.dart';
 import 'widgets/confirm_panel.dart';
@@ -48,6 +48,37 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
       heightFraction: 0.5,
     );
     return ok == true;
+  }
+
+  Future<void> _login() async {
+    if (!mounted || _busy) return;
+    final ok = await requireAccess(context, ref);
+    if (!mounted) return;
+    if (ok) {
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('Connecté avec succès.')));
+      setState(() {});
+    }
+  }
+
+  Future<void> _logout() async {
+    if (!mounted || _busy) return;
+    final ok = await _confirm(
+      icon: Icons.logout,
+      title: 'Se déconnecter ?',
+      message:
+          'Vous perdrez l’accès aux actions protégées. Les données locales restent sur l’appareil.',
+      confirmLabel: 'Se déconnecter',
+      cancelLabel: 'Annuler',
+    );
+    if (!ok) return;
+    await ref.read(accessSessionProvider.notifier).clear();
+    if (!mounted) return;
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(const SnackBar(content: Text('Déconnecté.')));
+    setState(() {});
   }
 
   Future<void> _upgradeDbSchema() async {
@@ -151,11 +182,28 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
 
   @override
   Widget build(BuildContext context) {
+    final session = ref.watch(accessSessionProvider);
+    final isLoggedIn = session != null;
+
     return Scaffold(
       appBar: AppBar(title: const Text('Profil')),
       body: ListView(
         padding: const EdgeInsets.all(12),
         children: [
+          _SectionCard(
+            title: 'Compte',
+            children: [
+              _tile(
+                icon: isLoggedIn ? Icons.logout : Icons.login,
+                title: isLoggedIn ? 'Se déconnecter' : 'Se connecter',
+                subtitle: isLoggedIn
+                    ? 'Désactiver l’accès aux fonctions protégées'
+                    : 'Activer la synchronisation et le partage sécurisé etc...',
+                onTap: _busy ? null : (isLoggedIn ? _logout : _login),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
           _SectionCard(
             title: 'Gestion',
             children: [

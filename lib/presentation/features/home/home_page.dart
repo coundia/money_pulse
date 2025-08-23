@@ -203,9 +203,7 @@ class _HomePageState extends ConsumerState<HomePage> {
                       if (!mounted || !ok) break;
                       ScaffoldMessenger.of(context).showSnackBar(
                         const SnackBar(
-                          content: Text(
-                            'Accès vérifié. Synchronisation activée.',
-                          ),
+                          content: Text('Accès vérifié. Synchronisation todo.'),
                         ),
                       );
                       break;
@@ -214,11 +212,11 @@ class _HomePageState extends ConsumerState<HomePage> {
                     {
                       final ok = await requireAccess(context, ref);
                       if (!mounted || !ok) break;
-                      final acc = await ref.read(
-                        selectedAccountProvider.future,
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(
+                          content: Text('Accès vérifié. partage todo.'),
+                        ),
                       );
-                      if (!mounted || acc == null) break;
-                      await _showShareDialog(acc);
                       break;
                     }
                   case 'personnalisation':

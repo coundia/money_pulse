@@ -185,7 +185,7 @@ class _AccessCodeVerifyPanelState extends ConsumerState<AccessCodeVerifyPanel> {
       focusNode: _codeFocus,
       decoration: InputDecoration(
         labelText: 'Code de confirmation',
-        hintText: '6 chiffres',
+        hintText: 'Le code reçu',
         prefixIcon: const Icon(Icons.verified_user_outlined),
         border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
         counterText: '',

@@ -4,14 +4,14 @@ class AccessIdentity {
   final String? email;
   final String? phone;
   final String? name;
-  final String? message;
+  final String? notes;
 
   const AccessIdentity({
     required this.username,
     this.email,
     this.phone,
     this.name,
-    this.message,
+    this.notes,
   });
 
   Map<String, dynamic> toJson() {
@@ -20,7 +20,7 @@ class AccessIdentity {
       'email': email,
       'phone': phone,
       'name': name,
-      'message': message,
+      'notes': notes,
     }..removeWhere((k, v) => v == null || (v is String && v.trim().isEmpty));
     return map;
   }
