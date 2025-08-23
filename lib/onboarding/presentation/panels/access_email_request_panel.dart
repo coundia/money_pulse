@@ -1,9 +1,10 @@
-// Right-drawer form to choose email or phone as identity, then request a code; Enter submits; responsive and accessible.
+// Right-drawer form to choose email or phone as identity, then request a code; fills source with installation ID.
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../providers/access_repo_provider.dart';
 import '../../domain/models/access_identity.dart';
+import 'package:money_pulse/presentation/app/installation_id_provider.dart';
 
 class AccessEmailRequestResult {
   final AccessIdentity identity;
@@ -24,12 +25,10 @@ class AccessEmailRequestPanel extends ConsumerStatefulWidget {
 class _AccessEmailRequestPanelState
     extends ConsumerState<AccessEmailRequestPanel> {
   final _formKey = GlobalKey<FormState>();
-
   final _emailCtrl = TextEditingController();
   final _phoneCtrl = TextEditingController();
   final _nameCtrl = TextEditingController();
   final _messageCtrl = TextEditingController();
-
   final _emailFocus = FocusNode();
   final _phoneFocus = FocusNode();
 
@@ -80,6 +79,9 @@ class _AccessEmailRequestPanelState
     try {
       final email = _mode == IdentityMode.email ? _emailCtrl.text.trim() : '';
       final phone = _mode == IdentityMode.phone ? _phoneCtrl.text.trim() : '';
+
+      final source = await ref.read(installationIdProvider.future);
+
       final identity = AccessIdentity(
         username: _username,
         email: email.isEmpty ? null : email,
@@ -88,6 +90,7 @@ class _AccessEmailRequestPanelState
         notes: _messageCtrl.text.trim().isEmpty
             ? null
             : _messageCtrl.text.trim(),
+        source: source,
       );
 
       final uc = ref.read(requestAccessUseCaseProvider);
@@ -165,16 +168,6 @@ class _AccessEmailRequestPanelState
                                   ),
                                   const SizedBox(height: 12),
                                   _messageField(),
-                                  const SizedBox(height: 12),
-                                  Align(
-                                    alignment: Alignment.centerLeft,
-                                    child: Text(
-                                      'Les autres champs sont optionnels.',
-                                      style: Theme.of(
-                                        context,
-                                      ).textTheme.bodySmall,
-                                    ),
-                                  ),
                                   const SizedBox(height: 16),
                                   SizedBox(
                                     width: 220,
@@ -186,25 +179,11 @@ class _AccessEmailRequestPanelState
                             else
                               Column(
                                 children: [
-                                  Text("Champs Obligatoire"),
-                                  const SizedBox(height: 12),
                                   _identityField(),
-                                  const SizedBox(height: 12),
-                                  Text("Champs optionnels"),
                                   const SizedBox(height: 12),
                                   _nameField(),
                                   const SizedBox(height: 12),
                                   _messageField(),
-                                  const SizedBox(height: 12),
-                                  Align(
-                                    alignment: Alignment.centerLeft,
-                                    child: Text(
-                                      'Les autres champs sont optionnels.',
-                                      style: Theme.of(
-                                        context,
-                                      ).textTheme.bodySmall,
-                                    ),
-                                  ),
                                   const SizedBox(height: 16),
                                   SizedBox(
                                     width: double.infinity,
@@ -232,7 +211,7 @@ class _AccessEmailRequestPanelState
       segments: const [
         ButtonSegment(
           value: IdentityMode.phone,
-          label: Text('Téléphone (WhatsApp)'),
+          label: Text('Téléphone [Whatsapp]'),
           icon: Icon(Icons.phone),
         ),
         ButtonSegment(

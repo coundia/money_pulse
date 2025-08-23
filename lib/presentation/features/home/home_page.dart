@@ -1,4 +1,4 @@
-// Home page scaffold using HomeAppBarTitle and gating Sync/Share behind access verification + login/logout actions.
+/* Home page scaffold using SyncAll to push all dirty tables after access verification. */
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -22,6 +22,7 @@ import 'package:money_pulse/presentation/features/categories/category_list_page.
 import 'package:money_pulse/domain/accounts/entities/account.dart';
 import 'package:money_pulse/domain/transactions/entities/transaction_entry.dart';
 
+import '../../../sync/infrastructure/sync_logger.dart';
 import '../transactions/controllers/transaction_list_controller.dart';
 import '../transactions/prefs/summary_card_prefs_panel.dart';
 import '../transactions/providers/transaction_list_providers.dart'
@@ -38,6 +39,9 @@ import 'prefs/home_ui_prefs_panel.dart';
 import 'widgets/home_app_bar_title.dart';
 
 import 'package:money_pulse/onboarding/presentation/providers/access_session_provider.dart';
+
+// ⬇️ Import sync orchestrator
+import 'package:money_pulse/sync/sync_service_provider.dart';
 
 class HomePage extends ConsumerStatefulWidget {
   const HomePage({super.key});
@@ -119,6 +123,35 @@ class _HomePageState extends ConsumerState<HomePage> {
     );
   }
 
+  Future<void> _runSyncAll() async {
+    final ok = await requireAccess(context, ref);
+    if (!mounted || !ok) return;
+
+    final logger = ref.read(syncLoggerProvider);
+
+    try {
+      logger.info('UI: trigger syncAll');
+      final s = await syncAllTables(ref);
+      logger.info(
+        'UI: syncAll success cats=${s.categories} accs=${s.accounts} txs=${s.transactions} '
+        'uts=${s.units} prods=${s.products} items=${s.items} comps=${s.companies} '
+        'custs=${s.customers} debts=${s.debts} sl=${s.stockLevels} sm=${s.stockMovements}',
+      );
+
+      await ref.read(balanceProvider.notifier).load();
+      await ref.read(transactionsProvider.notifier).load();
+      ref.invalidate(selectedAccountProvider);
+      ref.invalidate(transactionListItemsProvider);
+      setState(() {});
+    } catch (e, st) {
+      logger.error('UI: syncAll failed', e, st);
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Erreur de synchronisation')),
+      );
+    }
+  }
+
   void _onDestinationSelected(int v) {
     if (!mounted) return;
     setState(() => pageIdx = v);
@@ -198,16 +231,8 @@ class _HomePageState extends ConsumerState<HomePage> {
                     await _showPeriodSheet();
                     break;
                   case 'sync':
-                    {
-                      final ok = await requireAccess(context, ref);
-                      if (!mounted || !ok) break;
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(
-                          content: Text('Accès vérifié. Synchronisation todo.'),
-                        ),
-                      );
-                      break;
-                    }
+                    await _runSyncAll();
+                    break;
                   case 'share':
                     {
                       final ok = await requireAccess(context, ref);

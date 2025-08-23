@@ -1,10 +1,11 @@
-// Value object describing identity used to request/verify access.
+// Value object describing identity and metadata used to request/verify access.
 class AccessIdentity {
   final String username;
   final String? email;
   final String? phone;
   final String? name;
   final String? notes;
+  final String? source;
 
   const AccessIdentity({
     required this.username,
@@ -12,6 +13,7 @@ class AccessIdentity {
     this.phone,
     this.name,
     this.notes,
+    this.source,
   });
 
   Map<String, dynamic> toJson() {
@@ -21,6 +23,7 @@ class AccessIdentity {
       'phone': phone,
       'name': name,
       'notes': notes,
+      'source': source,
     }..removeWhere((k, v) => v == null || (v is String && v.trim().isEmpty));
     return map;
   }
