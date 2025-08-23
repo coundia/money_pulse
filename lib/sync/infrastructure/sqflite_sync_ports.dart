@@ -1,41 +1,17 @@
-/* Sqflite adapters implementing sync ports: findDirty + markSynced per table. */
+/* Sqflite SyncPorts for all tables with robust findDirty (dirty or never-synced) and markSynced. */
 import 'package:sqflite/sqflite.dart';
+
+import 'package:money_pulse/sync/application/_ports.dart';
+
 import 'package:money_pulse/domain/categories/entities/category.dart';
 import 'package:money_pulse/domain/accounts/entities/account.dart';
 import 'package:money_pulse/domain/transactions/entities/transaction_entry.dart';
-import 'package:money_pulse/sync/application/_ports.dart';
 
 class _Sql {
-  static String inClause(int n) => List.filled(n, '?').join(',');
-  static Future<void> markSyncedStringIds(
-    Database db,
-    String table,
-    Iterable<String> ids,
-    DateTime at,
-  ) async {
-    if (ids.isEmpty) return;
-    final placeholders = inClause(ids.length);
-    final iso = at.toUtc().toIso8601String();
-    await db.rawUpdate(
-      'UPDATE $table SET isDirty=0, syncAt=?, updatedAt=? WHERE id IN ($placeholders)',
-      [iso, iso, ...ids],
-    );
-  }
-
-  static Future<void> markSyncedIntIds(
-    Database db,
-    String table,
-    Iterable<int> ids,
-    DateTime at,
-  ) async {
-    if (ids.isEmpty) return;
-    final placeholders = inClause(ids.length);
-    final iso = at.toUtc().toIso8601String();
-    await db.rawUpdate(
-      'UPDATE $table SET isDirty=0, syncAt=?, updatedAt=? WHERE id IN ($placeholders)',
-      [iso, iso, ...ids],
-    );
-  }
+  static String listQ(int n) => List.filled(n, '?').join(', ');
+  static const commonWhere =
+      '(isDirty = 1) OR (remoteId IS NULL AND deletedAt IS NULL)';
+  static const order = 'updatedAt DESC';
 }
 
 class CategorySyncPortSqflite implements CategorySyncPort {
@@ -44,16 +20,30 @@ class CategorySyncPortSqflite implements CategorySyncPort {
 
   @override
   Future<List<Category>> findDirty({int limit = 200}) async {
-    final rows = await db.rawQuery(
-      'SELECT * FROM category WHERE isDirty=1 ORDER BY datetime(updatedAt) DESC LIMIT ?',
-      [limit],
+    final rows = await db.query(
+      'category',
+      where: _Sql.commonWhere,
+      orderBy: _Sql.order,
+      limit: limit,
     );
-    return rows.map((m) => Category.fromMap(m)).toList();
+    return rows.map(Category.fromMap).toList();
   }
 
   @override
-  Future<void> markSynced(Iterable<String> ids, DateTime syncedAt) =>
-      _Sql.markSyncedStringIds(db, 'category', ids, syncedAt);
+  Future<void> markSynced(Iterable<String> ids, DateTime at) async {
+    if (ids.isEmpty) return;
+    final ts = at.toIso8601String();
+    final b = db.batch();
+    for (final id in ids) {
+      b.update(
+        'category',
+        {'isDirty': 0, 'syncAt': ts, 'updatedAt': ts},
+        where: 'id = ?',
+        whereArgs: [id],
+      );
+    }
+    await b.commit(noResult: true);
+  }
 }
 
 class AccountSyncPortSqflite implements AccountSyncPort {
@@ -62,16 +52,30 @@ class AccountSyncPortSqflite implements AccountSyncPort {
 
   @override
   Future<List<Account>> findDirty({int limit = 200}) async {
-    final rows = await db.rawQuery(
-      'SELECT * FROM account WHERE isDirty=1 ORDER BY datetime(updatedAt) DESC LIMIT ?',
-      [limit],
+    final rows = await db.query(
+      'account',
+      where: _Sql.commonWhere,
+      orderBy: _Sql.order,
+      limit: limit,
     );
-    return rows.map((m) => Account.fromMap(m)).toList();
+    return rows.map(Account.fromMap).toList();
   }
 
   @override
-  Future<void> markSynced(Iterable<String> ids, DateTime syncedAt) =>
-      _Sql.markSyncedStringIds(db, 'account', ids, syncedAt);
+  Future<void> markSynced(Iterable<String> ids, DateTime at) async {
+    if (ids.isEmpty) return;
+    final ts = at.toIso8601String();
+    final b = db.batch();
+    for (final id in ids) {
+      b.update(
+        'account',
+        {'isDirty': 0, 'syncAt': ts, 'updatedAt': ts},
+        where: 'id = ?',
+        whereArgs: [id],
+      );
+    }
+    await b.commit(noResult: true);
+  }
 }
 
 class TransactionSyncPortSqflite implements TransactionSyncPort {
@@ -80,16 +84,30 @@ class TransactionSyncPortSqflite implements TransactionSyncPort {
 
   @override
   Future<List<TransactionEntry>> findDirty({int limit = 200}) async {
-    final rows = await db.rawQuery(
-      'SELECT * FROM transaction_entry WHERE isDirty=1 ORDER BY datetime(updatedAt) DESC, datetime(dateTransaction) DESC LIMIT ?',
-      [limit],
+    final rows = await db.query(
+      'transaction_entry',
+      where: _Sql.commonWhere,
+      orderBy: _Sql.order,
+      limit: limit,
     );
-    return rows.map((m) => TransactionEntry.fromMap(m)).toList();
+    return rows.map(TransactionEntry.fromMap).toList();
   }
 
   @override
-  Future<void> markSynced(Iterable<String> ids, DateTime syncedAt) =>
-      _Sql.markSyncedStringIds(db, 'transaction_entry', ids, syncedAt);
+  Future<void> markSynced(Iterable<String> ids, DateTime at) async {
+    if (ids.isEmpty) return;
+    final ts = at.toIso8601String();
+    final b = db.batch();
+    for (final id in ids) {
+      b.update(
+        'transaction_entry',
+        {'isDirty': 0, 'syncAt': ts, 'updatedAt': ts},
+        where: 'id = ?',
+        whereArgs: [id],
+      );
+    }
+    await b.commit(noResult: true);
+  }
 }
 
 class UnitSyncPortSqflite implements UnitSyncPort {
@@ -97,16 +115,23 @@ class UnitSyncPortSqflite implements UnitSyncPort {
   UnitSyncPortSqflite(this.db);
 
   @override
-  Future<List<Map<String, Object?>>> findDirty({
-    int limit = 200,
-  }) => db.rawQuery(
-    'SELECT * FROM unit WHERE isDirty=1 ORDER BY datetime(updatedAt) DESC LIMIT ?',
-    [limit],
-  );
+  Future<List<Map<String, Object?>>> findDirty({int limit = 200}) {
+    return db.query(
+      'unit',
+      where: _Sql.commonWhere,
+      orderBy: _Sql.order,
+      limit: limit,
+    );
+  }
 
   @override
-  Future<void> markSynced(Iterable<String> ids, DateTime syncedAt) =>
-      _Sql.markSyncedStringIds(db, 'unit', ids, syncedAt);
+  Future<void> markSynced(Iterable<String> ids, DateTime at) async {
+    if (ids.isEmpty) return;
+    final ts = at.toIso8601String();
+    final q =
+        'UPDATE unit SET isDirty = 0, syncAt = ?, updatedAt = ? WHERE id IN (${_Sql.listQ(ids.length)})';
+    await db.rawUpdate(q, [ts, ts, ...ids]);
+  }
 }
 
 class ProductSyncPortSqflite implements ProductSyncPort {
@@ -114,16 +139,23 @@ class ProductSyncPortSqflite implements ProductSyncPort {
   ProductSyncPortSqflite(this.db);
 
   @override
-  Future<List<Map<String, Object?>>> findDirty({
-    int limit = 200,
-  }) => db.rawQuery(
-    'SELECT * FROM product WHERE isDirty=1 ORDER BY datetime(updatedAt) DESC LIMIT ?',
-    [limit],
-  );
+  Future<List<Map<String, Object?>>> findDirty({int limit = 200}) {
+    return db.query(
+      'product',
+      where: _Sql.commonWhere,
+      orderBy: _Sql.order,
+      limit: limit,
+    );
+  }
 
   @override
-  Future<void> markSynced(Iterable<String> ids, DateTime syncedAt) =>
-      _Sql.markSyncedStringIds(db, 'product', ids, syncedAt);
+  Future<void> markSynced(Iterable<String> ids, DateTime at) async {
+    if (ids.isEmpty) return;
+    final ts = at.toIso8601String();
+    final q =
+        'UPDATE product SET isDirty = 0, syncAt = ?, updatedAt = ? WHERE id IN (${_Sql.listQ(ids.length)})';
+    await db.rawUpdate(q, [ts, ts, ...ids]);
+  }
 }
 
 class TransactionItemSyncPortSqflite implements TransactionItemSyncPort {
@@ -131,16 +163,23 @@ class TransactionItemSyncPortSqflite implements TransactionItemSyncPort {
   TransactionItemSyncPortSqflite(this.db);
 
   @override
-  Future<List<Map<String, Object?>>> findDirty({
-    int limit = 200,
-  }) => db.rawQuery(
-    'SELECT * FROM transaction_item WHERE isDirty=1 ORDER BY datetime(updatedAt) DESC LIMIT ?',
-    [limit],
-  );
+  Future<List<Map<String, Object?>>> findDirty({int limit = 200}) {
+    return db.query(
+      'transaction_item',
+      where: _Sql.commonWhere,
+      orderBy: _Sql.order,
+      limit: limit,
+    );
+  }
 
   @override
-  Future<void> markSynced(Iterable<String> ids, DateTime syncedAt) =>
-      _Sql.markSyncedStringIds(db, 'transaction_item', ids, syncedAt);
+  Future<void> markSynced(Iterable<String> ids, DateTime at) async {
+    if (ids.isEmpty) return;
+    final ts = at.toIso8601String();
+    final q =
+        'UPDATE transaction_item SET isDirty = 0, syncAt = ?, updatedAt = ? WHERE id IN (${_Sql.listQ(ids.length)})';
+    await db.rawUpdate(q, [ts, ts, ...ids]);
+  }
 }
 
 class CompanySyncPortSqflite implements CompanySyncPort {
@@ -148,16 +187,23 @@ class CompanySyncPortSqflite implements CompanySyncPort {
   CompanySyncPortSqflite(this.db);
 
   @override
-  Future<List<Map<String, Object?>>> findDirty({
-    int limit = 200,
-  }) => db.rawQuery(
-    'SELECT * FROM company WHERE isDirty=1 ORDER BY datetime(updatedAt) DESC LIMIT ?',
-    [limit],
-  );
+  Future<List<Map<String, Object?>>> findDirty({int limit = 200}) {
+    return db.query(
+      'company',
+      where: _Sql.commonWhere,
+      orderBy: _Sql.order,
+      limit: limit,
+    );
+  }
 
   @override
-  Future<void> markSynced(Iterable<String> ids, DateTime syncedAt) =>
-      _Sql.markSyncedStringIds(db, 'company', ids, syncedAt);
+  Future<void> markSynced(Iterable<String> ids, DateTime at) async {
+    if (ids.isEmpty) return;
+    final ts = at.toIso8601String();
+    final q =
+        'UPDATE company SET isDirty = 0, syncAt = ?, updatedAt = ? WHERE id IN (${_Sql.listQ(ids.length)})';
+    await db.rawUpdate(q, [ts, ts, ...ids]);
+  }
 }
 
 class CustomerSyncPortSqflite implements CustomerSyncPort {
@@ -165,16 +211,23 @@ class CustomerSyncPortSqflite implements CustomerSyncPort {
   CustomerSyncPortSqflite(this.db);
 
   @override
-  Future<List<Map<String, Object?>>> findDirty({
-    int limit = 200,
-  }) => db.rawQuery(
-    'SELECT * FROM customer WHERE isDirty=1 ORDER BY datetime(updatedAt) DESC LIMIT ?',
-    [limit],
-  );
+  Future<List<Map<String, Object?>>> findDirty({int limit = 200}) {
+    return db.query(
+      'customer',
+      where: _Sql.commonWhere,
+      orderBy: _Sql.order,
+      limit: limit,
+    );
+  }
 
   @override
-  Future<void> markSynced(Iterable<String> ids, DateTime syncedAt) =>
-      _Sql.markSyncedStringIds(db, 'customer', ids, syncedAt);
+  Future<void> markSynced(Iterable<String> ids, DateTime at) async {
+    if (ids.isEmpty) return;
+    final ts = at.toIso8601String();
+    final q =
+        'UPDATE customer SET isDirty = 0, syncAt = ?, updatedAt = ? WHERE id IN (${_Sql.listQ(ids.length)})';
+    await db.rawUpdate(q, [ts, ts, ...ids]);
+  }
 }
 
 class DebtSyncPortSqflite implements DebtSyncPort {
@@ -182,16 +235,23 @@ class DebtSyncPortSqflite implements DebtSyncPort {
   DebtSyncPortSqflite(this.db);
 
   @override
-  Future<List<Map<String, Object?>>> findDirty({
-    int limit = 200,
-  }) => db.rawQuery(
-    'SELECT * FROM debt WHERE isDirty=1 ORDER BY datetime(updatedAt) DESC LIMIT ?',
-    [limit],
-  );
+  Future<List<Map<String, Object?>>> findDirty({int limit = 200}) {
+    return db.query(
+      'debt',
+      where: _Sql.commonWhere,
+      orderBy: _Sql.order,
+      limit: limit,
+    );
+  }
 
   @override
-  Future<void> markSynced(Iterable<String> ids, DateTime syncedAt) =>
-      _Sql.markSyncedStringIds(db, 'debt', ids, syncedAt);
+  Future<void> markSynced(Iterable<String> ids, DateTime at) async {
+    if (ids.isEmpty) return;
+    final ts = at.toIso8601String();
+    final q =
+        'UPDATE debt SET isDirty = 0, syncAt = ?, updatedAt = ? WHERE id IN (${_Sql.listQ(ids.length)})';
+    await db.rawUpdate(q, [ts, ts, ...ids]);
+  }
 }
 
 class StockLevelSyncPortSqflite implements StockLevelSyncPort {
@@ -199,16 +259,23 @@ class StockLevelSyncPortSqflite implements StockLevelSyncPort {
   StockLevelSyncPortSqflite(this.db);
 
   @override
-  Future<List<Map<String, Object?>>> findDirty({
-    int limit = 200,
-  }) => db.rawQuery(
-    'SELECT * FROM stock_level WHERE isDirty=1 ORDER BY datetime(updatedAt) DESC LIMIT ?',
-    [limit],
-  );
+  Future<List<Map<String, Object?>>> findDirty({int limit = 200}) {
+    return db.query(
+      'stock_level',
+      where: 'syncAt IS NULL',
+      orderBy: _Sql.order,
+      limit: limit,
+    );
+  }
 
   @override
-  Future<void> markSynced(Iterable<int> ids, DateTime syncedAt) =>
-      _Sql.markSyncedIntIds(db, 'stock_level', ids, syncedAt);
+  Future<void> markSynced(Iterable<int> ids, DateTime at) async {
+    if (ids.isEmpty) return;
+    final ts = at.toIso8601String();
+    final q =
+        'UPDATE stock_level SET syncAt = ?, updatedAt = ? WHERE id IN (${_Sql.listQ(ids.length)})';
+    await db.rawUpdate(q, [ts, ts, ...ids]);
+  }
 }
 
 class StockMovementSyncPortSqflite implements StockMovementSyncPort {
@@ -216,14 +283,21 @@ class StockMovementSyncPortSqflite implements StockMovementSyncPort {
   StockMovementSyncPortSqflite(this.db);
 
   @override
-  Future<List<Map<String, Object?>>> findDirty({
-    int limit = 200,
-  }) => db.rawQuery(
-    'SELECT * FROM stock_movement WHERE isDirty=1 ORDER BY datetime(updatedAt) DESC LIMIT ?',
-    [limit],
-  );
+  Future<List<Map<String, Object?>>> findDirty({int limit = 200}) {
+    return db.query(
+      'stock_movement',
+      where: 'syncAt IS NULL',
+      orderBy: _Sql.order,
+      limit: limit,
+    );
+  }
 
   @override
-  Future<void> markSynced(Iterable<int> ids, DateTime syncedAt) =>
-      _Sql.markSyncedIntIds(db, 'stock_movement', ids, syncedAt);
+  Future<void> markSynced(Iterable<int> ids, DateTime at) async {
+    if (ids.isEmpty) return;
+    final ts = at.toIso8601String();
+    final q =
+        'UPDATE stock_movement SET syncAt = ?, updatedAt = ? WHERE id IN (${_Sql.listQ(ids.length)})';
+    await db.rawUpdate(q, [ts, ts, ...ids]);
+  }
 }

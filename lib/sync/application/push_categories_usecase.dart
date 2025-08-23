@@ -25,13 +25,20 @@ class PushCategoriesUseCase implements PushPort {
     this.logger,
   );
 
+  @override
   Future<int> execute({int batchSize = 200}) async {
     final items = await port.findDirty(limit: batchSize);
     final now = DateTime.now();
+
     final envelopes = items.map((c) {
-      final type = c.remoteId == null
-          ? SyncDeltaType.create
-          : SyncDeltaType.update;
+      final SyncDeltaType type;
+      if (c.deletedAt != null) {
+        type = SyncDeltaType.delete;
+      } else if (c.remoteId == null) {
+        type = SyncDeltaType.create;
+      } else {
+        type = SyncDeltaType.update;
+      }
       final dto = CategoryDeltaDto.fromEntity(c, type, now).toJson();
       return DeltaEnvelope(
         entityId: c.id,
