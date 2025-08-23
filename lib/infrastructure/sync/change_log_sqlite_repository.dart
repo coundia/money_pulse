@@ -1,7 +1,10 @@
+/* Sqflite implementation of change-log repository with outbox helpers. */
+import 'dart:convert';
 import 'package:money_pulse/infrastructure/db/app_database.dart';
 import 'package:money_pulse/domain/sync/entities/change_log_entry.dart';
 import 'package:money_pulse/domain/sync/repositories/change_log_repository.dart';
 import 'package:sqflite/sqflite.dart';
+import 'package:uuid/uuid.dart';
 
 class ChangeLogRepositorySqflite implements ChangeLogRepository {
   final AppDatabase _db;
@@ -25,6 +28,70 @@ class ChangeLogRepositorySqflite implements ChangeLogRepository {
   }
 
   @override
+  Future<List<ChangeLogEntry>> findPendingByEntity(
+    String entityTable, {
+    int limit = 200,
+  }) async {
+    final rows = await _db.db.query(
+      'change_log',
+      where: 'status = ? AND entityTable = ?',
+      whereArgs: ['PENDING', entityTable],
+      orderBy: 'createdAt ASC',
+      limit: limit,
+    );
+    return rows.map((m) => ChangeLogEntry.fromMap(m)).toList();
+  }
+
+  @override
+  Future<void> enqueue(
+    String entityTable,
+    String entityId,
+    String operation,
+    String payload,
+  ) async {
+    final now = _now();
+    await _db.db.insert('change_log', {
+      'id': const Uuid().v4(),
+      'entityTable': entityTable,
+      'entityId': entityId,
+      'operation': operation,
+      'payload': payload,
+      'status': 'PENDING',
+      'attempts': 0,
+      'error': null,
+      'createdAt': now,
+      'updatedAt': now,
+      'processedAt': null,
+    }, conflictAlgorithm: ConflictAlgorithm.ignore);
+  }
+
+  @override
+  Future<void> enqueueAll(
+    String entityTable,
+    List<({String entityId, String operation, String payload})> items,
+  ) async {
+    if (items.isEmpty) return;
+    final now = _now();
+    final batch = _db.db.batch();
+    for (final it in items) {
+      batch.insert('change_log', {
+        'id': const Uuid().v4(),
+        'entityTable': entityTable,
+        'entityId': it.entityId,
+        'operation': it.operation,
+        'payload': it.payload,
+        'status': 'PENDING',
+        'attempts': 0,
+        'error': null,
+        'createdAt': now,
+        'updatedAt': now,
+        'processedAt': null,
+      }, conflictAlgorithm: ConflictAlgorithm.ignore);
+    }
+    await batch.commit(noResult: true);
+  }
+
+  @override
   Future<void> markAck(String id) async {
     final now = _now();
     await _db.db.update(
@@ -38,11 +105,8 @@ class ChangeLogRepositorySqflite implements ChangeLogRepository {
 
   @override
   Future<void> markPending(String id, {String? error}) async {
-    // sqflite ne supporte pas l’incrément via Map => on passe par rawUpdate
     await _db.db.rawUpdate(
-      'UPDATE change_log '
-      'SET attempts = attempts + 1, status = ?, updatedAt = ?, error = ? '
-      'WHERE id = ?',
+      'UPDATE change_log SET attempts = attempts + 1, status = ?, updatedAt = ?, error = ? WHERE id = ?',
       ['PENDING', _now(), error, id],
     );
   }

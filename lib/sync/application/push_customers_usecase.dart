@@ -18,8 +18,8 @@ class PushCustomersUseCase implements PushPort {
       if (rows.isEmpty) break;
       final nowIso = DateTime.now().toUtc().toIso8601String();
       final deltas = rows.map((m) {
-        final deletedAt = m['deletedAt'] as String?;
-        final type = deletedAt == null ? 'UPDATE' : 'DELETE';
+        final remoteId = m['remoteId'] as String?;
+        final type = remoteId == null ? 'CREATE' : 'UPDATE';
         return CustomerDeltaDto(
           id: m['id'] as String,
           type: type,
@@ -43,7 +43,7 @@ class PushCustomersUseCase implements PushPort {
           postalCode: m['postalCode'] as String?,
           createdAt: (m['createdAt'] as String?) ?? nowIso,
           updatedAt: (m['updatedAt'] as String?) ?? nowIso,
-          deletedAt: deletedAt,
+          deletedAt: null,
           version: (m['version'] as int?) ?? 0,
           syncAt: nowIso,
         ).toJson();

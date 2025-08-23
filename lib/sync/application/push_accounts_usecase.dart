@@ -22,7 +22,7 @@ class PushAccountsUseCase implements PushPort {
           .map(
             (a) => AccountDeltaDto.fromEntity(
               a,
-              a.deletedAt != null ? SyncDeltaType.delete : SyncDeltaType.update,
+              a.remoteId == null ? SyncDeltaType.create : SyncDeltaType.update,
               now,
             ).toJson(),
           )
