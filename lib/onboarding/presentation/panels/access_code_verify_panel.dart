@@ -203,7 +203,7 @@ class _AccessCodeVerifyPanelState extends ConsumerState<AccessCodeVerifyPanel> {
 
   Widget _primaryBtn() {
     return ElevatedButton.icon(
-      onPressed: _codeValid && !_verifying ? _verify : null,
+      onPressed: !_verifying ? _verify : null,
       icon: _verifying
           ? const SizedBox(
               width: 18,

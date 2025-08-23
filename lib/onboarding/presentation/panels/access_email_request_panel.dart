@@ -1,4 +1,4 @@
-// Right-drawer form to collect identity data and request a code; Enter submits.
+// Right-drawer form to choose email or phone as identity, then request a code; Enter submits; responsive and accessible.
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -9,6 +9,8 @@ class AccessEmailRequestResult {
   final AccessIdentity identity;
   const AccessEmailRequestResult(this.identity);
 }
+
+enum IdentityMode { email, phone }
 
 class AccessEmailRequestPanel extends ConsumerStatefulWidget {
   final String? initialEmail;
@@ -22,13 +24,16 @@ class AccessEmailRequestPanel extends ConsumerStatefulWidget {
 class _AccessEmailRequestPanelState
     extends ConsumerState<AccessEmailRequestPanel> {
   final _formKey = GlobalKey<FormState>();
-  final _usernameCtrl = TextEditingController();
+
   final _emailCtrl = TextEditingController();
   final _phoneCtrl = TextEditingController();
   final _nameCtrl = TextEditingController();
   final _messageCtrl = TextEditingController();
 
-  final _usernameFocus = FocusNode();
+  final _emailFocus = FocusNode();
+  final _phoneFocus = FocusNode();
+
+  IdentityMode _mode = IdentityMode.phone;
   bool _sending = false;
 
   @override
@@ -39,44 +44,52 @@ class _AccessEmailRequestPanelState
 
   @override
   void dispose() {
-    _usernameCtrl.dispose();
     _emailCtrl.dispose();
     _phoneCtrl.dispose();
     _nameCtrl.dispose();
     _messageCtrl.dispose();
-    _usernameFocus.dispose();
+    _emailFocus.dispose();
+    _phoneFocus.dispose();
     super.dispose();
   }
 
-  bool get _usernameValid => _usernameCtrl.text.trim().isNotEmpty;
   bool get _emailValid {
     final v = _emailCtrl.text.trim();
-    if (v.isEmpty) return true;
+    if (v.isEmpty) return false;
     return RegExp(r'^[^@]+@[^@]+\.[^@]+$').hasMatch(v);
   }
 
   bool get _phoneValid {
     final v = _phoneCtrl.text.trim();
-    if (v.isEmpty) return true;
+    if (v.isEmpty) return false;
     return RegExp(r'^[0-9+\-\s]{6,20}$').hasMatch(v);
   }
 
+  bool get _identityValid =>
+      _mode == IdentityMode.email ? _emailValid : _phoneValid;
+
+  String get _username => _mode == IdentityMode.email
+      ? _emailCtrl.text.trim()
+      : _phoneCtrl.text.trim();
+
   Future<void> _submit() async {
-    final ok = _formKey.currentState?.validate() ?? false;
-    if (!ok || !_usernameValid || !_emailValid || !_phoneValid || _sending) {
-      return;
-    }
+    final ok = _formKey.currentState?.validate() ?? true;
+    if (!ok || !_identityValid || _sending) return;
+
     setState(() => _sending = true);
     try {
+      final email = _mode == IdentityMode.email ? _emailCtrl.text.trim() : '';
+      final phone = _mode == IdentityMode.phone ? _phoneCtrl.text.trim() : '';
       final identity = AccessIdentity(
-        username: _usernameCtrl.text.trim(),
-        email: _emailCtrl.text.trim().isEmpty ? null : _emailCtrl.text.trim(),
-        phone: _phoneCtrl.text.trim().isEmpty ? null : _phoneCtrl.text.trim(),
+        username: _username,
+        email: email.isEmpty ? null : email,
+        phone: phone.isEmpty ? null : phone,
         name: _nameCtrl.text.trim().isEmpty ? null : _nameCtrl.text.trim(),
         message: _messageCtrl.text.trim().isEmpty
             ? null
             : _messageCtrl.text.trim(),
       );
+
       final uc = ref.read(requestAccessUseCaseProvider);
       await uc.execute(identity);
       if (!mounted) return;
@@ -134,63 +147,72 @@ class _AccessEmailRequestPanelState
                           mainAxisSize: MainAxisSize.min,
                           children: [
                             Text(
-                              'Renseignez votre identifiant et vos coordonnées pour recevoir un code de confirmation.',
+                              'Choisissez votre méthode et saisissez votre contact pour recevoir un code de confirmation.',
                               textAlign: TextAlign.center,
                             ),
-                            const SizedBox(height: 16),
-                            isWide
-                                ? Column(
+                            const SizedBox(height: 12),
+                            _modeSwitcher(),
+                            const SizedBox(height: 12),
+                            if (isWide)
+                              Column(
+                                children: [
+                                  Row(
                                     children: [
-                                      Row(
-                                        children: [
-                                          Expanded(child: _usernameField()),
-                                          const SizedBox(width: 12),
-                                          Expanded(child: _emailField()),
-                                        ],
-                                      ),
-                                      const SizedBox(height: 12),
-                                      Row(
-                                        children: [
-                                          Expanded(child: _phoneField()),
-                                          const SizedBox(width: 12),
-                                          Expanded(child: _nameField()),
-                                        ],
-                                      ),
-                                      const SizedBox(height: 12),
-                                      _messageField(),
-                                      const SizedBox(height: 16),
-                                      SizedBox(
-                                        width: 200,
-                                        height: 48,
-                                        child: _primaryBtn(),
-                                      ),
-                                    ],
-                                  )
-                                : Column(
-                                    children: [
-                                      _usernameField(),
-                                      const SizedBox(height: 12),
-                                      _emailField(),
-                                      const SizedBox(height: 12),
-                                      _phoneField(),
-                                      const SizedBox(height: 12),
-                                      _nameField(),
-                                      const SizedBox(height: 12),
-                                      _messageField(),
-                                      const SizedBox(height: 16),
-                                      SizedBox(
-                                        width: double.infinity,
-                                        height: 48,
-                                        child: _primaryBtn(),
-                                      ),
+                                      Expanded(child: _identityField()),
+                                      const SizedBox(width: 12),
+                                      Expanded(child: _nameField()),
                                     ],
                                   ),
-                            const SizedBox(height: 12),
-                            Text(
-                              'Seul le nom d’utilisateur est obligatoire.',
-                              textAlign: TextAlign.center,
-                              style: Theme.of(context).textTheme.bodySmall,
-                            ),
+                                  const SizedBox(height: 12),
+                                  _messageField(),
+                                  const SizedBox(height: 12),
+                                  Align(
+                                    alignment: Alignment.centerLeft,
+                                    child: Text(
+                                      'Les autres champs sont optionnels.',
+                                      style: Theme.of(
+                                        context,
+                                      ).textTheme.bodySmall,
+                                    ),
+                                  ),
+                                  const SizedBox(height: 16),
+                                  SizedBox(
+                                    width: 220,
+                                    height: 48,
+                                    child: _primaryBtn(),
+                                  ),
+                                ],
+                              )
+                            else
+                              Column(
+                                children: [
+                                  Text("Champs Obligatoire"),
+                                  const SizedBox(height: 12),
+                                  _identityField(),
+                                  const SizedBox(height: 12),
+                                  Text("Champs optionnels"),
+                                  const SizedBox(height: 12),
+                                  _nameField(),
+                                  const SizedBox(height: 12),
+                                  _messageField(),
+                                  const SizedBox(height: 12),
+                                  Align(
+                                    alignment: Alignment.centerLeft,
+                                    child: Text(
+                                      'Les autres champs sont optionnels.',
+                                      style: Theme.of(
+                                        context,
+                                      ).textTheme.bodySmall,
+                                    ),
+                                  ),
+                                  const SizedBox(height: 16),
+                                  SizedBox(
+                                    width: double.infinity,
+                                    height: 48,
+                                    child: _primaryBtn(),
+                                  ),
+                                ],
+                              ),
                           ],
                         ),
                       ),
@@ -205,47 +227,64 @@ class _AccessEmailRequestPanelState
     );
   }
 
-  Widget _usernameField() {
-    return TextFormField(
-      controller: _usernameCtrl,
-      focusNode: _usernameFocus,
-      decoration: InputDecoration(
-        labelText: 'Nom d’utilisateur',
-        hintText: 'votre-identifiant',
-        prefixIcon: const Icon(Icons.person_outline),
-        border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
-        errorText: _usernameCtrl.text.isEmpty ? 'Champ requis' : null,
-      ),
-      textInputAction: TextInputAction.next,
-      onFieldSubmitted: (_) => _submit(),
+  Widget _modeSwitcher() {
+    return SegmentedButton<IdentityMode>(
+      segments: const [
+        ButtonSegment(
+          value: IdentityMode.phone,
+          label: Text('Téléphone (WhatsApp)'),
+          icon: Icon(Icons.phone),
+        ),
+        ButtonSegment(
+          value: IdentityMode.email,
+          label: Text('E-mail'),
+          icon: Icon(Icons.alternate_email),
+        ),
+      ],
+      selected: {_mode},
+      onSelectionChanged: (s) {
+        setState(() => _mode = s.first);
+        Future.microtask(() {
+          if (_mode == IdentityMode.email) {
+            _emailFocus.requestFocus();
+          } else {
+            _phoneFocus.requestFocus();
+          }
+        });
+      },
     );
   }
 
-  Widget _emailField() {
-    return TextFormField(
-      controller: _emailCtrl,
-      decoration: InputDecoration(
-        labelText: 'Adresse e-mail',
-        hintText: 'exemple@domaine.com',
-        prefixIcon: const Icon(Icons.alternate_email),
-        border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
-        errorText: _emailValid ? null : 'E-mail invalide',
-      ),
-      keyboardType: TextInputType.emailAddress,
-      textInputAction: TextInputAction.next,
-      onFieldSubmitted: (_) => _submit(),
-    );
-  }
-
-  Widget _phoneField() {
+  Widget _identityField() {
+    if (_mode == IdentityMode.email) {
+      return TextFormField(
+        controller: _emailCtrl,
+        focusNode: _emailFocus,
+        decoration: InputDecoration(
+          labelText: 'Adresse e-mail',
+          hintText: 'exemple@domaine.com',
+          prefixIcon: const Icon(Icons.alternate_email),
+          border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+          errorText: _emailCtrl.text.isEmpty
+              ? null
+              : (_emailValid ? null : 'E-mail invalide'),
+        ),
+        keyboardType: TextInputType.emailAddress,
+        textInputAction: TextInputAction.next,
+        onFieldSubmitted: (_) => _submit(),
+      );
+    }
     return TextFormField(
       controller: _phoneCtrl,
+      focusNode: _phoneFocus,
       decoration: InputDecoration(
         labelText: 'Téléphone',
         hintText: '+221 77 000 00 00',
         prefixIcon: const Icon(Icons.phone_outlined),
         border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
-        errorText: _phoneValid ? null : 'Numéro invalide',
+        errorText: _phoneCtrl.text.isEmpty
+            ? null
+            : (_phoneValid ? null : 'Numéro invalide'),
       ),
       keyboardType: TextInputType.phone,
       inputFormatters: [
@@ -287,10 +326,9 @@ class _AccessEmailRequestPanelState
   }
 
   Widget _primaryBtn() {
+    final canSubmit = !_sending;
     return ElevatedButton.icon(
-      onPressed: _usernameValid && _emailValid && _phoneValid && !_sending
-          ? _submit
-          : null,
+      onPressed: canSubmit ? _submit : null,
       icon: _sending
           ? const SizedBox(
               width: 18,
