@@ -54,11 +54,18 @@ class OutboxPusher {
     final validDeltas = <Json>[];
 
     for (final p in pending) {
-      final decoded = _tryDecode(p.payload) ?? await buildPayload(p);
+      final decoded = await buildPayload(p);
       if (decoded == null) {
         await changeLog.markFailed(p.id, error: 'Missing/invalid payload');
         continue;
       }
+
+      decoded["type"] = decoded["operation"];
+
+      if (decoded["remoteId"] == null || decoded["id"] == null) {
+        decoded["type"] = "CREATE";
+      }
+
       validEntries.add(p);
       validDeltas.add(decoded);
     }
@@ -71,6 +78,8 @@ class OutboxPusher {
     }
 
     // 3) POST
+    print(validDeltas);
+
     logger.info('Outbox $entityTable: POST count=${validDeltas.length}');
     final resp = await postFn(validDeltas);
     if (resp.statusCode < 200 || resp.statusCode >= 300) {
@@ -97,6 +106,7 @@ class OutboxPusher {
     await markSyncedFn(validEntries.map((e) => e.entityId), now);
 
     logger.info('Outbox $entityTable: synced ${validEntries.length}');
+
     return validEntries.length;
   }
 }

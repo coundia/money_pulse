@@ -4,6 +4,7 @@ import 'package:money_pulse/sync/domain/sync_delta_type_ext.dart';
 class AccountDeltaDto {
   final String? id; // remote id if UPDATE/DELETE
   final String localId; // ALWAYS set (local PK)
+  final String? remoteId;
   final String code;
   final String? description;
   final String? currency;
@@ -38,6 +39,7 @@ class AccountDeltaDto {
     required this.balanceLimit,
     required this.syncAt,
     required this.operation,
+    required this.remoteId,
   });
 
   /// `a` is your row (Account), fields accessed via dynamic to stay infra-agnostic.
@@ -63,6 +65,7 @@ class AccountDeltaDto {
       balanceLimit: a.balanceLimit as int?,
       syncAt: nowIso,
       operation: t.op,
+      remoteId: a.remoteId,
     );
   }
 
@@ -83,5 +86,6 @@ class AccountDeltaDto {
     'balanceLimit': balanceLimit,
     'syncAt': syncAt,
     'operation': operation,
+    'remoteId': remoteId,
   };
 }

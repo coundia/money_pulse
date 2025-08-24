@@ -46,6 +46,7 @@ class PushAccountsUseCase implements PushPort {
       final dto = AccountDeltaDto.fromEntity(acc, t, now).toJson();
       // si tu veux toujours envoyer localId :
       dto['localId'] = acc.id;
+      dto['remoteId'] = acc.remoteId;
       return dto;
     }
 
