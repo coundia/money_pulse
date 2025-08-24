@@ -40,6 +40,7 @@ class PushCategoriesUseCase implements PushPort {
         type = SyncDeltaType.update;
       }
       final dto = CategoryDeltaDto.fromEntity(c, type, now).toJson();
+
       return DeltaEnvelope(
         entityId: c.id,
         operation: type.name.toUpperCase(),

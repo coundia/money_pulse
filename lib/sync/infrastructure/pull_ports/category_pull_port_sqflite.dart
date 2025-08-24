@@ -1,18 +1,18 @@
-/* Sqflite pull port for accounts with de-duplication:
+/* Sqflite pull port for categories with de-duplication and legacy merge:
  * - Update by remoteId first,
- * - else update by active code (adopt remoteId),
- * - else insert,
- * All inside a transaction and compatible with UNIQUE indexes.
+ * - else update by active code,
+ * - else if a local row exists with id == remoteId, update that row,
+ * - else insert.
  */
 import 'package:sqflite/sqflite.dart';
 
 typedef Json = Map<String, Object?>;
 
-class AccountPullPortSqflite {
+class CategoryPullPortSqflite {
   final Database db;
-  AccountPullPortSqflite(this.db);
+  CategoryPullPortSqflite(this.db);
 
-  String get entityTable => 'account';
+  String get entityTable => 'category';
 
   Future<({int upserts, DateTime? maxSyncAt})> upsertRemote(
     List<Json> items,
@@ -26,12 +26,9 @@ class AccountPullPortSqflite {
       for (final r in items) {
         final remoteId = (r['id'] ?? r['remoteId'])?.toString();
         final code = r['code']?.toString();
-        final name = r['name']?.toString();
-        final desc = (r['description'] ?? name)?.toString();
-        final currency = r['currency']?.toString();
-        final typeAccount = r['typeAccount']?.toString();
-        final isDefault = (r['isDefault'] == true) || r['isDefault'] == 1;
-        final status = r['status']?.toString();
+        final desc = (r['description'] ?? r['name'])?.toString();
+        final rawType = (r['typeEntry'] ?? 'DEBIT').toString().toUpperCase();
+        final typeEntry = (rawType == 'CREDIT') ? 'CREDIT' : 'DEBIT';
 
         final syncAtStr = r['syncAt']?.toString();
         final syncAt = syncAtStr == null
@@ -40,14 +37,11 @@ class AccountPullPortSqflite {
         if (maxAt == null || syncAt.isAfter(maxAt!)) maxAt = syncAt;
 
         final nowIso = DateTime.now().toUtc().toIso8601String();
-        final data = <String, Object?>{
+        final patch = <String, Object?>{
           'remoteId': remoteId,
           'code': code,
           'description': desc,
-          'currency': currency,
-          'typeAccount': typeAccount,
-          'isDefault': isDefault ? 1 : 0,
-          'status': status,
+          'typeEntry': typeEntry,
           'syncAt': syncAt.toIso8601String(),
           'updatedAt': nowIso,
           'isDirty': 0,
@@ -55,11 +49,10 @@ class AccountPullPortSqflite {
 
         bool changed = false;
 
-        // 1) Update by remoteId if present
         if (remoteId != null) {
           final u = await txn.update(
-            'account',
-            data,
+            'category',
+            patch,
             where: 'remoteId = ?',
             whereArgs: [remoteId],
           );
@@ -69,11 +62,10 @@ class AccountPullPortSqflite {
           }
         }
 
-        // 2) Else update by active code (adopt remoteId into the existing row)
         if (!changed && code != null) {
           final u = await txn.update(
-            'account',
-            data,
+            'category',
+            patch,
             where: 'code = ? AND deletedAt IS NULL',
             whereArgs: [code],
           );
@@ -83,36 +75,48 @@ class AccountPullPortSqflite {
           }
         }
 
-        // 3) Else insert (let UNIQUE indexes prevent duplicates)
+        if (!changed && remoteId != null) {
+          final rows = await txn.query(
+            'category',
+            columns: const ['id'],
+            where: 'id = ?',
+            whereArgs: [remoteId],
+            limit: 1,
+          );
+          if (rows.isNotEmpty) {
+            final u = await txn.update(
+              'category',
+              patch,
+              where: 'id = ?',
+              whereArgs: [remoteId],
+            );
+            if (u > 0) {
+              upserts++;
+              changed = true;
+            }
+          }
+        }
+
         if (!changed) {
           try {
-            await txn.insert('account', {
+            await txn.insert('category', {
               'id':
-                  remoteId ??
-                  // on évite d'utiliser le code comme id pour limiter les collisions
-                  DateTime.now().microsecondsSinceEpoch.toString(),
-              ...data,
+                  remoteId ?? DateTime.now().microsecondsSinceEpoch.toString(),
+              ...patch,
               'createdAt': nowIso,
-              'balance': (r['balance'] as num?)?.toInt() ?? 0,
-              'balance_prev': (r['balancePrev'] as num?)?.toInt() ?? 0,
-              'balance_blocked': (r['balanceBlocked'] as num?)?.toInt() ?? 0,
-              'balance_init': (r['balanceInit'] as num?)?.toInt() ?? 0,
-              'balance_goal': (r['balanceGoal'] as num?)?.toInt() ?? 0,
-              'balance_limit': (r['balanceLimit'] as num?)?.toInt() ?? 0,
+              'version': (r['version'] as num?)?.toInt() ?? 0,
             }, conflictAlgorithm: ConflictAlgorithm.abort);
             upserts++;
             changed = true;
           } on DatabaseException catch (e) {
-            // Conflit d'unicité → fusionne par code (ou remoteId)
             final msg = e.toString();
             final isUnique = msg.contains('UNIQUE constraint failed');
 
             if (isUnique) {
-              // Si conflit sur code actif → update par code
               if (code != null) {
                 final u = await txn.update(
-                  'account',
-                  data,
+                  'category',
+                  patch,
                   where: 'code = ? AND deletedAt IS NULL',
                   whereArgs: [code],
                 );
@@ -121,12 +125,10 @@ class AccountPullPortSqflite {
                   changed = true;
                 }
               }
-
-              // Si toujours pas changé et remoteId dispo → update par remoteId
               if (!changed && remoteId != null) {
                 final u = await txn.update(
-                  'account',
-                  data,
+                  'category',
+                  patch,
                   where: 'remoteId = ?',
                   whereArgs: [remoteId],
                 );
@@ -135,9 +137,6 @@ class AccountPullPortSqflite {
                   changed = true;
                 }
               }
-
-              // Dernier recours : ignore (un doublon existant a gagné)
-              // changed peut rester false si l'item est strictement identique
             } else {
               rethrow;
             }

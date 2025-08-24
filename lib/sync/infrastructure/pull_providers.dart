@@ -9,6 +9,8 @@ import 'package:money_pulse/sync/infrastructure/sync_api_client.dart';
 import 'package:money_pulse/sync/infrastructure/sync_logger.dart';
 import 'package:money_pulse/sync/application/pull_all_usecase.dart';
 import 'package:money_pulse/sync/application/pull_accounts_usecase.dart';
+import 'package:money_pulse/sync/application/pull_categories_usecase.dart';
+import 'package:money_pulse/sync/infrastructure/pull_ports/category_pull_port_sqflite.dart';
 import 'package:money_pulse/sync/infrastructure/sqflite_pull_ports.dart';
 import 'package:money_pulse/sync/infrastructure/sync_policy_provider.dart';
 
@@ -36,12 +38,21 @@ final pullAccountsUseCaseProvider = Provider<PullAccountsUseCase>((ref) {
   return PullAccountsUseCase(port, api, syncState, logger);
 });
 
+final pullCategoriesUseCaseProvider = Provider<PullCategoriesUseCase>((ref) {
+  final api = ref.read(_apiProvider);
+  final logger = ref.read(syncLoggerProvider);
+  final db = ref.read(dbProvider).db as Database;
+  final port = CategoryPullPortSqflite(db);
+  final syncState = ref.read(_syncStateRepoProvider);
+  return PullCategoriesUseCase(port, api, syncState, logger);
+});
+
 final pullAllUseCaseProvider = Provider<PullAllUseCase>((ref) {
   final policy = ref.read(syncPolicyProvider);
   final logger = ref.read(syncLoggerProvider);
   return PullAllUseCase(
     accounts: ref.read(pullAccountsUseCaseProvider),
-    categories: null,
+    categories: ref.read(pullCategoriesUseCaseProvider),
     units: null,
     companies: null,
     products: null,

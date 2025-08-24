@@ -124,6 +124,11 @@ class _HomePageState extends ConsumerState<HomePage> {
     );
   }
 
+  Future<void> _runPullAndPush() async {
+    await _runPullAll();
+    await _runSyncAll();
+  }
+
   Future<void> _runSyncAll() async {
     final ok = await requireAccess(context, ref);
     if (!mounted || !ok) return;
@@ -261,7 +266,7 @@ class _HomePageState extends ConsumerState<HomePage> {
                     await _showPeriodSheet();
                     break;
                   case 'sync':
-                    await _runSyncAll();
+                    await _runPullAndPush();
                     break;
                   case 'share':
                     {

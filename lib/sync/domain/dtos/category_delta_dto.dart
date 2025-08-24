@@ -48,7 +48,7 @@ class CategoryDeltaDto {
       type: t.wire,
       code: c.code,
       name: c.code,
-      remoteId: c.remoteId,
+      remoteId: c.id,
       description: c.description,
       typeEntry: c.typeEntry,
       version: c.version,

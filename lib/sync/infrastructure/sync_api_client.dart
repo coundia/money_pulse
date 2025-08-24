@@ -1,4 +1,4 @@
-/* HTTP client for sync: adds GET /queries/{entity}/syncAt to pull remote items since a timestamp. */
+/* HTTP client for sync: ensures GET /queries/{entity}/syncAt uses RFC3339 UTC with milliseconds (e.g. 2025-08-24T08:49:04.201Z). */
 import 'dart:convert';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:http/http.dart' as http;
@@ -59,7 +59,8 @@ class SyncApiClient {
   );
 
   Future<List<Json>> getBySyncAt(String entity, DateTime since) async {
-    final iso = since.toIso8601String();
+    final iso = _formatMillisZ(since);
+    print(iso);
     final uri = Uri.parse(
       '$baseUri/api/v1/queries/$entity/syncAt',
     ).replace(queryParameters: {'syncAt': iso});
@@ -103,6 +104,21 @@ class SyncApiClient {
 
   Future<http.Response> _get(Uri uri) {
     return _http.get(uri, headers: _headers());
+  }
+
+  String _formatMillisZ(DateTime dt) {
+    final u = dt.isUtc ? dt : dt.toUtc();
+    final y = u.year.toString().padLeft(4, '0');
+    final mo = u.month.toString().padLeft(2, '0');
+    final d = u.day.toString().padLeft(2, '0');
+    final h = u.hour.toString().padLeft(2, '0');
+    final mi = u.minute.toString().padLeft(2, '0');
+    final s = u.second.toString().padLeft(2, '0');
+    final ms = u.millisecond.toString().padLeft(3, '0');
+    return '$y-$mo-$d'
+        'T'
+        '$h:$mi:$s.$ms'
+        'Z';
   }
 }
 
