@@ -127,8 +127,9 @@ final syncAllUseCaseProvider = Provider<SyncAllUseCase>((ref) {
   final logger = ref.read(syncLoggerProvider);
   final policy = ref.read(syncPolicyProvider);
   return SyncAllUseCase(
-    categories: ref.read(categoryPushUseCaseProvider),
     accounts: ref.read(accountPushUseCaseProvider),
+    /* categories: ref.read(categoryPushUseCaseProvider),
+    
     transactions: ref.read(transactionPushUseCaseProvider),
     units: ref.read(unitPushUseCaseProvider),
     products: ref.read(productPushUseCaseProvider),
@@ -137,7 +138,7 @@ final syncAllUseCaseProvider = Provider<SyncAllUseCase>((ref) {
     customers: ref.read(customerPushUseCaseProvider),
     debts: ref.read(debtPushUseCaseProvider),
     stockLevels: ref.read(stockLevelPushUseCaseProvider),
-    stockMovements: ref.read(stockMovementPushUseCaseProvider),
+    stockMovements: ref.read(stockMovementPushUseCaseProvider),*/
     policy: policy,
     logger: logger,
   );

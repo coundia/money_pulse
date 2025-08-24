@@ -1,4 +1,4 @@
-/* Minimal HTTP client for pushing deltas with auth headers from providers. */
+/* HTTP client for sync: adds GET /queries/{entity}/syncAt to pull remote items since a timestamp. */
 import 'dart:convert';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:http/http.dart' as http;
@@ -17,59 +17,92 @@ class SyncApiClient {
     Uri.parse('$baseUri/api/v1/commands/category/sync'),
     {'deltas': deltas},
   );
-
   Future<http.Response> postAccountDeltas(List<Json> deltas) => _post(
     Uri.parse('$baseUri/api/v1/commands/account/sync'),
     {'deltas': deltas},
   );
-
   Future<http.Response> postTransactionDeltas(List<Json> deltas) => _post(
     Uri.parse('$baseUri/api/v1/commands/transaction/sync'),
     {'deltas': deltas},
   );
-
   Future<http.Response> postUnitDeltas(List<Json> deltas) => _post(
     Uri.parse('$baseUri/api/v1/commands/unit/sync'),
     {'deltas': deltas},
   );
-
   Future<http.Response> postProductDeltas(List<Json> deltas) => _post(
     Uri.parse('$baseUri/api/v1/commands/product/sync'),
     {'deltas': deltas},
   );
-
   Future<http.Response> postTransactionItemDeltas(List<Json> deltas) => _post(
     Uri.parse('$baseUri/api/v1/commands/transactionItem/sync'),
     {'deltas': deltas},
   );
-
   Future<http.Response> postCompanyDeltas(List<Json> deltas) => _post(
     Uri.parse('$baseUri/api/v1/commands/company/sync'),
     {'deltas': deltas},
   );
-
   Future<http.Response> postCustomerDeltas(List<Json> deltas) => _post(
     Uri.parse('$baseUri/api/v1/commands/customer/sync'),
     {'deltas': deltas},
   );
-
   Future<http.Response> postDebtDeltas(List<Json> deltas) => _post(
     Uri.parse('$baseUri/api/v1/commands/debt/sync'),
     {'deltas': deltas},
   );
-
   Future<http.Response> postStockLevelDeltas(List<Json> deltas) => _post(
     Uri.parse('$baseUri/api/v1/commands/stockLevel/sync'),
     {'deltas': deltas},
   );
-
   Future<http.Response> postStockMovementDeltas(List<Json> deltas) => _post(
     Uri.parse('$baseUri/api/v1/commands/stockMovement/sync'),
     {'deltas': deltas},
   );
 
+  Future<List<Json>> getBySyncAt(String entity, DateTime since) async {
+    final iso = since.toIso8601String();
+    final uri = Uri.parse(
+      '$baseUri/api/v1/queries/$entity/syncAt',
+    ).replace(queryParameters: {'syncAt': iso});
+    final resp = await _get(uri);
+    if (resp.statusCode >= 200 && resp.statusCode < 300) {
+      final body = jsonDecode(resp.body);
+      if (body is List) {
+        return body.cast<Map>().map((e) => e.cast<String, Object?>()).toList();
+      }
+      return const [];
+    }
+    throw StateError('GET $entity/syncAt failed: ${resp.statusCode}');
+  }
+
+  Future<List<Json>> getAccountsSince(DateTime since) =>
+      getBySyncAt('account', since);
+  Future<List<Json>> getCategoriesSince(DateTime since) =>
+      getBySyncAt('category', since);
+  Future<List<Json>> getUnitsSince(DateTime since) =>
+      getBySyncAt('unit', since);
+  Future<List<Json>> getProductsSince(DateTime since) =>
+      getBySyncAt('product', since);
+  Future<List<Json>> getCompaniesSince(DateTime since) =>
+      getBySyncAt('company', since);
+  Future<List<Json>> getCustomersSince(DateTime since) =>
+      getBySyncAt('customer', since);
+  Future<List<Json>> getDebtsSince(DateTime since) =>
+      getBySyncAt('debt', since);
+  Future<List<Json>> getTransactionsSince(DateTime since) =>
+      getBySyncAt('transaction', since);
+  Future<List<Json>> getTransactionItemsSince(DateTime since) =>
+      getBySyncAt('transactionItem', since);
+  Future<List<Json>> getStockLevelsSince(DateTime since) =>
+      getBySyncAt('stockLevel', since);
+  Future<List<Json>> getStockMovementsSince(DateTime since) =>
+      getBySyncAt('stockMovement', since);
+
   Future<http.Response> _post(Uri uri, Json body) {
     return _http.post(uri, headers: _headers(), body: jsonEncode(body));
+  }
+
+  Future<http.Response> _get(Uri uri) {
+    return _http.get(uri, headers: _headers());
   }
 }
 

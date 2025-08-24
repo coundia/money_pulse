@@ -22,6 +22,7 @@ import 'package:money_pulse/presentation/features/categories/category_list_page.
 import 'package:money_pulse/domain/accounts/entities/account.dart';
 import 'package:money_pulse/domain/transactions/entities/transaction_entry.dart';
 
+import '../../../sync/infrastructure/pull_providers.dart';
 import '../../../sync/infrastructure/sync_logger.dart';
 import '../transactions/controllers/transaction_list_controller.dart';
 import '../transactions/prefs/summary_card_prefs_panel.dart';
@@ -129,6 +130,10 @@ class _HomePageState extends ConsumerState<HomePage> {
 
     final logger = ref.read(syncLoggerProvider);
 
+    logger.info('************** PULL *****');
+    final pull = await _runPullAll();
+    logger.info('************** PUSH *****');
+
     try {
       logger.info('UI: trigger syncAll');
       final s = await syncAllTables(ref);
@@ -149,6 +154,31 @@ class _HomePageState extends ConsumerState<HomePage> {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Erreur de synchronisation')),
       );
+    }
+  }
+
+  Future<void> _runPullAll() async {
+    try {
+      ref.read(syncLoggerProvider).info('UI: trigger pullAll');
+      final sum = await pullAllTables(ref);
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            'Import terminé • Comptes: ${sum.accounts}, Catégories: ${sum.categories}, Clients: ${sum.customers}',
+          ),
+        ),
+      );
+      await ref.read(balanceProvider.notifier).load();
+      await ref.read(transactionsProvider.notifier).load();
+      ref.invalidate(selectedAccountProvider);
+      if (mounted) setState(() {});
+    } catch (e, st) {
+      ref.read(syncLoggerProvider).error('UI: pullAll failed', e, st);
+      if (!mounted) return;
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('Échec import: $e')));
     }
   }
 
