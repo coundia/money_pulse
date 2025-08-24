@@ -32,8 +32,12 @@ class _ChangeLogListPageState extends ConsumerState<ChangeLogListPage> {
     }
   }
 
-  Future<List<ChangeLogEntry>> _load(ChangeLogRepository repo) {
-    return repo.findAll(status: _statusForFilter(filter));
+  Future<List<ChangeLogEntry>> _load(ChangeLogRepository repo) async {
+    final items = await repo.findAll(
+      status: _statusForFilter(filter),
+      limit: 500, // optional: control how many rows to fetch
+    );
+    return items.cast<ChangeLogEntry>();
   }
 
   @override

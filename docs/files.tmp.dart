@@ -1,7 +1,4 @@
-/* ChangeLog sqflite repository with conflict-safe ACK:
- * when updating a row to ACK, it removes any pre-existing ACK rows for the same (entityTable, entityId) to avoid UNIQUE violations.
- */
-import 'dart:convert';
+/* Sqflite change_log repository with merge-upsert support for PENDING entries. */
 import 'package:money_pulse/infrastructure/db/app_database.dart';
 import 'package:money_pulse/domain/sync/entities/change_log_entry.dart';
 import 'package:money_pulse/domain/sync/repositories/change_log_repository.dart';
@@ -42,6 +39,17 @@ class ChangeLogRepositorySqflite implements ChangeLogRepository {
       limit: limit,
     );
     return rows.map((m) => ChangeLogEntry.fromMap(m)).toList();
+  }
+
+  @override
+  Future<Set<String>> findPendingIdsByEntity(String entityTable) async {
+    final rows = await _db.db.query(
+      'change_log',
+      columns: ['entityId'],
+      where: 'status = ? AND entityTable = ?',
+      whereArgs: ['PENDING', entityTable],
+    );
+    return rows.map((m) => m['entityId'] as String).toSet();
   }
 
   @override
@@ -94,34 +102,55 @@ class ChangeLogRepositorySqflite implements ChangeLogRepository {
   }
 
   @override
-  Future<void> markAck(String id) async {
+  Future<void> enqueueOrMergeAll(
+    String entityTable,
+    List<({String entityId, String operation, String payload})> items,
+  ) async {
+    if (items.isEmpty) return;
     final now = _now();
     await _db.db.transaction((txn) async {
-      final rows = await txn.query(
-        'change_log',
-        columns: ['entityTable', 'entityId'],
-        where: 'id = ?',
-        whereArgs: [id],
-        limit: 1,
-      );
-      if (rows.isEmpty) return;
-      final entityTable = rows.first['entityTable'] as String;
-      final entityId = rows.first['entityId'] as String;
-
-      await txn.delete(
-        'change_log',
-        where: 'entityTable = ? AND entityId = ? AND status = ? AND id <> ?',
-        whereArgs: [entityTable, entityId, 'ACK', id],
-      );
-
-      await txn.update(
-        'change_log',
-        {'status': 'ACK', 'updatedAt': now, 'processedAt': now, 'error': null},
-        where: 'id = ?',
-        whereArgs: [id],
-        conflictAlgorithm: ConflictAlgorithm.abort,
-      );
+      for (final it in items) {
+        final updated = await txn.update(
+          'change_log',
+          {
+            'operation': it.operation,
+            'payload': it.payload,
+            'attempts': 0,
+            'error': null,
+            'updatedAt': now,
+          },
+          where: 'entityTable = ? AND entityId = ? AND status = ?',
+          whereArgs: [entityTable, it.entityId, 'PENDING'],
+        );
+        if (updated == 0) {
+          await txn.insert('change_log', {
+            'id': const Uuid().v4(),
+            'entityTable': entityTable,
+            'entityId': it.entityId,
+            'operation': it.operation,
+            'payload': it.payload,
+            'status': 'PENDING',
+            'attempts': 0,
+            'error': null,
+            'createdAt': now,
+            'updatedAt': now,
+            'processedAt': null,
+          }, conflictAlgorithm: ConflictAlgorithm.ignore);
+        }
+      }
     });
+  }
+
+  @override
+  Future<void> markAck(String id) async {
+    final now = _now();
+    await _db.db.update(
+      'change_log',
+      {'status': 'ACK', 'updatedAt': now, 'processedAt': now, 'error': null},
+      where: 'id = ?',
+      whereArgs: [id],
+      conflictAlgorithm: ConflictAlgorithm.abort,
+    );
   }
 
   @override
@@ -140,62 +169,5 @@ class ChangeLogRepositorySqflite implements ChangeLogRepository {
   @override
   Future<void> clearAll() async {
     await _db.db.delete('change_log');
-  }
-
-  Future<int> enqueueOrMergeAll(
-    String entityTable,
-    List<({String entityId, String operation, String payload})> items,
-  ) async {
-    if (items.isEmpty) return 0;
-    int inserted = 0;
-    final now = _now();
-    await _db.db.transaction((txn) async {
-      for (final it in items) {
-        final existing = await txn.query(
-          'change_log',
-          columns: ['id', 'payload'],
-          where: 'entityTable = ? AND entityId = ? AND status = ?',
-          whereArgs: [entityTable, it.entityId, 'PENDING'],
-          limit: 1,
-        );
-        if (existing.isEmpty) {
-          await txn.insert('change_log', {
-            'id': const Uuid().v4(),
-            'entityTable': entityTable,
-            'entityId': it.entityId,
-            'operation': it.operation,
-            'payload': it.payload,
-            'status': 'PENDING',
-            'attempts': 0,
-            'error': null,
-            'createdAt': now,
-            'updatedAt': now,
-            'processedAt': null,
-          }, conflictAlgorithm: ConflictAlgorithm.ignore);
-          inserted++;
-        } else {
-          final rowId = existing.first['id'] as String;
-          await txn.update(
-            'change_log',
-            {'payload': it.payload, 'updatedAt': now},
-            where: 'id = ?',
-            whereArgs: [rowId],
-            conflictAlgorithm: ConflictAlgorithm.abort,
-          );
-        }
-      }
-    });
-    return inserted;
-  }
-
-  @override
-  Future<Set<String>> findPendingIdsByEntity(String entityTable) async {
-    final rows = await _db.db.query(
-      'change_log',
-      columns: ['entityId'],
-      where: 'status = ? AND entityTable = ?',
-      whereArgs: ['PENDING', entityTable],
-    );
-    return rows.map((m) => m['entityId'] as String).toSet();
   }
 }

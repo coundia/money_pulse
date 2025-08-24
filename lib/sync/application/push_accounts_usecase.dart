@@ -1,4 +1,5 @@
-/* Push accounts via outbox: build envelopes with operation, post, ack change_log, update sync_state, then mark entities synced. */
+/* Standard account push: build deltas for dirty accounts, merge into change_log first, then push pending. */
+import 'dart:convert';
 import 'package:money_pulse/sync/application/_ports.dart';
 import 'package:money_pulse/sync/application/outbox_pusher.dart';
 import 'package:money_pulse/sync/application/push_port.dart';
@@ -27,23 +28,23 @@ class PushAccountsUseCase implements PushPort {
 
   @override
   Future<int> execute({int batchSize = 200}) async {
-    final now = DateTime.now();
-
     final items = await port.findDirty(limit: batchSize);
-    if (items.isEmpty) return 0;
+    if (items.isEmpty) {
+      logger.info('Accounts: nothing dirty');
+      return 0;
+    }
 
-    final envelopes = items.map((a) {
-      final SyncDeltaType type;
-      if (a.deletedAt != null) {
-        type = SyncDeltaType.delete;
-      } else if (a.remoteId == null) {
-        type = SyncDeltaType.create;
-      } else {
-        type = SyncDeltaType.update;
-      }
-      final dto = AccountDeltaDto.fromEntity(a, type, now).toJson();
-      return DeltaEnvelope(entityId: a.id, operation: type.op, delta: dto);
+    final now = DateTime.now();
+    final pendingTriples = items.map((a) {
+      final t = a.deletedAt != null
+          ? SyncDeltaType.delete
+          : (a.remoteId == null ? SyncDeltaType.create : SyncDeltaType.update);
+      final dto = AccountDeltaDto.fromEntity(a, t, now).toJson();
+      return (entityId: a.id, operation: t.op, payload: jsonEncode(dto));
     }).toList();
+
+    logger.info('Accounts: enqueueOrMergeAll=${pendingTriples.length}');
+    await changeLog.enqueueOrMergeAll('account', pendingTriples);
 
     final outbox = OutboxPusher(
       entityTable: 'account',
@@ -52,11 +53,15 @@ class PushAccountsUseCase implements PushPort {
       logger: logger,
     );
 
-    return outbox.push(
-      envelopes: envelopes,
+    logger.info('Accounts: push PENDING');
+    final pushed = await outbox.push(
+      envelopes: const [],
       postFn: (ds) => api.postAccountDeltas(ds),
       markSyncedFn: port.markSynced,
       limit: batchSize,
     );
+
+    logger.info('Accounts: pushed=$pushed');
+    return pushed;
   }
 }

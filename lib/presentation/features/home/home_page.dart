@@ -125,7 +125,8 @@ class _HomePageState extends ConsumerState<HomePage> {
   }
 
   Future<void> _runPullAndPush() async {
-    await _runPullAll();
+    // await _runPullAll();
+    //push
     await _runSyncAll();
   }
 
@@ -134,9 +135,6 @@ class _HomePageState extends ConsumerState<HomePage> {
     if (!mounted || !ok) return;
 
     final logger = ref.read(syncLoggerProvider);
-
-    logger.info('************** PULL *****');
-    final pull = await _runPullAll();
     logger.info('************** PUSH *****');
 
     try {

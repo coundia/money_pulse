@@ -72,7 +72,7 @@ class AccountDeltaDto {
     return AccountDeltaDto(
       id: a.id,
       type: t.wire,
-      remoteId: a.remoteId,
+      remoteId: a.id,
       code: a.code,
       description: a.description,
       status: a.status,
