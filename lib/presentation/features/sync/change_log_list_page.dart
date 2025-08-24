@@ -156,7 +156,7 @@ class _ChangeLogListPageState extends ConsumerState<ChangeLogListPage> {
         onSelected: (v) async {
           switch (v) {
             case 'ack':
-              await repo.markAck(e.id);
+              await repo.markSync(e.id);
               break;
             case 'retry':
               await repo.markPending(e.id);

@@ -1,21 +1,19 @@
-/* Helpers to convert between string operation and SyncDeltaType. */
-import 'sync_delta_type.dart';
+// lib/sync/domain/sync_delta_type_ext.dart
+import 'package:money_pulse/sync/domain/sync_delta_type.dart';
 
 extension SyncDeltaTypeExt on SyncDeltaType {
-  String get op => name.toUpperCase(); // CREATE / UPDATE / DELETE
+  String get op => switch (this) {
+    SyncDeltaType.create => 'CREATE',
+    SyncDeltaType.update => 'UPDATE',
+    SyncDeltaType.delete => 'DELETE',
+  };
 
-  static SyncDeltaType? fromOp(String? op) {
-    if (op == null) return null;
-    final s = op.toUpperCase().trim();
-    switch (s) {
-      case 'CREATE':
-        return SyncDeltaType.create;
-      case 'UPDATE':
-        return SyncDeltaType.update;
-      case 'DELETE':
-        return SyncDeltaType.delete;
-      default:
-        return null;
-    }
+  static SyncDeltaType fromOp(String? opStr, {bool deleted = false}) {
+    final s = (opStr ?? '').toUpperCase();
+    if (s == 'CREATE') return SyncDeltaType.create;
+    if (s == 'DELETE') return SyncDeltaType.delete;
+    if (s == 'UPDATE') return SyncDeltaType.update;
+    // Fallback : si l’entité est supprimée
+    return deleted ? SyncDeltaType.delete : SyncDeltaType.update;
   }
 }

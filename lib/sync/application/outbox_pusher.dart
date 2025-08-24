@@ -1,3 +1,4 @@
+// lib/sync/application/outbox_pusher.dart
 import 'dart:convert';
 import 'package:http/http.dart' as http;
 import 'package:money_pulse/domain/sync/entities/change_log_entry.dart';
@@ -7,17 +8,9 @@ import 'package:money_pulse/sync/infrastructure/sync_logger.dart';
 
 typedef Json = Map<String, Object?>;
 
-class DeltaEnvelope {
-  final String entityId; // local id
-  final String operation; // CREATE|UPDATE|DELETE
-  final Json delta;
-  DeltaEnvelope({
-    required this.entityId,
-    required this.operation,
-    required this.delta,
-  });
-}
-
+/// Mode drain-only : ne fait AUCUN enqueue.
+/// Lit `change_log` (PENDING), construit le payload si nécessaire via [buildPayload],
+/// POST puis marque chaque ligne en SYNC et met à jour sync_state + markSyncedFn.
 class OutboxPusher {
   final String entityTable;
   final ChangeLogRepository changeLog;
@@ -42,32 +35,13 @@ class OutboxPusher {
   }
 
   Future<int> push({
-    required List<DeltaEnvelope> envelopes,
     required Future<http.Response> Function(List<Json> deltas) postFn,
     required Future<void> Function(Iterable<String> ids, DateTime at)
     markSyncedFn,
+    required Future<Json?> Function(ChangeLogEntry entry) buildPayload,
     int limit = 200,
   }) async {
-    // 1) Enqueue newly built envelopes
-    if (envelopes.isNotEmpty) {
-      await changeLog.enqueueOrMergeAll(
-        entityTable,
-        envelopes
-            .map(
-              (e) => (
-                entityId: e.entityId,
-                operation: e.operation,
-                payload: jsonEncode(e.delta),
-              ),
-            )
-            .toList(),
-      );
-      logger.info('Outbox $entityTable: enqueueOrMergeAll=${envelopes.length}');
-    } else {
-      logger.info('Outbox $entityTable: no new envelopes to enqueue');
-    }
-
-    // 2) Load PENDING
+    // 1) Charger les PENDING
     final pending = await changeLog.findPendingByEntity(
       entityTable,
       limit: limit,
@@ -75,36 +49,28 @@ class OutboxPusher {
     logger.info('Outbox $entityTable: pending=${pending.length}');
     if (pending.isEmpty) return 0;
 
-    // 3) Filter invalid payloads
+    // 2) Construire/valider les payloads
     final validEntries = <ChangeLogEntry>[];
     final validDeltas = <Json>[];
-    final invalidIds = <String>[];
 
     for (final p in pending) {
-      final decoded = _tryDecode(p.payload);
+      final decoded = _tryDecode(p.payload) ?? await buildPayload(p);
       if (decoded == null) {
-        invalidIds.add(p.id);
-      } else {
-        validEntries.add(p);
-        validDeltas.add(decoded);
+        await changeLog.markFailed(p.id, error: 'Missing/invalid payload');
+        continue;
       }
-    }
-
-    if (invalidIds.isNotEmpty) {
-      logger.warn(
-        'Outbox $entityTable: dropping ${invalidIds.length} invalid rows (null/bad JSON payload)',
-      );
-      for (final id in invalidIds) {
-        await changeLog.delete(id);
-      }
+      validEntries.add(p);
+      validDeltas.add(decoded);
     }
 
     if (validDeltas.isEmpty) {
-      logger.info('Outbox $entityTable: nothing valid to push after cleaning');
+      logger.info(
+        'Outbox $entityTable: nothing valid to push after building payloads',
+      );
       return 0;
     }
 
-    // 4) POST
+    // 3) POST
     logger.info('Outbox $entityTable: POST count=${validDeltas.length}');
     final resp = await postFn(validDeltas);
     if (resp.statusCode < 200 || resp.statusCode >= 300) {
@@ -117,10 +83,10 @@ class OutboxPusher {
       throw StateError('Sync failed with status ${resp.statusCode}');
     }
 
-    // 5) ACK
+    // 4) SYNC + sync_state + markSynced
     final now = DateTime.now().toUtc();
     for (final p in validEntries) {
-      await changeLog.markSent(p.id);
+      await changeLog.markSync(p.id);
     }
 
     await syncState.upsert(
@@ -129,7 +95,8 @@ class OutboxPusher {
       lastCursor: null,
     );
     await markSyncedFn(validEntries.map((e) => e.entityId), now);
-    logger.info('Outbox $entityTable pushed ${validEntries.length}');
+
+    logger.info('Outbox $entityTable: synced ${validEntries.length}');
     return validEntries.length;
   }
 }

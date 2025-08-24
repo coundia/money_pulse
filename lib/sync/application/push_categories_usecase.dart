@@ -1,15 +1,14 @@
-/* Pushes categories using outbox pusher with change_log and sync_state. */
+// lib/sync/application/push_categories_usecase.dart
 import 'package:money_pulse/sync/application/_ports.dart';
 import 'package:money_pulse/sync/application/outbox_pusher.dart';
+import 'package:money_pulse/sync/application/push_port.dart';
 import 'package:money_pulse/sync/domain/dtos/category_delta_dto.dart';
-import 'package:money_pulse/sync/domain/sync_delta_type.dart';
 import 'package:money_pulse/sync/domain/sync_delta_type_ext.dart';
 import 'package:money_pulse/sync/infrastructure/sync_api_client.dart';
-import 'package:money_pulse/sync/infrastructure/sync_logger.dart';
 import 'package:money_pulse/domain/sync/repositories/change_log_repository.dart';
 import 'package:money_pulse/domain/sync/repositories/sync_state_repository.dart';
-
-import 'push_port.dart';
+import 'package:money_pulse/sync/infrastructure/sync_logger.dart';
+import 'package:money_pulse/domain/sync/entities/change_log_entry.dart';
 
 class PushCategoriesUseCase implements PushPort {
   final CategorySyncPort port;
@@ -28,28 +27,7 @@ class PushCategoriesUseCase implements PushPort {
 
   @override
   Future<int> execute({int batchSize = 200}) async {
-    final items = await port.findDirty(limit: batchSize);
-    final now = DateTime.now();
-
-    final envelopes = items.map((c) {
-      final SyncDeltaType type;
-      if (c.deletedAt != null) {
-        type = SyncDeltaType.delete;
-      } else if (c.remoteId == null) {
-        type = SyncDeltaType.create;
-      } else {
-        type = SyncDeltaType.update;
-      }
-
-      final dto = CategoryDeltaDto.fromEntity(c, type, now).toJson();
-
-      return DeltaEnvelope(
-        entityId: c.id,
-        operation: type.op, // <- utilise la représentation op de l'enum
-        delta: dto,
-      );
-    }).toList();
-
+    logger.info('Categories: drain change_log');
     final outbox = OutboxPusher(
       entityTable: 'category',
       changeLog: changeLog,
@@ -57,8 +35,21 @@ class PushCategoriesUseCase implements PushPort {
       logger: logger,
     );
 
+    Future<Map<String, Object?>?> build(ChangeLogEntry e) async {
+      final cat = await port.findById(e.entityId);
+      if (cat == null) return null;
+      final t = SyncDeltaTypeExt.fromOp(
+        e.operation,
+        deleted: cat.deletedAt != null,
+      );
+      final now = DateTime.now().toUtc();
+      final dto = CategoryDeltaDto.fromEntity(cat, t, now).toJson();
+      dto['localId'] = cat.id;
+      return dto;
+    }
+
     return outbox.push(
-      envelopes: envelopes,
+      buildPayload: build,
       postFn: (ds) => api.postCategoryDeltas(ds),
       markSyncedFn: port.markSynced,
       limit: batchSize,

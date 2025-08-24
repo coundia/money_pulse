@@ -1,7 +1,3 @@
-/* ChangeLog sqflite repository with conflict-safe ACK:
- * when updating a row to ACK, it removes any pre-existing ACK rows for the same (entityTable, entityId) to avoid UNIQUE violations.
- */
-import 'dart:convert';
 import 'package:money_pulse/infrastructure/db/app_database.dart';
 import 'package:money_pulse/domain/sync/entities/change_log_entry.dart';
 import 'package:money_pulse/domain/sync/repositories/change_log_repository.dart';
@@ -26,7 +22,7 @@ class ChangeLogRepositorySqflite implements ChangeLogRepository {
       orderBy: 'createdAt DESC',
       limit: limit,
     );
-    return rows.map((m) => ChangeLogEntry.fromMap(m)).toList();
+    return rows.map(ChangeLogEntry.fromMap).toList();
   }
 
   @override
@@ -41,21 +37,30 @@ class ChangeLogRepositorySqflite implements ChangeLogRepository {
       orderBy: 'createdAt ASC',
       limit: limit,
     );
-    return rows.map((m) => ChangeLogEntry.fromMap(m)).toList();
+    return rows.map(ChangeLogEntry.fromMap).toList();
   }
 
   @override
-  Future<void> markAck(String id) async {
-    final now = _now();
-    await _db.db.transaction((txn) async {
-      await txn.update(
-        'change_log',
-        {'status': 'ACK', 'updatedAt': now, 'processedAt': now, 'error': null},
-        where: 'id = ?',
-        whereArgs: [id],
-        conflictAlgorithm: ConflictAlgorithm.abort,
-      );
-    });
+  Future<Set<String>> findPendingIdsByEntity(String entityTable) async {
+    final rows = await _db.db.query(
+      'change_log',
+      columns: ['entityId'],
+      where: 'status = ? AND entityTable = ?',
+      whereArgs: ['PENDING', entityTable],
+    );
+    return rows.map((m) => m['entityId'] as String).toSet();
+  }
+
+  @override
+  Future<ChangeLogEntry?> getById(String id) async {
+    final rows = await _db.db.query(
+      'change_log',
+      where: 'id = ?',
+      whereArgs: [id],
+      limit: 1,
+    );
+    if (rows.isEmpty) return null;
+    return ChangeLogEntry.fromMap(rows.first);
   }
 
   @override
@@ -66,13 +71,57 @@ class ChangeLogRepositorySqflite implements ChangeLogRepository {
     );
   }
 
-  @override
-  Future<void> markSent(String id, {String? error}) async {
-    await _db.db.rawUpdate(
-      'UPDATE change_log SET attempts = attempts + 1, status = ?, updatedAt = ?, error = ? WHERE id = ?',
-      ['SENT', _now(), error, id],
+  // -------- transitions conflict-safe (supprime d'abord la cible) ----------
+
+  Future<void> _transitionTo(
+    String id,
+    String newStatus, {
+    String? error,
+    bool setProcessed = false,
+  }) async {
+    final row = await _db.db.query(
+      'change_log',
+      columns: ['entityTable', 'entityId'],
+      where: 'id = ?',
+      whereArgs: [id],
+      limit: 1,
     );
+    if (row.isEmpty) return;
+    final table = row.first['entityTable'] as String;
+    final entityId = row.first['entityId'] as String;
+    final now = _now();
+
+    await _db.db.transaction((txn) async {
+      // Supprimer toute autre ligne qui aurait déjà (table, entityId, newStatus)
+      await txn.delete(
+        'change_log',
+        where: 'entityTable = ? AND entityId = ? AND status = ? AND id <> ?',
+        whereArgs: [table, entityId, newStatus, id],
+      );
+      await txn.update(
+        'change_log',
+        {
+          'status': newStatus,
+          'updatedAt': now,
+          'processedAt': setProcessed ? now : null,
+          'error': error,
+        },
+        where: 'id = ?',
+        whereArgs: [id],
+        conflictAlgorithm: ConflictAlgorithm.abort,
+      );
+    });
   }
+
+  @override
+  Future<void> markSync(String id) =>
+      _transitionTo(id, 'SYNC', setProcessed: true);
+
+  @override
+  Future<void> markFailed(String id, {String? error}) =>
+      _transitionTo(id, 'FAILED', error: error);
+
+  // --------------------- utilitaires/legacy ---------------------------------
 
   @override
   Future<void> delete(String id) async {
@@ -84,10 +133,12 @@ class ChangeLogRepositorySqflite implements ChangeLogRepository {
     await _db.db.delete('change_log');
   }
 
+  @override
   Future<int> enqueueOrMergeAll(
     String entityTable,
     List<({String entityId, String operation, String payload})> items,
   ) async {
+    // Conservé pour compat, plus utilisé en mode “source de vérité”.
     if (items.isEmpty) return 0;
     int inserted = 0;
     final now = _now();
@@ -95,7 +146,7 @@ class ChangeLogRepositorySqflite implements ChangeLogRepository {
       for (final it in items) {
         final existing = await txn.query(
           'change_log',
-          columns: ['id', 'payload'],
+          columns: ['id'],
           where: 'entityTable = ? AND entityId = ? AND status = ?',
           whereArgs: [entityTable, it.entityId, 'PENDING'],
           limit: 1,
@@ -116,28 +167,16 @@ class ChangeLogRepositorySqflite implements ChangeLogRepository {
           }, conflictAlgorithm: ConflictAlgorithm.ignore);
           inserted++;
         } else {
-          final rowId = existing.first['id'] as String;
           await txn.update(
             'change_log',
             {'payload': it.payload, 'updatedAt': now},
             where: 'id = ?',
-            whereArgs: [rowId],
+            whereArgs: [existing.first['id'] as String],
             conflictAlgorithm: ConflictAlgorithm.abort,
           );
         }
       }
     });
     return inserted;
-  }
-
-  @override
-  Future<Set<String>> findPendingIdsByEntity(String entityTable) async {
-    final rows = await _db.db.query(
-      'change_log',
-      columns: ['entityId'],
-      where: 'status = ? AND entityTable = ?',
-      whereArgs: ['PENDING', entityTable],
-    );
-    return rows.map((m) => m['entityId'] as String).toSet();
   }
 }

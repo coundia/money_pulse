@@ -14,15 +14,6 @@ import 'package:money_pulse/sync/infrastructure/sync_logger.dart';
 
 import 'package:money_pulse/sync/application/push_categories_usecase.dart';
 import 'package:money_pulse/sync/application/push_accounts_usecase.dart';
-import 'package:money_pulse/sync/application/push_transactions_usecase.dart';
-import 'package:money_pulse/sync/application/push_units_usecase.dart';
-import 'package:money_pulse/sync/application/push_products_usecase.dart';
-import 'package:money_pulse/sync/application/push_transaction_items_usecase.dart';
-import 'package:money_pulse/sync/application/push_companies_usecase.dart';
-import 'package:money_pulse/sync/application/push_customers_usecase.dart';
-import 'package:money_pulse/sync/application/push_debts_usecase.dart';
-import 'package:money_pulse/sync/application/push_stock_levels_usecase.dart';
-import 'package:money_pulse/sync/application/push_stock_movements_usecase.dart';
 import 'package:money_pulse/sync/application/sync_all_usecase.dart';
 
 import '../infrastructure/repositories/sync_state_repository_sqflite.dart';
@@ -70,68 +61,7 @@ final accountPushUseCaseProvider = Provider<PushAccountsUseCase>((ref) {
     changeLog: changeLog,
     syncState: syncState,
     logger: logger,
-    db: dbRaw,
   );
-});
-
-final transactionPushUseCaseProvider = Provider<PushTransactionsUseCase>((ref) {
-  final api = ref.read(_apiProvider);
-  final Database dbRaw = ref.read(dbProvider).db;
-  return PushTransactionsUseCase(TransactionSyncPortSqflite(dbRaw), api);
-});
-
-final unitPushUseCaseProvider = Provider<PushUnitsUseCase>((ref) {
-  final api = ref.read(_apiProvider);
-  final Database dbRaw = ref.read(dbProvider).db;
-  return PushUnitsUseCase(UnitSyncPortSqflite(dbRaw), api);
-});
-
-final productPushUseCaseProvider = Provider<PushProductsUseCase>((ref) {
-  final api = ref.read(_apiProvider);
-  final Database dbRaw = ref.read(dbProvider).db;
-  return PushProductsUseCase(ProductSyncPortSqflite(dbRaw), api);
-});
-
-final transactionItemPushUseCaseProvider =
-    Provider<PushTransactionItemsUseCase>((ref) {
-      final api = ref.read(_apiProvider);
-      final Database dbRaw = ref.read(dbProvider).db;
-      return PushTransactionItemsUseCase(
-        TransactionItemSyncPortSqflite(dbRaw),
-        api,
-      );
-    });
-
-final companyPushUseCaseProvider = Provider<PushCompaniesUseCase>((ref) {
-  final api = ref.read(_apiProvider);
-  final Database dbRaw = ref.read(dbProvider).db;
-  return PushCompaniesUseCase(CompanySyncPortSqflite(dbRaw), api);
-});
-
-final customerPushUseCaseProvider = Provider<PushCustomersUseCase>((ref) {
-  final api = ref.read(_apiProvider);
-  final Database dbRaw = ref.read(dbProvider).db;
-  return PushCustomersUseCase(CustomerSyncPortSqflite(dbRaw), api);
-});
-
-final debtPushUseCaseProvider = Provider<PushDebtsUseCase>((ref) {
-  final api = ref.read(_apiProvider);
-  final Database dbRaw = ref.read(dbProvider).db;
-  return PushDebtsUseCase(DebtSyncPortSqflite(dbRaw), api);
-});
-
-final stockLevelPushUseCaseProvider = Provider<PushStockLevelsUseCase>((ref) {
-  final api = ref.read(_apiProvider);
-  final Database dbRaw = ref.read(dbProvider).db;
-  return PushStockLevelsUseCase(StockLevelSyncPortSqflite(dbRaw), api);
-});
-
-final stockMovementPushUseCaseProvider = Provider<PushStockMovementsUseCase>((
-  ref,
-) {
-  final api = ref.read(_apiProvider);
-  final Database dbRaw = ref.read(dbProvider).db;
-  return PushStockMovementsUseCase(StockMovementSyncPortSqflite(dbRaw), api);
 });
 
 final syncAllUseCaseProvider = Provider<SyncAllUseCase>((ref) {
