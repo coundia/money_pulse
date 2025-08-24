@@ -41,7 +41,13 @@ final pushAccountsUseCaseProvider = Provider<PushAccountsUseCase>((ref) {
   final port = AccountSyncPortSqflite(dbRaw);
   final changeLog = ref.read(_changeLogRepoProvider);
   final syncState = ref.read(_syncStateRepoProvider);
-  return PushAccountsUseCase(port, api, changeLog, syncState, logger);
+  return PushAccountsUseCase(
+    port: port,
+    api: api,
+    changeLog: changeLog,
+    syncState: syncState,
+    logger: logger,
+  );
 });
 
 // ---- pull

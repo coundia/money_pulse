@@ -1,17 +1,15 @@
-import 'package:money_pulse/infrastructure/repositories/sync_state_repository_sqflite.dart';
-import 'package:money_pulse/infrastructure/sync/change_log_sqlite_repository.dart';
+// push_accounts_usecase.dart
 import 'package:money_pulse/sync/application/_ports.dart';
 import 'package:money_pulse/sync/application/outbox_pusher.dart';
 import 'package:money_pulse/sync/application/push_port.dart';
 import 'package:money_pulse/sync/domain/dtos/account_delta_dto.dart';
 import 'package:money_pulse/sync/domain/sync_delta_type.dart';
 import 'package:money_pulse/sync/domain/sync_delta_type_ext.dart';
-import 'package:money_pulse/sync/infrastructure/sqflite_sync_ports.dart';
 import 'package:money_pulse/sync/infrastructure/sync_api_client.dart';
 import 'package:money_pulse/domain/sync/repositories/change_log_repository.dart';
 import 'package:money_pulse/domain/sync/repositories/sync_state_repository.dart';
 import 'package:money_pulse/sync/infrastructure/sync_logger.dart';
-import 'package:sqflite_common/sqlite_api.dart';
+import 'package:sqflite/sqflite.dart' show Database;
 
 class PushAccountsUseCase implements PushPort {
   final AccountSyncPort port;
@@ -20,27 +18,34 @@ class PushAccountsUseCase implements PushPort {
   final SyncStateRepository syncState;
   final SyncLogger logger;
 
-  PushAccountsUseCase(
-    this.port,
-    this.api,
-    this.changeLog,
-    this.syncState,
-    this.logger,
-  );
+  // Only needed if you plan to run raw SQL; otherwise you can drop it.
+  final Database? db;
+
+  const PushAccountsUseCase({
+    required this.port,
+    required this.api,
+    required this.changeLog,
+    required this.syncState,
+    required this.logger,
+    this.db,
+  });
 
   @override
   Future<int> execute({int batchSize = 200}) async {
     logger.info('Accounts: building envelopes');
     final now = DateTime.now().toUtc();
+
     final items = await port.findDirty(limit: batchSize);
+    if (items.isEmpty) {
+      logger.info('Accounts: nothing to push');
+      return 0;
+    }
 
     final envelopes = items.map((a) {
-      final SyncDeltaType type;
-      if (a.remoteId == null) {
-        type = SyncDeltaType.create;
-      } else {
-        type = SyncDeltaType.update;
-      }
+      final type = (a.deletedAt != null)
+          ? SyncDeltaType.delete
+          : (a.remoteId == null ? SyncDeltaType.create : SyncDeltaType.update);
+
       final dto = AccountDeltaDto.fromEntity(a, type, now).toJson();
       return DeltaEnvelope(entityId: a.id, operation: type.op, delta: dto);
     }).toList();
