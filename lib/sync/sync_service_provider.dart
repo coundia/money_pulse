@@ -27,6 +27,7 @@ import 'package:money_pulse/sync/application/sync_all_usecase.dart';
 
 import '../infrastructure/repositories/sync_state_repository_sqflite.dart';
 import '../infrastructure/sync/change_log_sqlite_repository.dart';
+import 'application/push_accounts_force_update_usecase.dart';
 import 'infrastructure/sync_policy_provider.dart';
 
 final syncBaseUriProvider = Provider<String>(
@@ -57,14 +58,23 @@ final categoryPushUseCaseProvider = Provider<PushCategoriesUseCase>((ref) {
   return PushCategoriesUseCase(port, api, changeLog, syncState, logger);
 });
 
-final accountPushUseCaseProvider = Provider<PushAccountsUseCase>((ref) {
+final accountPushUseCaseProvider = Provider<PushAccountsForceUpdateUseCase>((
+  ref,
+) {
   final api = ref.read(_apiProvider);
   final dbRaw = ref.read(dbProvider).db;
   final port = AccountSyncPortSqflite(dbRaw);
   final changeLog = ref.read(_changeLogRepoProvider);
   final syncState = ref.read(_syncStateRepoProvider);
   final logger = ref.read(syncLoggerProvider);
-  return PushAccountsUseCase(port, api, changeLog, syncState, logger);
+  return PushAccountsForceUpdateUseCase(
+    port: port,
+    api: api,
+    changeLog: changeLog,
+    syncState: syncState,
+    logger: logger,
+    db: dbRaw,
+  );
 });
 
 final transactionPushUseCaseProvider = Provider<PushTransactionsUseCase>((ref) {
