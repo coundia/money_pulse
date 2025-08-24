@@ -1,9 +1,3 @@
-/* Sqflite pull port for accounts with de-duplication:
- * - Update by remoteId first,
- * - else update by active code (adopt remoteId),
- * - else insert,
- * All inside a transaction and compatible with UNIQUE indexes.
- */
 import 'package:sqflite/sqflite.dart';
 
 typedef Json = Map<String, Object?>;
@@ -14,6 +8,8 @@ class AccountPullPortSqflite {
 
   String get entityTable => 'account';
 
+  /// Upsert items from server; if server sends `localId`, adopt remote id as PK
+  /// and repoint children (transaction_entry.accountId).
   Future<({int upserts, DateTime? maxSyncAt})> upsertRemote(
     List<Json> items,
   ) async {
@@ -25,9 +21,11 @@ class AccountPullPortSqflite {
     await db.transaction((txn) async {
       for (final r in items) {
         final remoteId = (r['id'] ?? r['remoteId'])?.toString();
+        if (remoteId == null || remoteId.isEmpty) continue;
+
+        final localId = r['localId']?.toString();
         final code = r['code']?.toString();
-        final name = r['name']?.toString();
-        final desc = (r['description'] ?? name)?.toString();
+        final desc = (r['description'] ?? r['name'])?.toString();
         final currency = r['currency']?.toString();
         final typeAccount = r['typeAccount']?.toString();
         final isDefault = (r['isDefault'] == true) || r['isDefault'] == 1;
@@ -53,95 +51,135 @@ class AccountPullPortSqflite {
           'isDirty': 0,
         };
 
-        bool changed = false;
+        bool handled = false;
 
-        // 1) Update by remoteId if present
-        if (remoteId != null) {
-          final u = await txn.update(
+        // Adopt: move local PK => remoteId
+        if (localId != null && localId.isNotEmpty) {
+          final localRow = await txn.query(
             'account',
-            data,
-            where: 'remoteId = ?',
-            whereArgs: [remoteId],
+            where: 'id = ?',
+            whereArgs: [localId],
+            limit: 1,
           );
-          if (u > 0) {
-            upserts++;
-            changed = true;
+          if (localRow.isNotEmpty) {
+            final remoteRow = await txn.query(
+              'account',
+              where: 'id = ?',
+              whereArgs: [remoteId],
+              limit: 1,
+            );
+            if (remoteRow.isEmpty) {
+              // create remote shell, redirect children, drop local, finalize
+              try {
+                await txn.insert('account', {
+                  'id': remoteId,
+                  'localId': localId,
+                  ...data,
+                  'createdAt': nowIso,
+                  'balance': (r['balance'] as num?)?.toInt() ?? 0,
+                  'balance_prev': (r['balancePrev'] as num?)?.toInt() ?? 0,
+                  'balance_blocked':
+                      (r['balanceBlocked'] as num?)?.toInt() ?? 0,
+                  'balance_init': (r['balanceInit'] as num?)?.toInt() ?? 0,
+                  'balance_goal': (r['balanceGoal'] as num?)?.toInt() ?? 0,
+                  'balance_limit': (r['balanceLimit'] as num?)?.toInt() ?? 0,
+                }, conflictAlgorithm: ConflictAlgorithm.abort);
+              } catch (_) {}
+
+              await txn.update(
+                'transaction_entry',
+                {'accountId': remoteId},
+                where: 'accountId = ?',
+                whereArgs: [localId],
+              );
+
+              await txn.delete(
+                'account',
+                where: 'id = ?',
+                whereArgs: [localId],
+              );
+              await txn.update(
+                'account',
+                data,
+                where: 'id = ?',
+                whereArgs: [remoteId],
+              );
+              upserts++;
+              handled = true;
+            } else {
+              // already have remote row; just update/redirect and remove local
+              await txn.update(
+                'account',
+                data,
+                where: 'id = ?',
+                whereArgs: [remoteId],
+              );
+              await txn.update(
+                'transaction_entry',
+                {'accountId': remoteId},
+                where: 'accountId = ?',
+                whereArgs: [localId],
+              );
+              await txn.delete(
+                'account',
+                where: 'id = ?',
+                whereArgs: [localId],
+              );
+              upserts++;
+              handled = true;
+            }
           }
         }
+        if (handled) continue;
 
-        // 2) Else update by active code (adopt remoteId into the existing row)
-        if (!changed && code != null) {
-          final u = await txn.update(
+        // Update by remoteId or by id==remoteId (already adopted locally)
+        final uByRemote = await txn.update(
+          'account',
+          data,
+          where: 'remoteId = ? OR id = ?',
+          whereArgs: [remoteId, remoteId],
+        );
+        if (uByRemote > 0) {
+          upserts++;
+          continue;
+        }
+
+        // Update by active code
+        if (code != null) {
+          final uByCode = await txn.update(
             'account',
             data,
             where: 'code = ? AND deletedAt IS NULL',
             whereArgs: [code],
           );
-          if (u > 0) {
+          if (uByCode > 0) {
             upserts++;
-            changed = true;
+            continue;
           }
         }
 
-        // 3) Else insert (let UNIQUE indexes prevent duplicates)
-        if (!changed) {
-          try {
-            await txn.insert('account', {
-              'id':
-                  remoteId ??
-                  // on évite d'utiliser le code comme id pour limiter les collisions
-                  DateTime.now().microsecondsSinceEpoch.toString(),
-              ...data,
-              'createdAt': nowIso,
-              'balance': (r['balance'] as num?)?.toInt() ?? 0,
-              'balance_prev': (r['balancePrev'] as num?)?.toInt() ?? 0,
-              'balance_blocked': (r['balanceBlocked'] as num?)?.toInt() ?? 0,
-              'balance_init': (r['balanceInit'] as num?)?.toInt() ?? 0,
-              'balance_goal': (r['balanceGoal'] as num?)?.toInt() ?? 0,
-              'balance_limit': (r['balanceLimit'] as num?)?.toInt() ?? 0,
-            }, conflictAlgorithm: ConflictAlgorithm.abort);
-            upserts++;
-            changed = true;
-          } on DatabaseException catch (e) {
-            // Conflit d'unicité → fusionne par code (ou remoteId)
-            final msg = e.toString();
-            final isUnique = msg.contains('UNIQUE constraint failed');
-
-            if (isUnique) {
-              // Si conflit sur code actif → update par code
-              if (code != null) {
-                final u = await txn.update(
-                  'account',
-                  data,
-                  where: 'code = ? AND deletedAt IS NULL',
-                  whereArgs: [code],
-                );
-                if (u > 0) {
-                  upserts++;
-                  changed = true;
-                }
-              }
-
-              // Si toujours pas changé et remoteId dispo → update par remoteId
-              if (!changed && remoteId != null) {
-                final u = await txn.update(
-                  'account',
-                  data,
-                  where: 'remoteId = ?',
-                  whereArgs: [remoteId],
-                );
-                if (u > 0) {
-                  upserts++;
-                  changed = true;
-                }
-              }
-
-              // Dernier recours : ignore (un doublon existant a gagné)
-              // changed peut rester false si l'item est strictement identique
-            } else {
-              rethrow;
-            }
-          }
+        // Insert fresh
+        try {
+          await txn.insert('account', {
+            'id': remoteId,
+            ...data,
+            'createdAt': nowIso,
+            'balance': (r['balance'] as num?)?.toInt() ?? 0,
+            'balance_prev': (r['balancePrev'] as num?)?.toInt() ?? 0,
+            'balance_blocked': (r['balanceBlocked'] as num?)?.toInt() ?? 0,
+            'balance_init': (r['balanceInit'] as num?)?.toInt() ?? 0,
+            'balance_goal': (r['balanceGoal'] as num?)?.toInt() ?? 0,
+            'balance_limit': (r['balanceLimit'] as num?)?.toInt() ?? 0,
+          }, conflictAlgorithm: ConflictAlgorithm.abort);
+          upserts++;
+        } catch (_) {
+          await txn.update(
+            'account',
+            data,
+            where: 'id = ?',
+            whereArgs: [remoteId],
+          );
+          upserts++;
         }
       }
     });

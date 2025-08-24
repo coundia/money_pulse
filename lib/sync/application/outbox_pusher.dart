@@ -1,4 +1,3 @@
-/* Generic outbox pusher: enqueue/merge, load PENDING, filter, POST, ACK rows, update sync_state, mark entities synced, with detailed logs. */
 import 'dart:convert';
 import 'package:http/http.dart' as http;
 import 'package:money_pulse/domain/sync/entities/change_log_entry.dart';
@@ -9,8 +8,8 @@ import 'package:money_pulse/sync/infrastructure/sync_logger.dart';
 typedef Json = Map<String, Object?>;
 
 class DeltaEnvelope {
-  final String entityId;
-  final String operation;
+  final String entityId; // local id
+  final String operation; // CREATE|UPDATE|DELETE
   final Json delta;
   DeltaEnvelope({
     required this.entityId,
@@ -36,8 +35,7 @@ class OutboxPusher {
     if (s == null || s.isEmpty) return null;
     try {
       final v = jsonDecode(s);
-      if (v is Map<String, Object?>) return v;
-      return null;
+      return v is Map<String, Object?> ? v : null;
     } catch (_) {
       return null;
     }
@@ -50,11 +48,9 @@ class OutboxPusher {
     markSyncedFn,
     int limit = 200,
   }) async {
+    // 1) Enqueue newly built envelopes
     if (envelopes.isNotEmpty) {
-      logger.info(
-        'Outbox $entityTable: enqueue ${envelopes.length} (merge on unique)',
-      );
-      await changeLog.enqueueAll(
+      await changeLog.enqueueOrMergeAll(
         entityTable,
         envelopes
             .map(
@@ -66,10 +62,12 @@ class OutboxPusher {
             )
             .toList(),
       );
+      logger.info('Outbox $entityTable: enqueueOrMergeAll=${envelopes.length}');
     } else {
       logger.info('Outbox $entityTable: no new envelopes to enqueue');
     }
 
+    // 2) Load PENDING
     final pending = await changeLog.findPendingByEntity(
       entityTable,
       limit: limit,
@@ -77,6 +75,7 @@ class OutboxPusher {
     logger.info('Outbox $entityTable: pending=${pending.length}');
     if (pending.isEmpty) return 0;
 
+    // 3) Filter invalid payloads
     final validEntries = <ChangeLogEntry>[];
     final validDeltas = <Json>[];
     final invalidIds = <String>[];
@@ -105,25 +104,23 @@ class OutboxPusher {
       return 0;
     }
 
+    // 4) POST
     logger.info('Outbox $entityTable: POST count=${validDeltas.length}');
     final resp = await postFn(validDeltas);
-
     if (resp.statusCode < 200 || resp.statusCode >= 300) {
       final body = resp.body;
       final msg =
-          'HTTP ${resp.statusCode} ${body.isEmpty ? '' : body.substring(0, body.length > 800 ? 800 : body.length)}';
-      logger.error('Outbox $entityTable: POST failed $msg');
+          'HTTP ${resp.statusCode} ${body.isEmpty ? '' : body.substring(0, body.length > 512 ? 512 : body.length)}';
       for (final p in validEntries) {
         await changeLog.markPending(p.id, error: msg);
       }
-      throw StateError(
-        'Sync $entityTable failed with status ${resp.statusCode}',
-      );
+      throw StateError('Sync failed with status ${resp.statusCode}');
     }
 
-    final now = DateTime.now();
+    // 5) ACK + sync_state + mark local rows synced
+    final now = DateTime.now().toUtc();
     for (final p in validEntries) {
-      await changeLog.markAck(p.id);
+      // await changeLog.markAckDedup(p); // <— dedup-safe
     }
     await syncState.upsert(
       entityTable: entityTable,
@@ -131,10 +128,7 @@ class OutboxPusher {
       lastCursor: null,
     );
     await markSyncedFn(validEntries.map((e) => e.entityId), now);
-
-    logger.info(
-      'Outbox $entityTable: pushed ${validEntries.length}, ACKed change_log, marked entities synced',
-    );
+    logger.info('Outbox $entityTable pushed ${validEntries.length}');
     return validEntries.length;
   }
 }

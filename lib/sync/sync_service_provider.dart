@@ -58,16 +58,14 @@ final categoryPushUseCaseProvider = Provider<PushCategoriesUseCase>((ref) {
   return PushCategoriesUseCase(port, api, changeLog, syncState, logger);
 });
 
-final accountPushUseCaseProvider = Provider<PushAccountsForceUpdateUseCase>((
-  ref,
-) {
+final accountPushUseCaseProvider = Provider<PushAccountsUseCase>((ref) {
   final api = ref.read(_apiProvider);
   final dbRaw = ref.read(dbProvider).db;
   final port = AccountSyncPortSqflite(dbRaw);
   final changeLog = ref.read(_changeLogRepoProvider);
   final syncState = ref.read(_syncStateRepoProvider);
   final logger = ref.read(syncLoggerProvider);
-  return PushAccountsForceUpdateUseCase(
+  return PushAccountsUseCase(
     port: port,
     api: api,
     changeLog: changeLog,

@@ -1,94 +1,87 @@
-/* DTO for Account delta push payload. */
-import 'package:money_pulse/domain/accounts/entities/account.dart';
 import 'package:money_pulse/sync/domain/sync_delta_type.dart';
+import 'package:money_pulse/sync/domain/sync_delta_type_ext.dart';
 
 class AccountDeltaDto {
-  final String id;
-  final String type;
-  final String? remoteId;
-  final String? code;
+  final String? id; // remote id if UPDATE/DELETE
+  final String localId; // ALWAYS set (local PK)
+  final String code;
   final String? description;
-  final String? status;
   final String? currency;
   final String? typeAccount;
-  final int balance;
-  final int balancePrev;
-  final int balanceBlocked;
-  final int balanceInit;
-  final int balanceGoal;
-  final int balanceLimit;
-  final String? dateStartAccount;
-  final String? dateEndAccount;
   final bool isDefault;
-  final int version;
-  final String? syncAt;
+  final String? status;
 
-  const AccountDeltaDto({
+  final int? balance;
+  final int? balancePrev;
+  final int? balanceBlocked;
+  final int? balanceInit;
+  final int? balanceGoal;
+  final int? balanceLimit;
+
+  final String syncAt;
+  final String operation; // CREATE | UPDATE | DELETE
+
+  AccountDeltaDto._({
     required this.id,
-    required this.type,
-    this.remoteId,
-    this.code,
-    this.description,
-    this.status,
-    this.currency,
-    this.typeAccount,
+    required this.localId,
+    required this.code,
+    required this.description,
+    required this.currency,
+    required this.typeAccount,
+    required this.isDefault,
+    required this.status,
     required this.balance,
     required this.balancePrev,
     required this.balanceBlocked,
     required this.balanceInit,
     required this.balanceGoal,
     required this.balanceLimit,
-    this.dateStartAccount,
-    this.dateEndAccount,
-    required this.isDefault,
-    required this.version,
-    this.syncAt,
+    required this.syncAt,
+    required this.operation,
   });
 
+  /// `a` is your row (Account), fields accessed via dynamic to stay infra-agnostic.
+  factory AccountDeltaDto.fromEntity(dynamic a, SyncDeltaType t, DateTime now) {
+    final nowIso = (now.isUtc ? now : now.toUtc()).toIso8601String();
+    final localId = (a.localId as String?) ?? (a.id as String);
+    final isUpdateOrDelete = t != SyncDeltaType.create;
+
+    return AccountDeltaDto._(
+      id: isUpdateOrDelete ? a.remoteId as String? : null,
+      localId: localId,
+      code: a.code as String? ?? '',
+      description: a.description as String?,
+      currency: a.currency as String?,
+      typeAccount: a.typeAccount as String?,
+      isDefault: (a.isDefault as int? ?? 0) == 1,
+      status: a.status as String?,
+      balance: a.balance as int?,
+      balancePrev: a.balance_prev as int? ?? a.balancePrev as int?,
+      balanceBlocked: a.balance_blocked as int? ?? a.balanceBlocked as int?,
+      balanceInit: a.balance_init as int? ?? a.balanceInit as int?,
+      balanceGoal: a.balance_goal as int? ?? a.balanceGoal as int?,
+      balanceLimit: a.balance_limit as int? ?? a.balanceLimit as int?,
+      syncAt: nowIso,
+      operation: t.op,
+    );
+  }
+
   Map<String, Object?> toJson() => {
-    'id': id,
-    'type': type,
-    'remoteId': remoteId,
+    if (id != null) 'id': id,
+    'localId': localId,
     'code': code,
-    'name': code,
     'description': description,
-    'status': status,
     'currency': currency,
     'typeAccount': typeAccount,
+    'isDefault': isDefault,
+    'status': status,
     'balance': balance,
     'balancePrev': balancePrev,
     'balanceBlocked': balanceBlocked,
     'balanceInit': balanceInit,
     'balanceGoal': balanceGoal,
     'balanceLimit': balanceLimit,
-    'dateStartAccount': dateStartAccount,
-    'dateEndAccount': dateEndAccount,
-    'isDefault': isDefault,
-    'version': version,
     'syncAt': syncAt,
+    'operation': operation,
   };
-
-  static AccountDeltaDto fromEntity(Account a, SyncDeltaType t, DateTime now) {
-    return AccountDeltaDto(
-      id: a.id,
-      type: t.wire,
-      remoteId: a.id,
-      code: a.code,
-      description: a.description,
-      status: a.status,
-      currency: a.currency,
-      typeAccount: a.typeAccount,
-      balance: a.balance,
-      balancePrev: a.balancePrev,
-      balanceBlocked: a.balanceBlocked,
-      balanceInit: a.balanceInit,
-      balanceGoal: a.balanceGoal,
-      balanceLimit: a.balanceLimit,
-      dateStartAccount: a.dateStartAccount?.toUtc().toIso8601String(),
-      dateEndAccount: a.dateEndAccount?.toUtc().toIso8601String(),
-      isDefault: a.isDefault,
-      version: a.version,
-      syncAt: now.toUtc().toIso8601String(),
-    );
-  }
 }

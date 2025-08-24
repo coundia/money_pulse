@@ -3,18 +3,19 @@ PRAGMA foreign_keys = OFF;
 CREATE TABLE IF NOT EXISTS  account (
   id TEXT PRIMARY KEY,
   remoteId TEXT,
+  localId TEXT,
   balance INTEGER DEFAULT 0,
   balance_prev INTEGER DEFAULT 0,
   balance_blocked INTEGER DEFAULT 0,
 
-balance_init   INTEGER DEFAULT 0,
-balance_goal   INTEGER DEFAULT 0,
-balance_limit  INTEGER DEFAULT 0,
+  balance_init   INTEGER DEFAULT 0,
+  balance_goal   INTEGER DEFAULT 0,
+  balance_limit  INTEGER DEFAULT 0,
 
-dateStartAccount TEXT,
-dateEndAccount   TEXT,
+  dateStartAccount TEXT,
+  dateEndAccount   TEXT,
 
-typeAccount TEXT,
+  typeAccount TEXT,
 
   code TEXT,
   description TEXT,
@@ -36,6 +37,7 @@ CREATE INDEX idx_account_deleted ON account(deletedAt);
 CREATE TABLE IF NOT EXISTS  category (
   id TEXT PRIMARY KEY,
   remoteId TEXT,
+    localId TEXT,
   code TEXT,
   description TEXT,
   typeEntry TEXT DEFAULT 'DEBIT' CHECK(typeEntry IN ('DEBIT','CREDIT')),
@@ -54,6 +56,7 @@ CREATE INDEX idx_category_deleted ON category(deletedAt);
 CREATE TABLE IF NOT EXISTS  transaction_entry (
   id TEXT PRIMARY KEY,
   remoteId TEXT,
+    localId TEXT,
   code TEXT,
   description TEXT,
   amount INTEGER DEFAULT 0,
@@ -88,6 +91,7 @@ CREATE TABLE  IF NOT EXISTS change_log (
   entityTable TEXT NOT NULL,
   entityId TEXT NOT NULL,
   remoteId TEXT,
+    localId TEXT,
   operation TEXT,
   payload TEXT,
   status TEXT,
@@ -106,6 +110,7 @@ CREATE INDEX idx_changelog_entity ON change_log(entityTable, entityId);
 CREATE TABLE IF NOT EXISTS  sync_state (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   remoteId TEXT,
+    localId TEXT,
   entityTable TEXT NOT NULL UNIQUE,
   lastSyncAt TEXT,
   lastCursor TEXT,
@@ -116,6 +121,7 @@ CREATE TABLE IF NOT EXISTS  sync_state (
 CREATE TABLE IF NOT EXISTS unit (
   id TEXT PRIMARY KEY,
   remoteId TEXT,
+    localId TEXT,
   code TEXT NOT NULL,
   name TEXT,
   description TEXT,
@@ -135,6 +141,7 @@ CREATE INDEX IF NOT EXISTS idx_unit_deleted ON unit(deletedAt);
 CREATE TABLE IF NOT EXISTS product (
   id TEXT PRIMARY KEY,
   remoteId TEXT,
+    localId TEXT,
   code TEXT,                   
   name TEXT,                  
   description TEXT,
@@ -165,7 +172,8 @@ CREATE TABLE IF NOT EXISTS transaction_item (
   id TEXT PRIMARY KEY,
   transactionId TEXT NOT NULL,   
   productId TEXT,  
-  remoteId TEXT,              
+  remoteId TEXT,    
+    localId TEXT,          
   label TEXT,                     
   quantity INTEGER NOT NULL DEFAULT 1 CHECK(quantity >= 0),    
   unitId TEXT,                   
@@ -193,6 +201,7 @@ CREATE INDEX IF NOT EXISTS idx_item_deleted ON transaction_item(deletedAt);
 CREATE TABLE IF NOT EXISTS company (
   id TEXT PRIMARY KEY,
   remoteId TEXT,
+    localId TEXT,
   code TEXT NOT NULL,
   name TEXT ,
   description TEXT,
@@ -231,6 +240,7 @@ CREATE INDEX IF NOT EXISTS idx_company_dirty ON company(isDirty);
 CREATE TABLE IF NOT EXISTS customer (
   id TEXT PRIMARY KEY,
   remoteId TEXT,
+    localId TEXT,
   code TEXT,                      
   firstName TEXT,
   lastName TEXT,
@@ -276,6 +286,7 @@ CREATE TABLE stock_level
 (
     createdAt        TEXT DEFAULT (datetime('now')) ,
     remoteId TEXT,
+      localId TEXT,
     updatedAt        TEXT DEFAULT (datetime('now')) ,
     stockOnHand      INTEGER                        ,
     stockAllocated   INTEGER                        ,
@@ -303,6 +314,7 @@ CREATE TABLE IF NOT EXISTS stock_movement (
   id                INTEGER PRIMARY KEY AUTOINCREMENT,
   type_stock_movement TEXT ,
   remoteId TEXT,
+    localId TEXT,
   quantity          INTEGER  ,
   companyId         TEXT  ,
   productVariantId  TEXT ,
@@ -325,6 +337,7 @@ CREATE INDEX IF NOT EXISTS IDX_stockmove_created   ON stock_movement(createdAt);
 CREATE TABLE IF NOT EXISTS debt (
   id TEXT PRIMARY KEY,
   remoteId TEXT,
+    localId TEXT,
   code TEXT,
   notes TEXT,
   balance INTEGER DEFAULT 0,
