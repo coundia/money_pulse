@@ -2,7 +2,7 @@
 import 'package:money_pulse/sync/infrastructure/sync_api_client.dart';
 import 'package:money_pulse/domain/sync/repositories/sync_state_repository.dart';
 import '../infrastructure/sync_logger.dart';
-import '../infrastructure/pull_ports/category_pull_port_sqflite.dart';
+import '../infrastructure/category_pull_port_sqflite.dart';
 import 'pull_port.dart';
 
 class PullCategoriesUseCase implements PullPort {
