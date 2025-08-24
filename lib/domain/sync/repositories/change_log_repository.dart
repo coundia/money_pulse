@@ -16,6 +16,7 @@ abstract class ChangeLogRepository {
   Future<void> markAck(String id);
 
   Future<void> markPending(String id, {String? error});
+  Future<void> markSent(String id, {String? error});
 
   Future<void> delete(String id);
 

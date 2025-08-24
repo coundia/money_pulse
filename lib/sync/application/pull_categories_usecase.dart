@@ -1,12 +1,13 @@
 /* Pull categories from remote /queries/category/syncAt and upsert locally, then advance sync_state. */
 import 'package:money_pulse/sync/infrastructure/sync_api_client.dart';
 import 'package:money_pulse/domain/sync/repositories/sync_state_repository.dart';
+import '../infrastructure/sqflite_sync_ports.dart';
 import '../infrastructure/sync_logger.dart';
 import '../infrastructure/category_pull_port_sqflite.dart';
 import 'pull_port.dart';
 
 class PullCategoriesUseCase implements PullPort {
-  final CategoryPullPortSqflite port;
+  final CategorySyncPortSqflite port;
   final SyncApiClient api;
   final SyncStateRepository syncState;
   final SyncLogger logger;

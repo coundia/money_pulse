@@ -117,11 +117,12 @@ class OutboxPusher {
       throw StateError('Sync failed with status ${resp.statusCode}');
     }
 
-    // 5) ACK + sync_state + mark local rows synced
+    // 5) ACK
     final now = DateTime.now().toUtc();
     for (final p in validEntries) {
-      // await changeLog.markAck(p.id);
+      await changeLog.markSent(p.id);
     }
+
     await syncState.upsert(
       entityTable: entityTable,
       lastSyncAt: now,

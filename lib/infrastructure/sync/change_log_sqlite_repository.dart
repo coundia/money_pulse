@@ -48,15 +48,6 @@ class ChangeLogRepositorySqflite implements ChangeLogRepository {
   Future<void> markAck(String id) async {
     final now = _now();
     await _db.db.transaction((txn) async {
-      /* final rows = await txn.query(
-        'change_log',
-        columns: ['entityTable', 'entityId'],
-        where: 'id = ?',
-        whereArgs: [id],
-        limit: 1,
-      );
-      if (rows.isEmpty) return;*/
-
       await txn.update(
         'change_log',
         {'status': 'ACK', 'updatedAt': now, 'processedAt': now, 'error': null},
@@ -72,6 +63,14 @@ class ChangeLogRepositorySqflite implements ChangeLogRepository {
     await _db.db.rawUpdate(
       'UPDATE change_log SET attempts = attempts + 1, status = ?, updatedAt = ?, error = ? WHERE id = ?',
       ['PENDING', _now(), error, id],
+    );
+  }
+
+  @override
+  Future<void> markSent(String id, {String? error}) async {
+    await _db.db.rawUpdate(
+      'UPDATE change_log SET attempts = attempts + 1, status = ?, updatedAt = ?, error = ? WHERE id = ?',
+      ['SENT', _now(), error, id],
     );
   }
 

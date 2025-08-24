@@ -1,4 +1,5 @@
 /* Sqflite SyncPorts for all tables with robust findDirty (dirty or never-synced) and markSynced. */
+import 'package:money_pulse/sync/infrastructure/sync_api_client.dart';
 import 'package:sqflite/sqflite.dart';
 
 import 'package:money_pulse/sync/application/_ports.dart';
@@ -16,6 +17,8 @@ class _Sql {
 class CategorySyncPortSqflite implements CategorySyncPort {
   final Database db;
   CategorySyncPortSqflite(this.db);
+
+  String get entityTable => 'category';
 
   @override
   Future<List<Category>> findDirty({int limit = 200}) async {
@@ -43,6 +46,8 @@ class CategorySyncPortSqflite implements CategorySyncPort {
     }
     await b.commit(noResult: true);
   }
+
+  Future upsertRemote(List<Json> items) async {}
 }
 
 class AccountSyncPortSqflite implements AccountSyncPort {
@@ -68,7 +73,7 @@ class AccountSyncPortSqflite implements AccountSyncPort {
     for (final id in ids) {
       b.update(
         'account',
-        {'isDirty': 0, 'syncAt': ts, 'updatedAt': ts},
+        {'isDirty': 0, 'syncAt': ts, 'updatedAt': ts, 'status': 'SENT'},
         where: 'id = ?',
         whereArgs: [id],
       );

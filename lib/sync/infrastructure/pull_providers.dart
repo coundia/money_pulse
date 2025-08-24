@@ -15,6 +15,7 @@ import 'package:money_pulse/sync/infrastructure/sqflite_pull_ports.dart';
 import 'package:money_pulse/sync/infrastructure/sync_policy_provider.dart';
 
 import '../../infrastructure/repositories/sync_state_repository_sqflite.dart';
+import 'sqflite_sync_ports.dart';
 
 final pullBaseUriProvider = Provider<String>(
   (ref) => ref.watch(baseUriProvider),
@@ -42,7 +43,7 @@ final pullCategoriesUseCaseProvider = Provider<PullCategoriesUseCase>((ref) {
   final api = ref.read(_apiProvider);
   final logger = ref.read(syncLoggerProvider);
   final db = ref.read(dbProvider).db as Database;
-  final port = CategoryPullPortSqflite(db);
+  final port = CategorySyncPortSqflite(db);
   final syncState = ref.read(_syncStateRepoProvider);
   return PullCategoriesUseCase(port, api, syncState, logger);
 });
