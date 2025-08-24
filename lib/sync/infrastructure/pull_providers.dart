@@ -10,11 +10,10 @@ import 'package:money_pulse/sync/infrastructure/sync_logger.dart';
 import 'package:money_pulse/sync/application/pull_all_usecase.dart';
 import 'package:money_pulse/sync/application/pull_accounts_usecase.dart';
 import 'package:money_pulse/sync/application/pull_categories_usecase.dart';
-import 'package:money_pulse/sync/infrastructure/category_pull_port_sqflite.dart';
-import 'package:money_pulse/sync/infrastructure/sqflite_pull_ports.dart';
 import 'package:money_pulse/sync/infrastructure/sync_policy_provider.dart';
 
 import '../../infrastructure/repositories/sync_state_repository_sqflite.dart';
+import 'pull_ports/account_pull_port_sqflite.dart';
 import 'sqflite_sync_ports.dart';
 
 final pullBaseUriProvider = Provider<String>(
@@ -53,7 +52,7 @@ final pullAllUseCaseProvider = Provider<PullAllUseCase>((ref) {
   final logger = ref.read(syncLoggerProvider);
   return PullAllUseCase(
     accounts: ref.read(pullAccountsUseCaseProvider),
-    categories: ref.read(pullCategoriesUseCaseProvider),
+    // categories: ref.read(pullCategoriesUseCaseProvider),
     units: null,
     companies: null,
     products: null,

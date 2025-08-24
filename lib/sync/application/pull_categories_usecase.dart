@@ -29,10 +29,10 @@ class PullCategoriesUseCase implements PullPort {
     }
 
     final res = await port.upsertRemote(items);
-    if (res.maxSyncAt != null) {
+    if (res.syncAt != null) {
       await syncState.upsert(
         entityTable: port.entityTable,
-        lastSyncAt: res.maxSyncAt,
+        lastSyncAt: res.syncAt,
         lastCursor: null,
       );
     }
