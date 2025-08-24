@@ -83,10 +83,10 @@ class OutboxPusher {
       throw StateError('Sync failed with status ${resp.statusCode}');
     }
 
-    // 4) SYNC + sync_state + markSynced
+    //sent
     final now = DateTime.now().toUtc();
     for (final p in validEntries) {
-      await changeLog.markSync(p.id);
+      await changeLog.markSent(p.id);
     }
 
     await syncState.upsert(
