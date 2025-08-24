@@ -120,7 +120,7 @@ class OutboxPusher {
     // 5) ACK + sync_state + mark local rows synced
     final now = DateTime.now().toUtc();
     for (final p in validEntries) {
-      // await changeLog.markAckDedup(p); // <— dedup-safe
+      // await changeLog.markAck(p.id);
     }
     await syncState.upsert(
       entityTable: entityTable,

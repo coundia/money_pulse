@@ -45,74 +45,17 @@ class ChangeLogRepositorySqflite implements ChangeLogRepository {
   }
 
   @override
-  Future<void> enqueue(
-    String entityTable,
-    String entityId,
-    String operation,
-    String payload,
-  ) async {
-    final now = _now();
-    await _db.db.insert('change_log', {
-      'id': const Uuid().v4(),
-      'entityTable': entityTable,
-      'entityId': entityId,
-      'operation': operation,
-      'payload': payload,
-      'status': 'PENDING',
-      'attempts': 0,
-      'error': null,
-      'createdAt': now,
-      'updatedAt': now,
-      'processedAt': null,
-    }, conflictAlgorithm: ConflictAlgorithm.ignore);
-  }
-
-  @override
-  Future<void> enqueueAll(
-    String entityTable,
-    List<({String entityId, String operation, String payload})> items,
-  ) async {
-    if (items.isEmpty) return;
-    final now = _now();
-    final batch = _db.db.batch();
-    for (final it in items) {
-      batch.insert('change_log', {
-        'id': const Uuid().v4(),
-        'entityTable': entityTable,
-        'entityId': it.entityId,
-        'operation': it.operation,
-        'payload': it.payload,
-        'status': 'PENDING',
-        'attempts': 0,
-        'error': null,
-        'createdAt': now,
-        'updatedAt': now,
-        'processedAt': null,
-      }, conflictAlgorithm: ConflictAlgorithm.ignore);
-    }
-    await batch.commit(noResult: true);
-  }
-
-  @override
   Future<void> markAck(String id) async {
     final now = _now();
     await _db.db.transaction((txn) async {
-      final rows = await txn.query(
+      /* final rows = await txn.query(
         'change_log',
         columns: ['entityTable', 'entityId'],
         where: 'id = ?',
         whereArgs: [id],
         limit: 1,
       );
-      if (rows.isEmpty) return;
-      final entityTable = rows.first['entityTable'] as String;
-      final entityId = rows.first['entityId'] as String;
-
-      await txn.delete(
-        'change_log',
-        where: 'entityTable = ? AND entityId = ? AND status = ? AND id <> ?',
-        whereArgs: [entityTable, entityId, 'ACK', id],
-      );
+      if (rows.isEmpty) return;*/
 
       await txn.update(
         'change_log',

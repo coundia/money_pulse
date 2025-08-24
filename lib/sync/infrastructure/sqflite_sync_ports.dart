@@ -9,8 +9,7 @@ import 'package:money_pulse/domain/transactions/entities/transaction_entry.dart'
 
 class _Sql {
   static String listQ(int n) => List.filled(n, '?').join(', ');
-  static const commonWhere =
-      '(isDirty = 1) OR (remoteId IS NULL AND deletedAt IS NULL)';
+  static const commonWhere = 'remoteId IS NULL AND deletedAt IS NULL';
   static const order = 'updatedAt DESC';
 }
 
