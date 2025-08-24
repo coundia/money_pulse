@@ -21,8 +21,11 @@ import 'package:money_pulse/presentation/features/categories/category_list_page.
 
 import 'package:money_pulse/domain/accounts/entities/account.dart';
 import 'package:money_pulse/domain/transactions/entities/transaction_entry.dart';
+import 'package:sqflite/sqlite_api.dart';
 
+import '../../../sync/infrastructure/pull_ports/account_pull_port_sqflite.dart';
 import '../../../sync/infrastructure/pull_providers.dart';
+import '../../../sync/infrastructure/sync_api_client.dart';
 import '../../../sync/infrastructure/sync_logger.dart';
 import '../transactions/controllers/transaction_list_controller.dart';
 import '../transactions/prefs/summary_card_prefs_panel.dart';
@@ -125,8 +128,41 @@ class _HomePageState extends ConsumerState<HomePage> {
   }
 
   Future<void> _runPullAndPush() async {
-    await _runPullAll();
+    await _runPullAndUpdateRemoteIdOnly();
     await _runSyncAll();
+    await _runPullAll();
+  }
+
+  Future<void> _runPullAndUpdateRemoteIdOnly() async {
+    final logger = ref.read(syncLoggerProvider);
+    try {
+      logger.info('UI: adopt remoteId for accounts (no balance update)');
+
+      // Build API + port from existing providers
+      final baseUri = ref.read(syncBaseUriProvider);
+      final api = ref.read(syncApiClientProvider(baseUri));
+      final Database dbRaw = ref.read(dbProvider).db;
+      final port = AccountPullPortSqflite(dbRaw);
+
+      // We only need items that can carry (id, localId); epoch is fine
+      final since = DateTime.fromMillisecondsSinceEpoch(0, isUtc: true);
+      final items = await api.getAccountsSince(since);
+
+      if (items.isEmpty) {
+        logger.info('Adopt remoteId: no server items');
+        return;
+      }
+
+      // Pass 1 only: adopt remote ids into local rows; do NOT touch balances
+      final adopted = await port.adoptRemoteIds(items);
+      logger.info('Adopt remoteId: adopted=$adopted row(s)');
+    } catch (e, st) {
+      ref.read(syncLoggerProvider).error('UI: adopt remoteId failed', e, st);
+      if (!mounted) return;
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('Échec adoption remoteId')));
+    }
   }
 
   Future<void> _runSyncAll() async {
