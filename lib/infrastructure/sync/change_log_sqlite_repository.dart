@@ -1,5 +1,4 @@
-/* Sqflite implementation of change-log repository with outbox helpers. */
-import 'dart:convert';
+/* SQLite ChangeLog repository with UPSERT semantics on (entityTable, entityId, status). */
 import 'package:money_pulse/infrastructure/db/app_database.dart';
 import 'package:money_pulse/domain/sync/entities/change_log_entry.dart';
 import 'package:money_pulse/domain/sync/repositories/change_log_repository.dart';
@@ -36,10 +35,10 @@ class ChangeLogRepositorySqflite implements ChangeLogRepository {
       'change_log',
       where: 'status = ? AND entityTable = ?',
       whereArgs: ['PENDING', entityTable],
-      orderBy: 'createdAt ASC',
+      orderBy: 'updatedAt ASC, createdAt ASC',
       limit: limit,
     );
-    return rows.map((m) => ChangeLogEntry.fromMap(m)).toList();
+    return rows.map(ChangeLogEntry.fromMap).toList();
   }
 
   @override
@@ -50,19 +49,41 @@ class ChangeLogRepositorySqflite implements ChangeLogRepository {
     String payload,
   ) async {
     final now = _now();
-    await _db.db.insert('change_log', {
-      'id': const Uuid().v4(),
-      'entityTable': entityTable,
-      'entityId': entityId,
-      'operation': operation,
-      'payload': payload,
-      'status': 'PENDING',
-      'attempts': 0,
-      'error': null,
-      'createdAt': now,
-      'updatedAt': now,
-      'processedAt': null,
-    }, conflictAlgorithm: ConflictAlgorithm.ignore);
+    await _db.db.transaction((txn) async {
+      try {
+        await txn.insert('change_log', {
+          'id': const Uuid().v4(),
+          'entityTable': entityTable,
+          'entityId': entityId,
+          'operation': operation,
+          'payload': payload,
+          'status': 'PENDING',
+          'attempts': 0,
+          'error': null,
+          'createdAt': now,
+          'updatedAt': now,
+          'processedAt': null,
+        }, conflictAlgorithm: ConflictAlgorithm.abort);
+      } on DatabaseException catch (e) {
+        final msg = e.toString();
+        final isUnique = msg.contains('UNIQUE constraint failed');
+        if (!isUnique) rethrow;
+        await txn.update(
+          'change_log',
+          {
+            'operation': operation,
+            'payload': payload,
+            'status': 'PENDING',
+            'attempts': 0,
+            'error': null,
+            'updatedAt': now,
+            'processedAt': null,
+          },
+          where: 'entityTable = ? AND entityId = ? AND status = ?',
+          whereArgs: [entityTable, entityId, 'PENDING'],
+        );
+      }
+    });
   }
 
   @override
@@ -72,23 +93,43 @@ class ChangeLogRepositorySqflite implements ChangeLogRepository {
   ) async {
     if (items.isEmpty) return;
     final now = _now();
-    final batch = _db.db.batch();
-    for (final it in items) {
-      batch.insert('change_log', {
-        'id': const Uuid().v4(),
-        'entityTable': entityTable,
-        'entityId': it.entityId,
-        'operation': it.operation,
-        'payload': it.payload,
-        'status': 'PENDING',
-        'attempts': 0,
-        'error': null,
-        'createdAt': now,
-        'updatedAt': now,
-        'processedAt': null,
-      }, conflictAlgorithm: ConflictAlgorithm.ignore);
-    }
-    await batch.commit(noResult: true);
+    await _db.db.transaction((txn) async {
+      for (final it in items) {
+        try {
+          await txn.insert('change_log', {
+            'id': const Uuid().v4(),
+            'entityTable': entityTable,
+            'entityId': it.entityId,
+            'operation': it.operation,
+            'payload': it.payload,
+            'status': 'PENDING',
+            'attempts': 0,
+            'error': null,
+            'createdAt': now,
+            'updatedAt': now,
+            'processedAt': null,
+          }, conflictAlgorithm: ConflictAlgorithm.abort);
+        } on DatabaseException catch (e) {
+          final msg = e.toString();
+          final isUnique = msg.contains('UNIQUE constraint failed');
+          if (!isUnique) rethrow;
+          await txn.update(
+            'change_log',
+            {
+              'operation': it.operation,
+              'payload': it.payload,
+              'status': 'PENDING',
+              'attempts': 0,
+              'error': null,
+              'updatedAt': now,
+              'processedAt': null,
+            },
+            where: 'entityTable = ? AND entityId = ? AND status = ?',
+            whereArgs: [entityTable, it.entityId, 'PENDING'],
+          );
+        }
+      }
+    });
   }
 
   @override
@@ -106,7 +147,9 @@ class ChangeLogRepositorySqflite implements ChangeLogRepository {
   @override
   Future<void> markPending(String id, {String? error}) async {
     await _db.db.rawUpdate(
-      'UPDATE change_log SET attempts = attempts + 1, status = ?, updatedAt = ?, error = ? WHERE id = ?',
+      'UPDATE change_log '
+      'SET attempts = attempts + 1, status = ?, updatedAt = ?, error = ? '
+      'WHERE id = ?',
       ['PENDING', _now(), error, id],
     );
   }

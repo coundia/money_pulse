@@ -3,6 +3,7 @@ import 'package:money_pulse/sync/application/_ports.dart';
 import 'package:money_pulse/sync/application/outbox_pusher.dart';
 import 'package:money_pulse/sync/domain/dtos/category_delta_dto.dart';
 import 'package:money_pulse/sync/domain/sync_delta_type.dart';
+import 'package:money_pulse/sync/domain/sync_delta_type_ext.dart';
 import 'package:money_pulse/sync/infrastructure/sync_api_client.dart';
 import 'package:money_pulse/sync/infrastructure/sync_logger.dart';
 import 'package:money_pulse/domain/sync/repositories/change_log_repository.dart';
@@ -39,11 +40,12 @@ class PushCategoriesUseCase implements PushPort {
       } else {
         type = SyncDeltaType.update;
       }
+
       final dto = CategoryDeltaDto.fromEntity(c, type, now).toJson();
 
       return DeltaEnvelope(
         entityId: c.id,
-        operation: type.name.toUpperCase(),
+        operation: type.op, // <- utilise la représentation op de l'enum
         delta: dto,
       );
     }).toList();

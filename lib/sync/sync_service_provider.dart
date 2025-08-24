@@ -59,8 +59,12 @@ final categoryPushUseCaseProvider = Provider<PushCategoriesUseCase>((ref) {
 
 final accountPushUseCaseProvider = Provider<PushAccountsUseCase>((ref) {
   final api = ref.read(_apiProvider);
-  final Database dbRaw = ref.read(dbProvider).db;
-  return PushAccountsUseCase(AccountSyncPortSqflite(dbRaw), api);
+  final dbRaw = ref.read(dbProvider).db;
+  final port = AccountSyncPortSqflite(dbRaw);
+  final changeLog = ref.read(_changeLogRepoProvider);
+  final syncState = ref.read(_syncStateRepoProvider);
+  final logger = ref.read(syncLoggerProvider);
+  return PushAccountsUseCase(port, api, changeLog, syncState, logger);
 });
 
 final transactionPushUseCaseProvider = Provider<PushTransactionsUseCase>((ref) {
@@ -127,11 +131,10 @@ final syncAllUseCaseProvider = Provider<SyncAllUseCase>((ref) {
   final logger = ref.read(syncLoggerProvider);
   final policy = ref.read(syncPolicyProvider);
   return SyncAllUseCase(
-    //accounts: ref.read(accountPushUseCaseProvider),
+    accounts: ref.read(accountPushUseCaseProvider),
     categories: ref.read(categoryPushUseCaseProvider),
-
-    /*  transactions: ref.read(transactionPushUseCaseProvider),
-    units: ref.read(unitPushUseCaseProvider),
+    //transactions: ref.read(transactionPushUseCaseProvider),
+    /*  units: ref.read(unitPushUseCaseProvider),
     products: ref.read(productPushUseCaseProvider),
     items: ref.read(transactionItemPushUseCaseProvider),
     companies: ref.read(companyPushUseCaseProvider),

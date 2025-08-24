@@ -1,16 +1,23 @@
-/* Robust outbox pusher: filters/cleans invalid pending rows, retries once, posts valid deltas, updates sync_state and marks entities synced only on 2xx. */
+/* Robust outbox pusher:
+ * - Safely decodes payloads
+ * - Falls back to ChangeLogEntry.operation to ensure 'type' in delta JSON
+ * - Skips/deletes invalid rows
+ * - Posts valid deltas, updates sync_state and marks entities synced
+ */
 import 'dart:convert';
 import 'package:http/http.dart' as http;
 import 'package:money_pulse/domain/sync/entities/change_log_entry.dart';
 import 'package:money_pulse/domain/sync/repositories/change_log_repository.dart';
 import 'package:money_pulse/domain/sync/repositories/sync_state_repository.dart';
 import 'package:money_pulse/sync/infrastructure/sync_logger.dart';
+import 'package:money_pulse/sync/domain/sync_delta_type.dart';
+import 'package:money_pulse/sync/domain/sync_delta_type_ext.dart';
 
 typedef Json = Map<String, Object?>;
 
 class DeltaEnvelope {
   final String entityId;
-  final String operation;
+  final String operation; // CREATE / UPDATE / DELETE
   final Json delta;
   DeltaEnvelope({
     required this.entityId,
@@ -36,45 +43,11 @@ class OutboxPusher {
     if (s == null || s.isEmpty) return null;
     try {
       final v = jsonDecode(s);
-      return v is Map<String, Object?> ? v : null;
+      if (v is Map<String, Object?>) return v;
+      return null;
     } catch (_) {
       return null;
     }
-  }
-
-  Future<({List<ChangeLogEntry> entries, List<Json> deltas, bool dropped})>
-  _loadFilterDrop(int limit, {bool dropInvalid = true}) async {
-    final pending = await changeLog.findPendingByEntity(
-      entityTable,
-      limit: limit,
-    );
-    final validEntries = <ChangeLogEntry>[];
-    final validDeltas = <Json>[];
-    final invalidIds = <String>[];
-
-    for (final p in pending) {
-      final d = _tryDecode(p.payload);
-      if (d == null) {
-        invalidIds.add(p.id);
-      } else {
-        validEntries.add(p);
-        validDeltas.add(d);
-      }
-    }
-
-    if (dropInvalid && invalidIds.isNotEmpty) {
-      logger.warn(
-        'Outbox $entityTable: dropping ${invalidIds.length} invalid rows (null/bad JSON payload)',
-      );
-      for (final id in invalidIds) {
-        await changeLog.delete(id);
-      }
-    }
-    return (
-      entries: validEntries,
-      deltas: validDeltas,
-      dropped: invalidIds.isNotEmpty,
-    );
   }
 
   Future<int> push({
@@ -84,7 +57,7 @@ class OutboxPusher {
     markSyncedFn,
     int limit = 200,
   }) async {
-    // 1) Enqueue new deltas (if any)
+    // 1) Enqueue new envelopes (operation stored in change_log.operation)
     if (envelopes.isNotEmpty) {
       await changeLog.enqueueAll(
         entityTable,
@@ -92,7 +65,7 @@ class OutboxPusher {
             .map(
               (e) => (
                 entityId: e.entityId,
-                operation: e.operation,
+                operation: e.operation, // already uppercase (enum.op)
                 payload: jsonEncode(e.delta),
               ),
             )
@@ -100,40 +73,76 @@ class OutboxPusher {
       );
     }
 
-    // 2) Load + drop invalid once
-    var filtered = await _loadFilterDrop(limit, dropInvalid: true);
+    // 2) Load pending
+    final pending = await changeLog.findPendingByEntity(
+      entityTable,
+      limit: limit,
+    );
+    if (pending.isEmpty) return 0;
 
-    // 3) If all were invalid and got dropped (or they saturated the page), retry load once
-    if (filtered.deltas.isEmpty && filtered.dropped) {
-      filtered = await _loadFilterDrop(limit, dropInvalid: false);
-      if (filtered.deltas.isEmpty) {
-        logger.info(
-          'Outbox $entityTable: nothing valid to push after cleaning',
-        );
-        return 0; // no sync state update, no markSynced (as demandé)
+    // 3) Validate/prepare deltas
+    final validEntries = <ChangeLogEntry>[];
+    final validDeltas = <Json>[];
+    final invalidIds = <String>[];
+
+    for (final p in pending) {
+      final decoded = _tryDecode(p.payload);
+      if (decoded == null) {
+        invalidIds.add(p.id);
+        continue;
+      }
+
+      // Ensure 'type' field in payload matches operation if missing
+      // (we do NOT override an existing 'type')
+      if (!decoded.containsKey('type')) {
+        final opT = p.opType; // from ChangeLogEntry.operation → SyncDeltaType?
+        if (opT != null) {
+          decoded['type'] = opT.op; // CREATE / UPDATE / DELETE
+        }
+      }
+
+      // Minimal sanity check: type must be valid if present
+      final t = decoded['type']?.toString().toUpperCase();
+      if (t != null && SyncDeltaTypeExt.fromOp(t) == null) {
+        // invalid type → drop row
+        invalidIds.add(p.id);
+        continue;
+      }
+
+      validEntries.add(p);
+      validDeltas.add(decoded);
+    }
+
+    // 4) Drop invalid rows
+    if (invalidIds.isNotEmpty) {
+      logger.warn(
+        'Outbox $entityTable: dropping ${invalidIds.length} invalid rows (null/bad JSON payload or bad type)',
+      );
+      for (final id in invalidIds) {
+        await changeLog.delete(id);
       }
     }
 
-    if (filtered.deltas.isEmpty) {
-      logger.info('Outbox $entityTable: nothing to push');
+    if (validDeltas.isEmpty) {
+      logger.info('Outbox $entityTable: nothing valid to push after cleaning');
       return 0;
     }
 
-    // 4) Post
-    final resp = await postFn(filtered.deltas);
+    // 5) POST
+    final resp = await postFn(validDeltas);
     if (resp.statusCode < 200 || resp.statusCode >= 300) {
       final body = resp.body;
       final msg =
-          'HTTP ${resp.statusCode} ${body.isEmpty ? '' : (body.length > 1000 ? body.substring(0, 1000) : body)}';
-      for (final p in filtered.entries) {
+          'HTTP ${resp.statusCode} ${body.isEmpty ? '' : body.substring(0, body.length > 1000 ? 1000 : body.length)}';
+      for (final p in validEntries) {
         await changeLog.markPending(p.id, error: msg);
       }
       throw StateError('Sync failed with status ${resp.statusCode}');
     }
 
-    // 5) On success: ACK outbox, update sync_state, and mark entities as synced
+    // 6) Mark ACK + sync_state + markSynced
     final now = DateTime.now();
-    for (final p in filtered.entries) {
+    for (final p in validEntries) {
       await changeLog.markAck(p.id);
     }
     await syncState.upsert(
@@ -141,8 +150,9 @@ class OutboxPusher {
       lastSyncAt: now,
       lastCursor: null,
     );
-    await markSyncedFn(filtered.entries.map((e) => e.entityId), now);
-    logger.info('Outbox $entityTable pushed ${filtered.entries.length}');
-    return filtered.entries.length;
+    await markSyncedFn(validEntries.map((e) => e.entityId), now);
+
+    logger.info('Outbox $entityTable pushed ${validEntries.length}');
+    return validEntries.length;
   }
 }

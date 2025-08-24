@@ -22,6 +22,8 @@ class CheckoutCartUseCase {
     DateTime? when,
     required List<Map<String, Object?>> lines,
   }) async {
+    print("******** CheckoutCartUseCase *******");
+
     final t = typeEntry.toUpperCase();
     const allowed = {'DEBIT', 'CREDIT', 'DEBT', 'REMBOURSEMENT', 'PRET'};
     if (!allowed.contains(t)) {
@@ -211,6 +213,7 @@ class CheckoutCartUseCase {
       }
 
       await _upsertChangeLog(txn, 'transaction_entry', txId, 'INSERT', nowIso);
+      await _upsertChangeLog(txn, 'account', acc!.id, 'UPDATE', nowIso);
     });
 
     return txId;

@@ -1,11 +1,12 @@
-// Pure Dart entity (no Flutter import required).
+/* Pure Dart entity (no Flutter import required). */
+import 'package:money_pulse/sync/domain/sync_delta_type.dart';
+import 'package:money_pulse/sync/domain/sync_delta_type_ext.dart';
 
 class ChangeLogEntry {
   final String id;
-  final String entityTable;
+  final String entityTable; //account, category etc.
   final String entityId;
-  final String?
-  operation; // 'INSERT' | 'UPDATE' | 'DELETE' (nullable if unknown)
+  final String? operation; // 'CREATE' | 'UPDATE' | 'DELETE'
   final String? payload; // JSON or any serialized text
   final String? status; // 'PENDING' | 'SENT' | 'ACK' | 'FAILED'
   final int attempts;
@@ -28,18 +29,15 @@ class ChangeLogEntry {
     required this.processedAt,
   });
 
-  // --- Parsing helpers -------------------------------------------------------
+  // Convenience: typed access to operation as SyncDeltaType
+  SyncDeltaType? get opType => SyncDeltaTypeExt.fromOp(operation);
 
   static DateTime? _parseDate(dynamic v) {
     if (v == null) return null;
     if (v is DateTime) return v;
-    if (v is int) {
-      // support epoch millis (just in case)
-      return DateTime.fromMillisecondsSinceEpoch(v, isUtc: false);
-    }
+    if (v is int) return DateTime.fromMillisecondsSinceEpoch(v, isUtc: false);
     final s = v.toString().trim();
     if (s.isEmpty) return null;
-    // SQLite often stores "YYYY-MM-DD HH:MM:SS" -> make it ISO-ish to be safe
     final iso = s.contains('T') ? s : s.replaceFirst(' ', 'T');
     return DateTime.tryParse(iso);
   }
@@ -51,8 +49,6 @@ class ChangeLogEntry {
     final p = int.tryParse(v.toString());
     return p ?? fallback;
   }
-
-  // --- Mapping ---------------------------------------------------------------
 
   factory ChangeLogEntry.fromMap(Map<String, Object?> m) {
     return ChangeLogEntry(
@@ -86,8 +82,6 @@ class ChangeLogEntry {
       'processedAt': _fmt(processedAt),
     };
   }
-
-  // --- Utils -----------------------------------------------------------------
 
   ChangeLogEntry copyWith({
     String? id,
