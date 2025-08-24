@@ -1,14 +1,16 @@
 // Entity for accounts with init/goal/limit balances, date range and type.
-
 class Account {
-  final String id;
-  final String? remoteId;
+  final String id; // local PK in your SQLite
+  final String? localId; // explicit client-side id sent to server
+  final String? remoteId; // server id (nullable until created remotely)
+
   final int balance;
   final int balancePrev;
   final int balanceBlocked;
   final int balanceInit;
   final int balanceGoal;
   final int balanceLimit;
+
   final String? code;
   final String? description;
   final String? status;
@@ -17,6 +19,7 @@ class Account {
   final DateTime? dateStartAccount;
   final DateTime? dateEndAccount;
   final bool isDefault;
+
   final DateTime createdAt;
   final DateTime updatedAt;
   final DateTime? deletedAt;
@@ -26,6 +29,7 @@ class Account {
 
   const Account({
     required this.id,
+    this.localId,
     this.remoteId,
     this.balance = 0,
     this.balancePrev = 0,
@@ -51,6 +55,7 @@ class Account {
 
   Account copyWith({
     String? id,
+    String? localId,
     String? remoteId,
     int? balance,
     int? balancePrev,
@@ -75,6 +80,7 @@ class Account {
   }) {
     return Account(
       id: id ?? this.id,
+      localId: localId ?? this.localId,
       remoteId: remoteId ?? this.remoteId,
       balance: balance ?? this.balance,
       balancePrev: balancePrev ?? this.balancePrev,
@@ -103,13 +109,16 @@ class Account {
     if (v == null) return null;
     if (v is int) return DateTime.fromMillisecondsSinceEpoch(v);
     final s = v.toString();
-    if (s.contains('T')) return DateTime.parse(s);
-    return DateTime.parse(s.replaceFirst(' ', 'T'));
+    if (s.contains('T')) return DateTime.tryParse(s);
+    return DateTime.tryParse(s.replaceFirst(' ', 'T'));
   }
 
   factory Account.fromMap(Map<String, Object?> map) {
+    final id = map['id'] as String;
+    final localId = (map['localId'] as String?) ?? id; // fallback for old rows
     return Account(
-      id: map['id'] as String,
+      id: id,
+      localId: localId,
       remoteId: map['remoteId'] as String?,
       balance: (map['balance'] as int?) ?? 0,
       balancePrev: (map['balance_prev'] as int?) ?? 0,
@@ -138,6 +147,7 @@ class Account {
     String? _fmt(DateTime? d) => d?.toIso8601String();
     return {
       'id': id,
+      'localId': localId,
       'remoteId': remoteId,
       'balance': balance,
       'balance_prev': balancePrev,

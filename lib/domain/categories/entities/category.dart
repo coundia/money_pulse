@@ -2,6 +2,10 @@ class Category {
   /// Row id (UUID v4 recommandé)
   final String id;
 
+  /// Client-side identifier sent to the server (optional).
+  /// Falls back to [id] when missing in older rows.
+  final String? localId;
+
   /// Remote identifier if synced with a server
   final String? remoteId;
 
@@ -29,6 +33,7 @@ class Category {
 
   const Category({
     required this.id,
+    this.localId,
     this.remoteId,
     required this.code,
     this.description,
@@ -64,7 +69,6 @@ class Category {
     if (v is DateTime) return v;
     if (v is int) return DateTime.fromMillisecondsSinceEpoch(v);
     final s = v.toString().trim();
-    // SQLite renvoie souvent "YYYY-MM-DD HH:MM:SS"
     if (!s.contains('T') && s.contains(' ')) {
       return DateTime.tryParse(s.replaceFirst(' ', 'T'));
     }
@@ -86,8 +90,10 @@ class Category {
   }
 
   factory Category.fromMap(Map<String, Object?> m) {
+    final id = m['id'] as String;
     return Category(
-      id: m['id'] as String,
+      id: id,
+      localId: (m['localId'] as String?) ?? id, // fallback for old rows
       remoteId: m['remoteId'] as String?,
       code: m['code'] as String,
       description: m['description'] as String?,
@@ -105,6 +111,7 @@ class Category {
     String? f(DateTime? d) => d?.toIso8601String();
     return {
       'id': id,
+      'localId': localId,
       'remoteId': remoteId,
       'code': code,
       'description': description,
@@ -114,7 +121,7 @@ class Category {
       'syncAt': f(syncAt),
       'version': version,
       'isDirty': isDirty ? 1 : 0,
-      'typeEntry': typeEntry.toUpperCase(), // DB attend 'DEBIT'/'CREDIT'
+      'typeEntry': typeEntry.toUpperCase(),
     };
   }
 
@@ -130,6 +137,7 @@ class Category {
 
   Category copyWith({
     String? id,
+    String? localId,
     String? remoteId,
     String? code,
     String? description,
@@ -148,6 +156,7 @@ class Category {
     );
     return Category(
       id: id ?? this.id,
+      localId: localId ?? this.localId,
       remoteId: remoteId ?? this.remoteId,
       code: code ?? this.code,
       description: description ?? this.description,
@@ -170,6 +179,7 @@ class Category {
     if (identical(this, other)) return true;
     return other is Category &&
         other.id == id &&
+        other.localId == localId &&
         other.remoteId == remoteId &&
         other.code == code &&
         other.description == description &&
@@ -185,6 +195,7 @@ class Category {
   @override
   int get hashCode =>
       id.hashCode ^
+      (localId?.hashCode ?? 0) ^
       (remoteId?.hashCode ?? 0) ^
       code.hashCode ^
       (description?.hashCode ?? 0) ^
@@ -198,5 +209,5 @@ class Category {
 
   @override
   String toString() =>
-      'Category(id: $id, code: $code, typeEntry: $typeEntry, version: $version, isDirty: $isDirty)';
+      'Category(id: $id, localId: $localId, code: $code, typeEntry: $typeEntry, version: $version, isDirty: $isDirty)';
 }

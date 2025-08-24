@@ -2,19 +2,24 @@
 
 class TransactionEntry {
   final String id;
+
+  /// Client-side identifier (used before the entity gets a remoteId).
+  /// Falls back to [id] when missing.
+  final String? localId;
+
   final String? remoteId;
   final String? code;
   final String? description;
   final int amount;
-  final String
-  typeEntry; // 'DEBIT' | 'CREDIT' | 'DEBT' | 'REMBOURSEMENT' | 'PRET' ...
+
+  /// 'DEBIT' | 'CREDIT' | 'DEBT' | 'REMBOURSEMENT' | 'PRET' ...
+  final String typeEntry;
   final DateTime dateTransaction;
   final String? status;
   final String? entityName;
   final String? entityId;
-  final String? accountId; // <-- nullable
+  final String? accountId; // nullable
   final String? categoryId;
-
   final String? companyId;
   final String? customerId;
 
@@ -27,6 +32,7 @@ class TransactionEntry {
 
   const TransactionEntry({
     required this.id,
+    this.localId,
     this.remoteId,
     this.code,
     this.description,
@@ -36,7 +42,7 @@ class TransactionEntry {
     this.status,
     this.entityName,
     this.entityId,
-    this.accountId, // <-- nullable
+    this.accountId,
     this.categoryId,
     this.companyId,
     this.customerId,
@@ -75,7 +81,6 @@ class TransactionEntry {
     if (v is int) return DateTime.fromMillisecondsSinceEpoch(v);
     final s = v.toString();
     if (s.isEmpty) return null;
-    // Autoriser les formats "YYYY-MM-DD HH:MM:SS" en remplaçant l'espace par 'T'
     final normalized = s.contains('T') ? s : s.replaceFirst(' ', 'T');
     try {
       return DateTime.parse(normalized);
@@ -87,8 +92,10 @@ class TransactionEntry {
   // ------------------------ Mapping ------------------------
 
   factory TransactionEntry.fromMap(Map<String, Object?> m) {
+    final id = _asString(m['id'])!;
     return TransactionEntry(
-      id: _asString(m['id'])!, // id doit exister
+      id: id,
+      localId: _asString(m['localId']) ?? id, // ✅ fallback pour anciens rows
       remoteId: _asString(m['remoteId']),
       code: _asString(m['code']),
       description: _asString(m['description']),
@@ -98,7 +105,7 @@ class TransactionEntry {
       status: _asString(m['status']),
       entityName: _asString(m['entityName']),
       entityId: _asString(m['entityId']),
-      accountId: _asString(m['accountId']), // ✅ nullable, plus de cast error
+      accountId: _asString(m['accountId']), // nullable
       categoryId: _asString(m['categoryId']),
       companyId: _asString(m['companyId']),
       customerId: _asString(m['customerId']),
@@ -115,6 +122,7 @@ class TransactionEntry {
     String? f(DateTime? d) => d?.toIso8601String();
     return {
       'id': id,
+      'localId': localId,
       'remoteId': remoteId,
       'code': code,
       'description': description,
@@ -124,7 +132,7 @@ class TransactionEntry {
       'status': status,
       'entityName': entityName,
       'entityId': entityId,
-      'accountId': accountId, // ✅ peut rester null
+      'accountId': accountId,
       'categoryId': categoryId,
       'companyId': companyId,
       'customerId': customerId,
@@ -141,6 +149,7 @@ class TransactionEntry {
 
   TransactionEntry copyWith({
     String? id,
+    String? localId,
     String? remoteId,
     String? code,
     String? description,
@@ -150,7 +159,7 @@ class TransactionEntry {
     String? status,
     String? entityName,
     String? entityId,
-    String? accountId, // <-- nullable
+    String? accountId,
     String? categoryId,
     String? companyId,
     String? customerId,
@@ -163,6 +172,7 @@ class TransactionEntry {
   }) {
     return TransactionEntry(
       id: id ?? this.id,
+      localId: localId ?? this.localId,
       remoteId: remoteId ?? this.remoteId,
       code: code ?? this.code,
       description: description ?? this.description,
@@ -172,7 +182,7 @@ class TransactionEntry {
       status: status ?? this.status,
       entityName: entityName ?? this.entityName,
       entityId: entityId ?? this.entityId,
-      accountId: accountId ?? this.accountId, // ✅
+      accountId: accountId ?? this.accountId,
       categoryId: categoryId ?? this.categoryId,
       companyId: companyId ?? this.companyId,
       customerId: customerId ?? this.customerId,
