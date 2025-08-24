@@ -16,6 +16,8 @@ abstract class ChangeLogRepository {
 
   /// Marque l’entrée comme SYNC en supprimant toute autre ligne (entityTable, entityId, 'SYNC') qui ferait collision.
   Future<void> markSync(String id);
+  Future<void> markSent(String id);
+  Future<void> markAck(String id);
 
   /// Optionnel : statut FAILED si tu veux distinguer visuellement l’échec réseau.
   Future<void> markFailed(String id, {String? error});

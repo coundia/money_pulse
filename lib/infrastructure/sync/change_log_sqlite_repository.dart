@@ -179,4 +179,12 @@ class ChangeLogRepositorySqflite implements ChangeLogRepository {
     });
     return inserted;
   }
+
+  @override
+  Future<void> markAck(String id) =>
+      _transitionTo(id, 'ACK', setProcessed: true);
+
+  @override
+  Future<void> markSent(String id) =>
+      _transitionTo(id, 'SENT', setProcessed: true);
 }
