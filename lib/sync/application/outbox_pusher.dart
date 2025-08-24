@@ -86,7 +86,7 @@ class OutboxPusher {
     //sent
     final now = DateTime.now().toUtc();
     for (final p in validEntries) {
-      await changeLog.markSent(p.id);
+      await changeLog.markAck(p.id);
     }
 
     await syncState.upsert(

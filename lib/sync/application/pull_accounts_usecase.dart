@@ -3,7 +3,6 @@ import 'package:money_pulse/domain/sync/repositories/sync_state_repository.dart'
 import 'package:money_pulse/sync/infrastructure/sync_logger.dart';
 
 import '../infrastructure/pull_ports/account_pull_port_sqflite.dart';
-import '../infrastructure/sqflite_pull_ports.dart';
 import 'pull_port.dart';
 
 class PullAccountsUseCase implements PullPort {

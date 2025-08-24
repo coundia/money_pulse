@@ -353,6 +353,8 @@ class AccountDetailsPanel extends StatelessWidget {
                   label: 'Dernière maj',
                   value: Formatters.dateFull(account.updatedAt),
                 ),
+                _KvRow(label: 'IDL.', value: account.localId ?? "-"),
+                _KvRow(label: 'IDR.', value: account.remoteId ?? "-"),
               ],
             ),
           ),

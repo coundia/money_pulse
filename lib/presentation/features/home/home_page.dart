@@ -126,7 +126,7 @@ class _HomePageState extends ConsumerState<HomePage> {
 
   Future<void> _runPullAndPush() async {
     await _runPullAll();
-    //Sawait _runSyncAll();
+    await _runSyncAll();
   }
 
   Future<void> _runSyncAll() async {

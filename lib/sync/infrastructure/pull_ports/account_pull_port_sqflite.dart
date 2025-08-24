@@ -3,6 +3,7 @@
 // Sqflite pull port for accounts.
 // Pass 1: adopt remote ids using `localId`
 // Pass 2: upsert/merge fields and clear isDirty.
+// IMPORTANT: if a local row exists with id == localId, we UPDATE it (no insert).
 
 import 'package:sqflite/sqflite.dart';
 
@@ -38,11 +39,11 @@ class AccountPullPortSqflite {
 
   /// Bind remote `id` to the local row pointed by `localId`.
   /// - If row exists with id==localId:
-  ///   - set remoteId and localId columns
+  ///   - set remoteId/localId fields
   ///   - if remoteId != localId:
-  ///       * if a row exists with id==remoteId → merge: update that row, delete the local one
+  ///       * if a row exists with id==remoteId → merge then delete local
   ///       * else rename PK (id: localId -> remoteId)
-  /// - If only a row exists with id==remoteId → set remoteId/localId columns there.
+  /// - If only a row exists with id==remoteId → set remoteId/localId there.
   Future<int> adoptRemoteIds(List<Json> items) async {
     if (items.isEmpty) return 0;
     int changed = 0;
@@ -54,7 +55,6 @@ class AccountPullPortSqflite {
         final localId = _asStr(r['localId']);
         if (remoteId == null || localId == null) continue;
 
-        // Find local row by localId
         final localRows = await txn.query(
           'account',
           where: 'id = ?',
@@ -63,7 +63,6 @@ class AccountPullPortSqflite {
         );
 
         if (localRows.isEmpty) {
-          // Maybe row already stored under remoteId
           final remoteRows = await txn.query(
             'account',
             where: 'id = ?',
@@ -87,9 +86,7 @@ class AccountPullPortSqflite {
           continue;
         }
 
-        // Row exists at localId
         if (remoteId == localId) {
-          // No PK change; just set columns
           await txn.update(
             'account',
             {
@@ -105,7 +102,6 @@ class AccountPullPortSqflite {
           continue;
         }
 
-        // remoteId != localId → migrate/merge
         final targetRows = await txn.query(
           'account',
           where: 'id = ?',
@@ -114,7 +110,6 @@ class AccountPullPortSqflite {
         );
 
         if (targetRows.isNotEmpty) {
-          // Merge into the row already at remoteId, drop the localId row
           await txn.update(
             'account',
             {
@@ -128,7 +123,6 @@ class AccountPullPortSqflite {
           );
           await txn.delete('account', where: 'id = ?', whereArgs: [localId]);
         } else {
-          // Rename PK localId -> remoteId
           await txn.update(
             'account',
             {'id': remoteId},
@@ -158,8 +152,10 @@ class AccountPullPortSqflite {
 
   /// Upsert remote fields (balances, flags, etc.). De-duplicates by:
   /// - remoteId (preferred),
-  /// - or id==remoteId (when column remoteId isn't set yet),
-  /// - or active `code` as a fallback.
+  /// - id==remoteId (when remoteId not set),
+  /// - **id==localId (new: update local row, never insert)**,
+  /// - active `code` as an additional fallback,
+  /// - insert only if none of the above matched.
   Future<({int upserts, DateTime? maxSyncAt})> upsertRemote(
     List<Json> items,
   ) async {
@@ -209,7 +205,7 @@ class AccountPullPortSqflite {
 
         bool changed = false;
 
-        // 1) Update by remoteId
+        // 1) Update by remoteId (preferred)
         if (remoteId != null) {
           final u1 = await txn.update(
             'account',
@@ -221,7 +217,7 @@ class AccountPullPortSqflite {
             upserts++;
             changed = true;
           } else {
-            // Or by id==remoteId (if remoteId column not set yet)
+            // Or by id==remoteId (while remoteId column not set yet)
             final u2 = await txn.update(
               'account',
               data,
@@ -235,7 +231,21 @@ class AccountPullPortSqflite {
           }
         }
 
-        // 2) Fallback: update by active code
+        // 2) NEW: Update by localId → means it exists locally; do NOT insert.
+        if (!changed && localId != null) {
+          final u = await txn.update(
+            'account',
+            data,
+            where: 'id = ?',
+            whereArgs: [localId],
+          );
+          if (u > 0) {
+            upserts++;
+            changed = true;
+          }
+        }
+
+        // 3) Fallback: update by active code
         if (!changed && code != null) {
           final u = await txn.update(
             'account',
@@ -249,7 +259,7 @@ class AccountPullPortSqflite {
           }
         }
 
-        // 3) Insert if still not changed
+        // 4) Insert only if nothing matched above
         if (!changed) {
           try {
             await txn.insert('account', {
