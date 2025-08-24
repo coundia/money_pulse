@@ -87,6 +87,7 @@ CREATE TABLE  IF NOT EXISTS change_log (
   id TEXT PRIMARY KEY,
   entityTable TEXT NOT NULL,
   entityId TEXT NOT NULL,
+  remoteId TEXT,
   operation TEXT,
   payload TEXT,
   status TEXT,
@@ -104,6 +105,7 @@ CREATE INDEX idx_changelog_entity ON change_log(entityTable, entityId);
 
 CREATE TABLE IF NOT EXISTS  sync_state (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
+  remoteId TEXT,
   entityTable TEXT NOT NULL UNIQUE,
   lastSyncAt TEXT,
   lastCursor TEXT,
@@ -162,7 +164,8 @@ CREATE INDEX IF NOT EXISTS idx_product_deleted ON product(deletedAt);
 CREATE TABLE IF NOT EXISTS transaction_item (
   id TEXT PRIMARY KEY,
   transactionId TEXT NOT NULL,   
-  productId TEXT,                
+  productId TEXT,  
+  remoteId TEXT,              
   label TEXT,                     
   quantity INTEGER NOT NULL DEFAULT 1 CHECK(quantity >= 0),    
   unitId TEXT,                   
@@ -272,12 +275,16 @@ CREATE INDEX IF NOT EXISTS idx_customer_dirty ON customer(isDirty);
 CREATE TABLE stock_level
 (
     createdAt        TEXT DEFAULT (datetime('now')) ,
+    remoteId TEXT,
     updatedAt        TEXT DEFAULT (datetime('now')) ,
     stockOnHand      INTEGER                        ,
     stockAllocated   INTEGER                        ,
     id               INTEGER                         PRIMARY KEY AUTOINCREMENT,
     productVariantId TEXT                        
         REFERENCES product(id) ON DELETE CASCADE,
+        syncAt TEXT,
+  version INTEGER DEFAULT 0,
+  isDirty INTEGER DEFAULT 1,
     companyId        TEXT                           
         REFERENCES company(id) ON DELETE CASCADE
 );
@@ -295,11 +302,15 @@ CREATE INDEX IF NOT EXISTS IDX_stocklevel_product
 CREATE TABLE IF NOT EXISTS stock_movement (
   id                INTEGER PRIMARY KEY AUTOINCREMENT,
   type_stock_movement TEXT ,
+  remoteId TEXT,
   quantity          INTEGER  ,
   companyId         TEXT  ,
   productVariantId  TEXT ,
   orderLineId       TEXT,
   discriminator     TEXT,
+  syncAt TEXT,
+  version INTEGER DEFAULT 0,
+  isDirty INTEGER DEFAULT 1,
   createdAt         TEXT DEFAULT (datetime('now')),
   updatedAt         TEXT DEFAULT (datetime('now'))
 
