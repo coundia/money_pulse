@@ -1,7 +1,4 @@
-/* Riverpod wiring for sync use cases with outbox integration. Fixes:
- * - Pass sqflite.Database to *SyncPortSqflite (ref.read(dbProvider).db).
- * - SyncAllUseCase receives concrete PushPort instances (no ProviderListenable).
- */
+/* Riverpod providers for push use cases including Company, plus SyncAll composition. */
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:sqflite/sqflite.dart' show Database;
 
@@ -14,11 +11,13 @@ import 'package:money_pulse/sync/infrastructure/sync_logger.dart';
 
 import 'package:money_pulse/sync/application/push_categories_usecase.dart';
 import 'package:money_pulse/sync/application/push_accounts_usecase.dart';
+import 'package:money_pulse/sync/application/push_companies_usecase.dart';
+import 'package:money_pulse/sync/application/push_customers_usecase.dart';
+import 'package:money_pulse/sync/application/push_transactions_usecase.dart';
 import 'package:money_pulse/sync/application/sync_all_usecase.dart';
 
 import '../infrastructure/repositories/sync_state_repository_sqflite.dart';
 import '../infrastructure/sync/change_log_sqlite_repository.dart';
-import 'application/push_transactions_usecase.dart';
 import 'infrastructure/sync_policy_provider.dart';
 
 final syncBaseUriProvider = Provider<String>(
@@ -65,6 +64,26 @@ final accountPushUseCaseProvider = Provider<PushAccountsUseCase>((ref) {
   );
 });
 
+final companyPushUseCaseProvider = Provider<PushCompaniesUseCase>((ref) {
+  final api = ref.read(_apiProvider);
+  final dbRaw = ref.read(dbProvider).db;
+  final port = CompanySyncPortSqflite(dbRaw);
+  final changeLog = ref.read(_changeLogRepoProvider);
+  final syncState = ref.read(_syncStateRepoProvider);
+  final logger = ref.read(syncLoggerProvider);
+  return PushCompaniesUseCase(port, api, changeLog, syncState, logger);
+});
+
+final customerPushUseCaseProvider = Provider<PushCustomersUseCase>((ref) {
+  final api = ref.read(_apiProvider);
+  final dbRaw = ref.read(dbProvider).db;
+  final port = CustomerSyncPortSqflite(dbRaw);
+  final changeLog = ref.read(_changeLogRepoProvider);
+  final syncState = ref.read(_syncStateRepoProvider);
+  final logger = ref.read(syncLoggerProvider);
+  return PushCustomersUseCase(port, api, changeLog, syncState, logger);
+});
+
 final transactionPushUseCaseProvider = Provider<PushTransactionsUseCase>((ref) {
   final api = ref.read(_apiProvider);
   final Database dbRaw = ref.read(dbProvider).db;
@@ -74,21 +93,16 @@ final transactionPushUseCaseProvider = Provider<PushTransactionsUseCase>((ref) {
   final logger = ref.read(syncLoggerProvider);
   return PushTransactionsUseCase(port, api, changeLog, syncState, logger);
 });
+
 final syncAllUseCaseProvider = Provider<SyncAllUseCase>((ref) {
   final logger = ref.read(syncLoggerProvider);
   final policy = ref.read(syncPolicyProvider);
   return SyncAllUseCase(
     accounts: ref.read(accountPushUseCaseProvider),
     categories: ref.read(categoryPushUseCaseProvider),
-    transactions: ref.read(transactionPushUseCaseProvider),
-    /*  units: ref.read(unitPushUseCaseProvider),
-    products: ref.read(productPushUseCaseProvider),
-    items: ref.read(transactionItemPushUseCaseProvider),
     companies: ref.read(companyPushUseCaseProvider),
     customers: ref.read(customerPushUseCaseProvider),
-    debts: ref.read(debtPushUseCaseProvider),
-    stockLevels: ref.read(stockLevelPushUseCaseProvider),
-    stockMovements: ref.read(stockMovementPushUseCaseProvider),*/
+    transactions: ref.read(transactionPushUseCaseProvider),
     policy: policy,
     logger: logger,
   );

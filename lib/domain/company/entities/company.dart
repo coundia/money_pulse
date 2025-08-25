@@ -3,6 +3,7 @@ import 'package:equatable/equatable.dart';
 class Company extends Equatable {
   final String id;
   final String? remoteId;
+  final String? localId;
   final String code;
   final String name;
   final String? description;
@@ -28,6 +29,7 @@ class Company extends Equatable {
   const Company({
     required this.id,
     this.remoteId,
+    this.localId,
     required this.code,
     required this.name,
     this.description,

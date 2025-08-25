@@ -1,4 +1,4 @@
-/* Riverpod wiring for pull use cases and pull-all orchestration. */
+/* Riverpod providers for pull use cases including Company. */
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:sqflite/sqflite.dart' show Database;
 
@@ -10,14 +10,17 @@ import 'package:money_pulse/sync/infrastructure/sync_logger.dart';
 import 'package:money_pulse/sync/application/pull_all_usecase.dart';
 import 'package:money_pulse/sync/application/pull_accounts_usecase.dart';
 import 'package:money_pulse/sync/application/pull_categories_usecase.dart';
+import 'package:money_pulse/sync/application/pull_companies_usecase.dart';
+import 'package:money_pulse/sync/application/pull_customers_usecase.dart';
+import 'package:money_pulse/sync/application/pull_transactions_usecase.dart';
 import 'package:money_pulse/sync/infrastructure/sync_policy_provider.dart';
 
 import '../../infrastructure/repositories/sync_state_repository_sqflite.dart';
-import '../application/pull_transactions_usecase.dart';
 import 'pull_ports/account_pull_port_sqflite.dart';
 import 'pull_ports/category_pull_port_sqflite.dart';
+import 'pull_ports/company_pull_port_sqflite.dart';
+import 'pull_ports/customer_pull_port_sqflite.dart';
 import 'pull_ports/transaction_pull_port_sqflite.dart';
-import 'sqflite_sync_ports.dart';
 
 final pullBaseUriProvider = Provider<String>(
   (ref) => ref.watch(baseUriProvider),
@@ -50,6 +53,24 @@ final pullCategoriesUseCaseProvider = Provider<PullCategoriesUseCase>((ref) {
   return PullCategoriesUseCase(port, api, syncState, logger);
 });
 
+final pullCompaniesUseCaseProvider = Provider<PullCompaniesUseCase>((ref) {
+  final api = ref.read(_apiProvider);
+  final logger = ref.read(syncLoggerProvider);
+  final db = ref.read(dbProvider).db as Database;
+  final port = CompanyPullPortSqflite(db);
+  final syncState = ref.read(_syncStateRepoProvider);
+  return PullCompaniesUseCase(port, api, syncState, logger);
+});
+
+final pullCustomersUseCaseProvider = Provider<PullCustomersUseCase>((ref) {
+  final api = ref.read(_apiProvider);
+  final logger = ref.read(syncLoggerProvider);
+  final db = ref.read(dbProvider).db as Database;
+  final port = CustomerPullPortSqflite(db);
+  final syncState = ref.read(_syncStateRepoProvider);
+  return PullCustomersUseCase(port, api, syncState, logger);
+});
+
 final pullTransactionsUseCaseProvider = Provider<PullTransactionsUseCase>((
   ref,
 ) {
@@ -67,13 +88,8 @@ final pullAllUseCaseProvider = Provider<PullAllUseCase>((ref) {
   return PullAllUseCase(
     accounts: ref.read(pullAccountsUseCaseProvider),
     categories: ref.read(pullCategoriesUseCaseProvider),
-    units: null,
-    companies: null,
-    products: null,
-    customers: null,
-    debts: null,
-    stockLevels: null,
-    stockMovements: null,
+    companies: ref.read(pullCompaniesUseCaseProvider),
+    customers: ref.read(pullCustomersUseCaseProvider),
     transactions: ref.read(pullTransactionsUseCaseProvider),
     items: null,
     policy: policy,

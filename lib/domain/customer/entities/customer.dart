@@ -21,6 +21,7 @@ class Customer extends Equatable {
   final String? region;
   final String? country;
   final String? postalCode;
+  final String? localId;
   final DateTime createdAt;
   final DateTime updatedAt;
   final DateTime? deletedAt;
@@ -48,6 +49,7 @@ class Customer extends Equatable {
     this.region,
     this.country,
     this.postalCode,
+    this.localId,
     required this.createdAt,
     required this.updatedAt,
     this.deletedAt,

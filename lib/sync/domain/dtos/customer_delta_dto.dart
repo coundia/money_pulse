@@ -1,8 +1,12 @@
-/* DTO for Customer delta push payload. */
+// DTO for customer deltas sent to the API; ensures ISO-8601 UTC for dates.
+import 'package:money_pulse/sync/domain/sync_delta_type.dart';
+
+import '../../../domain/customer/entities/customer.dart';
+
 class CustomerDeltaDto {
   final String id;
-  final String type;
   final String? remoteId;
+  final String? localId;
   final String? code;
   final String? firstName;
   final String? lastName;
@@ -20,16 +24,13 @@ class CustomerDeltaDto {
   final String? region;
   final String? country;
   final String? postalCode;
-  final String createdAt;
-  final String updatedAt;
-  final String? deletedAt;
-  final int version;
-  final String? syncAt;
+  final String type;
+  final DateTime updatedAt;
 
-  const CustomerDeltaDto({
+  CustomerDeltaDto({
     required this.id,
-    required this.type,
     this.remoteId,
+    this.localId,
     this.code,
     this.firstName,
     this.lastName,
@@ -47,17 +48,45 @@ class CustomerDeltaDto {
     this.region,
     this.country,
     this.postalCode,
-    required this.createdAt,
+    required this.type,
     required this.updatedAt,
-    this.deletedAt,
-    required this.version,
-    this.syncAt,
   });
+
+  factory CustomerDeltaDto.fromEntity(
+    Customer c,
+    SyncDeltaType t,
+    DateTime now,
+  ) {
+    return CustomerDeltaDto(
+      id: c.id,
+      remoteId: c.remoteId,
+      localId: c.localId,
+      code: c.code,
+      firstName: c.firstName,
+      lastName: c.lastName,
+      fullName: c.fullName,
+      balance: c.balance,
+      balanceDebt: c.balanceDebt,
+      phone: c.phone,
+      email: c.email,
+      notes: c.notes,
+      status: c.status,
+      companyId: c.companyId,
+      addressLine1: c.addressLine1,
+      addressLine2: c.addressLine2,
+      city: c.city,
+      region: c.region,
+      country: c.country,
+      postalCode: c.postalCode,
+      type: t.name,
+      updatedAt: now,
+    );
+  }
 
   Map<String, Object?> toJson() => {
     'id': id,
-    'type': type,
     'remoteId': remoteId,
+    'localId': localId,
     'code': code,
     'firstName': firstName,
     'lastName': lastName,
@@ -75,10 +104,7 @@ class CustomerDeltaDto {
     'region': region,
     'country': country,
     'postalCode': postalCode,
-    'createdAt': createdAt,
-    'updatedAt': updatedAt,
-    'deletedAt': deletedAt,
-    'version': version,
-    'syncAt': syncAt,
+    'operation': type,
+    'updatedAt': updatedAt.toUtc().toIso8601String(),
   };
 }

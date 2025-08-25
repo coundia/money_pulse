@@ -1,10 +1,14 @@
-/* DTO for Company delta push payload. */
+/* DTO for company deltas: builds JSON payload with UTC ISO-8601 dates for push. */
+import 'package:money_pulse/sync/domain/sync_delta_type.dart';
+
+import '../../../domain/company/entities/company.dart';
+
 class CompanyDeltaDto {
   final String id;
-  final String type;
-  final String code;
-  final String? name;
   final String? remoteId;
+  final String? localId;
+  final String? code;
+  final String? name;
   final String? description;
   final String? phone;
   final String? email;
@@ -18,15 +22,15 @@ class CompanyDeltaDto {
   final String? country;
   final String? postalCode;
   final bool isDefault;
-  final int version;
-  final String? syncAt;
+  final String type;
+  final DateTime updatedAt;
 
-  const CompanyDeltaDto({
+  CompanyDeltaDto({
     required this.id,
-    required this.type,
-    required this.code,
-    this.name,
     this.remoteId,
+    this.localId,
+    this.code,
+    this.name,
     this.description,
     this.phone,
     this.email,
@@ -40,16 +44,41 @@ class CompanyDeltaDto {
     this.country,
     this.postalCode,
     required this.isDefault,
-    required this.version,
-    this.syncAt,
+    required this.type,
+    required this.updatedAt,
   });
+
+  factory CompanyDeltaDto.fromEntity(Company c, SyncDeltaType t, DateTime now) {
+    return CompanyDeltaDto(
+      id: c.id,
+      remoteId: c.remoteId,
+      localId: c.localId,
+      code: c.code,
+      name: c.name,
+      description: c.description,
+      phone: c.phone,
+      email: c.email,
+      website: c.website,
+      taxId: c.taxId,
+      currency: c.currency,
+      addressLine1: c.addressLine1,
+      addressLine2: c.addressLine2,
+      city: c.city,
+      region: c.region,
+      country: c.country,
+      postalCode: c.postalCode,
+      isDefault: c.isDefault,
+      type: t.name,
+      updatedAt: now,
+    );
+  }
 
   Map<String, Object?> toJson() => {
     'id': id,
-    'type': type,
+    'remoteId': remoteId,
+    'localId': localId,
     'code': code,
     'name': name,
-    'remoteId': remoteId,
     'description': description,
     'phone': phone,
     'email': email,
@@ -63,7 +92,7 @@ class CompanyDeltaDto {
     'country': country,
     'postalCode': postalCode,
     'isDefault': isDefault,
-    'version': version,
-    'syncAt': syncAt,
+    'operation': type,
+    'updatedAt': updatedAt.toUtc().toIso8601String(),
   };
 }
