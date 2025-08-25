@@ -1,3 +1,4 @@
+import 'package:money_pulse/infrastructure/db/app_database.dart';
 import 'package:money_pulse/sync/application/_ports.dart';
 import 'package:money_pulse/sync/application/outbox_pusher.dart';
 import 'package:money_pulse/sync/application/push_port.dart';
@@ -8,7 +9,9 @@ import 'package:money_pulse/domain/sync/repositories/change_log_repository.dart'
 import 'package:money_pulse/domain/sync/repositories/sync_state_repository.dart';
 import 'package:money_pulse/sync/infrastructure/sync_logger.dart';
 import 'package:money_pulse/domain/sync/entities/change_log_entry.dart';
+import 'package:sqflite/sqlite_api.dart';
 
+import '../infrastructure/remote_id_lookup.dart';
 import '_pull_ports.dart';
 
 class PushTransactionsUseCase implements PushPort {
@@ -17,6 +20,7 @@ class PushTransactionsUseCase implements PushPort {
   final ChangeLogRepository changeLog;
   final SyncStateRepository syncState;
   final SyncLogger logger;
+  final Database db;
 
   PushTransactionsUseCase(
     this.port,
@@ -24,6 +28,7 @@ class PushTransactionsUseCase implements PushPort {
     this.changeLog,
     this.syncState,
     this.logger,
+    this.db,
   );
 
   @override
@@ -44,10 +49,20 @@ class PushTransactionsUseCase implements PushPort {
         deleted: tx.deletedAt != null,
       );
       final now = DateTime.now().toUtc();
-      final dto = TransactionDeltaDto.fromEntity(tx, t, now).toJson();
-      dto['localId'] = tx.id;
-      dto['remoteId'] = tx.remoteId;
-      return dto;
+      final dto = TransactionDeltaDto.fromEntity(tx, t, now);
+      final dtoJson = dto.toJson();
+
+      dtoJson['localId'] = tx.id;
+      dtoJson['remoteId'] = tx.remoteId;
+
+      print(dto.account);
+
+      dtoJson['account'] = await remoteIdOfDb(db, 'account', dto.account);
+      dtoJson['category'] = await remoteIdOfDb(db, 'category', dto.category);
+      dtoJson['customer'] = await remoteIdOfDb(db, 'customer', dto.customer);
+      dtoJson['company'] = await remoteIdOfDb(db, 'company', dto.company);
+
+      return dtoJson;
     }
 
     return outbox.push(

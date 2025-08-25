@@ -91,7 +91,14 @@ final transactionPushUseCaseProvider = Provider<PushTransactionsUseCase>((ref) {
   final changeLog = ref.read(_changeLogRepoProvider);
   final syncState = ref.read(_syncStateRepoProvider);
   final logger = ref.read(syncLoggerProvider);
-  return PushTransactionsUseCase(port, api, changeLog, syncState, logger);
+  return PushTransactionsUseCase(
+    port,
+    api,
+    changeLog,
+    syncState,
+    logger,
+    dbRaw,
+  );
 });
 
 final syncAllUseCaseProvider = Provider<SyncAllUseCase>((ref) {
