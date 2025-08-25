@@ -1,4 +1,4 @@
-/* Home page scaffold using SyncAll to push all dirty tables after access verification. */
+/* Home page scaffold with menu-based refresh, full remount, and hot restart entry. */
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -6,6 +6,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:money_pulse/presentation/app/providers.dart';
 import 'package:money_pulse/presentation/app/account_selection.dart';
 import 'package:money_pulse/presentation/widgets/right_drawer.dart';
+import 'package:money_pulse/presentation/app/restart_app.dart';
 
 import 'package:money_pulse/presentation/features/settings/settings_page.dart';
 import 'package:money_pulse/presentation/features/transactions/transaction_form_sheet.dart';
@@ -43,8 +44,6 @@ import 'prefs/home_ui_prefs_panel.dart';
 import 'widgets/home_app_bar_title.dart';
 
 import 'package:money_pulse/onboarding/presentation/providers/access_session_provider.dart';
-
-// ⬇️ Import sync orchestrator
 import 'package:money_pulse/sync/sync_service_provider.dart';
 
 class HomePage extends ConsumerStatefulWidget {
@@ -56,6 +55,8 @@ class HomePage extends ConsumerStatefulWidget {
 
 class _HomePageState extends ConsumerState<HomePage> {
   int pageIdx = 0;
+  bool _isBusy = false;
+  int _remountSeed = 0;
 
   @override
   void initState() {
@@ -68,6 +69,22 @@ class _HomePageState extends ConsumerState<HomePage> {
       ref.invalidate(transactionListItemsProvider);
       await ref.read(accessSessionProvider.notifier).restore();
     });
+  }
+
+  Future<void> _softReload() async {
+    await ref.read(balanceProvider.notifier).load();
+    await ref.read(categoriesProvider.notifier).load();
+    await ref.read(transactionsProvider.notifier).load();
+    ref.invalidate(selectedAccountProvider);
+    ref.invalidate(transactionListItemsProvider);
+  }
+
+  void _hardRemount() {
+    setState(() => _remountSeed++);
+  }
+
+  Future<void> _refreshAll({bool remount = true}) async {
+    RestartApp.restart(context);
   }
 
   Future<void> _showAccountPicker() async {
@@ -84,11 +101,8 @@ class _HomePageState extends ConsumerState<HomePage> {
       ref.read(selectedAccountIdProvider.notifier).state = picked.id;
       final prefs = await SharedPreferences.getInstance();
       await prefs.setString(kLastAccountIdKey, picked.id);
-      await ref.read(balanceProvider.notifier).load();
-      await ref.read(transactionsProvider.notifier).load();
-      ref.invalidate(selectedAccountProvider);
-      ref.invalidate(transactionListItemsProvider);
-      if (mounted) setState(() {});
+      await _softReload();
+      _hardRemount();
     }
   }
 
@@ -101,7 +115,7 @@ class _HomePageState extends ConsumerState<HomePage> {
     if (sel != null) {
       ref.read(transactionListStateProvider.notifier).setPeriod(sel);
       ref.invalidate(transactionListItemsProvider);
-      if (mounted) setState(() {});
+      _hardRemount();
     }
   }
 
@@ -131,29 +145,23 @@ class _HomePageState extends ConsumerState<HomePage> {
     await _runPullAndUpdateRemoteIdOnly();
     await _runSyncAll();
     await _runPullAll();
+    await _refreshAll(remount: true);
   }
 
   Future<void> _runPullAndUpdateRemoteIdOnly() async {
     final logger = ref.read(syncLoggerProvider);
     try {
       logger.info('UI: adopt remoteId for accounts (no balance update)');
-
-      // Build API + port from existing providers
       final baseUri = ref.read(syncBaseUriProvider);
       final api = ref.read(syncApiClientProvider(baseUri));
       final Database dbRaw = ref.read(dbProvider).db;
       final port = AccountPullPortSqflite(dbRaw);
-
-      // We only need items that can carry (id, localId); epoch is fine
       final since = DateTime.fromMillisecondsSinceEpoch(0, isUtc: true);
       final items = await api.getAccountsSince(since);
-
       if (items.isEmpty) {
         logger.info('Adopt remoteId: no server items');
         return;
       }
-
-      // Pass 1 only: adopt remote ids into local rows; do NOT touch balances
       final adopted = await port.adoptRemoteIds(items);
       logger.info('Adopt remoteId: adopted=$adopted row(s)');
     } catch (e, st) {
@@ -180,12 +188,6 @@ class _HomePageState extends ConsumerState<HomePage> {
         'uts=${s.units} prods=${s.products} items=${s.items} comps=${s.companies} '
         'custs=${s.customers} debts=${s.debts} sl=${s.stockLevels} sm=${s.stockMovements}',
       );
-
-      await ref.read(balanceProvider.notifier).load();
-      await ref.read(transactionsProvider.notifier).load();
-      ref.invalidate(selectedAccountProvider);
-      ref.invalidate(transactionListItemsProvider);
-      setState(() {});
     } catch (e, st) {
       logger.error('UI: syncAll failed', e, st);
       if (!mounted) return;
@@ -207,10 +209,6 @@ class _HomePageState extends ConsumerState<HomePage> {
           ),
         ),
       );
-      await ref.read(balanceProvider.notifier).load();
-      await ref.read(transactionsProvider.notifier).load();
-      ref.invalidate(selectedAccountProvider);
-      if (mounted) setState(() {});
     } catch (e, st) {
       ref.read(syncLoggerProvider).error('UI: pullAll failed', e, st);
       if (!mounted) return;
@@ -237,254 +235,274 @@ class _HomePageState extends ConsumerState<HomePage> {
       orElse: () => false,
     );
 
-    return Scaffold(
-      appBar: AppBar(
-        centerTitle: true,
-        title: HomeAppBarTitle(
-          accountAsync: accAsync,
-          onTap: _showAccountPicker,
-          hideAmounts: hide,
-          onToggleHide: () =>
-              ref.read(homePrivacyPrefsProvider.notifier).toggleHideBalance(),
-        ),
-        actions: [
-          if (pageIdx == 0)
-            PopupMenuButton<String>(
-              tooltip: 'Plus',
-              onSelected: (action) async {
-                switch (action) {
-                  case 'login':
-                    {
-                      final ok = await requireAccess(context, ref);
-                      if (!mounted || !ok) break;
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(content: Text('Connecté avec succès.')),
-                      );
+    return KeyedSubtree(
+      key: ValueKey(_remountSeed),
+      child: Scaffold(
+        appBar: AppBar(
+          centerTitle: true,
+          title: HomeAppBarTitle(
+            accountAsync: accAsync,
+            onTap: _showAccountPicker,
+            hideAmounts: hide,
+            onToggleHide: () =>
+                ref.read(homePrivacyPrefsProvider.notifier).toggleHideBalance(),
+          ),
+          actions: [
+            if (pageIdx == 0)
+              PopupMenuButton<String>(
+                tooltip: 'Plus',
+                onSelected: (action) async {
+                  switch (action) {
+                    case 'refresh':
+                      await _refreshAll(remount: true);
                       break;
-                    }
-                  case 'logout':
-                    {
-                      await ref.read(accessSessionProvider.notifier).clear();
-                      if (!mounted) break;
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(content: Text('Déconnecté.')),
-                      );
-                      break;
-                    }
-                  case 'search':
-                    {
-                      final items = await ref.read(
-                        transactionListItemsProvider.future,
-                      );
-                      final result = await showSearch<TransactionEntry?>(
-                        context: context,
-                        delegate: TxnSearchDelegate(items),
-                      );
-                      if (result != null) {
-                        final ok = await showModalBottomSheet<bool>(
-                          context: context,
-                          isScrollControlled: true,
-                          builder: (_) => TransactionFormSheet(entry: result),
+
+                    case 'login':
+                      {
+                        final ok = await requireAccess(context, ref);
+                        if (!mounted || !ok) break;
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(
+                            content: Text('Connecté avec succès.'),
+                          ),
                         );
-                        if (ok == true) {
-                          await ref.read(balanceProvider.notifier).load();
-                          await ref.read(transactionsProvider.notifier).load();
-                          ref.invalidate(selectedAccountProvider);
-                          ref.invalidate(transactionListItemsProvider);
-                        }
+                        break;
                       }
+                    case 'logout':
+                      {
+                        await ref.read(accessSessionProvider.notifier).clear();
+                        if (!mounted) break;
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(content: Text('Déconnecté.')),
+                        );
+                        break;
+                      }
+                    case 'search':
+                      {
+                        final items = await ref.read(
+                          transactionListItemsProvider.future,
+                        );
+                        final result = await showSearch<TransactionEntry?>(
+                          context: context,
+                          delegate: TxnSearchDelegate(items),
+                        );
+                        if (result != null) {
+                          final ok = await showModalBottomSheet<bool>(
+                            context: context,
+                            isScrollControlled: true,
+                            builder: (_) => TransactionFormSheet(entry: result),
+                          );
+                          if (ok == true) {
+                            await _refreshAll(remount: true);
+                          }
+                        }
+                        break;
+                      }
+                    case 'period':
+                      await _showPeriodSheet();
                       break;
-                    }
-                  case 'period':
-                    await _showPeriodSheet();
-                    break;
-                  case 'sync':
-                    await _runPullAndPush();
-                    break;
-                  case 'share':
-                    {
-                      final ok = await requireAccess(context, ref);
-                      if (!mounted || !ok) break;
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(
-                          content: Text('Accès vérifié. partage todo.'),
+                    case 'sync':
+                      await _runPullAndPush();
+                      break;
+                    case 'share':
+                      {
+                        final ok = await requireAccess(context, ref);
+                        if (!mounted || !ok) break;
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(
+                            content: Text('Accès vérifié. partage todo.'),
+                          ),
+                        );
+                        break;
+                      }
+                    case 'personnalisation':
+                      if (!mounted) break;
+                      await openSummaryPrefs();
+                      break;
+                    case 'ui':
+                      if (!mounted) break;
+                      await openUiPrefs();
+                      break;
+                    case 'manageCategories':
+                      if (!mounted) break;
+                      await Navigator.of(context).push(
+                        MaterialPageRoute(
+                          builder: (_) => const CategoryListPage(),
                         ),
                       );
                       break;
-                    }
-                  case 'personnalisation':
-                    if (!mounted) break;
-                    await openSummaryPrefs();
-                    break;
-                  case 'ui':
-                    if (!mounted) break;
-                    await openUiPrefs();
-                    break;
-                  case 'manageCategories':
-                    if (!mounted) break;
-                    await Navigator.of(context).push(
-                      MaterialPageRoute(
-                        builder: (_) => const CategoryListPage(),
+                    case 'manageAccounts':
+                      if (!mounted) break;
+                      await Navigator.of(context).push(
+                        MaterialPageRoute(
+                          builder: (_) => const AccountListPage(),
+                        ),
+                      );
+                      break;
+                    case 'clients':
+                      if (!mounted) break;
+                      await Navigator.of(context).push(
+                        MaterialPageRoute(
+                          builder: (_) => const CustomerListPage(),
+                        ),
+                      );
+                      break;
+                    case 'produits':
+                      if (!mounted) break;
+                      await Navigator.of(context).push(
+                        MaterialPageRoute(
+                          builder: (_) => const ProductListPage(),
+                        ),
+                      );
+                      break;
+                    case 'settings':
+                      if (!mounted) break;
+                      await Navigator.of(context).push(
+                        MaterialPageRoute(builder: (_) => const SettingsPage()),
+                      );
+                      break;
+                  }
+                },
+                itemBuilder: (context) {
+                  final items = <PopupMenuEntry<String>>[];
+                  items.addAll(const [
+                    PopupMenuItem(
+                      value: 'refresh',
+                      child: ListTile(
+                        leading: Icon(Icons.refresh),
+                        title: Text('Rafraîchir'),
                       ),
-                    );
-                    break;
-                  case 'manageAccounts':
-                    if (!mounted) break;
-                    await Navigator.of(context).push(
-                      MaterialPageRoute(
-                        builder: (_) => const AccountListPage(),
-                      ),
-                    );
-                    break;
-                  case 'clients':
-                    if (!mounted) break;
-                    await Navigator.of(context).push(
-                      MaterialPageRoute(
-                        builder: (_) => const CustomerListPage(),
-                      ),
-                    );
-                    break;
-                  case 'produits':
-                    if (!mounted) break;
-                    await Navigator.of(context).push(
-                      MaterialPageRoute(
-                        builder: (_) => const ProductListPage(),
-                      ),
-                    );
-                    break;
-                  case 'settings':
-                    if (!mounted) break;
-                    await Navigator.of(context).push(
-                      MaterialPageRoute(builder: (_) => const SettingsPage()),
-                    );
-                    break;
-                }
-              },
-              itemBuilder: (context) {
-                final items = <PopupMenuEntry<String>>[];
+                    ),
 
-                items.addAll(const [
-                  PopupMenuItem(
-                    value: 'search',
-                    child: ListTile(
-                      leading: Icon(Icons.search),
-                      title: Text('Rechercher'),
-                    ),
-                  ),
-                  PopupMenuDivider(),
-                  PopupMenuItem(
-                    value: 'period',
-                    child: ListTile(
-                      leading: Icon(Icons.filter_alt),
-                      title: Text('Sélectionner la période'),
-                    ),
-                  ),
-                  PopupMenuItem(
-                    value: 'sync',
-                    child: ListTile(
-                      leading: Icon(Icons.sync),
-                      title: Text('Synchroniser '),
-                    ),
-                  ),
-                  PopupMenuItem(
-                    value: 'share',
-                    child: ListTile(
-                      leading: Icon(Icons.ios_share),
-                      title: Text('Partager le compte'),
-                    ),
-                  ),
-                  PopupMenuDivider(),
-                  PopupMenuItem(
-                    value: 'produits',
-                    child: ListTile(
-                      leading: Icon(Icons.shop),
-                      title: Text('Produits'),
-                    ),
-                  ),
-                  PopupMenuItem(
-                    value: 'manageCategories',
-                    child: ListTile(
-                      leading: Icon(Icons.category_outlined),
-                      title: Text('Catégories'),
-                    ),
-                  ),
-                  PopupMenuItem(
-                    value: 'manageAccounts',
-                    child: ListTile(
-                      leading: Icon(Icons.wallet_giftcard),
-                      title: Text('Comptes'),
-                    ),
-                  ),
-                  PopupMenuItem(
-                    value: 'clients',
-                    child: ListTile(
-                      leading: Icon(Icons.person),
-                      title: Text('Clients'),
-                    ),
-                  ),
-                  PopupMenuDivider(),
-                  PopupMenuItem(
-                    value: 'personnalisation',
-                    child: ListTile(
-                      leading: Icon(Icons.dashboard_customize),
-                      title: Text('Personnalisation'),
-                    ),
-                  ),
-                  PopupMenuItem(
-                    value: 'settings',
-                    child: ListTile(
-                      leading: Icon(Icons.settings),
-                      title: Text('Paramètres'),
-                    ),
-                  ),
-                ]);
-                items.add(const PopupMenuDivider());
-                items.add(
-                  PopupMenuItem(
-                    value: accessGrant == null ? 'login' : 'logout',
-                    child: ListTile(
-                      leading: Icon(
-                        accessGrant == null ? Icons.login : Icons.logout,
-                      ),
-                      title: Text(
-                        accessGrant == null ? 'Se connecter' : 'Se déconnecter',
+                    PopupMenuDivider(),
+                    PopupMenuItem(
+                      value: 'search',
+                      child: ListTile(
+                        leading: Icon(Icons.search),
+                        title: Text('Rechercher'),
                       ),
                     ),
+                    PopupMenuDivider(),
+                    PopupMenuItem(
+                      value: 'period',
+                      child: ListTile(
+                        leading: Icon(Icons.filter_alt),
+                        title: Text('Sélectionner la période'),
+                      ),
+                    ),
+                    PopupMenuItem(
+                      value: 'sync',
+                      child: ListTile(
+                        leading: Icon(Icons.sync),
+                        title: Text('Synchroniser'),
+                      ),
+                    ),
+                    PopupMenuItem(
+                      value: 'share',
+                      child: ListTile(
+                        leading: Icon(Icons.ios_share),
+                        title: Text('Partager le compte'),
+                      ),
+                    ),
+                    PopupMenuDivider(),
+                    PopupMenuItem(
+                      value: 'produits',
+                      child: ListTile(
+                        leading: Icon(Icons.shop),
+                        title: Text('Produits'),
+                      ),
+                    ),
+                    PopupMenuItem(
+                      value: 'manageCategories',
+                      child: ListTile(
+                        leading: Icon(Icons.category_outlined),
+                        title: Text('Catégories'),
+                      ),
+                    ),
+                    PopupMenuItem(
+                      value: 'manageAccounts',
+                      child: ListTile(
+                        leading: Icon(Icons.wallet_giftcard),
+                        title: Text('Comptes'),
+                      ),
+                    ),
+                    PopupMenuItem(
+                      value: 'clients',
+                      child: ListTile(
+                        leading: Icon(Icons.person),
+                        title: Text('Clients'),
+                      ),
+                    ),
+                    PopupMenuDivider(),
+                    PopupMenuItem(
+                      value: 'personnalisation',
+                      child: ListTile(
+                        leading: Icon(Icons.dashboard_customize),
+                        title: Text('Personnalisation'),
+                      ),
+                    ),
+                    PopupMenuItem(
+                      value: 'settings',
+                      child: ListTile(
+                        leading: Icon(Icons.settings),
+                        title: Text('Paramètres'),
+                      ),
+                    ),
+                  ]);
+                  items.add(const PopupMenuDivider());
+                  items.add(
+                    PopupMenuItem(
+                      value: accessGrant == null ? 'login' : 'logout',
+                      child: ListTile(
+                        leading: Icon(
+                          accessGrant == null ? Icons.login : Icons.logout,
+                        ),
+                        title: Text(
+                          accessGrant == null
+                              ? 'Se connecter'
+                              : 'Se déconnecter',
+                        ),
+                      ),
+                    ),
+                  );
+                  return items;
+                },
+              ),
+          ],
+          bottom: _isBusy
+              ? const PreferredSize(
+                  preferredSize: Size(double.infinity, 3),
+                  child: LinearProgressIndicator(minHeight: 3),
+                )
+              : null,
+        ),
+        body: IndexedStack(
+          index: pageIdx,
+          children: const [TransactionListPage(), PosPage(), SettingsPage()],
+        ),
+        bottomNavigationBar: uiPrefs.showBottomNav
+            ? NavigationBar(
+                labelBehavior:
+                    NavigationDestinationLabelBehavior.onlyShowSelected,
+                selectedIndex: pageIdx,
+                onDestinationSelected: _onDestinationSelected,
+                destinations: const [
+                  NavigationDestination(
+                    icon: Icon(Icons.list_alt),
+                    label: 'Transactions',
                   ),
-                );
-
-                return items;
-              },
-            ),
-        ],
+                  NavigationDestination(
+                    icon: Icon(Icons.point_of_sale),
+                    label: 'POS',
+                  ),
+                  NavigationDestination(
+                    icon: Icon(Icons.person),
+                    label: 'Profil',
+                  ),
+                ],
+              )
+            : null,
       ),
-      body: IndexedStack(
-        index: pageIdx,
-        children: const [TransactionListPage(), PosPage(), SettingsPage()],
-      ),
-      bottomNavigationBar: uiPrefs.showBottomNav
-          ? NavigationBar(
-              labelBehavior:
-                  NavigationDestinationLabelBehavior.onlyShowSelected,
-              selectedIndex: pageIdx,
-              onDestinationSelected: _onDestinationSelected,
-              destinations: const [
-                NavigationDestination(
-                  icon: Icon(Icons.list_alt),
-                  label: 'Transactions',
-                ),
-                NavigationDestination(
-                  icon: Icon(Icons.point_of_sale),
-                  label: 'POS',
-                ),
-                NavigationDestination(
-                  icon: Icon(Icons.person),
-                  label: 'Profil',
-                ),
-              ],
-            )
-          : null,
-      floatingActionButtonLocation: FloatingActionButtonLocation.endFloat,
     );
   }
 }

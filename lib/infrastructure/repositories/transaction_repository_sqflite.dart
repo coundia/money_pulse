@@ -253,6 +253,7 @@ class TransactionRepositorySqflite implements TransactionRepository {
     int limit = 50,
   }) async {
     print("****** findRecentByAccount ");
+    print(accountId);
 
     final rows = await _db.db.query(
       'transaction_entry',
