@@ -31,17 +31,17 @@ final _apiProvider = Provider<SyncApiClient>((ref) {
 
 final _changeLogRepoProvider = Provider<ChangeLogRepositorySqflite>((ref) {
   final db = ref.read(dbProvider);
-  return ChangeLogRepositorySqflite(db); // attend AppDatabase ✅
+  return ChangeLogRepositorySqflite(db);
 });
 
 final _syncStateRepoProvider = Provider<SyncStateRepositorySqflite>((ref) {
   final db = ref.read(dbProvider);
-  return SyncStateRepositorySqflite(db); // attend AppDatabase ✅
+  return SyncStateRepositorySqflite(db);
 });
 
 final categoryPushUseCaseProvider = Provider<PushCategoriesUseCase>((ref) {
   final api = ref.read(_apiProvider);
-  final Database dbRaw = ref.read(dbProvider).db; // ⬅️ sqflite.Database
+  final Database dbRaw = ref.read(dbProvider).db;
   final port = CategorySyncPortSqflite(dbRaw);
   final changeLog = ref.read(_changeLogRepoProvider);
   final syncState = ref.read(_syncStateRepoProvider);

@@ -8,8 +8,10 @@ class TransactionDeltaDto {
   final String? code;
   final String? description;
   final int amount;
+  final String typeEntry;
   final String type;
   final DateTime updatedAt;
+  final DateTime? syncAt;
   final String? accountId;
   final String? categoryId;
   final String? companyId;
@@ -24,9 +26,11 @@ class TransactionDeltaDto {
     this.code,
     this.description,
     required this.amount,
+    required this.typeEntry,
     required this.type,
     required this.updatedAt,
     this.accountId,
+    this.syncAt,
     this.categoryId,
     this.companyId,
     this.customerId,
@@ -48,12 +52,14 @@ class TransactionDeltaDto {
       amount: e.amount,
       type: t.name,
       updatedAt: now,
-      accountId: e.accountId,
-      categoryId: e.categoryId,
-      companyId: e.companyId,
-      customerId: e.customerId,
+      syncAt: now,
+      // accountId: null,
+      // categoryId: null,
+      // companyId: null,
+      // customerId: null,
       dateTransaction: e.dateTransaction,
       status: e.status,
+      typeEntry: e.typeEntry,
     );
   }
 
@@ -64,13 +70,14 @@ class TransactionDeltaDto {
     'code': code,
     'description': description,
     'amount': amount,
-    'operation': type,
-    'updatedAt': updatedAt.toIso8601String(),
+    'type': type,
+    'typeEntry': typeEntry,
+    'updatedAt': updatedAt.toUtc().toIso8601String(),
     'accountId': accountId,
     'categoryId': categoryId,
     'companyId': companyId,
     'customerId': customerId,
-    'dateTransaction': dateTransaction.toIso8601String(),
+    'dateTransaction': dateTransaction.toUtc().toIso8601String(),
     'status': status,
   };
 }
