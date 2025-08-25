@@ -13,7 +13,10 @@ import 'package:money_pulse/sync/application/pull_categories_usecase.dart';
 import 'package:money_pulse/sync/infrastructure/sync_policy_provider.dart';
 
 import '../../infrastructure/repositories/sync_state_repository_sqflite.dart';
+import '../application/pull_transactions_usecase.dart';
 import 'pull_ports/account_pull_port_sqflite.dart';
+import 'pull_ports/category_pull_port_sqflite.dart';
+import 'pull_ports/transaction_pull_port_sqflite.dart';
 import 'sqflite_sync_ports.dart';
 
 final pullBaseUriProvider = Provider<String>(
@@ -42,9 +45,20 @@ final pullCategoriesUseCaseProvider = Provider<PullCategoriesUseCase>((ref) {
   final api = ref.read(_apiProvider);
   final logger = ref.read(syncLoggerProvider);
   final db = ref.read(dbProvider).db as Database;
-  final port = CategorySyncPortSqflite(db);
+  final port = CategoryPullPortSqflite(db);
   final syncState = ref.read(_syncStateRepoProvider);
   return PullCategoriesUseCase(port, api, syncState, logger);
+});
+
+final pullTransactionsUseCaseProvider = Provider<PullTransactionsUseCase>((
+  ref,
+) {
+  final api = ref.read(_apiProvider);
+  final logger = ref.read(syncLoggerProvider);
+  final db = ref.read(dbProvider).db as Database;
+  final port = TransactionPullPortSqflite(db);
+  final syncState = ref.read(_syncStateRepoProvider);
+  return PullTransactionsUseCase(port, api, syncState, logger);
 });
 
 final pullAllUseCaseProvider = Provider<PullAllUseCase>((ref) {
@@ -52,7 +66,7 @@ final pullAllUseCaseProvider = Provider<PullAllUseCase>((ref) {
   final logger = ref.read(syncLoggerProvider);
   return PullAllUseCase(
     accounts: ref.read(pullAccountsUseCaseProvider),
-    // categories: ref.read(pullCategoriesUseCaseProvider),
+    categories: ref.read(pullCategoriesUseCaseProvider),
     units: null,
     companies: null,
     products: null,
@@ -60,7 +74,7 @@ final pullAllUseCaseProvider = Provider<PullAllUseCase>((ref) {
     debts: null,
     stockLevels: null,
     stockMovements: null,
-    transactions: null,
+    transactions: ref.read(pullTransactionsUseCaseProvider),
     items: null,
     policy: policy,
     logger: logger,

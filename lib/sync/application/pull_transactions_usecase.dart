@@ -2,16 +2,16 @@ import 'package:money_pulse/sync/infrastructure/sync_api_client.dart';
 import 'package:money_pulse/domain/sync/repositories/sync_state_repository.dart';
 import 'package:money_pulse/sync/infrastructure/sync_logger.dart';
 
-import '../infrastructure/pull_ports/category_pull_port_sqflite.dart';
+import '../infrastructure/pull_ports/transaction_pull_port_sqflite.dart';
 import 'pull_port.dart';
 
-class PullCategoriesUseCase implements PullPort {
-  final CategoryPullPortSqflite port;
+class PullTransactionsUseCase implements PullPort {
+  final TransactionPullPortSqflite port;
   final SyncApiClient api;
   final SyncStateRepository syncState;
   final SyncLogger logger;
 
-  PullCategoriesUseCase(this.port, this.api, this.syncState, this.logger);
+  PullTransactionsUseCase(this.port, this.api, this.syncState, this.logger);
 
   @override
   Future<int> execute() async {
@@ -20,15 +20,15 @@ class PullCategoriesUseCase implements PullPort {
         st?.lastSyncAt?.toUtc() ??
         DateTime.fromMillisecondsSinceEpoch(0, isUtc: true);
 
-    final items = await api.getCategoriesSince(since);
+    final items = await api.getTransactionsSince(since);
     if (items.isEmpty) {
-      logger.info('Pull categories: nothing to pull since $since');
+      logger.info('Pull transactions: nothing to pull since $since');
       return 0;
     }
 
     final adopted = await port.adoptRemoteIds(items);
     if (adopted > 0) {
-      logger.info('Pull categories: adopted remote ids for $adopted row(s)');
+      logger.info('Pull transactions: adopted remote ids for $adopted row(s)');
     }
 
     final res = await port.upsertRemote(items);
@@ -38,7 +38,7 @@ class PullCategoriesUseCase implements PullPort {
       lastSyncAt: res.maxSyncAt ?? DateTime.now().toUtc(),
     );
 
-    logger.info('Pull categories: upserts=${res.upserts}');
+    logger.info('Pull transactions: upserts=${res.upserts}');
     return res.upserts;
   }
 }

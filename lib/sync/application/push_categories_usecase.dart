@@ -1,4 +1,3 @@
-// lib/sync/application/push_categories_usecase.dart
 import 'package:money_pulse/sync/application/_ports.dart';
 import 'package:money_pulse/sync/application/outbox_pusher.dart';
 import 'package:money_pulse/sync/application/push_port.dart';
@@ -45,6 +44,7 @@ class PushCategoriesUseCase implements PushPort {
       final now = DateTime.now().toUtc();
       final dto = CategoryDeltaDto.fromEntity(cat, t, now).toJson();
       dto['localId'] = cat.id;
+      dto['remoteId'] = cat.remoteId;
       return dto;
     }
 

@@ -1,0 +1,178 @@
+import 'package:sqflite/sqflite.dart';
+
+typedef Json = Map<String, Object?>;
+
+class TransactionPullPortSqflite {
+  final Database db;
+  TransactionPullPortSqflite(this.db);
+
+  String get entityTable => 'transaction_entry';
+
+  String? _asStr(Object? v) => v?.toString();
+  int _asInt(Object? v) {
+    if (v == null) return 0;
+    if (v is int) return v;
+    if (v is num) return v.toInt();
+    return int.tryParse(v.toString()) ?? 0;
+  }
+
+  DateTime _asUtc(Object? v) {
+    if (v == null) return DateTime.now().toUtc();
+    final dt = DateTime.tryParse(v.toString());
+    return (dt?.toUtc() ?? DateTime.now().toUtc());
+  }
+
+  DateTime? _parseLocalDate(Object? v) {
+    if (v == null) return null;
+    final s = v.toString();
+    if (s.isEmpty) return null;
+    final norm = s.contains('T') ? s : s.replaceFirst(' ', 'T');
+    return DateTime.tryParse(norm)?.toUtc();
+  }
+
+  Future<int> adoptRemoteIds(List<Json> items) async {
+    if (items.isEmpty) return 0;
+    int changed = 0;
+    await db.transaction((txn) async {
+      for (final r in items) {
+        final remoteId = _asStr(r['id']) ?? _asStr(r['remoteId']);
+        final localId = _asStr(r['localId']);
+        if (remoteId == null || localId == null) continue;
+
+        final localRows = await txn.query(
+          entityTable,
+          where: 'id = ?',
+          whereArgs: [localId],
+          limit: 1,
+        );
+        if (localRows.isNotEmpty) {
+          await txn.update(
+            entityTable,
+            {'remoteId': remoteId, 'localId': localId},
+            where: 'id = ?',
+            whereArgs: [localId],
+          );
+          if (remoteId != localId) {
+            final dup = await txn.query(
+              entityTable,
+              where: 'id = ?',
+              whereArgs: [remoteId],
+              limit: 1,
+            );
+            if (dup.isNotEmpty) {
+              await txn.delete(
+                entityTable,
+                where: 'id = ?',
+                whereArgs: [remoteId],
+              );
+            }
+          }
+          changed++;
+          continue;
+        }
+
+        final remoteRows = await txn.query(
+          entityTable,
+          where: 'id = ?',
+          whereArgs: [remoteId],
+          limit: 1,
+        );
+        if (remoteRows.isNotEmpty) {
+          await txn.update(
+            entityTable,
+            {'remoteId': remoteId, 'localId': localId},
+            where: 'id = ?',
+            whereArgs: [remoteId],
+          );
+          changed++;
+        }
+      }
+    });
+    return changed;
+  }
+
+  Future<({int upserts, DateTime? maxSyncAt})> upsertRemote(
+    List<Json> items,
+  ) async {
+    if (items.isEmpty) return (upserts: 0, maxSyncAt: null);
+    int upserts = 0;
+    DateTime? maxAt;
+
+    await db.transaction((txn) async {
+      for (final r in items) {
+        final remoteId = _asStr(r['id']) ?? _asStr(r['remoteId']);
+        final localId = _asStr(r['localId']);
+        final code = _asStr(r['code']);
+        final desc = _asStr(r['description']);
+        final typeEntry = _asStr(r['typeEntry']) ?? 'DEBIT';
+        final amount = _asInt(r['amount']);
+        final accountId = _asStr(r['accountId']);
+        final categoryId = _asStr(r['categoryId']);
+        final companyId = _asStr(r['companyId']);
+        final customerId = _asStr(r['customerId']);
+        final dateTransaction = _asStr(r['dateTransaction']);
+        final status = _asStr(r['status']);
+
+        final remoteSyncAt = _asUtc(r['syncAt']);
+        if (maxAt == null || remoteSyncAt.isAfter(maxAt!)) maxAt = remoteSyncAt;
+
+        final baseData = <String, Object?>{
+          'remoteId': remoteId,
+          'localId': localId,
+          'code': code,
+          'description': desc,
+          'typeEntry': typeEntry,
+          'amount': amount,
+          'accountId': accountId,
+          'categoryId': categoryId,
+          'companyId': companyId,
+          'customerId': customerId,
+          'dateTransaction': dateTransaction,
+          'status': status,
+          'syncAt': remoteSyncAt.toIso8601String(),
+        };
+
+        Map<String, Object?>? targetRow;
+        if (remoteId != null) {
+          final byRemoteId = await txn.query(
+            entityTable,
+            where: 'remoteId = ?',
+            whereArgs: [remoteId],
+            limit: 1,
+          );
+          if (byRemoteId.isNotEmpty) targetRow = byRemoteId.first;
+        }
+        if (targetRow == null && localId != null) {
+          final byLocalId = await txn.query(
+            entityTable,
+            where: 'id = ?',
+            whereArgs: [localId],
+            limit: 1,
+          );
+          if (byLocalId.isNotEmpty) targetRow = byLocalId.first;
+        }
+
+        if (targetRow != null) {
+          await txn.update(
+            entityTable,
+            baseData,
+            where: 'id = ?',
+            whereArgs: [targetRow['id']],
+          );
+          upserts++;
+        } else {
+          final createdAt = remoteSyncAt.toIso8601String();
+          await txn.insert(entityTable, {
+            'id': remoteId ?? DateTime.now().microsecondsSinceEpoch.toString(),
+            ...baseData,
+            'createdAt': createdAt,
+            'updatedAt': createdAt,
+            'isDirty': 0,
+          });
+          upserts++;
+        }
+      }
+    });
+    return (upserts: upserts, maxSyncAt: maxAt);
+  }
+}

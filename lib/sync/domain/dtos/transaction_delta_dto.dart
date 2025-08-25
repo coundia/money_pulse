@@ -1,85 +1,76 @@
-/* DTO for TransactionEntry delta push payload. */
 import 'package:money_pulse/domain/transactions/entities/transaction_entry.dart';
 import 'package:money_pulse/sync/domain/sync_delta_type.dart';
 
 class TransactionDeltaDto {
   final String id;
-  final String type;
   final String? remoteId;
+  final String? localId;
   final String? code;
   final String? description;
   final int amount;
-  final String typeEntry;
-  final String dateOperation;
+  final String type;
+  final DateTime updatedAt;
+  final String? accountId;
+  final String? categoryId;
+  final String? companyId;
+  final String? customerId;
+  final DateTime dateTransaction;
   final String? status;
-  final String? reference;
-  final String? balance;
-  final String? category;
-  final String createdAt;
-  final String updatedAt;
-  final String? syncAt;
-  final int version;
 
-  const TransactionDeltaDto({
+  TransactionDeltaDto({
     required this.id,
-    required this.type,
     this.remoteId,
+    this.localId,
     this.code,
     this.description,
     required this.amount,
-    required this.typeEntry,
-    required this.dateOperation,
-    this.status,
-    this.reference,
-    this.balance,
-    this.category,
-    required this.createdAt,
+    required this.type,
     required this.updatedAt,
-    this.syncAt,
-    required this.version,
+    this.accountId,
+    this.categoryId,
+    this.companyId,
+    this.customerId,
+    required this.dateTransaction,
+    this.status,
   });
 
-  Map<String, Object?> toJson() => {
-    'id': id,
-    'type': type,
-    'remoteId': remoteId,
-    'code': code,
-    'description': description,
-    'amount': amount,
-    'typeEntry': typeEntry,
-    'dateOperation': dateOperation,
-    'status': status,
-    'reference': reference,
-    'balance': balance,
-    'category': category,
-    'createdAt': createdAt,
-    'updatedAt': updatedAt,
-    'syncAt': syncAt,
-    'version': version,
-  };
-
-  static TransactionDeltaDto fromEntity(
+  factory TransactionDeltaDto.fromEntity(
     TransactionEntry e,
     SyncDeltaType t,
     DateTime now,
   ) {
     return TransactionDeltaDto(
       id: e.id,
-      type: t.wire,
       remoteId: e.remoteId,
+      localId: e.localId,
       code: e.code,
       description: e.description,
       amount: e.amount,
-      typeEntry: e.typeEntry,
-      dateOperation: e.dateTransaction.toUtc().toIso8601String(),
+      type: t.name,
+      updatedAt: now,
+      accountId: e.accountId,
+      categoryId: e.categoryId,
+      companyId: e.companyId,
+      customerId: e.customerId,
+      dateTransaction: e.dateTransaction,
       status: e.status,
-      reference: e.code,
-      balance: e.accountId,
-      category: e.categoryId,
-      createdAt: e.createdAt.toUtc().toIso8601String(),
-      updatedAt: e.updatedAt.toUtc().toIso8601String(),
-      syncAt: now.toUtc().toIso8601String(),
-      version: e.version,
     );
   }
+
+  Map<String, Object?> toJson() => {
+    'id': id,
+    'remoteId': remoteId,
+    'localId': localId,
+    'code': code,
+    'description': description,
+    'amount': amount,
+    'operation': type,
+    'updatedAt': updatedAt.toIso8601String(),
+    'accountId': accountId,
+    'categoryId': categoryId,
+    'companyId': companyId,
+    'customerId': customerId,
+    'dateTransaction': dateTransaction.toIso8601String(),
+    'status': status,
+  };
 }

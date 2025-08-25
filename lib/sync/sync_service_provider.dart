@@ -18,6 +18,7 @@ import 'package:money_pulse/sync/application/sync_all_usecase.dart';
 
 import '../infrastructure/repositories/sync_state_repository_sqflite.dart';
 import '../infrastructure/sync/change_log_sqlite_repository.dart';
+import 'application/push_transactions_usecase.dart';
 import 'infrastructure/sync_policy_provider.dart';
 
 final syncBaseUriProvider = Provider<String>(
@@ -64,13 +65,22 @@ final accountPushUseCaseProvider = Provider<PushAccountsUseCase>((ref) {
   );
 });
 
+final transactionPushUseCaseProvider = Provider<PushTransactionsUseCase>((ref) {
+  final api = ref.read(_apiProvider);
+  final Database dbRaw = ref.read(dbProvider).db;
+  final port = TransactionSyncPortSqflite(dbRaw);
+  final changeLog = ref.read(_changeLogRepoProvider);
+  final syncState = ref.read(_syncStateRepoProvider);
+  final logger = ref.read(syncLoggerProvider);
+  return PushTransactionsUseCase(port, api, changeLog, syncState, logger);
+});
 final syncAllUseCaseProvider = Provider<SyncAllUseCase>((ref) {
   final logger = ref.read(syncLoggerProvider);
   final policy = ref.read(syncPolicyProvider);
   return SyncAllUseCase(
     accounts: ref.read(accountPushUseCaseProvider),
-    //categories: ref.read(categoryPushUseCaseProvider),
-    //transactions: ref.read(transactionPushUseCaseProvider),
+    categories: ref.read(categoryPushUseCaseProvider),
+    transactions: ref.read(transactionPushUseCaseProvider),
     /*  units: ref.read(unitPushUseCaseProvider),
     products: ref.read(productPushUseCaseProvider),
     items: ref.read(transactionItemPushUseCaseProvider),
