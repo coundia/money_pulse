@@ -374,7 +374,6 @@ class _HomePageState extends ConsumerState<HomePage> {
                       ),
                     ),
 
-                    PopupMenuDivider(),
                     PopupMenuItem(
                       value: 'search',
                       child: ListTile(
@@ -382,7 +381,7 @@ class _HomePageState extends ConsumerState<HomePage> {
                         title: Text('Rechercher'),
                       ),
                     ),
-                    PopupMenuDivider(),
+
                     PopupMenuItem(
                       value: 'period',
                       child: ListTile(
@@ -395,13 +394,6 @@ class _HomePageState extends ConsumerState<HomePage> {
                       child: ListTile(
                         leading: Icon(Icons.sync),
                         title: Text('Synchroniser'),
-                      ),
-                    ),
-                    PopupMenuItem(
-                      value: 'share',
-                      child: ListTile(
-                        leading: Icon(Icons.ios_share),
-                        title: Text('Partager le compte'),
                       ),
                     ),
                     PopupMenuDivider(),
