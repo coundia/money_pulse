@@ -132,6 +132,7 @@ class CompanyPullPortSqflite {
         if (maxAt == null || remoteSyncAt.isAfter(maxAt!)) maxAt = remoteSyncAt;
 
         final baseData = <String, Object?>{
+          'id': localId,
           'remoteId': remoteId,
           'localId': localId,
           'code': code,

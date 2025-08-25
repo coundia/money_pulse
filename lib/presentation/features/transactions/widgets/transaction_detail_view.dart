@@ -97,6 +97,11 @@ class TransactionDetailView extends ConsumerWidget {
                 value: (entry.code ?? '').trim().isEmpty ? '—' : entry.code!,
               ),
               _InfoTile(
+                icon: Icons.tag_outlined,
+                title: 'Compte',
+                value: entry.accountId ?? 'NA',
+              ),
+              _InfoTile(
                 icon: Icons.fingerprint,
                 title: 'Identifiant',
                 value: entry.id,

@@ -99,7 +99,9 @@ class CustomerPullPortSqflite {
     return changed;
   }
 
-  Future<({int upserts, DateTime? maxSyncAt})> upsertRemote(List<Json> items) async {
+  Future<({int upserts, DateTime? maxSyncAt})> upsertRemote(
+    List<Json> items,
+  ) async {
     if (items.isEmpty) return (upserts: 0, maxSyncAt: null);
 
     int upserts = 0;
@@ -129,6 +131,7 @@ class CustomerPullPortSqflite {
         if (maxAt == null || remoteSyncAt.isAfter(maxAt!)) maxAt = remoteSyncAt;
 
         final baseData = <String, Object?>{
+          'id': localId,
           'remoteId': remoteId,
           'localId': localId,
           'code': code,
@@ -219,27 +222,24 @@ class CustomerPullPortSqflite {
             whereArgs: [targetRow['id']],
           );
 
-          await txn.insert(
-            'change_log',
-            {
-              'id': '${targetRow['id']}-pull',
-              'entityTable': entityTable,
-              'entityId': targetRow['id'],
-              'remoteId': remoteId,
-              'localId': localId,
-              'operation': 'UPDATE',
-              'status': 'SYNCED',
-              'payload': null,
-              'createdAt': DateTime.now().toUtc().toIso8601String(),
-              'updatedAt': DateTime.now().toUtc().toIso8601String(),
-            },
-            conflictAlgorithm: ConflictAlgorithm.replace,
-          );
+          await txn.insert('change_log', {
+            'id': '${targetRow['id']}-pull',
+            'entityTable': entityTable,
+            'entityId': targetRow['id'],
+            'remoteId': remoteId,
+            'localId': localId,
+            'operation': 'UPDATE',
+            'status': 'SYNCED',
+            'payload': null,
+            'createdAt': DateTime.now().toUtc().toIso8601String(),
+            'updatedAt': DateTime.now().toUtc().toIso8601String(),
+          }, conflictAlgorithm: ConflictAlgorithm.replace);
 
           upserts++;
         } else {
           final createdAt = remoteSyncAt.toIso8601String();
-          final id = remoteId ?? DateTime.now().microsecondsSinceEpoch.toString();
+          final id =
+              remoteId ?? DateTime.now().microsecondsSinceEpoch.toString();
 
           await txn.insert(entityTable, {
             'id': id,
@@ -250,22 +250,18 @@ class CustomerPullPortSqflite {
             'isDirty': 0,
           }, conflictAlgorithm: ConflictAlgorithm.abort);
 
-          await txn.insert(
-            'change_log',
-            {
-              'id': '$id-pull',
-              'entityTable': entityTable,
-              'entityId': id,
-              'remoteId': remoteId,
-              'localId': localId,
-              'operation': 'INSERT',
-              'status': 'SYNCED',
-              'payload': null,
-              'createdAt': DateTime.now().toUtc().toIso8601String(),
-              'updatedAt': DateTime.now().toUtc().toIso8601String(),
-            },
-            conflictAlgorithm: ConflictAlgorithm.replace,
-          );
+          await txn.insert('change_log', {
+            'id': '$id-pull',
+            'entityTable': entityTable,
+            'entityId': id,
+            'remoteId': remoteId,
+            'localId': localId,
+            'operation': 'INSERT',
+            'status': 'SYNCED',
+            'payload': null,
+            'createdAt': DateTime.now().toUtc().toIso8601String(),
+            'updatedAt': DateTime.now().toUtc().toIso8601String(),
+          }, conflictAlgorithm: ConflictAlgorithm.replace);
 
           upserts++;
         }

@@ -60,11 +60,12 @@ class OutboxPusher {
         continue;
       }
 
-      decoded["type"] = decoded["operation"];
-
       if (decoded["remoteId"] == null || decoded["id"] == null) {
         decoded["type"] = "CREATE";
       }
+
+      // print("+++++++++ decode ++++");
+      // print(decoded);
 
       validEntries.add(p);
       validDeltas.add(decoded);

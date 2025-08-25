@@ -21,6 +21,7 @@ class PullTransactionsUseCase implements PullPort {
         DateTime.fromMillisecondsSinceEpoch(0, isUtc: true);
 
     final items = await api.getTransactionsSince(since);
+
     if (items.isEmpty) {
       logger.info('Pull transactions: nothing to pull since $since');
       return 0;

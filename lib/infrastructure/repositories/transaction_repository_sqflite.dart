@@ -252,6 +252,8 @@ class TransactionRepositorySqflite implements TransactionRepository {
     String accountId, {
     int limit = 50,
   }) async {
+    print("****** findRecentByAccount ");
+
     final rows = await _db.db.query(
       'transaction_entry',
       where: 'accountId=? AND deletedAt IS NULL',
@@ -268,6 +270,7 @@ class TransactionRepositorySqflite implements TransactionRepository {
     DateTime month, {
     String? typeEntry,
   }) async {
+    print("****** findByAccountForMonth ");
     final start = DateTime(month.year, month.month, 1).toIso8601String();
     final end = DateTime(month.year, month.month + 1, 1).toIso8601String();
     final where = StringBuffer(
@@ -294,6 +297,8 @@ class TransactionRepositorySqflite implements TransactionRepository {
     DateTime to, {
     String? typeEntry,
   }) async {
+    print("****** findByAccountBetween ");
+
     final where = StringBuffer(
       // Inclure les transactions du compte sélectionné
       // OU les dettes (typeEntry='DEBT') sans compte (accountId IS NULL)

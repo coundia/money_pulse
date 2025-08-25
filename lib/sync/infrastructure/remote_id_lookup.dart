@@ -19,8 +19,6 @@ Future<String?> remoteIdOfDb(Database db, String table, String? id) async {
   }
   final v = rows.first['remoteId'];
 
-  print(rows);
-
   print('[remoteIdOfDb] table=$table id=$id -> remoteId=$v');
   return v == null ? null : v.toString();
 }

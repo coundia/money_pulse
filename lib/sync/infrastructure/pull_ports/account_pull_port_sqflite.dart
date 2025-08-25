@@ -12,6 +12,9 @@
 // - On INSERT we use remote balances, set isDirty=0, and set updatedAt=remote.syncAt.
 
 import 'package:sqflite/sqflite.dart';
+import 'package:uuid/uuid.dart';
+
+import '../change_log_helper.dart';
 
 typedef Json = Map<String, Object?>;
 
@@ -82,6 +85,13 @@ class AccountPullPortSqflite {
             whereArgs: [localId],
           );
 
+          await upsertChangeLogPending(
+            txn,
+            entityTable: 'account',
+            entityId: localId,
+            operation: 'UPDATE',
+          );
+
           // If a duplicate row exists under remoteId, drop it (keep local PK)
           if (remoteId != localId) {
             final dup = await txn.query(
@@ -116,6 +126,14 @@ class AccountPullPortSqflite {
             where: 'id = ?',
             whereArgs: [remoteId],
           );
+
+          await upsertChangeLogPending(
+            txn,
+            entityTable: 'account',
+            entityId: localId,
+            operation: 'UPDATE',
+          );
+
           changed++;
         }
         // else: nothing yet; upsertRemote will handle insert
@@ -154,6 +172,7 @@ class AccountPullPortSqflite {
         if (maxAt == null || remoteSyncAt.isAfter(maxAt!)) maxAt = remoteSyncAt;
 
         final baseData = <String, Object?>{
+          'id': localId,
           'remoteId': remoteId,
           'localId': localId,
           'code': code,

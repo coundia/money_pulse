@@ -106,10 +106,10 @@ class TransactionPullPortSqflite {
         final desc = _asStr(r['description']);
         final typeEntry = _asStr(r['typeEntry']) ?? 'DEBIT';
         final amount = _asInt(r['amount']);
-        final accountId = _asStr(r['accountId']);
-        final categoryId = _asStr(r['categoryId']);
-        final companyId = _asStr(r['companyId']);
-        final customerId = _asStr(r['customerId']);
+        final accountId = _asStr(r['account']);
+        final categoryId = _asStr(r['category']);
+        final companyId = _asStr(r['company']);
+        final customerId = _asStr(r['customer']);
         final dateTransaction = _asStr(r['dateTransaction']);
         final status = _asStr(r['status']);
 
@@ -117,6 +117,7 @@ class TransactionPullPortSqflite {
         if (maxAt == null || remoteSyncAt.isAfter(maxAt!)) maxAt = remoteSyncAt;
 
         final baseData = <String, Object?>{
+          'id': localId,
           'remoteId': remoteId,
           'localId': localId,
           'code': code,

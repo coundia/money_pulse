@@ -151,6 +151,7 @@ class TransactionSyncPortSqflite implements TransactionSyncPort {
       limit: 1,
     );
     if (rows.isEmpty) return null;
+
     return TransactionEntry.fromMap(rows.first);
   }
 }

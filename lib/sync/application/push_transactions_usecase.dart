@@ -44,23 +44,14 @@ class PushTransactionsUseCase implements PushPort {
     Future<Map<String, Object?>?> build(ChangeLogEntry e) async {
       final tx = await port.findById(e.entityId);
       if (tx == null) return null;
-      final t = SyncDeltaTypeExt.fromOp(
-        e.operation,
-        deleted: tx.deletedAt != null,
-      );
+      final t = SyncDeltaTypeExt.fromOp(e.operation);
       final now = DateTime.now().toUtc();
       final dto = TransactionDeltaDto.fromEntity(tx, t, now);
       final dtoJson = dto.toJson();
 
       dtoJson['localId'] = tx.id;
       dtoJson['remoteId'] = tx.remoteId;
-
-      print(dto.account);
-
-      dtoJson['account'] = await remoteIdOfDb(db, 'account', dto.account);
-      dtoJson['category'] = await remoteIdOfDb(db, 'category', dto.category);
-      dtoJson['customer'] = await remoteIdOfDb(db, 'customer', dto.customer);
-      dtoJson['company'] = await remoteIdOfDb(db, 'company', dto.company);
+      dtoJson['type'] = t.name.toUpperCase();
 
       return dtoJson;
     }
