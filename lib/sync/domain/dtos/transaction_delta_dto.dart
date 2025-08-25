@@ -12,10 +12,10 @@ class TransactionDeltaDto {
   final String type;
   final DateTime updatedAt;
   final DateTime? syncAt;
-  final String? accountId;
-  final String? categoryId;
-  final String? companyId;
-  final String? customerId;
+  final String? account;
+  final String? category;
+  final String? company;
+  final String? customer;
   final DateTime dateTransaction;
   final String? status;
 
@@ -29,11 +29,11 @@ class TransactionDeltaDto {
     required this.typeEntry,
     required this.type,
     required this.updatedAt,
-    this.accountId,
+    this.account,
     this.syncAt,
-    this.categoryId,
-    this.companyId,
-    this.customerId,
+    this.category,
+    this.company,
+    this.customer,
     required this.dateTransaction,
     this.status,
   });
@@ -53,10 +53,10 @@ class TransactionDeltaDto {
       type: t.name,
       updatedAt: now,
       syncAt: now,
-      // accountId: null,
-      // categoryId: null,
-      // companyId: null,
-      // customerId: null,
+      account: e.accountId,
+      category: e.categoryId,
+      company: e.companyId,
+      customer: e.customerId,
       dateTransaction: e.dateTransaction,
       status: e.status,
       typeEntry: e.typeEntry,
@@ -73,10 +73,10 @@ class TransactionDeltaDto {
     'type': type,
     'typeEntry': typeEntry,
     'updatedAt': updatedAt.toUtc().toIso8601String(),
-    'accountId': accountId,
-    'categoryId': categoryId,
-    'companyId': companyId,
-    'customerId': customerId,
+    'account': account,
+    'category': category,
+    'company': company,
+    'customer': customer,
     'dateTransaction': dateTransaction.toUtc().toIso8601String(),
     'status': status,
   };

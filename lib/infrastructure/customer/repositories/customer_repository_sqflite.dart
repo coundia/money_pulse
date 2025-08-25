@@ -133,6 +133,15 @@ class CustomerRepositorySqflite implements CustomerRepository {
         data,
         conflictAlgorithm: ConflictAlgorithm.abort,
       );
+      final idLog = const Uuid().v4();
+      String now = DateTime.now().toIso8601String();
+      await txn.rawInsert(
+        'INSERT INTO change_log(id, entityTable, entityId, operation, payload, status, createdAt, updatedAt) '
+        'VALUES(?,?,?,?,?,?,?,?) '
+        'ON CONFLICT(entityTable, entityId, status) DO UPDATE '
+        'SET operation=excluded.operation, updatedAt=excluded.updatedAt, payload=excluded.payload',
+        [idLog, 'customer', c.id, 'INSERT', null, 'PENDING', now, now],
+      );
     });
     return id;
   }
@@ -156,6 +165,16 @@ class CustomerRepositorySqflite implements CustomerRepository {
         next.toMap(),
         where: 'id=?',
         whereArgs: [c.id],
+      );
+
+      final idLog = const Uuid().v4();
+      String now = DateTime.now().toIso8601String();
+      await txn.rawInsert(
+        'INSERT INTO change_log(id, entityTable, entityId, operation, payload, status, createdAt, updatedAt) '
+        'VALUES(?,?,?,?,?,?,?,?) '
+        'ON CONFLICT(entityTable, entityId, status) DO UPDATE '
+        'SET operation=excluded.operation, updatedAt=excluded.updatedAt, payload=excluded.payload',
+        [idLog, 'customer', c.id, 'UPDATE', null, 'PENDING', now, now],
       );
     });
   }
