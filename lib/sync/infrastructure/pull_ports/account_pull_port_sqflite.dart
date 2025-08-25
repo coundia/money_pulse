@@ -77,7 +77,7 @@ class AccountPullPortSqflite {
           // Set linkage on the local row
           await txn.update(
             'account',
-            {'remoteId': remoteId, 'localId': localId},
+            {'remoteId': remoteId, 'localId': localId, 'isDirty': 1},
             where: 'id = ?',
             whereArgs: [localId],
           );
@@ -112,7 +112,7 @@ class AccountPullPortSqflite {
         if (remoteRows.isNotEmpty) {
           await txn.update(
             'account',
-            {'remoteId': remoteId, 'localId': localId},
+            {'remoteId': remoteId, 'localId': localId, 'isDirty': 1},
             where: 'id = ?',
             whereArgs: [remoteId],
           );
