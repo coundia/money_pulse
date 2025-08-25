@@ -78,6 +78,7 @@ class OutboxPusher {
     }
 
     // 3) POST
+    print("**** POST ****");
     print(validDeltas);
 
     logger.info('Outbox $entityTable: POST count=${validDeltas.length}');

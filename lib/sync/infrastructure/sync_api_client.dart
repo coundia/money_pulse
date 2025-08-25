@@ -60,7 +60,7 @@ class SyncApiClient {
 
   Future<List<Json>> getBySyncAt(String entity, DateTime since) async {
     final iso = _formatMillisZ(since);
-    print(iso);
+
     final uri = Uri.parse(
       '$baseUri/api/v1/queries/$entity/syncAt',
     ).replace(queryParameters: {'syncAt': iso});
