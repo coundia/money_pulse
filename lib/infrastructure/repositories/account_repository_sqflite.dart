@@ -133,7 +133,7 @@ class AccountRepositorySqflite implements AccountRepository {
   Future<Account?> findDefault() async {
     final rows = await _database.db.query(
       'account',
-      where: 'isDefault=1 AND deletedAt IS NULL',
+      where: 'isDefault=1 ',
       orderBy: 'updatedAt DESC',
       limit: 1,
     );
@@ -143,11 +143,7 @@ class AccountRepositorySqflite implements AccountRepository {
 
   @override
   Future<List<Account>> findAllActive() async {
-    final rows = await _database.db.query(
-      'account',
-      where: 'deletedAt IS NULL',
-      orderBy: 'updatedAt DESC',
-    );
+    final rows = await _database.db.query('account', orderBy: 'updatedAt DESC');
     return rows.map(Account.fromMap).toList();
   }
 
