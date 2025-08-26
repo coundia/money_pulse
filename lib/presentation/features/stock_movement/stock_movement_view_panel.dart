@@ -1,4 +1,4 @@
-/// Read-only right-drawer panel to display a stock movement with amounts and labels.
+// Read-only right-drawer for a stock movement without exposing raw IDs in UI.
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'providers/stock_movement_repo_provider.dart';
@@ -92,11 +92,9 @@ class StockMovementViewPanel extends ConsumerWidget {
                 Wrap(
                   spacing: 8,
                   runSpacing: 8,
-                  children: [
+                  children: const [
                     _ChipIcon(text: 'Type', icon: Icons.compare_arrows),
                     _ChipIcon(text: 'Mouvement', icon: Icons.move_down),
-                    if (row.orderLineId != null && row.orderLineId!.isNotEmpty)
-                      _ChipIcon(text: 'Ligne liée', icon: Icons.link),
                   ],
                 ),
                 const SizedBox(height: 16),
@@ -109,8 +107,6 @@ class StockMovementViewPanel extends ConsumerWidget {
                 _KV('Prix unitaire', pu),
                 _KV('Total', tot),
                 _KV('Créé le', Formatters.dateFull(row.createdAt)),
-                _KV('Ligne transaction', row.orderLineId ?? '—'),
-                _KV('ID mouvement', row.id ?? "-"),
               ],
             ),
           ),

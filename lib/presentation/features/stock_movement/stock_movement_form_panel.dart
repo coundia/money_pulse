@@ -1,4 +1,4 @@
-/// Right drawer form to create or edit a StockMovement with searchable pickers and ENTER submission.
+// Right drawer form for stock movement with stable ID on edit and Enter submission.
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -84,7 +84,7 @@ class _StockMovementFormPanelState
     final repo = ref.read(stockMovementRepoProvider);
     final now = DateTime.now();
     final entity = StockMovement(
-      id: Uuid().v4(),
+      id: widget.itemId ?? const Uuid().v4(),
       type: _type,
       quantity: int.parse(_qtyCtrl.text.trim()),
       companyId: _companyId!,

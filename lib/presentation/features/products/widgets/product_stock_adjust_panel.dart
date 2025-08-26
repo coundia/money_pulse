@@ -1,4 +1,4 @@
-// lib/presentation/features/products/widgets/product_stock_adjust_panel.dart
+// Right drawer to adjust product stock without exposing codes or raw IDs in UI.
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -103,9 +103,7 @@ class _ProductStockAdjustPanelState
   @override
   Widget build(BuildContext context) {
     final p = widget.product;
-    final title = (p.name?.isNotEmpty == true)
-        ? p.name!
-        : (p.code ?? 'Produit');
+    final title = (p.name?.isNotEmpty == true) ? p.name! : 'Produit';
 
     return Scaffold(
       appBar: AppBar(
@@ -130,7 +128,6 @@ class _ProductStockAdjustPanelState
             key: _formKey,
             child: ListView(
               children: [
-                // En-tête produit
                 Row(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
@@ -154,16 +151,6 @@ class _ProductStockAdjustPanelState
                             spacing: 8,
                             runSpacing: 4,
                             children: [
-                              if ((p.code ?? '').isNotEmpty)
-                                Chip(
-                                  label: Text('Code: ${p.code}'),
-                                  visualDensity: VisualDensity.compact,
-                                ),
-                              if ((p.barcode ?? '').isNotEmpty)
-                                Chip(
-                                  label: Text('EAN: ${p.barcode}'),
-                                  visualDensity: VisualDensity.compact,
-                                ),
                               Chip(
                                 label: Text(
                                   'PU par défaut: ${Formatters.amountFromCents(p.defaultPrice)}',
@@ -178,8 +165,6 @@ class _ProductStockAdjustPanelState
                   ],
                 ),
                 const SizedBox(height: 16),
-
-                // Société
                 DropdownButtonFormField<String>(
                   value: _companyId,
                   items: _companies
@@ -197,8 +182,6 @@ class _ProductStockAdjustPanelState
                   ),
                 ),
                 const SizedBox(height: 12),
-
-                // Mode d'ajustement
                 SegmentedButton<_AdjustMode>(
                   segments: const [
                     ButtonSegment(
@@ -216,7 +199,6 @@ class _ProductStockAdjustPanelState
                   onSelectionChanged: (s) => setState(() => _mode = s.first),
                 ),
                 const SizedBox(height: 12),
-
                 if (_mode == _AdjustMode.byDelta)
                   TextFormField(
                     controller: _qtyCtrl,
@@ -236,7 +218,6 @@ class _ProductStockAdjustPanelState
                       return null;
                     },
                   ),
-
                 if (_mode == _AdjustMode.toTarget)
                   TextFormField(
                     controller: _targetCtrl,
@@ -254,7 +235,6 @@ class _ProductStockAdjustPanelState
                       return null;
                     },
                   ),
-
                 const SizedBox(height: 12),
                 TextFormField(
                   controller: _reasonCtrl,
@@ -264,7 +244,6 @@ class _ProductStockAdjustPanelState
                     hintText: 'Ex: “Inventaire”, “Correction”, …',
                   ),
                 ),
-
                 const SizedBox(height: 16),
                 FilledButton.icon(
                   onPressed: _loading ? null : _submit,

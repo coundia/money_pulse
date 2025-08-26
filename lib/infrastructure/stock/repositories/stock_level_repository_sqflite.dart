@@ -1,5 +1,4 @@
-/// Sqflite repository for StockLevel with TEXT productVariantId, label lookups,
-/// change_log entries and automatic stock_movement insertions on update/create.
+// Repository handling stock levels with change_log and safe movement creation per change.
 import 'package:sqflite/sqflite.dart';
 import 'package:uuid/uuid.dart';
 import '../../../infrastructure/db/app_database.dart';
@@ -15,12 +14,12 @@ class StockLevelRepositorySqflite implements StockLevelRepository {
   String _nowIso() => DateTime.now().toIso8601String();
 
   Future<void> _upsertChangeLog(
-    Transaction txn, {
-    required String table,
-    required String entityId,
-    required String op,
-    String? payload,
-  }) async {
+      Transaction txn, {
+        required String table,
+        required String entityId,
+        required String op,
+        String? payload,
+      }) async {
     final idLog = const Uuid().v4();
     final now = _nowIso();
     await txn.rawInsert(
@@ -39,11 +38,11 @@ class StockLevelRepositorySqflite implements StockLevelRepository {
   }
 
   Future<void> _ensureLevelRow(
-    Transaction txn, {
-    required String productVariantId,
-    required String companyId,
-    required String nowIso,
-  }) async {
+      Transaction txn, {
+        required String productVariantId,
+        required String companyId,
+        required String nowIso,
+      }) async {
     final exists = await txn.rawQuery(
       'SELECT id FROM stock_level WHERE productVariantId=? AND companyId=? LIMIT 1',
       [productVariantId, companyId],
@@ -101,9 +100,7 @@ class StockLevelRepositorySqflite implements StockLevelRepository {
         companyLabel: (m['companyLabel'] as String?) ?? '',
         stockOnHand: (m['stockOnHand'] as int?) ?? 0,
         stockAllocated: (m['stockAllocated'] as int?) ?? 0,
-        updatedAt:
-            DateTime.tryParse((m['updatedAt'] as String?) ?? '') ??
-            DateTime.now(),
+        updatedAt: DateTime.tryParse((m['updatedAt'] as String?) ?? '') ?? DateTime.now(),
       );
     }).toList();
   }
@@ -124,12 +121,8 @@ class StockLevelRepositorySqflite implements StockLevelRepository {
       companyId: (m['companyId'] as String),
       stockOnHand: (m['stockOnHand'] as int),
       stockAllocated: (m['stockAllocated'] as int),
-      createdAt:
-          DateTime.tryParse((m['createdAt'] as String?) ?? '') ??
-          DateTime.now(),
-      updatedAt:
-          DateTime.tryParse((m['updatedAt'] as String?) ?? '') ??
-          DateTime.now(),
+      createdAt: DateTime.tryParse((m['createdAt'] as String?) ?? '') ?? DateTime.now(),
+      updatedAt: DateTime.tryParse((m['updatedAt'] as String?) ?? '') ?? DateTime.now(),
     );
   }
 
@@ -137,10 +130,9 @@ class StockLevelRepositorySqflite implements StockLevelRepository {
   Future<String> create(StockLevel level) async {
     final now = _nowIso();
     final idStock = const Uuid().v4();
-    final idMvts = const Uuid().v4();
 
     return await db.transaction<String>((txn) async {
-      final id = await txn.insert('stock_level', {
+      await txn.insert('stock_level', {
         'productVariantId': level.productVariantId,
         'companyId': level.companyId,
         'stockOnHand': level.stockOnHand,
@@ -151,6 +143,7 @@ class StockLevelRepositorySqflite implements StockLevelRepository {
       }, conflictAlgorithm: ConflictAlgorithm.abort);
 
       if (level.stockOnHand != 0) {
+        final idMvts = const Uuid().v4();
         await txn.insert('stock_movement', {
           'type_stock_movement': 'ADJUST',
           'quantity': level.stockOnHand.abs(),
@@ -161,15 +154,16 @@ class StockLevelRepositorySqflite implements StockLevelRepository {
           'createdAt': now,
           'updatedAt': now,
           'id': idMvts,
+          'syncAt': null,
+          'version': 0,
+          'isDirty': 1,
+          'remoteId': null,
+          'localId': null,
         });
-        await _upsertChangeLog(
-          txn,
-          table: 'stock_movement',
-          entityId: idMvts,
-          op: 'INSERT',
-        );
+        await _upsertChangeLog(txn, table: 'stock_movement', entityId: idMvts, op: 'INSERT');
       }
       if (level.stockAllocated != 0) {
+        final idMvts2 = const Uuid().v4();
         final t = level.stockAllocated > 0 ? 'ALLOCATE' : 'RELEASE';
         await txn.insert('stock_movement', {
           'type_stock_movement': t,
@@ -180,52 +174,36 @@ class StockLevelRepositorySqflite implements StockLevelRepository {
           'discriminator': 'INIT',
           'createdAt': now,
           'updatedAt': now,
-          'id': idMvts,
+          'id': idMvts2,
+          'syncAt': null,
+          'version': 0,
+          'isDirty': 1,
+          'remoteId': null,
+          'localId': null,
         });
-        await _upsertChangeLog(
-          txn,
-          table: 'stock_movement',
-          entityId: idMvts,
-          op: 'INSERT',
-        );
+        await _upsertChangeLog(txn, table: 'stock_movement', entityId: idMvts2, op: 'INSERT');
       }
 
-      await _upsertChangeLog(
-        txn,
-        table: 'stock_level',
-        entityId: idStock,
-        op: 'INSERT',
-      );
+      await _upsertChangeLog(txn, table: 'stock_level', entityId: idStock, op: 'INSERT');
       return idStock;
     });
   }
 
   @override
   Future<void> update(StockLevel level) async {
-    final idStock = level.id;
-
     final now = _nowIso();
     await db.transaction((txn) async {
       final prevRows = await txn.query(
         'stock_level',
-        columns: [
-          'productVariantId',
-          'companyId',
-          'stockOnHand',
-          'stockAllocated',
-        ],
+        columns: ['productVariantId', 'companyId', 'stockOnHand', 'stockAllocated'],
         where: 'id = ?',
         whereArgs: [level.id],
         limit: 1,
       );
-      String prevPv = level.productVariantId;
-      String prevCo = level.companyId;
       int prevOn = 0;
       int prevAl = 0;
       if (prevRows.isNotEmpty) {
         final m = prevRows.first;
-        prevPv = (m['productVariantId'] as String?) ?? prevPv;
-        prevCo = (m['companyId'] as String?) ?? prevCo;
         prevOn = (m['stockOnHand'] as int?) ?? 0;
         prevAl = (m['stockAllocated'] as int?) ?? 0;
       }
@@ -247,7 +225,6 @@ class StockLevelRepositorySqflite implements StockLevelRepository {
       final dOn = level.stockOnHand - prevOn;
       if (dOn != 0) {
         final idMvts = const Uuid().v4();
-
         await txn.insert('stock_movement', {
           'type_stock_movement': 'ADJUST',
           'quantity': dOn.abs(),
@@ -258,13 +235,13 @@ class StockLevelRepositorySqflite implements StockLevelRepository {
           'createdAt': now,
           'updatedAt': now,
           'id': idMvts,
+          'syncAt': null,
+          'version': 0,
+          'isDirty': 1,
+          'remoteId': null,
+          'localId': null,
         });
-        await _upsertChangeLog(
-          txn,
-          table: 'stock_movement',
-          entityId: idMvts,
-          op: 'INSERT',
-        );
+        await _upsertChangeLog(txn, table: 'stock_movement', entityId: idMvts, op: 'INSERT');
       }
 
       final dAl = level.stockAllocated - prevAl;
@@ -281,21 +258,16 @@ class StockLevelRepositorySqflite implements StockLevelRepository {
           'createdAt': now,
           'updatedAt': now,
           'id': idMvts,
+          'syncAt': null,
+          'version': 0,
+          'isDirty': 1,
+          'remoteId': null,
+          'localId': null,
         });
-        await _upsertChangeLog(
-          txn,
-          table: 'stock_movement',
-          entityId: idMvts,
-          op: 'INSERT',
-        );
+        await _upsertChangeLog(txn, table: 'stock_movement', entityId: idMvts, op: 'INSERT');
       }
 
-      await _upsertChangeLog(
-        txn,
-        table: 'stock_level',
-        entityId: '${level.id}',
-        op: 'UPDATE',
-      );
+      await _upsertChangeLog(txn, table: 'stock_level', entityId: '${level.id}', op: 'UPDATE');
     });
   }
 
@@ -303,12 +275,7 @@ class StockLevelRepositorySqflite implements StockLevelRepository {
   Future<void> delete(String id) async {
     await db.transaction((txn) async {
       await txn.delete('stock_level', where: 'id = ?', whereArgs: [id]);
-      await _upsertChangeLog(
-        txn,
-        table: 'stock_level',
-        entityId: id,
-        op: 'DELETE',
-      );
+      await _upsertChangeLog(txn, table: 'stock_level', entityId: id, op: 'DELETE');
     });
   }
 
@@ -338,13 +305,10 @@ class StockLevelRepositorySqflite implements StockLevelRepository {
         'SELECT stockOnHand, id FROM stock_level WHERE productVariantId=? AND companyId=? LIMIT 1',
         [productVariantId, companyId],
       );
-      final cur = (curRow.isEmpty
-          ? 0
-          : (curRow.first['stockOnHand'] as int? ?? 0));
+      final cur = (curRow.isEmpty ? 0 : (curRow.first['stockOnHand'] as int? ?? 0));
       final next = cur + delta;
       final newVal = next < 0 ? 0 : next;
-
-      String idStock = curRow.first['id'] as String;
+      final idStock = curRow.first['id'] as String;
 
       await txn.rawUpdate(
         'UPDATE stock_level SET stockOnHand=?, updatedAt=? WHERE id=?',
@@ -352,7 +316,6 @@ class StockLevelRepositorySqflite implements StockLevelRepository {
       );
 
       final idMvts = const Uuid().v4();
-
       await txn.insert('stock_movement', {
         'type_stock_movement': 'ADJUST',
         'quantity': delta.abs(),
@@ -363,21 +326,15 @@ class StockLevelRepositorySqflite implements StockLevelRepository {
         'createdAt': now,
         'updatedAt': now,
         'id': idMvts,
+        'syncAt': null,
+        'version': 0,
+        'isDirty': 1,
+        'remoteId': null,
+        'localId': null,
       });
 
-      await _upsertChangeLog(
-        txn,
-        table: 'stock_level',
-        entityId: idStock,
-        op: 'UPDATE',
-      );
-
-      await _upsertChangeLog(
-        txn,
-        table: 'stock_movement',
-        entityId: idMvts,
-        op: 'INSERT',
-      );
+      await _upsertChangeLog(txn, table: 'stock_level', entityId: idStock, op: 'UPDATE');
+      await _upsertChangeLog(txn, table: 'stock_movement', entityId: idMvts, op: 'INSERT');
     });
   }
 
@@ -402,9 +359,7 @@ class StockLevelRepositorySqflite implements StockLevelRepository {
         'SELECT stockOnHand , id FROM stock_level WHERE productVariantId=? AND companyId=? LIMIT 1',
         [productVariantId, companyId],
       );
-      final cur = (curRow.isEmpty
-          ? 0
-          : (curRow.first['stockOnHand'] as int? ?? 0));
+      final cur = (curRow.isEmpty ? 0 : (curRow.first['stockOnHand'] as int? ?? 0));
       final safeTarget = target < 0 ? 0 : target;
       final delta = safeTarget - cur;
       if (delta == 0) return;
@@ -421,7 +376,6 @@ class StockLevelRepositorySqflite implements StockLevelRepository {
           : (delta > 0 ? 'INC' : 'DEC');
 
       final idMvts = const Uuid().v4();
-
       await txn.insert('stock_movement', {
         'type_stock_movement': 'ADJUST',
         'quantity': delta.abs(),
@@ -432,27 +386,20 @@ class StockLevelRepositorySqflite implements StockLevelRepository {
         'createdAt': now,
         'updatedAt': now,
         'id': idMvts,
+        'syncAt': null,
+        'version': 0,
+        'isDirty': 1,
+        'remoteId': null,
+        'localId': null,
       });
 
-      await _upsertChangeLog(
-        txn,
-        table: 'stock_level',
-        entityId: idStock,
-        op: 'UPDATE',
-      );
-      await _upsertChangeLog(
-        txn,
-        table: 'stock_movement',
-        entityId: idMvts,
-        op: 'INSERT',
-      );
+      await _upsertChangeLog(txn, table: 'stock_level', entityId: idStock, op: 'UPDATE');
+      await _upsertChangeLog(txn, table: 'stock_movement', entityId: idMvts, op: 'INSERT');
     });
   }
 
   @override
-  Future<List<Map<String, Object?>>> listProductVariants({
-    String query = '',
-  }) async {
+  Future<List<Map<String, Object?>>> listProductVariants({String query = ''}) async {
     final q = query.trim().toLowerCase();
     final like = '%$q%';
     return db.rawQuery(
