@@ -1,14 +1,13 @@
-// Customer autocomplete with keyboard-safe popup height, "create" that closes the
-// options overlay first, then opens the right drawer to add a customer, and returns Customer.
+// Customer autocomplete with keyboard-safe popup height,
+// and a "create" action that closes only the options overlay (no route pop)
+// before opening the right drawer to add a customer. Returns Customer.
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'package:money_pulse/domain/customer/entities/customer.dart';
 import 'package:money_pulse/presentation/widgets/right_drawer.dart';
-import 'package:money_pulse/presentation/features/customers/customer_add_panel.dart';
-
-import '../../customers/customer_create_panel.dart';
+import 'package:money_pulse/presentation/features/customers/customer_create_panel.dart';
 
 class CustomerAutocomplete extends ConsumerStatefulWidget {
   final TextEditingController controller;
@@ -40,6 +39,14 @@ class CustomerAutocomplete extends ConsumerStatefulWidget {
 }
 
 class _CustomerAutocompleteState extends ConsumerState<CustomerAutocomplete> {
+  // Keep a handle to the input's FocusNode so we can close only the options overlay.
+  FocusNode? _inputFocus;
+
+  void _closeOptionsOverlay() {
+    // Unfocusing the field hides RawAutocomplete's overlay.
+    _inputFocus?.unfocus();
+  }
+
   Future<void> _createCustomer(BuildContext context) async {
     Customer? created;
     if (widget.onCreate != null) {
@@ -53,8 +60,10 @@ class _CustomerAutocompleteState extends ConsumerState<CustomerAutocomplete> {
       );
     }
     if (created == null) return;
+
     widget.controller.text = created.fullName;
     widget.onSelected(created);
+
     if (!mounted) return;
     ScaffoldMessenger.of(
       context,
@@ -73,10 +82,15 @@ class _CustomerAutocompleteState extends ConsumerState<CustomerAutocomplete> {
       ),
       fieldViewBuilder:
           (context, textEditingController, focusNode, onFieldSubmitted) {
+            // Capture the field FocusNode so we can close the overlay later.
+            _inputFocus = focusNode;
+
+            // Keep external controller in sync on first build
             if (widget.controller.text.isNotEmpty &&
                 textEditingController.text.isEmpty) {
               textEditingController.text = widget.controller.text;
             }
+
             return ValueListenableBuilder<TextEditingValue>(
               valueListenable: textEditingController,
               builder: (context, value, _) {
@@ -93,13 +107,11 @@ class _CustomerAutocompleteState extends ConsumerState<CustomerAutocomplete> {
                           tooltip: 'Créer un client',
                           icon: const Icon(Icons.person_add_alt),
                           onPressed: () async {
-                            // Fermer l’overlay d’options proprement avant d’ouvrir le drawer
-                            FocusScope.of(context).unfocus();
-                            Navigator.of(
-                              context,
-                            ).maybePop(); // ferme le menu autocomplete
+                            // Close only the autocomplete overlay
+                            _closeOptionsOverlay();
+                            // Let the overlay settle, then open the drawer
                             await Future<void>.delayed(
-                              const Duration(milliseconds: 1),
+                              const Duration(milliseconds: 16),
                             );
                             if (!mounted) return;
                             await _createCustomer(this.context);
@@ -150,10 +162,10 @@ class _CustomerAutocompleteState extends ConsumerState<CustomerAutocomplete> {
                           ? Text('Société: ${widget.companyLabel!}')
                           : null,
                       onTap: () async {
-                        // ferme le menu des options puis ouvre le drawer
-                        Navigator.of(context).pop();
+                        // Close only the overlay; do NOT pop any route.
+                        _closeOptionsOverlay();
                         await Future<void>.delayed(
-                          const Duration(milliseconds: 1),
+                          const Duration(milliseconds: 16),
                         );
                         if (!mounted) return;
                         await _createCustomer(this.context);

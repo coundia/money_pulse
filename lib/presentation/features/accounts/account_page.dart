@@ -253,7 +253,7 @@ class _AccountListPageState extends ConsumerState<AccountListPage> {
             ],
             child: Chip(label: Text('Filtres (${count.toString()})')),
           ),
-        ],
+        ].toList(),
       ),
     );
 
@@ -295,7 +295,11 @@ class _AccountListPageState extends ConsumerState<AccountListPage> {
               itemBuilder: (_, i) {
                 if (i == 0) return header;
                 final a = items[i - 1];
+
+                // ✅ Unique, stable key based on account.id so duplicate `code`s don't collapse.
                 return GestureDetector(
+                  key: ValueKey(a.id),
+                  behavior: HitTestBehavior.opaque,
                   onLongPressStart: (d) {
                     showAccountContextMenu(
                       context,
@@ -314,6 +318,7 @@ class _AccountListPageState extends ConsumerState<AccountListPage> {
                     );
                   },
                   child: AccountTile(
+                    key: ValueKey('tile_${a.id}'),
                     account: a,
                     balanceText: _fmtMoney(a.balance, a.currency),
                     updatedAtText: _fmtDate(a.updatedAt),

@@ -226,15 +226,6 @@ class AccountPullPortSqflite {
           );
           if (byLocalId.isNotEmpty) targetRow = byLocalId.first;
         }
-        if (targetRow == null && code != null) {
-          final byCode = await txn.query(
-            'account',
-            where: 'code = ? AND deletedAt IS NULL',
-            whereArgs: [code],
-            limit: 1,
-          );
-          if (byCode.isNotEmpty) targetRow = byCode.first;
-        }
 
         if (targetRow != null) {
           // -------- UPDATE path (do not touch updatedAt) --------
@@ -268,9 +259,10 @@ class AccountPullPortSqflite {
         } else {
           // -------- INSERT path (id is new; OK to set) --------
           // Use remoteSyncAt for updatedAt to avoid "local is newer" illusions.
+
           final createdAt = remoteSyncAt.toIso8601String();
           await txn.insert('account', {
-            'id': remoteId ?? DateTime.now().microsecondsSinceEpoch.toString(),
+            'id': localId ?? remoteId,
             ...baseData,
             ...remoteBalances,
             'createdAt': createdAt,

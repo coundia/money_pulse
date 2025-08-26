@@ -170,11 +170,17 @@ Future<Account?> showAccountPickerSheet({
                                 final a = filtered[i];
                                 final isSelected =
                                     (selectedAccountId ?? '') == a.id;
-                                return AccountPickerTile(
-                                  account: a,
-                                  isSelected: isSelected,
-                                  onPick: () => Navigator.pop(c, a),
-                                  onAdjust: () => _adjust(a),
+
+                                // ✅ Stable unique keys (based on id) so duplicate codes render separately.
+                                return Container(
+                                  key: ValueKey('picker_row_${a.id}'),
+                                  child: AccountPickerTile(
+                                    key: ValueKey('picker_tile_${a.id}'),
+                                    account: a,
+                                    isSelected: isSelected,
+                                    onPick: () => Navigator.pop(c, a),
+                                    onAdjust: () => _adjust(a),
+                                  ),
                                 );
                               },
                               separatorBuilder: (_, __) =>

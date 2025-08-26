@@ -1,5 +1,6 @@
 // Sqflite repository for accounts with change-log tracking and optional DatabaseExecutor for atomic operations.
 // Also ensures balance_prev mirrors the previous balance whenever balance changes.
+// Self-heals default account so exactly one row isDefault=1 (never 0, never >1).
 import 'package:uuid/uuid.dart';
 import 'package:sqflite/sqflite.dart';
 import 'package:money_pulse/infrastructure/db/app_database.dart';
@@ -61,7 +62,6 @@ class AccountRepositorySqflite implements AccountRepository {
 
     Future<void> _do(DatabaseExecutor e) async {
       // If the balance is changing, snapshot current balance into balance_prev first.
-      // This keeps the invariant: balance_prev = previous balance before this update.
       try {
         final rows = await e.query(
           'account',
@@ -131,10 +131,13 @@ class AccountRepositorySqflite implements AccountRepository {
 
   @override
   Future<Account?> findDefault() async {
+    // Self-heal the default invariant before reading it.
+    await _ensureSingleDefault();
+
     final rows = await _database.db.query(
       'account',
-      where: 'isDefault=1 ',
-      orderBy: 'updatedAt DESC',
+      where: 'isDefault=1 AND deletedAt IS NULL',
+      orderBy: 'updatedAt DESC, createdAt DESC',
       limit: 1,
     );
     if (rows.isEmpty) return null;
@@ -143,7 +146,14 @@ class AccountRepositorySqflite implements AccountRepository {
 
   @override
   Future<List<Account>> findAllActive() async {
-    final rows = await _database.db.query('account', orderBy: 'updatedAt DESC');
+    // Self-heal here as well so UI always sees a single default.
+    await _ensureSingleDefault();
+
+    final rows = await _database.db.query(
+      'account',
+      where: 'deletedAt IS NULL',
+      orderBy: 'updatedAt DESC',
+    );
     return rows.map(Account.fromMap).toList();
   }
 
@@ -184,6 +194,7 @@ class AccountRepositorySqflite implements AccountRepository {
           );
         }
       }
+
       await e.rawUpdate(
         'UPDATE account SET isDefault=1, isDirty=1, version=version+1, updatedAt=? WHERE id=?',
         [nowIso, id],
@@ -231,8 +242,8 @@ class AccountRepositorySqflite implements AccountRepository {
     }
   }
 
-  // Optional helper if you want to adjust balances atomically from use cases:
-  // Sets balance_prev = current balance, then sets balance = newBalance.
+  /// Optional helper if you want to adjust balances atomically from use cases:
+  /// Sets balance_prev = current balance, then sets balance = newBalance.
   Future<void> updateBalancesWithPrev(
     String id,
     int newBalanceCents, {
@@ -263,6 +274,109 @@ class AccountRepositorySqflite implements AccountRepository {
         'SET operation=excluded.operation, updatedAt=excluded.updatedAt, payload=excluded.payload',
         [idLog, 'account', id, 'UPDATE', null, 'PENDING', nowIso, nowIso],
       );
+    }
+
+    if (exec != null) {
+      await _do(exec);
+    } else {
+      await _database.tx((txn) async => _do(txn));
+    }
+  }
+
+  // ------------------------- default self-heal --------------------------------
+
+  /// Ensures exactly one default account (isDefault=1 and deletedAt IS NULL).
+  /// If many defaults exist, keeps the most recently updated/created, clears others.
+  /// If none exist (but accounts exist), promotes the most recent to default.
+  Future<void> _ensureSingleDefault({DatabaseExecutor? exec}) async {
+    Future<void> _do(DatabaseExecutor e) async {
+      // Count current defaults (not deleted)
+      final defaults = await e.query(
+        'account',
+        columns: ['id'],
+        where: 'isDefault=1 AND deletedAt IS NULL',
+      );
+
+      final nowIso = _nowIso();
+
+      if (defaults.length > 1) {
+        // Winner: most recently updated (fallback created)
+        final winnerRows = await e.rawQuery(
+          'SELECT id FROM account '
+          'WHERE isDefault=1 AND deletedAt IS NULL '
+          'ORDER BY updatedAt DESC, createdAt DESC LIMIT 1',
+        );
+        if (winnerRows.isEmpty) return;
+        final winnerId = winnerRows.first['id'] as String;
+
+        // Losers: all other defaults
+        final losers = await e.query(
+          'account',
+          columns: ['id'],
+          where: 'isDefault=1 AND deletedAt IS NULL AND id<>?',
+          whereArgs: [winnerId],
+        );
+        if (losers.isNotEmpty) {
+          // Set others to 0; log each
+          await e.rawUpdate(
+            'UPDATE account SET isDefault=0, isDirty=1, version=version+1, updatedAt=? '
+            'WHERE isDefault=1 AND deletedAt IS NULL AND id<>?',
+            [nowIso, winnerId],
+          );
+          for (final row in losers) {
+            final loserId = row['id'] as String;
+            final idLog = const Uuid().v4();
+            await e.rawInsert(
+              'INSERT INTO change_log(id, entityTable, entityId, operation, payload, status, createdAt, updatedAt) '
+              'VALUES(?,?,?,?,?,?,?,?) '
+              'ON CONFLICT(entityTable, entityId, status) DO UPDATE '
+              'SET operation=excluded.operation, updatedAt=excluded.updatedAt, payload=excluded.payload',
+              [
+                idLog,
+                'account',
+                loserId,
+                'UPDATE',
+                null,
+                'PENDING',
+                nowIso,
+                nowIso,
+              ],
+            );
+          }
+        }
+      } else if (defaults.isEmpty) {
+        // No default: promote the most recent active account (if any)
+        final winnerRows = await e.rawQuery(
+          'SELECT id FROM account '
+          'WHERE deletedAt IS NULL '
+          'ORDER BY updatedAt DESC, createdAt DESC LIMIT 1',
+        );
+        if (winnerRows.isEmpty) return; // no accounts
+        final winnerId = winnerRows.first['id'] as String;
+
+        await e.rawUpdate(
+          'UPDATE account SET isDefault=1, isDirty=1, version=version+1, updatedAt=? '
+          'WHERE id=?',
+          [nowIso, winnerId],
+        );
+        final idLog = const Uuid().v4();
+        await e.rawInsert(
+          'INSERT INTO change_log(id, entityTable, entityId, operation, payload, status, createdAt, updatedAt) '
+          'VALUES(?,?,?,?,?,?,?,?) '
+          'ON CONFLICT(entityTable, entityId, status) DO UPDATE '
+          'SET operation=excluded.operation, updatedAt=excluded.updatedAt, payload=excluded.payload',
+          [
+            idLog,
+            'account',
+            winnerId,
+            'UPDATE',
+            null,
+            'PENDING',
+            nowIso,
+            nowIso,
+          ],
+        );
+      }
     }
 
     if (exec != null) {
