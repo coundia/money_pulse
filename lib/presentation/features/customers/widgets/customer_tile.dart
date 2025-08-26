@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/gestures.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:money_pulse/domain/customer/entities/customer.dart';
+import 'package:money_pulse/presentation/features/customers/customer_edit_panel.dart';
 import 'package:money_pulse/presentation/widgets/right_drawer.dart';
 import 'package:money_pulse/presentation/shared/formatters.dart';
 
@@ -83,7 +84,7 @@ class CustomerTile extends ConsumerWidget {
   Future<void> _openEdit(BuildContext context, WidgetRef ref) async {
     final ok = await showRightDrawer<bool>(
       context,
-      child: CustomerFormPanel(initial: customer),
+      child: CustomerEditPanel(initial: customer),
       widthFraction: 0.86,
       heightFraction: 0.96,
     );

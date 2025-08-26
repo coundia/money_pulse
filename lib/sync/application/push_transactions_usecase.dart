@@ -51,6 +51,7 @@ class PushTransactionsUseCase implements PushPort {
 
       dtoJson['localId'] = tx.id;
       dtoJson['remoteId'] = tx.remoteId;
+      dtoJson['category'] = tx.categoryId;
       dtoJson['type'] = t.name.toUpperCase();
 
       return dtoJson;

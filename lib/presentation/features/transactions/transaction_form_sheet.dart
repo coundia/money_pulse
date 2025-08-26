@@ -23,6 +23,7 @@ import '../../app/providers/customer_repo_provider.dart';
 import '../../widgets/right_drawer.dart';
 
 // Inline create panels
+import '../customers/customer_create_panel.dart';
 import '../customers/customer_form_panel.dart';
 import '../../features/categories/widgets/category_form_panel.dart'
     show CategoryFormPanel, CategoryFormResult;
@@ -272,7 +273,7 @@ class _TransactionFormSheetState extends ConsumerState<TransactionFormSheet> {
   Future<void> _createCustomerAndSelect() async {
     final created = await showRightDrawer<Customer?>(
       context,
-      child: const CustomerFormPanel(),
+      child: const CustomerCreatePanel(),
       widthFraction: 0.86,
       heightFraction: 0.96,
     );

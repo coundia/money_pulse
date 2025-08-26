@@ -1,11 +1,14 @@
-// Customer autocomplete with keyboard-safe popup height and focus handoff to next field.
+// Customer autocomplete with keyboard-safe popup height, "create" that closes the
+// options overlay first, then opens the right drawer to add a customer, and returns Customer.
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'package:money_pulse/domain/customer/entities/customer.dart';
 import 'package:money_pulse/presentation/widgets/right_drawer.dart';
-import 'package:money_pulse/presentation/features/customers/customer_form_panel.dart';
+import 'package:money_pulse/presentation/features/customers/customer_add_panel.dart';
+
+import '../../customers/customer_create_panel.dart';
 
 class CustomerAutocomplete extends ConsumerStatefulWidget {
   final TextEditingController controller;
@@ -44,7 +47,7 @@ class _CustomerAutocompleteState extends ConsumerState<CustomerAutocomplete> {
     } else {
       created = await showRightDrawer<Customer?>(
         context,
-        child: const CustomerFormPanel(),
+        child: const CustomerCreatePanel(),
         widthFraction: 0.86,
         heightFraction: 0.96,
       );
@@ -65,6 +68,9 @@ class _CustomerAutocompleteState extends ConsumerState<CustomerAutocomplete> {
       optionsBuilder: (textEditingValue) =>
           widget.optionsBuilder(textEditingValue.text),
       displayStringForOption: (c) => c.fullName,
+      initialValue: TextEditingValue(
+        text: widget.initialSelected?.fullName ?? '',
+      ),
       fieldViewBuilder:
           (context, textEditingController, focusNode, onFieldSubmitted) {
             if (widget.controller.text.isNotEmpty &&
@@ -87,7 +93,11 @@ class _CustomerAutocompleteState extends ConsumerState<CustomerAutocomplete> {
                           tooltip: 'Créer un client',
                           icon: const Icon(Icons.person_add_alt),
                           onPressed: () async {
+                            // Fermer l’overlay d’options proprement avant d’ouvrir le drawer
                             FocusScope.of(context).unfocus();
+                            Navigator.of(
+                              context,
+                            ).maybePop(); // ferme le menu autocomplete
                             await Future<void>.delayed(
                               const Duration(milliseconds: 1),
                             );
@@ -140,6 +150,7 @@ class _CustomerAutocompleteState extends ConsumerState<CustomerAutocomplete> {
                           ? Text('Société: ${widget.companyLabel!}')
                           : null,
                       onTap: () async {
+                        // ferme le menu des options puis ouvre le drawer
                         Navigator.of(context).pop();
                         await Future<void>.delayed(
                           const Duration(milliseconds: 1),

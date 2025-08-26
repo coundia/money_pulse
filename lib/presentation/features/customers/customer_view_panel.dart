@@ -3,6 +3,7 @@
 // Adds “Transactions” entry in AppBar menu to open CustomerTransactionsPopup.
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:money_pulse/presentation/features/customers/customer_edit_panel.dart';
 import 'providers/customer_detail_providers.dart';
 import 'providers/customer_list_providers.dart';
 import 'widgets/customer_linked_section.dart';
@@ -35,7 +36,7 @@ class CustomerViewPanel extends ConsumerWidget {
       if (c == null) return;
       final ok = await showRightDrawer<bool>(
         context,
-        child: CustomerFormPanel(initial: c),
+        child: CustomerEditPanel(initial: c),
         widthFraction: 0.86,
         heightFraction: 0.96,
       );

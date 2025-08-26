@@ -11,6 +11,7 @@ import 'package:money_pulse/presentation/widgets/right_drawer.dart';
 import 'package:money_pulse/presentation/features/products/product_picker_panel.dart';
 import 'package:money_pulse/presentation/features/products/product_repo_provider.dart';
 import 'package:money_pulse/presentation/features/products/widgets/product_form_panel.dart';
+import '../customers/customer_create_panel.dart';
 import 'models/tx_item.dart';
 import 'quick_add/tx_quick_add_notifier.dart';
 import 'quick_add/tx_quick_utils.dart';
@@ -546,7 +547,7 @@ class _TransactionQuickAddSheetState
   Future<Customer?> _quickCreateCustomer() async {
     final created = await showRightDrawer<Customer?>(
       context,
-      child: const CustomerFormPanel(),
+      child: const CustomerCreatePanel(),
       widthFraction: 0.86,
       heightFraction: 0.96,
     );

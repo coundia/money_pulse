@@ -9,6 +9,7 @@ class CategoryDeltaDto {
   final String code;
   final String? description;
   final String type;
+  final String typeEntry;
   final DateTime updatedAt;
 
   CategoryDeltaDto({
@@ -19,6 +20,7 @@ class CategoryDeltaDto {
     required this.code,
     this.description,
     required this.type,
+    required this.typeEntry,
     required this.updatedAt,
   });
 
@@ -35,6 +37,7 @@ class CategoryDeltaDto {
       name: c.code,
       description: c.description,
       type: t.name,
+      typeEntry: c.typeEntry,
       updatedAt: now,
     );
   }
@@ -46,6 +49,7 @@ class CategoryDeltaDto {
     'code': code,
     'name': code,
     'description': description,
+    'typeEntry': typeEntry,
     'operation': type,
     'updatedAt': updatedAt.toIso8601String(),
     'type': type.toUpperCase(),
