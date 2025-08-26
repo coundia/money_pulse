@@ -1,5 +1,5 @@
 class StockLevel {
-  final String? id;
+  final String id;
   final String productVariantId;
   final String companyId;
   final int stockOnHand;
@@ -13,7 +13,7 @@ class StockLevel {
   final String? remoteId;
 
   StockLevel({
-    this.id,
+    required this.id,
     required this.productVariantId,
     required this.companyId,
     required this.stockOnHand,
@@ -28,7 +28,7 @@ class StockLevel {
   });
 
   StockLevel copyWith({
-    String? id,
+    required String id,
     String? productVariantId,
     String? companyId,
     int? stockOnHand,
@@ -40,7 +40,7 @@ class StockLevel {
     bool? isDirty,
   }) {
     return StockLevel(
-      id: id ?? this.id,
+      id: id,
       productVariantId: productVariantId ?? this.productVariantId,
       companyId: companyId ?? this.companyId,
       stockOnHand: stockOnHand ?? this.stockOnHand,

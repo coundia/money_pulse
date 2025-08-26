@@ -2,6 +2,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:uuid/uuid.dart';
 import 'providers/stock_level_repo_provider.dart';
 import 'package:money_pulse/domain/stock/entities/stock_level.dart';
 
@@ -83,7 +84,7 @@ class _StockLevelFormPanelState extends ConsumerState<StockLevelFormPanel> {
     final repo = ref.read(stockLevelRepoProvider);
     final now = DateTime.now();
     final entity = StockLevel(
-      id: widget.itemId != null ? widget.itemId! : null,
+      id: Uuid().v4(),
       productVariantId: _pvId!,
       companyId: _companyId!,
       stockOnHand: int.parse(_onHandCtrl.text.trim()),

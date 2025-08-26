@@ -2,6 +2,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:uuid/uuid.dart';
 import 'providers/stock_movement_repo_provider.dart';
 import '../../../domain/stock/entities/stock_movement.dart';
 
@@ -83,7 +84,7 @@ class _StockMovementFormPanelState
     final repo = ref.read(stockMovementRepoProvider);
     final now = DateTime.now();
     final entity = StockMovement(
-      id: widget.itemId != null ? widget.itemId! : null,
+      id: Uuid().v4(),
       type: _type,
       quantity: int.parse(_qtyCtrl.text.trim()),
       companyId: _companyId!,

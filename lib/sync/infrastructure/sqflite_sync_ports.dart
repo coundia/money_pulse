@@ -367,7 +367,7 @@ class StockLevelSyncPortSqflite implements StockLevelSyncPort {
         entityTable,
         {'isDirty': 0, 'syncAt': iso, 'updatedAt': iso},
         where: 'id = ?',
-        whereArgs: [int.tryParse(id) ?? -1],
+        whereArgs: [id],
       );
     }
     await batch.commit(noResult: true);
@@ -378,7 +378,7 @@ class StockLevelSyncPortSqflite implements StockLevelSyncPort {
     final rows = await db.query(
       entityTable,
       where: 'id = ?',
-      whereArgs: [int.tryParse(id) ?? -1],
+      whereArgs: [id],
       limit: 1,
     );
     if (rows.isEmpty) return null;
@@ -412,7 +412,7 @@ class StockMovementSyncPortSqflite implements StockMovementSyncPort {
         entityTable,
         {'isDirty': 0, 'syncAt': iso, 'updatedAt': iso},
         where: 'id = ?',
-        whereArgs: [int.tryParse(id) ?? -1],
+        whereArgs: [id],
       );
     }
     await batch.commit(noResult: true);
@@ -423,7 +423,7 @@ class StockMovementSyncPortSqflite implements StockMovementSyncPort {
     final rows = await db.query(
       entityTable,
       where: 'id = ?',
-      whereArgs: [int.tryParse(id) ?? -1],
+      whereArgs: [id],
       limit: 1,
     );
     if (rows.isEmpty) return null;

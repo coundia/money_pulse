@@ -110,7 +110,7 @@ class StockMovementViewPanel extends ConsumerWidget {
                 _KV('Total', tot),
                 _KV('Créé le', Formatters.dateFull(row.createdAt)),
                 _KV('Ligne transaction', row.orderLineId ?? '—'),
-                _KV('ID mouvement', row.id),
+                _KV('ID mouvement', row.id ?? "-"),
               ],
             ),
           ),

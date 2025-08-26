@@ -119,7 +119,7 @@ class StockLevelRepositorySqflite implements StockLevelRepository {
     if (rows.isEmpty) return null;
     final m = rows.first;
     return StockLevel(
-      id: m['id'] as String?,
+      id: id,
       productVariantId: (m['productVariantId'] as String),
       companyId: (m['companyId'] as String),
       stockOnHand: (m['stockOnHand'] as int),

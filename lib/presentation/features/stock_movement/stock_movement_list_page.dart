@@ -33,7 +33,7 @@ class _StockMovementListPageState extends ConsumerState<StockMovementListPage> {
   Future<void> _openView(StockMovementRow row) async {
     await showRightDrawer(
       context,
-      child: StockMovementViewPanel(itemId: row.id),
+      child: StockMovementViewPanel(itemId: row.id ?? "-"),
     );
   }
 

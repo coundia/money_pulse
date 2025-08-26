@@ -104,7 +104,7 @@ class StockMovementRepositorySqflite implements StockMovementRepository {
   Future<void> update(StockMovement m) async {
     await db.update(
       'stock_movement',
-      m.copyWith(updatedAt: DateTime.now()).toMap(),
+      m.copyWith(id: m.id, updatedAt: DateTime.now()).toMap(),
       where: 'id = ?',
       whereArgs: [m.id],
       conflictAlgorithm: ConflictAlgorithm.abort,

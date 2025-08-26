@@ -86,6 +86,7 @@ class ProductRepositorySqflite implements ProductRepository {
         'stockAllocated': 0,
         'createdAt': now,
         'updatedAt': now,
+        'id': Uuid().v4(),
       }, conflictAlgorithm: ConflictAlgorithm.ignore);
     }
   }
