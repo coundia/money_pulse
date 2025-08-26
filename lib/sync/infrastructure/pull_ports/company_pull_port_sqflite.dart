@@ -182,15 +182,6 @@ class CompanyPullPortSqflite {
           );
           if (byLocalId.isNotEmpty) targetRow = byLocalId.first;
         }
-        if (targetRow == null && code != null) {
-          final byCode = await txn.query(
-            entityTable,
-            where: 'code = ? AND deletedAt IS NULL',
-            whereArgs: [code],
-            limit: 1,
-          );
-          if (byCode.isNotEmpty) targetRow = byCode.first;
-        }
 
         if (targetRow != null) {
           final localUpdatedAt = _parseLocalDate(targetRow['updatedAt']);

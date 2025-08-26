@@ -141,7 +141,7 @@ CREATE TABLE IF NOT EXISTS product (
   isDirty INTEGER DEFAULT 1
 );
 
-CREATE UNIQUE INDEX IF NOT EXISTS uq_product_code_active ON product(code) WHERE deletedAt IS NULL;
+CREATE   INDEX IF NOT EXISTS uq_product_code_active ON product(code) WHERE deletedAt IS NULL;
 CREATE INDEX IF NOT EXISTS idx_product_barcode ON product(barcode);
 CREATE INDEX IF NOT EXISTS idx_product_unit ON product(unitId);
 CREATE INDEX IF NOT EXISTS idx_product_category ON product(categoryId);
@@ -206,7 +206,7 @@ CREATE TABLE IF NOT EXISTS company (
   isDirty INTEGER DEFAULT 1
 );
 
-CREATE UNIQUE INDEX IF NOT EXISTS uq_company_code_active
+CREATE   INDEX IF NOT EXISTS uq_company_code_active
   ON company(code) WHERE deletedAt IS NULL;
 
 CREATE INDEX IF NOT EXISTS idx_company_name ON company(name);
@@ -247,7 +247,7 @@ CREATE TABLE IF NOT EXISTS customer (
   isDirty INTEGER DEFAULT 1
 );
 
-CREATE UNIQUE INDEX IF NOT EXISTS uq_customer_code_active
+CREATE   INDEX IF NOT EXISTS uq_customer_code_active
   ON customer(code) WHERE deletedAt IS NULL;
 
 CREATE  INDEX IF NOT EXISTS uq_customer_email_active
