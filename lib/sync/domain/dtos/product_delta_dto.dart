@@ -39,12 +39,13 @@ class ProductDeltaDto {
     final isUpdateOrDelete = t != SyncDeltaType.create;
     final nowIso = (now.isUtc ? now : now.toUtc()).toIso8601String();
     final localId = (p.localId as String?) ?? (p.id as String);
+
     return ProductDeltaDto._(
       id: isUpdateOrDelete ? p.remoteId as String? : null,
       localId: localId,
       remoteId: p.remoteId as String?,
-      code: p.code as String?,
-      name: p.name as String?,
+      code: p.code ?? p.name,
+      name: p.name ?? p.code,
       description: p.description as String?,
       barcode: p.barcode as String?,
       unitId: p.unitId as String?,

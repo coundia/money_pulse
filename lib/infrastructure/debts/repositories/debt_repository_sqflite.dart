@@ -4,6 +4,8 @@ import 'package:money_pulse/infrastructure/db/app_database.dart';
 import 'package:money_pulse/domain/debts/entities/debt.dart';
 import 'package:money_pulse/domain/debts/repositories/debt_repository.dart';
 
+import '../../../sync/infrastructure/change_log_helper.dart';
+
 class DebtRepositorySqflite implements DebtRepository {
   final AppDatabase db;
   DebtRepositorySqflite(this.db);
@@ -36,12 +38,19 @@ class DebtRepositorySqflite implements DebtRepository {
     await db.tx((txn) async {
       await createTx(txn, debt);
     });
+
     return debt;
   }
 
   @override
   Future<Debt> createTx(Transaction txn, Debt debt) async {
     await txn.insert('debt', debt.toMap());
+    await upsertChangeLogPending(
+      txn,
+      entityTable: 'debt',
+      entityId: debt.id,
+      operation: 'INSERT',
+    );
     return debt;
   }
 
@@ -70,6 +79,13 @@ class DebtRepositorySqflite implements DebtRepository {
       where: 'id = ?',
       whereArgs: [id],
     );
+
+    await upsertChangeLogPending(
+      txn,
+      entityTable: 'debt',
+      entityId: id,
+      operation: 'UPDATE',
+    );
   }
 
   @override
@@ -86,6 +102,13 @@ class DebtRepositorySqflite implements DebtRepository {
       {'updatedAt': when.toIso8601String(), 'isDirty': 1},
       where: 'id = ?',
       whereArgs: [id],
+    );
+
+    await upsertChangeLogPending(
+      txn,
+      entityTable: 'debt',
+      entityId: id,
+      operation: 'UPDATE',
     );
   }
 

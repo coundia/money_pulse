@@ -3,6 +3,8 @@ import 'package:money_pulse/domain/transactions/repositories/transaction_item_re
 import 'package:money_pulse/infrastructure/db/app_database.dart';
 import 'package:sqflite/sqflite.dart';
 
+import '../../../sync/infrastructure/change_log_helper.dart';
+
 class TransactionItemRepositoryImpl implements TransactionItemRepository {
   final AppDatabase db;
   TransactionItemRepositoryImpl(this.db);
@@ -53,6 +55,13 @@ class TransactionItemRepositoryImpl implements TransactionItemRepository {
         data,
         conflictAlgorithm: ConflictAlgorithm.abort,
       );
+
+      await upsertChangeLogPending(
+        txn,
+        entityTable: 'transaction_item',
+        entityId: item.id,
+        operation: 'INSERT',
+      );
     });
     return item.id;
   }
@@ -76,6 +85,13 @@ class TransactionItemRepositoryImpl implements TransactionItemRepository {
         whereArgs: [item.id],
         conflictAlgorithm: ConflictAlgorithm.abort,
       );
+
+      await upsertChangeLogPending(
+        txn,
+        entityTable: 'transaction_item',
+        entityId: item.id,
+        operation: 'UPDATE',
+      );
     });
   }
 
@@ -92,6 +108,13 @@ class TransactionItemRepositoryImpl implements TransactionItemRepository {
         },
         where: 'id=?',
         whereArgs: [id],
+      );
+
+      await upsertChangeLogPending(
+        txn,
+        entityTable: 'transaction_item',
+        entityId: id,
+        operation: 'DELETE',
       );
     });
   }

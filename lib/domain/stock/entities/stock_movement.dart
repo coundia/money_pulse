@@ -1,6 +1,6 @@
 /// Domain entity representing a stock movement audit row.
 class StockMovement {
-  final int? id;
+  final String? id;
   final String type; // 'IN','OUT','ALLOCATE','RELEASE','ADJUST'
   final int quantity;
   final String companyId;
@@ -27,7 +27,7 @@ class StockMovement {
   });
 
   StockMovement copyWith({
-    int? id,
+    String? id,
     String? type,
     int? quantity,
     String? companyId,
@@ -52,7 +52,7 @@ class StockMovement {
 
   factory StockMovement.fromMap(Map<String, Object?> m) {
     return StockMovement(
-      id: m['id'] as int?,
+      id: m['id'] as String?,
       type: (m['type_stock_movement'] as String),
       quantity: (m['quantity'] as int?) ?? 0,
       companyId: (m['companyId'] as String),

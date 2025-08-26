@@ -1,6 +1,7 @@
 class Product {
   final String id;
   final String? remoteId;
+  final String? localId;
   final String? code;
   final String? name;
   final String? description;
@@ -20,6 +21,7 @@ class Product {
   const Product({
     required this.id,
     this.remoteId,
+    this.localId,
     this.code,
     this.name,
     this.description,

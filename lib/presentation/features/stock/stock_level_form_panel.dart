@@ -83,7 +83,7 @@ class _StockLevelFormPanelState extends ConsumerState<StockLevelFormPanel> {
     final repo = ref.read(stockLevelRepoProvider);
     final now = DateTime.now();
     final entity = StockLevel(
-      id: widget.itemId != null ? int.parse(widget.itemId!) : null,
+      id: widget.itemId != null ? widget.itemId! : null,
       productVariantId: _pvId!,
       companyId: _companyId!,
       stockOnHand: int.parse(_onHandCtrl.text.trim()),

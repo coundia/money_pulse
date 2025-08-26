@@ -37,15 +37,9 @@ Future<void> main() async {
       RestartApp(
         child: ProviderScope(
           overrides: [
-            // ⬇️ Skip "products" sync globally (change the set to disable others too)
-            syncPolicyProvider.overrideWithValue(
-              const DisabledSetSyncPolicy({
-                SyncDomain.products,
-                SyncDomain.debts,
-                SyncDomain.stockLevels,
-                SyncDomain.stockMovements,
-              }),
-            ),
+            /*syncPolicyProvider.overrideWithValue(
+              const DisabledSetSyncPolicy({SyncDomain.stockMovements}),
+            ),*/
           ],
           child: const Bootstrap(),
         ),

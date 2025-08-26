@@ -116,7 +116,7 @@ CREATE TABLE IF NOT EXISTS  sync_state (
   lastCursor TEXT,
   updatedAt TEXT DEFAULT (datetime('now')) NOT NULL
 );
- 
+  
  
 
 CREATE TABLE IF NOT EXISTS product (
@@ -265,13 +265,14 @@ CREATE INDEX IF NOT EXISTS idx_customer_dirty ON customer(isDirty);
 
 CREATE TABLE stock_level
 (
+  id TEXT PRIMARY KEY,
     createdAt        TEXT DEFAULT (datetime('now')) ,
     remoteId TEXT,
       localId TEXT,
     updatedAt        TEXT DEFAULT (datetime('now')) ,
     stockOnHand      INTEGER                        ,
     stockAllocated   INTEGER                        ,
-    id               INTEGER                         PRIMARY KEY AUTOINCREMENT,
+    
     productVariantId TEXT                        
         REFERENCES product(id) ON DELETE CASCADE,
         syncAt TEXT,
@@ -292,7 +293,7 @@ CREATE INDEX IF NOT EXISTS IDX_stocklevel_product
 
 
 CREATE TABLE IF NOT EXISTS stock_movement (
-  id                INTEGER PRIMARY KEY AUTOINCREMENT,
+  id TEXT PRIMARY KEY,
   type_stock_movement TEXT ,
   remoteId TEXT,
     localId TEXT,

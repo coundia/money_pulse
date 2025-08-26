@@ -1,8 +1,10 @@
 /// Sqflite repository for StockMovement CRUD and search, exposing unit price and total.
 import 'package:sqflite/sqflite.dart';
+import 'package:uuid/uuid.dart';
 import '../../../infrastructure/db/app_database.dart';
 import '../../../domain/stock/entities/stock_movement.dart';
 import '../../../domain/stock/repositories/stock_movement_repository.dart';
+import '../../../sync/infrastructure/change_log_helper.dart';
 
 class StockMovementRepositorySqflite implements StockMovementRepository {
   final AppDatabase app;
@@ -47,7 +49,7 @@ class StockMovementRepositorySqflite implements StockMovementRepository {
     final rows = await db.query(
       'stock_movement',
       where: 'id = ?',
-      whereArgs: [int.parse(id)],
+      whereArgs: [id],
       limit: 1,
     );
     if (rows.isEmpty) return null;
@@ -74,7 +76,7 @@ class StockMovementRepositorySqflite implements StockMovementRepository {
       WHERE sm.id = ?
       LIMIT 1
       ''',
-      [int.parse(id)],
+      [id],
     );
     if (rows.isEmpty) return null;
     return _toRow(rows.first);
@@ -82,6 +84,15 @@ class StockMovementRepositorySqflite implements StockMovementRepository {
 
   @override
   Future<int> create(StockMovement m) async {
+    final idStock = const Uuid().v4();
+    final idMvts = const Uuid().v4();
+
+    await upsertChangeLogPending(
+      db,
+      entityTable: 'stock_movement',
+      entityId: m.id as String,
+      operation: 'INSERT',
+    );
     return await db.insert(
       'stock_movement',
       m.toMap(),
@@ -98,14 +109,24 @@ class StockMovementRepositorySqflite implements StockMovementRepository {
       whereArgs: [m.id],
       conflictAlgorithm: ConflictAlgorithm.abort,
     );
+
+    await upsertChangeLogPending(
+      db,
+      entityTable: 'stock_movement',
+      entityId: m.id as String,
+      operation: 'UPDATE',
+    );
   }
 
   @override
   Future<void> delete(String id) async {
-    await db.delete(
-      'stock_movement',
-      where: 'id = ?',
-      whereArgs: [int.parse(id)],
+    await db.delete('stock_movement', where: 'id = ?', whereArgs: [id]);
+
+    await upsertChangeLogPending(
+      db,
+      entityTable: 'stock_movement',
+      entityId: id,
+      operation: 'DELETE',
     );
   }
 
@@ -147,7 +168,7 @@ class StockMovementRepositorySqflite implements StockMovementRepository {
 
   StockMovementRow _toRow(Map<String, Object?> m) {
     return StockMovementRow(
-      id: (m['id'] as int).toString(),
+      id: m['id'] as String,
       productLabel: (m['productLabel'] as String?) ?? '',
       companyLabel: (m['companyLabel'] as String?) ?? '',
       type: (m['type'] as String?) ?? '',

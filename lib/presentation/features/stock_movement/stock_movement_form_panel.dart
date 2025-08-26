@@ -83,7 +83,7 @@ class _StockMovementFormPanelState
     final repo = ref.read(stockMovementRepoProvider);
     final now = DateTime.now();
     final entity = StockMovement(
-      id: widget.itemId != null ? int.parse(widget.itemId!) : null,
+      id: widget.itemId != null ? widget.itemId! : null,
       type: _type,
       quantity: int.parse(_qtyCtrl.text.trim()),
       companyId: _companyId!,

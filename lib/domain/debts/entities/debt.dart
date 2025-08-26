@@ -4,6 +4,7 @@ import 'package:uuid/uuid.dart';
 class Debt {
   final String id;
   final String? remoteId;
+  final String? localId;
   final String? code;
   final String? notes;
   final int balance;
@@ -21,6 +22,7 @@ class Debt {
   const Debt({
     required this.id,
     this.remoteId,
+    this.localId,
     this.code,
     this.notes,
     this.balance = 0,

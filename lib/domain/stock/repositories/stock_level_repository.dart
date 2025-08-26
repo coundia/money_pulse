@@ -22,7 +22,7 @@ class StockLevelRow {
 abstract class StockLevelRepository {
   Future<List<StockLevelRow>> search({String query = ''});
   Future<StockLevel?> findById(String id);
-  Future<int> create(StockLevel level);
+  Future<String> create(StockLevel level);
   Future<void> update(StockLevel level);
   Future<void> delete(String id);
 

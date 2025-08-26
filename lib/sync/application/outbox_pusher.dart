@@ -64,14 +64,16 @@ class OutboxPusher {
         decoded["type"] = "CREATE";
       }
 
-      // print("+++++++++ decode ++++");
-      // print(decoded);
-
       validEntries.add(p);
       validDeltas.add(decoded);
     }
 
     if (validDeltas.isEmpty) {
+      print(
+        "+++++++++ pending ++++++++++++++++++++++++++++++++++++++++++++++++",
+      );
+      print(pending);
+
       logger.info(
         'Outbox $entityTable: nothing valid to push after building payloads',
       );
@@ -85,6 +87,7 @@ class OutboxPusher {
 
     logger.info('Outbox $entityTable: POST count=${validDeltas.length}');
     final resp = await postFn(validDeltas);
+    // if has error
     if (resp.statusCode < 200 || resp.statusCode >= 300) {
       final body = resp.body;
       final msg =
@@ -92,7 +95,17 @@ class OutboxPusher {
       for (final p in validEntries) {
         await changeLog.markPending(p.id, error: msg);
       }
-      throw StateError('Sync failed with status ${resp.statusCode}');
+      //throw StateError('Sync failed with status ${resp.statusCode}');
+      logger.error(
+        'xxxxxxxxx ERROR  xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx',
+      );
+      logger.error('[OutboxPusher.error]  status: ${resp.statusCode}');
+      logger.error('[OutboxPusher.error]  body: ${resp.body}');
+      final now = DateTime.now().toUtc();
+      for (final p in validEntries) {
+        await changeLog.markFailed(p.id);
+      }
+      return 0;
     }
 
     //sent

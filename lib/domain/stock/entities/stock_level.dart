@@ -1,5 +1,5 @@
 class StockLevel {
-  final int? id;
+  final String? id;
   final String productVariantId;
   final String companyId;
   final int stockOnHand;
@@ -28,7 +28,7 @@ class StockLevel {
   });
 
   StockLevel copyWith({
-    int? id,
+    String? id,
     String? productVariantId,
     String? companyId,
     int? stockOnHand,
@@ -61,7 +61,7 @@ class StockLevel {
     }
 
     return StockLevel(
-      id: (map['id'] as int?) ?? int.tryParse(map['id']?.toString() ?? ''),
+      id: (map['id'] as String?) ?? map['id']?.toString() ?? '',
       productVariantId: map['productVariantId'] as String? ?? '',
       companyId: map['companyId'] as String? ?? '',
       stockOnHand: (map['stockOnHand'] as int?) ?? 0,
