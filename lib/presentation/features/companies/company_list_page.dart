@@ -1,104 +1,214 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+
 import 'package:money_pulse/presentation/features/companies/company_form_panel.dart';
 import 'package:money_pulse/presentation/features/companies/providers/company_list_providers.dart';
 import 'package:money_pulse/presentation/features/companies/widgets/company_tile.dart';
 import 'package:money_pulse/presentation/widgets/right_drawer.dart';
 
-class CompanyListPage extends ConsumerWidget {
+class CompanyListPage extends ConsumerStatefulWidget {
   const CompanyListPage({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final listAsync = ref.watch(companyListProvider);
-    final countAsync = ref.watch(companyCountProvider);
-    final searchCtrl = TextEditingController(
-      text: ref.read(companySearchProvider),
+  ConsumerState<CompanyListPage> createState() => _CompanyListPageState();
+}
+
+class _CompanyListPageState extends ConsumerState<CompanyListPage> {
+  late final TextEditingController _searchCtrl;
+
+  @override
+  void initState() {
+    super.initState();
+    _searchCtrl = TextEditingController(text: ref.read(companySearchProvider));
+  }
+
+  @override
+  void dispose() {
+    _searchCtrl.dispose();
+    super.dispose();
+  }
+
+  void _refresh() {
+    ref.invalidate(companyListProvider);
+    ref.invalidate(companyCountProvider);
+  }
+
+  Future<void> _openCreate() async {
+    final ok = await showRightDrawer<bool>(
+      context,
+      child: const CompanyFormPanel(),
+      widthFraction: 0.86,
+      heightFraction: 0.96,
     );
+    if (ok == true && mounted) _refresh();
+  }
 
-    void _refresh() {
-      ref.invalidate(companyListProvider);
-      ref.invalidate(companyCountProvider);
-    }
+  @override
+  Widget build(BuildContext context) {
+    final listAsync = ref.watch(companyListProvider);
+    final count = ref
+        .watch(companyCountProvider)
+        .maybeWhen(data: (c) => c, orElse: () => null);
 
-    return Scaffold(
-      appBar: AppBar(title: const Text('Sociétés')),
-      body: Column(
+    final header = Padding(
+      padding: const EdgeInsets.fromLTRB(12, 10, 12, 6),
+      child: Row(
         children: [
-          Padding(
-            padding: const EdgeInsets.fromLTRB(12, 10, 12, 6),
-            child: Row(
-              children: [
-                Expanded(
-                  child: TextField(
-                    controller: searchCtrl,
-                    onSubmitted: (v) {
-                      ref.read(companySearchProvider.notifier).state = v;
-                      ref.read(companyPageIndexProvider.notifier).state = 0;
-                    },
-                    decoration: InputDecoration(
-                      prefixIcon: const Icon(Icons.search),
-                      isDense: true,
-                      hintText: 'Rechercher par code, nom, téléphone, email',
-                      suffixIcon: IconButton(
+          Expanded(
+            child: TextField(
+              controller: _searchCtrl,
+              onChanged: (v) {
+                ref.read(companySearchProvider.notifier).state = v;
+                ref.read(companyPageIndexProvider.notifier).state = 0;
+              },
+              onSubmitted: (v) {
+                ref.read(companySearchProvider.notifier).state = v;
+                ref.read(companyPageIndexProvider.notifier).state = 0;
+              },
+              decoration: InputDecoration(
+                prefixIcon: const Icon(Icons.search),
+                isDense: true,
+                hintText: 'Rechercher par code, nom, téléphone, email',
+                suffixIcon: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    if (_searchCtrl.text.isNotEmpty)
+                      IconButton(
                         tooltip: 'Effacer',
                         onPressed: () {
-                          searchCtrl.clear();
+                          _searchCtrl.clear();
                           ref.read(companySearchProvider.notifier).state = '';
                           ref.read(companyPageIndexProvider.notifier).state = 0;
                         },
                         icon: const Icon(Icons.clear),
                       ),
-                      border: const OutlineInputBorder(),
+                    IconButton(
+                      tooltip: 'Rafraîchir',
+                      onPressed: _refresh,
+                      icon: const Icon(Icons.refresh),
                     ),
-                  ),
+                  ],
                 ),
-                const SizedBox(width: 8),
-                countAsync.maybeWhen(
-                  data: (c) => Text('$c élément(s)'),
-                  orElse: () => const SizedBox.shrink(),
-                ),
-              ],
+                border: const OutlineInputBorder(),
+              ),
             ),
           ),
+          const SizedBox(width: 8),
+          if (count != null)
+            Chip(
+              label: Text('$count élément(s)'),
+              avatar: const Icon(Icons.filter_alt, size: 18),
+            ),
+        ],
+      ),
+    );
+
+    return Scaffold(
+      appBar: AppBar(
+        title: const Text('Sociétés'),
+        actions: [
+          IconButton(
+            tooltip: 'Ajouter',
+            onPressed: _openCreate,
+            icon: const Icon(Icons.add),
+          ),
+          IconButton(
+            tooltip: 'Rafraîchir',
+            onPressed: _refresh,
+            icon: const Icon(Icons.refresh),
+          ),
+        ],
+      ),
+      body: Column(
+        children: [
+          header,
           const Divider(height: 1),
           Expanded(
             child: listAsync.when(
-              data: (rows) {
-                if (rows.isEmpty) {
-                  return const Center(child: Text('Aucune société'));
-                }
-                return ListView.separated(
-                  itemCount: rows.length,
-                  separatorBuilder: (_, __) => const Divider(height: 1),
-                  itemBuilder: (_, i) {
-                    final c = rows[i];
-                    return CompanyTile(
-                      company: c,
-                      onActionDone: _refresh,
-                      // Enrichir menu ici si besoin
-                    );
-                  },
-                );
-              },
               loading: () => const Center(child: CircularProgressIndicator()),
               error: (e, _) => Center(child: Text('Erreur: $e')),
+              data: (rows) {
+                if (rows.isEmpty) {
+                  return _EmptyState(onAdd: _openCreate);
+                }
+                return RefreshIndicator(
+                  onRefresh: () async => _refresh(),
+                  child: ListView.separated(
+                    padding: const EdgeInsets.only(bottom: 88),
+                    itemCount: rows.length,
+                    separatorBuilder: (_, __) => const Divider(height: 1),
+                    itemBuilder: (_, i) {
+                      final c = rows[i];
+
+                      // ✅ Stable key so duplicates (same code) never collapse.
+                      final tile = CompanyTile(
+                        key: ValueKey('company_${c.id}'),
+                        company: c,
+                        onActionDone: _refresh,
+                      );
+
+                      if (c.isDefault == true) {
+                        return ClipRect(
+                          child: Banner(
+                            message: 'Défaut',
+                            location: BannerLocation.topStart,
+                            color: Theme.of(context).colorScheme.primary,
+                            textStyle: TextStyle(
+                              color: Theme.of(
+                                context,
+                              ).colorScheme.onPrimary.withOpacity(0.95),
+                              fontWeight: FontWeight.w600,
+                            ),
+                            child: tile,
+                          ),
+                        );
+                      }
+                      return tile;
+                    },
+                  ),
+                );
+              },
             ),
           ),
         ],
       ),
       floatingActionButton: FloatingActionButton.extended(
-        onPressed: () async {
-          final ok = await showRightDrawer<bool>(
-            context,
-            child: const CompanyFormPanel(),
-            widthFraction: 0.86,
-            heightFraction: 0.96,
-          );
-          if (ok == true) _refresh();
-        },
+        onPressed: _openCreate,
         icon: const Icon(Icons.add),
         label: const Text('Ajouter'),
+      ),
+    );
+  }
+}
+
+class _EmptyState extends StatelessWidget {
+  final VoidCallback onAdd;
+  const _EmptyState({required this.onAdd});
+
+  @override
+  Widget build(BuildContext context) {
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(24),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Icon(Icons.business_outlined, size: 72),
+            const SizedBox(height: 12),
+            const Text(
+              'Aucune société',
+              style: TextStyle(fontSize: 18, fontWeight: FontWeight.w600),
+            ),
+            const SizedBox(height: 6),
+            const Text('Créez votre première société pour commencer.'),
+            const SizedBox(height: 16),
+            FilledButton.icon(
+              onPressed: onAdd,
+              icon: const Icon(Icons.add),
+              label: const Text('Ajouter'),
+            ),
+          ],
+        ),
       ),
     );
   }
