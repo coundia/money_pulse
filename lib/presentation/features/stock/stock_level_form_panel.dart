@@ -1,4 +1,4 @@
-/// Right drawer panel to create or edit a StockLevel with searchable pickers and ENTER submission.
+// Right drawer panel to create or edit a StockLevel with searchable pickers and ENTER submission. IDs remain stable on edit.
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -84,7 +84,7 @@ class _StockLevelFormPanelState extends ConsumerState<StockLevelFormPanel> {
     final repo = ref.read(stockLevelRepoProvider);
     final now = DateTime.now();
     final entity = StockLevel(
-      id: Uuid().v4(),
+      id: widget.itemId ?? const Uuid().v4(),
       productVariantId: _pvId!,
       companyId: _companyId!,
       stockOnHand: int.parse(_onHandCtrl.text.trim()),
@@ -104,8 +104,6 @@ class _StockLevelFormPanelState extends ConsumerState<StockLevelFormPanel> {
     }
   }
 
-  String? _req(String? v) =>
-      (v == null || v.trim().isEmpty) ? 'Champ obligatoire' : null;
   String? _intv(String? v) {
     if (v == null || v.trim().isEmpty) return 'Champ obligatoire';
     final n = int.tryParse(v.trim());
@@ -117,12 +115,12 @@ class _StockLevelFormPanelState extends ConsumerState<StockLevelFormPanel> {
   @override
   Widget build(BuildContext context) {
     return Shortcuts(
-      shortcuts: <LogicalKeySet, Intent>{
-        LogicalKeySet(LogicalKeyboardKey.enter): const ActivateIntent(),
-        LogicalKeySet(LogicalKeyboardKey.numpadEnter): const ActivateIntent(),
+      shortcuts: {
+        LogicalKeySet(LogicalKeyboardKey.enter): ActivateIntent(),
+        LogicalKeySet(LogicalKeyboardKey.numpadEnter): ActivateIntent(),
       },
       child: Actions(
-        actions: <Type, Action<Intent>>{
+        actions: {
           ActivateIntent: CallbackAction<ActivateIntent>(
             onInvoke: (_) {
               _submit();
