@@ -294,8 +294,6 @@ class TransactionRepositorySqflite implements TransactionRepository {
     DateTime to, {
     String? typeEntry,
   }) async {
-    print("****** findByAccountBetween ");
-
     final where = StringBuffer(
       // Inclure les transactions du compte sélectionné
       // OU les dettes (typeEntry='DEBT') sans compte (accountId IS NULL)

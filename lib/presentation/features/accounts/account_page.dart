@@ -1,4 +1,6 @@
-// Orchestrates accounts list; context menu opens on long-press only (no secondary tap). FR labels, EN code.
+// Orchestrates accounts list; context menu opens on long-press only (no secondary tap).
+// FR labels, EN code. Highlights the default account with a left accent + "Défaut" badge,
+// clearable search, visible filter status, and small UX touches.
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -216,44 +218,82 @@ class _AccountListPageState extends ConsumerState<AccountListPage> {
     final count = ref
         .watch(accountCountProvider)
         .maybeWhen(orElse: () => 0, data: (v) => v);
+    final selectedType = ref.watch(accountTypeFilterProvider);
 
     final header = Padding(
       padding: const EdgeInsets.fromLTRB(12, 12, 12, 8),
-      child: Row(
+      child: Column(
         children: [
-          Expanded(
-            child: TextField(
-              controller: _searchCtrl,
-              decoration: InputDecoration(
-                hintText: 'Rechercher par code, devise, description, type',
-                prefixIcon: const Icon(Icons.search),
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(12),
+          Row(
+            children: [
+              Expanded(
+                child: TextField(
+                  controller: _searchCtrl,
+                  decoration: InputDecoration(
+                    hintText: 'Rechercher par code, devise, description, type',
+                    prefixIcon: const Icon(Icons.search),
+                    suffixIcon: (_searchCtrl.text.isEmpty)
+                        ? null
+                        : IconButton(
+                            tooltip: 'Effacer',
+                            onPressed: () {
+                              _searchCtrl.clear();
+                              // listener updates provider
+                            },
+                            icon: const Icon(Icons.clear),
+                          ),
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    isDense: true,
+                  ),
+                  onSubmitted: (_) => ref.invalidate(accountListProvider),
+                  textInputAction: TextInputAction.search,
                 ),
-                isDense: true,
+              ),
+              const SizedBox(width: 8),
+              PopupMenuButton<String>(
+                tooltip: 'Filtrer',
+                onSelected: (v) =>
+                    ref.read(accountTypeFilterProvider.notifier).state =
+                        v == 'ALL' ? null : v,
+                itemBuilder: (_) => const [
+                  PopupMenuItem(value: 'ALL', child: Text('Tous les types')),
+                  PopupMenuItem(value: 'CASH', child: Text('Espèces')),
+                  PopupMenuItem(value: 'BANK', child: Text('Banque')),
+                  PopupMenuItem(value: 'MOBILE', child: Text('Mobile money')),
+                  PopupMenuItem(value: 'SAVINGS', child: Text('Épargne')),
+                  PopupMenuItem(value: 'CREDIT', child: Text('Crédit')),
+                  PopupMenuItem(
+                    value: 'BUDGET_MAX',
+                    child: Text('Budget maximum'),
+                  ),
+                  PopupMenuItem(value: 'OTHER', child: Text('Autre')),
+                ],
+                child: Chip(
+                  avatar: const Icon(Icons.filter_alt, size: 18),
+                  label: Text(
+                    selectedType == null
+                        ? 'Filtres ($count)'
+                        : 'Filtre: $selectedType ($count)',
+                  ),
+                ),
+              ),
+            ],
+          ),
+          if (selectedType != null) // show active filter chip with quick clear
+            Align(
+              alignment: Alignment.centerLeft,
+              child: Padding(
+                padding: const EdgeInsets.only(top: 8),
+                child: InputChip(
+                  label: Text('Type: $selectedType'),
+                  onDeleted: () =>
+                      ref.read(accountTypeFilterProvider.notifier).state = null,
+                ),
               ),
             ),
-          ),
-          const SizedBox(width: 8),
-          PopupMenuButton<String>(
-            tooltip: 'Filtrer',
-            onSelected: (v) =>
-                ref.read(accountTypeFilterProvider.notifier).state = v == 'ALL'
-                ? null
-                : v,
-            itemBuilder: (_) => const [
-              PopupMenuItem(value: 'ALL', child: Text('Tous les types')),
-              PopupMenuItem(value: 'CASH', child: Text('Espèces')),
-              PopupMenuItem(value: 'BANK', child: Text('Banque')),
-              PopupMenuItem(value: 'MOBILE', child: Text('Mobile money')),
-              PopupMenuItem(value: 'SAVINGS', child: Text('Épargne')),
-              PopupMenuItem(value: 'CREDIT', child: Text('Crédit')),
-              PopupMenuItem(value: 'BUDGET_MAX', child: Text('Budget maximum')),
-              PopupMenuItem(value: 'OTHER', child: Text('Autre')),
-            ],
-            child: Chip(label: Text('Filtres (${count.toString()})')),
-          ),
-        ].toList(),
+        ],
       ),
     );
 
@@ -295,41 +335,107 @@ class _AccountListPageState extends ConsumerState<AccountListPage> {
               itemBuilder: (_, i) {
                 if (i == 0) return header;
                 final a = items[i - 1];
-
-                // ✅ Unique, stable key based on account.id so duplicate `code`s don't collapse.
-                return GestureDetector(
-                  key: ValueKey(a.id),
-                  behavior: HitTestBehavior.opaque,
-                  onLongPressStart: (d) {
-                    showAccountContextMenu(
-                      context,
-                      d.globalPosition,
-                      canMakeDefault: !a.isDefault,
-                      onView: () => _view(a),
-                      onMakeDefault: () => _setDefault(a),
-                      onEdit: () => _addOrEdit(existing: a),
-                      onDelete: () => _delete(a),
-                      onShare: () => _share(a),
-                      onAdjustBalance: () => _adjustBalance(a),
-                      accountLabel: a.code,
-                      balanceCents: a.balance,
-                      currency: a.currency,
-                      updatedAt: a.updatedAt,
-                    );
-                  },
-                  child: AccountTile(
-                    key: ValueKey('tile_${a.id}'),
-                    account: a,
-                    balanceText: _fmtMoney(a.balance, a.currency),
-                    updatedAtText: _fmtDate(a.updatedAt),
-                    onView: () => _view(a),
-                  ),
-                );
+                return _accountRow(a);
               },
             ),
           );
         },
       ),
+    );
+  }
+
+  Widget _accountRow(Account a) {
+    final theme = Theme.of(context);
+    final isDefault = a.isDefault;
+
+    final tile = AccountTile(
+      key: ValueKey('tile_${a.id}'),
+      account: a,
+      balanceText: _fmtMoney(a.balance, a.currency),
+      updatedAtText: _fmtDate(a.updatedAt),
+      onView: () => _view(a),
+    );
+
+    final decorated = Container(
+      key: ValueKey(a.id),
+      decoration: isDefault
+          ? BoxDecoration(
+              color: theme.colorScheme.primary.withOpacity(0.035),
+              border: Border(
+                left: BorderSide(color: theme.colorScheme.primary, width: 4),
+              ),
+            )
+          : null,
+      child: tile,
+    );
+
+    final content = isDefault
+        ? Stack(
+            children: [
+              decorated,
+              Positioned(
+                right: 10,
+                top: 8,
+                child: Tooltip(
+                  message: 'Compte par défaut',
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 8,
+                      vertical: 4,
+                    ),
+                    decoration: BoxDecoration(
+                      color: theme.colorScheme.primary.withOpacity(0.10),
+                      borderRadius: BorderRadius.circular(999),
+                      border: Border.all(
+                        color: theme.colorScheme.primary.withOpacity(0.35),
+                      ),
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(
+                          Icons.star,
+                          size: 16,
+                          color: theme.colorScheme.primary,
+                        ),
+                        const SizedBox(width: 4),
+                        Text(
+                          'Défaut',
+                          style: theme.textTheme.labelSmall?.copyWith(
+                            color: theme.colorScheme.primary,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          )
+        : decorated;
+
+    return GestureDetector(
+      key: ValueKey('row_${a.id}'),
+      behavior: HitTestBehavior.opaque,
+      onLongPressStart: (d) {
+        showAccountContextMenu(
+          context,
+          d.globalPosition,
+          canMakeDefault: !a.isDefault,
+          onView: () => _view(a),
+          onMakeDefault: () => _setDefault(a),
+          onEdit: () => _addOrEdit(existing: a),
+          onDelete: () => _delete(a),
+          onShare: () => _share(a),
+          onAdjustBalance: () => _adjustBalance(a),
+          accountLabel: a.code,
+          balanceCents: a.balance,
+          currency: a.currency,
+          updatedAt: a.updatedAt,
+        );
+      },
+      child: content,
     );
   }
 

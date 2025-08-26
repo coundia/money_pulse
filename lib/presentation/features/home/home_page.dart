@@ -89,18 +89,55 @@ class _HomePageState extends ConsumerState<HomePage> {
 
   Future<void> _showAccountPicker() async {
     if (!mounted) return;
+
+    // 1) Load/prepare accounts and normalize default BEFORE opening the picker.
+    final repo = ref.read(accountRepoProvider);
+    final selectedIdPref = ref.read(selectedAccountIdProvider);
+
+    final accountsFuture = ref
+        .read(balanceProvider.notifier)
+        .load()
+        .then((_) => repo.findAllActive())
+        .then((list) async {
+          // Ensure exactly one default exists.
+          final defaults = list.where((a) => a.isDefault).toList();
+          if (list.isNotEmpty && defaults.length != 1) {
+            // Prefer previously-selected account if present; otherwise first.
+            final target = list.firstWhere(
+              (a) => a.id == (selectedIdPref ?? ''),
+              orElse: () => list.first,
+            );
+            try {
+              await repo.setDefault(target.id);
+            } catch (_) {
+              // Fallback: mark chosen one as default directly.
+              await repo.update(target.copyWith(isDefault: true));
+            }
+            // Reload list after normalization.
+            return await repo.findAllActive();
+          }
+          return list;
+        });
+
+    // 2) Show picker with normalized default selection.
     final picked = await showAccountPickerSheet(
       context: context,
-      accountsFuture: ref
-          .read(balanceProvider.notifier)
-          .load()
-          .then((_) => ref.read(accountRepoProvider).findAllActive()),
+      accountsFuture: accountsFuture,
       selectedAccountId: ref.read(selectedAccountIdProvider),
     );
+
+    // 3) On pick: make the picked account the (only) default, persist and refresh.
     if (picked != null) {
+      try {
+        await repo.setDefault(picked.id);
+      } catch (_) {
+        await repo.update(picked.copyWith(isDefault: true));
+      }
+
       ref.read(selectedAccountIdProvider.notifier).state = picked.id;
       final prefs = await SharedPreferences.getInstance();
       await prefs.setString(kLastAccountIdKey, picked.id);
+
       await _softReload();
       _hardRemount();
     }
@@ -442,6 +479,7 @@ class _HomePageState extends ConsumerState<HomePage> {
                     ),
                   ]);
                   items.add(const PopupMenuDivider());
+                  final accessGrant = ref.read(accessSessionProvider);
                   items.add(
                     PopupMenuItem(
                       value: accessGrant == null ? 'login' : 'logout',
