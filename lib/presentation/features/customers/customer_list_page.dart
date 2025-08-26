@@ -1,13 +1,14 @@
-// Customer list page with search, active-filters bar (with onAnyChange), and right-drawer filter panel.
+// Customer list page with search, active-filters bar, and right-drawer filter panel.
+// Uses CustomerCreatePanel (SRP) for adding; expects a Customer? result.
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../domain/customer/entities/customer.dart';
 import 'providers/customer_list_providers.dart';
-import 'widgets/customer_tile.dart';
-import 'customer_form_panel.dart';
-import 'widgets/customer_filters_panel.dart';
 import 'widgets/active_filters_bar.dart';
+import 'widgets/customer_tile.dart';
+import 'customer_create_panel.dart'; // <-- changed import
+import 'widgets/customer_filters_panel.dart';
 import 'package:money_pulse/presentation/widgets/right_drawer.dart';
 
 class CustomerListPage extends ConsumerStatefulWidget {
@@ -70,7 +71,7 @@ class _CustomerListPageState extends ConsumerState<CustomerListPage> {
             onPressed: () async {
               final created = await showRightDrawer<Customer?>(
                 context,
-                child: const CustomerFormPanel(),
+                child: const CustomerCreatePanel(),
                 widthFraction: 0.86,
                 heightFraction: 0.96,
               );
@@ -100,7 +101,7 @@ class _CustomerListPageState extends ConsumerState<CustomerListPage> {
                     onSubmitted: (v) {
                       ref.read(customerSearchProvider.notifier).state = v;
                       ref.read(customerPageIndexProvider.notifier).state = 0;
-                      _refresh(); // refresh on search submit
+                      _refresh();
                     },
                     decoration: InputDecoration(
                       prefixIcon: const Icon(Icons.search),
@@ -129,10 +130,7 @@ class _CustomerListPageState extends ConsumerState<CustomerListPage> {
               ],
             ),
           ),
-
-          // IMPORTANT: Active filters
           ActiveFiltersBar(onAnyChange: _refresh),
-
           const Divider(height: 1),
           Expanded(
             child: listAsync.when(

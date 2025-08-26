@@ -1,4 +1,5 @@
-// Customer create/update form with responsive layout, small AppBar action to avoid overflow, and enter-to-save.
+// Customer create/update right-drawer panel; aligns with Product panel closing logic.
+// Uses post-frame Navigator.pop<bool>(true) (no rootNavigator) to avoid !_debugLocked.
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -43,6 +44,7 @@ class _CustomerFormPanelState extends ConsumerState<CustomerFormPanel> {
   late final FocusNode _fNotes;
 
   String? _companyId;
+  bool _isSaving = false;
 
   @override
   void initState() {
@@ -69,7 +71,6 @@ class _CustomerFormPanelState extends ConsumerState<CustomerFormPanel> {
       _notes.text = c.notes ?? '';
       _companyId = c.companyId;
     }
-
     if (widget.initial == null && (widget.initialCompanyId ?? '').isNotEmpty) {
       _companyId = widget.initialCompanyId;
     }
@@ -110,9 +111,7 @@ class _CustomerFormPanelState extends ConsumerState<CustomerFormPanel> {
         } catch (_) {
           def = companies.isNotEmpty ? companies.first : null;
         }
-        if (def != null) {
-          setState(() => _companyId = def!.id);
-        }
+        if (def != null) setState(() => _companyId = def!.id);
       }
     }
     return companies;
@@ -126,9 +125,14 @@ class _CustomerFormPanelState extends ConsumerState<CustomerFormPanel> {
   }
 
   Future<void> _save() async {
+    if (_isSaving) return;
     if (!_formKey.currentState!.validate()) return;
+
+    setState(() => _isSaving = true);
+
     final repo = ref.read(customerRepoProvider);
     final now = DateTime.now();
+
     final entity = Customer(
       id: widget.initial?.id ?? const Uuid().v4(),
       remoteId: widget.initial?.remoteId,
@@ -161,13 +165,32 @@ class _CustomerFormPanelState extends ConsumerState<CustomerFormPanel> {
       balance: widget.initial?.balance ?? 0,
       balanceDebt: widget.initial?.balanceDebt ?? 0,
     );
-    if (widget.initial == null) {
-      await repo.create(entity);
-    } else {
-      await repo.update(entity);
-    }
-    if (mounted) {
-      Navigator.of(context).pop<bool>(true);
+
+    try {
+      if (widget.initial == null) {
+        await repo.create(entity);
+      } else {
+        await repo.update(entity);
+      }
+
+      if (!mounted) return;
+
+      // 1) Fermer le clavier et menus éventuels
+      FocusManager.instance.primaryFocus?.unfocus();
+
+      // 2) Laisser la frame courante se terminer pour éviter !_debugLocked
+      await Future<void>.delayed(const Duration(milliseconds: 16));
+      if (!mounted) return;
+
+      // 3) Pop local (comme Product). Renvoie true si ça a pop.
+      final poppedLocal = await Navigator.of(context).maybePop<bool>(true);
+
+      // 4) Si pas pop (selon comment right_drawer est branché), fallback root
+      if (!poppedLocal && mounted) {
+        await Navigator.of(context, rootNavigator: true).maybePop<bool>(true);
+      }
+    } finally {
+      if (mounted) setState(() => _isSaving = false);
     }
   }
 
@@ -204,12 +227,13 @@ class _CustomerFormPanelState extends ConsumerState<CustomerFormPanel> {
             leading: IconButton(
               tooltip: 'Fermer',
               icon: const Icon(Icons.close),
+              // Pop "local" (comme product)
               onPressed: () => Navigator.of(context).maybePop(),
             ),
             actions: [
               IconButton(
                 tooltip: isEdit ? 'Enregistrer' : 'Créer',
-                onPressed: _save,
+                onPressed: _isSaving ? null : _save,
                 icon: const Icon(Icons.check),
               ),
             ],
@@ -446,9 +470,9 @@ class _CustomerFormPanelState extends ConsumerState<CustomerFormPanel> {
                     LayoutBuilder(
                       builder: (context, cts) {
                         final narrow = cts.maxWidth < 400;
-                        if (widget.initial == null) {
+                        if (widget.initial == null)
                           return const SizedBox.shrink();
-                        }
+
                         final addBtn = FilledButton.tonalIcon(
                           onPressed: () async {
                             final ok = await showRightDrawer<bool>(
@@ -463,12 +487,17 @@ class _CustomerFormPanelState extends ConsumerState<CustomerFormPanel> {
                               heightFraction: 0.96,
                             );
                             if (ok == true && context.mounted) {
-                              Navigator.of(context).pop<bool>(true);
+                              WidgetsBinding.instance.addPostFrameCallback((_) {
+                                if (context.mounted) {
+                                  Navigator.of(context).pop<bool>(true);
+                                }
+                              });
                             }
                           },
                           icon: const Icon(Icons.add_circle_outline),
                           label: const Text('Ajouter au solde'),
                         );
+
                         final setBtn = OutlinedButton.icon(
                           onPressed: () async {
                             final ok = await showRightDrawer<bool>(
@@ -483,12 +512,17 @@ class _CustomerFormPanelState extends ConsumerState<CustomerFormPanel> {
                               heightFraction: 0.96,
                             );
                             if (ok == true && context.mounted) {
-                              Navigator.of(context).pop<bool>(true);
+                              WidgetsBinding.instance.addPostFrameCallback((_) {
+                                if (context.mounted) {
+                                  Navigator.of(context).pop<bool>(true);
+                                }
+                              });
                             }
                           },
                           icon: const Icon(Icons.edit_outlined),
                           label: const Text('Définir le solde'),
                         );
+
                         if (narrow) {
                           return Column(
                             crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -508,39 +542,42 @@ class _CustomerFormPanelState extends ConsumerState<CustomerFormPanel> {
                     ),
                   ];
 
-                  return Form(
-                    key: _formKey,
-                    autovalidateMode: AutovalidateMode.onUserInteraction,
-                    child: ListView(
-                      padding: const EdgeInsets.all(16),
-                      children: [
-                        if (isWide)
-                          Row(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Expanded(child: Column(children: [...left])),
-                              const SizedBox(width: 16),
-                              Expanded(child: Column(children: [...right])),
-                            ],
-                          )
-                        else
-                          Column(
-                            children: [
-                              ...left,
-                              const SizedBox(height: 16),
-                              ...right,
-                            ],
+                  return AbsorbPointer(
+                    absorbing: _isSaving,
+                    child: Form(
+                      key: _formKey,
+                      autovalidateMode: AutovalidateMode.onUserInteraction,
+                      child: ListView(
+                        padding: const EdgeInsets.all(16),
+                        children: [
+                          if (isWide)
+                            Row(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Expanded(child: Column(children: [...left])),
+                                const SizedBox(width: 16),
+                                Expanded(child: Column(children: [...right])),
+                              ],
+                            )
+                          else
+                            Column(
+                              children: [
+                                ...left,
+                                const SizedBox(height: 16),
+                                ...right,
+                              ],
+                            ),
+                          const SizedBox(height: 16),
+                          SafeArea(
+                            top: false,
+                            child: FilledButton.icon(
+                              onPressed: _isSaving ? null : _save,
+                              icon: const Icon(Icons.check),
+                              label: Text(isEdit ? 'Enregistrer' : 'Créer'),
+                            ),
                           ),
-                        const SizedBox(height: 16),
-                        SafeArea(
-                          top: false,
-                          child: FilledButton.icon(
-                            onPressed: _save,
-                            icon: const Icon(Icons.check),
-                            label: Text(isEdit ? 'Enregistrer' : 'Créer'),
-                          ),
-                        ),
-                      ],
+                        ],
+                      ),
                     ),
                   );
                 },
