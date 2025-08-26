@@ -183,64 +183,10 @@ class ProductViewPanel extends ConsumerWidget {
             ),
           ),
 
-          _SectionCard(
-            title: 'Stock',
-            trailing: (onAdjust != null)
-                ? OutlinedButton.icon(
-                    onPressed: onAdjust,
-                    icon: const Icon(Icons.tune),
-                    label: const Text('Ajuster le stock'),
-                  )
-                : null,
-            child: asyncLevels.when(
-              data: (rows) {
-                final filtered = rows.where((r) {
-                  if ((product.code ?? '').isNotEmpty) {
-                    return r.productLabel.toLowerCase().contains(
-                      product.code!.toLowerCase(),
-                    );
-                  }
-                  if ((product.name ?? '').isNotEmpty) {
-                    return r.productLabel.toLowerCase().contains(
-                      product.name!.toLowerCase(),
-                    );
-                  }
-                  return true;
-                }).toList();
-
-                if (filtered.isEmpty) {
-                  return _EmptyStockCard(
-                    hint: "Aucun niveau de stock trouvé pour ce produit.",
-                    onAdjust: onAdjust,
-                  );
-                }
-
-                final totalOnHand = filtered.fold<int>(
-                  0,
-                  (p, e) => p + e.stockOnHand,
-                );
-                final totalAllocated = filtered.fold<int>(
-                  0,
-                  (p, e) => p + e.stockAllocated,
-                );
-
-                return Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    _TotalsBar(
-                      onHand: totalOnHand,
-                      allocated: totalAllocated,
-                      updatedAt: filtered.first.updatedAt,
-                    ),
-                    const SizedBox(height: 8),
-                    _ResponsiveStockListOrTable(rows: filtered),
-                  ],
-                );
-              },
-              loading: () => const _LoadingCard(),
-              error: (err, _) =>
-                  _EmptyStockCard(hint: 'Impossible de charger le stock: $err'),
-            ),
+          OutlinedButton.icon(
+            onPressed: onAdjust,
+            icon: const Icon(Icons.tune),
+            label: const Text('Ajuster le stock'),
           ),
 
           const SizedBox(height: 8),

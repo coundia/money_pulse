@@ -77,11 +77,6 @@ class ProductTile extends StatelessWidget {
         subtitle: (subtitle == null || subtitle!.isEmpty)
             ? null
             : Text(subtitle!),
-        trailing: Wrap(
-          spacing: 10,
-          crossAxisAlignment: WrapCrossAlignment.center,
-          children: [stockChip, Text(Formatters.amountFromCents(priceCents))],
-        ),
       ),
     );
   }
