@@ -14,11 +14,11 @@ class StockMovementRepositorySqflite implements StockMovementRepository {
   String _nowIso() => DateTime.now().toIso8601String();
 
   Future<Map<String, Object?>> _ensureLevelRow(
-      Transaction txn, {
-        required String productVariantId,
-        required String companyId,
-        required String nowIso,
-      }) async {
+    Transaction txn, {
+    required String productVariantId,
+    required String companyId,
+    required String nowIso,
+  }) async {
     final rows = await txn.rawQuery(
       'SELECT id, stockOnHand, stockAllocated FROM stock_level WHERE productVariantId=? AND companyId=? LIMIT 1',
       [productVariantId, companyId],
@@ -40,22 +40,18 @@ class StockMovementRepositorySqflite implements StockMovementRepository {
       entityId: id,
       operation: 'INSERT',
     );
-    return {
-      'id': id,
-      'stockOnHand': 0,
-      'stockAllocated': 0,
-    };
+    return {'id': id, 'stockOnHand': 0, 'stockAllocated': 0};
   }
 
   Future<void> _applyImpact(
-      Transaction txn, {
-        required String type,
-        required int qty,
-        required String productVariantId,
-        required String companyId,
-        required String nowIso,
-        required int multiplier,
-      }) async {
+    Transaction txn, {
+    required String type,
+    required int qty,
+    required String productVariantId,
+    required String companyId,
+    required String nowIso,
+    required int multiplier,
+  }) async {
     final base = await _ensureLevelRow(
       txn,
       productVariantId: productVariantId,
@@ -102,7 +98,8 @@ class StockMovementRepositorySqflite implements StockMovementRepository {
       'SELECT id FROM stock_level WHERE productVariantId=? AND companyId=? LIMIT 1',
       [productVariantId, companyId],
     );
-    final idStock = (idRow.isNotEmpty ? (idRow.first['id'] as String?) : null) ?? '';
+    final idStock =
+        (idRow.isNotEmpty ? (idRow.first['id'] as String?) : null) ?? '';
 
     if (idStock.isNotEmpty) {
       await upsertChangeLogPending(
@@ -193,26 +190,22 @@ class StockMovementRepositorySqflite implements StockMovementRepository {
     final now = _nowIso();
 
     return await db.transaction<int>((txn) async {
-      final inserted = await txn.insert(
-        'stock_movement',
-        {
-          'id': id,
-          'type_stock_movement': m.type,
-          'quantity': m.quantity,
-          'companyId': m.companyId,
-          'productVariantId': m.productVariantId,
-          'orderLineId': m.orderLineId,
-          'discriminator': m.discriminator,
-          'createdAt': m.createdAt.toIso8601String(),
-          'updatedAt': now,
-          'syncAt': null,
-          'version': 0,
-          'isDirty': 1,
-          'remoteId': null,
-          'localId': null,
-        },
-        conflictAlgorithm: ConflictAlgorithm.abort,
-      );
+      final inserted = await txn.insert('stock_movement', {
+        'id': id,
+        'type_stock_movement': m.type,
+        'quantity': m.quantity,
+        'companyId': m.companyId,
+        'productVariantId': m.productVariantId,
+        'orderLineId': m.orderLineId,
+        'discriminator': m.discriminator,
+        'createdAt': m.createdAt.toIso8601String(),
+        'updatedAt': now,
+        'syncAt': null,
+        'version': 0,
+        'isDirty': 1,
+        'remoteId': null,
+        'localId': null,
+      }, conflictAlgorithm: ConflictAlgorithm.abort);
 
       await _applyImpact(
         txn,
@@ -330,7 +323,9 @@ class StockMovementRepositorySqflite implements StockMovementRepository {
   }
 
   @override
-  Future<List<Map<String, Object?>>> listProductVariants({String query = ''}) async {
+  Future<List<Map<String, Object?>>> listProductVariants({
+    String query = '',
+  }) async {
     final q = query.trim().toLowerCase();
     final like = '%$q%';
     return db.rawQuery(
@@ -365,14 +360,16 @@ class StockMovementRepositorySqflite implements StockMovementRepository {
 
   StockMovementRow _toRow(Map<String, Object?> m) {
     return StockMovementRow(
-      id: m['id'] as String,
+      id: (m['id'] ?? "N/A") as String,
       productLabel: (m['productLabel'] as String?) ?? '',
       companyLabel: (m['companyLabel'] as String?) ?? '',
       type: (m['type'] as String?) ?? '',
       quantity: (m['quantity'] as int?) ?? 0,
       unitPriceCents: (m['unitPriceCents'] as int?) ?? 0,
       totalCents: (m['totalCents'] as int?) ?? 0,
-      createdAt: DateTime.tryParse((m['createdAt'] as String?) ?? '') ?? DateTime.now(),
+      createdAt:
+          DateTime.tryParse((m['createdAt'] as String?) ?? '') ??
+          DateTime.now(),
       orderLineId: m['orderLineId'] as String?,
     );
   }
