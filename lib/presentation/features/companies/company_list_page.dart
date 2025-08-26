@@ -140,7 +140,6 @@ class _CompanyListPageState extends ConsumerState<CompanyListPage> {
                     itemBuilder: (_, i) {
                       final c = rows[i];
 
-                      // ✅ Stable key so duplicates (same code) never collapse.
                       final tile = CompanyTile(
                         key: ValueKey('company_${c.id}'),
                         company: c,
