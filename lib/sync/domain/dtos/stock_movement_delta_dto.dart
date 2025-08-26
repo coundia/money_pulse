@@ -58,11 +58,12 @@ class StockMovementDeltaDto {
     'remoteId': remoteId,
     'typeStockMovement': typeStockMovement,
     'quantity': quantity,
-    'companyId': companyId,
-    'productVariantId': productVariantId,
+    'company': companyId,
+    'productVariant': productVariantId,
     'orderLineId': orderLineId,
     'discriminator': discriminator,
     'syncAt': syncAt,
+
     'operation': operation,
   };
 }

@@ -114,6 +114,10 @@ class StockMovementPullPortSqflite {
         final orderLineId = _asStr(r['orderLineId']);
         final discriminator = _asStr(r['discriminator']);
 
+        if (productVariantId == null) {
+          continue;
+        }
+
         final remoteSyncAt = _asUtc(r['syncAt']);
         if (maxAt == null || remoteSyncAt.isAfter(maxAt!)) maxAt = remoteSyncAt;
 

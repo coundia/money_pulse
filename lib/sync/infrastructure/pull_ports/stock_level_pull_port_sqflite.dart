@@ -111,6 +111,10 @@ class StockLevelPullPortSqflite {
         final stockOnHand = _asInt(r['stockOnHand']);
         final stockAllocated = _asInt(r['stockAllocated']);
 
+        if (productVariantId == null) {
+          continue;
+        }
+
         final remoteSyncAt = _asUtc(r['syncAt']);
         if (maxAt == null || remoteSyncAt.isAfter(maxAt!)) maxAt = remoteSyncAt;
 
@@ -164,6 +168,7 @@ class StockLevelPullPortSqflite {
           } else {
             merged['isDirty'] = 0;
           }
+
           await txn.update(
             entityTable,
             merged,

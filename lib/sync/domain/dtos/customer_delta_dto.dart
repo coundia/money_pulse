@@ -97,7 +97,7 @@ class CustomerDeltaDto {
     'email': email,
     'notes': notes,
     'status': status,
-    'companyId': companyId,
+    'company': companyId,
     'addressLine1': addressLine1,
     'addressLine2': addressLine2,
     'city': city,
@@ -105,6 +105,7 @@ class CustomerDeltaDto {
     'country': country,
     'postalCode': postalCode,
     'operation': type,
+    'type': type.toUpperCase(),
     'updatedAt': updatedAt.toUtc().toIso8601String(),
   };
 }

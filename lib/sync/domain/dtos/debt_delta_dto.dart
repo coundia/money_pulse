@@ -61,8 +61,9 @@ class DebtDeltaDto {
     'balanceDebt': balanceDebt,
     'dueDate': dueDate,
     'statuses': statuses,
-    'customerId': customerId,
+    'customer': customerId,
     'syncAt': syncAt,
+    'type': operation.toUpperCase(),
     'operation': operation,
   };
 }

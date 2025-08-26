@@ -67,11 +67,12 @@ class ProductDeltaDto {
     'description': description,
     'barcode': barcode,
     'unitId': unitId,
-    'categoryId': categoryId,
+    'category': categoryId,
     'defaultPrice': defaultPrice,
     'purchasePrice': purchasePrice,
     'statuses': statuses,
     'syncAt': syncAt,
     'operation': operation,
+    'type': operation.toUpperCase(),
   };
 }

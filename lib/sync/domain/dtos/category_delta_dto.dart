@@ -48,5 +48,6 @@ class CategoryDeltaDto {
     'description': description,
     'operation': type,
     'updatedAt': updatedAt.toIso8601String(),
+    'type': type.toUpperCase(),
   };
 }

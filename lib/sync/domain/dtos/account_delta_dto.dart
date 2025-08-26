@@ -86,6 +86,7 @@ class AccountDeltaDto {
     'balanceLimit': balanceLimit,
     'syncAt': syncAt,
     'operation': operation,
+    'type': operation.toUpperCase(),
     'remoteId': remoteId,
   };
 }

@@ -93,6 +93,7 @@ class CompanyDeltaDto {
     'postalCode': postalCode,
     'isDefault': isDefault,
     'operation': type,
+    'type': type.toUpperCase(),
     'updatedAt': updatedAt.toUtc().toIso8601String(),
   };
 }

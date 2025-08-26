@@ -1,4 +1,4 @@
-// Product form right-drawer panel with purchase price and single-string status; robust number parsing and Enter submit.
+// Right-drawer panel to create or edit a product; code and name are required, robust number parsing, and Enter submission.
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:intl/intl.dart';
@@ -43,7 +43,6 @@ class ProductFormPanel extends StatefulWidget {
 class _ProductFormPanelState extends State<ProductFormPanel> {
   final _formKey = GlobalKey<FormState>();
 
-  // Controllers
   late final TextEditingController _code = TextEditingController(
     text: widget.existing?.code ?? '',
   );
@@ -67,7 +66,6 @@ class _ProductFormPanelState extends State<ProductFormPanel> {
         : _moneyFromCents(widget.existing!.purchasePrice),
   );
 
-  // Focus chain
   final _fPriceBuy = FocusNode();
   final _fName = FocusNode();
   final _fCode = FocusNode();
@@ -83,7 +81,6 @@ class _ProductFormPanelState extends State<ProductFormPanel> {
     ('ARCHIVED', 'Archivé'),
   ];
 
-  // Accept digits, dot, comma, normal spaces and NBSP variants
   static final _numFilter = FilteringTextInputFormatter.allow(
     RegExp(r'[0-9\.\, \u00A0\u202F]'),
   );
@@ -115,22 +112,16 @@ class _ProductFormPanelState extends State<ProductFormPanel> {
 
   String _moneyFromCents(int cents) {
     final v = cents / 100.0;
-    // Keep 0 decimals to match your UX: user types "1500" for 1500 units
     return NumberFormat.currency(symbol: '', decimalDigits: 0).format(v).trim();
   }
 
-  // --- robust number sanitizer ------------------------------------------------
-  // 1) remove all spaces including NBSP (\u00A0) and NNBSP (\u202F)
-  // 2) convert comma to dot for decimals
-  // 3) if multiple dots exist, treat them as thousand separators -> remove all dots
   String _sanitizeNumber(String v) {
     var s = v.trim();
-    s = s.replaceAll(RegExp(r'[\u00A0\u202F\s]'), ''); // all kinds of spaces
-    s = s.replaceAll(',', '.'); // unify decimal sep
+    s = s.replaceAll(RegExp(r'[\u00A0\u202F\s]'), '');
+    s = s.replaceAll(',', '.');
     final firstDot = s.indexOf('.');
     final lastDot = s.lastIndexOf('.');
     if (firstDot != -1 && firstDot != lastDot) {
-      // multiple dots -> consider them as grouping; remove all
       s = s.replaceAll('.', '');
     }
     return s;
@@ -144,7 +135,7 @@ class _ProductFormPanelState extends State<ProductFormPanel> {
   }
 
   String? _required(String? v) =>
-      (v == null || v.trim().isEmpty) ? 'Requis' : null;
+      (v == null || v.trim().isEmpty) ? 'Obligatoire' : null;
 
   InputDecoration _dec(
     String label, {
@@ -172,11 +163,9 @@ class _ProductFormPanelState extends State<ProductFormPanel> {
   void _submit() {
     if (!_formKey.currentState!.validate()) return;
 
-    final nameValue = _name.text.trim().isEmpty ? 'No name' : _name.text.trim();
-
     final result = ProductFormResult(
-      code: _code.text.trim().isEmpty ? null : _code.text.trim(),
-      name: nameValue,
+      code: _code.text.trim(),
+      name: _name.text.trim(),
       description: _desc.text.trim().isEmpty ? null : _desc.text.trim(),
       barcode: _barcode.text.trim().isEmpty ? null : _barcode.text.trim(),
       categoryId: _categoryId,
@@ -232,7 +221,6 @@ class _ProductFormPanelState extends State<ProductFormPanel> {
               child: ListView(
                 padding: const EdgeInsets.all(16),
                 children: [
-                  // Prix de vente (requis)
                   TextFormField(
                     controller: _priceSell,
                     keyboardType: const TextInputType.numberWithOptions(
@@ -251,8 +239,6 @@ class _ProductFormPanelState extends State<ProductFormPanel> {
                     autofocus: true,
                   ),
                   const SizedBox(height: 12),
-
-                  // Prix d'achat (optionnel)
                   TextFormField(
                     focusNode: _fPriceBuy,
                     controller: _priceBuy,
@@ -270,31 +256,28 @@ class _ProductFormPanelState extends State<ProductFormPanel> {
                     ),
                   ),
                   const SizedBox(height: 16),
-
-                  // Nom
                   TextFormField(
                     focusNode: _fName,
                     controller: _name,
                     textInputAction: TextInputAction.next,
                     onFieldSubmitted: (_) => _fCode.requestFocus(),
-                    decoration: _dec(
-                      'Nom (laisser vide = "No name")',
-                      ctrl: _name,
-                    ),
+                    decoration: _dec('Nom', helper: 'Obligatoire', ctrl: _name),
+                    validator: _required,
                   ),
                   const SizedBox(height: 12),
-
-                  // Code
                   TextFormField(
                     focusNode: _fCode,
                     controller: _code,
                     textInputAction: TextInputAction.next,
                     onFieldSubmitted: (_) => _fBarcode.requestFocus(),
-                    decoration: _dec('Code (SKU)', ctrl: _code),
+                    decoration: _dec(
+                      'Code (SKU)',
+                      helper: 'Obligatoire',
+                      ctrl: _code,
+                    ),
+                    validator: _required,
                   ),
                   const SizedBox(height: 12),
-
-                  // Code barre
                   TextFormField(
                     focusNode: _fBarcode,
                     controller: _barcode,
@@ -303,8 +286,6 @@ class _ProductFormPanelState extends State<ProductFormPanel> {
                     decoration: _dec('Code barre (EAN/UPC)', ctrl: _barcode),
                   ),
                   const SizedBox(height: 12),
-
-                  // Catégorie
                   DropdownButtonFormField<String>(
                     value: _categoryId,
                     items: widget.categories
@@ -319,8 +300,6 @@ class _ProductFormPanelState extends State<ProductFormPanel> {
                     decoration: _dec('Catégorie'),
                   ),
                   const SizedBox(height: 12),
-
-                  // Statut
                   DropdownButtonFormField<String>(
                     value: _status,
                     items: _statusOptions
@@ -333,8 +312,6 @@ class _ProductFormPanelState extends State<ProductFormPanel> {
                     decoration: _dec('Statut'),
                   ),
                   const SizedBox(height: 16),
-
-                  // Description
                   TextFormField(
                     focusNode: _fDesc,
                     controller: _desc,
@@ -343,7 +320,6 @@ class _ProductFormPanelState extends State<ProductFormPanel> {
                     onFieldSubmitted: (_) => _submit(),
                     decoration: _dec('Description', ctrl: _desc),
                   ),
-
                   const SizedBox(height: 10),
                   Text(
                     'Astuce : appuyez sur Entrée pour enregistrer rapidement.',

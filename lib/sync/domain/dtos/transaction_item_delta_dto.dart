@@ -62,8 +62,8 @@ class TransactionItemDeltaDto {
     if (id != null) 'id': id,
     'localId': localId,
     'remoteId': remoteId,
-    'transactionId': transactionId,
-    'productId': productId,
+    'transaction': transactionId,
+    'product': productId,
     'label': label,
     'quantity': quantity,
     'unitId': unitId,
@@ -71,6 +71,7 @@ class TransactionItemDeltaDto {
     'total': total,
     'notes': notes,
     'syncAt': syncAt,
+    'type': operation.toUpperCase(),
     'operation': operation,
   };
 }

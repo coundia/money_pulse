@@ -133,6 +133,7 @@ class ProductPullPortSqflite {
         if (maxAt == null || remoteSyncAt.isAfter(maxAt!)) maxAt = remoteSyncAt;
 
         final base = <String, Object?>{
+          'id': localId,
           'remoteId': remoteId,
           'localId': localId,
           'code': code,
@@ -207,6 +208,7 @@ class ProductPullPortSqflite {
             where: 'id = ?',
             whereArgs: [target['id']],
           );
+
           upserts++;
         } else {
           final createdAt = remoteSyncAt.toIso8601String();

@@ -50,11 +50,12 @@ class StockLevelDeltaDto {
     if (id != null) 'id': id,
     'localId': localId,
     'remoteId': remoteId,
-    'productVariantId': productVariantId,
-    'companyId': companyId,
+    'productVariant': productVariantId,
+    'company': companyId,
     'stockOnHand': stockOnHand,
     'stockAllocated': stockAllocated,
     'syncAt': syncAt,
     'operation': operation,
+    'type': operation.toUpperCase(),
   };
 }
