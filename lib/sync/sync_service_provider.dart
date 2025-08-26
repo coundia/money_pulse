@@ -14,6 +14,11 @@ import 'package:money_pulse/sync/application/push_accounts_usecase.dart';
 import 'package:money_pulse/sync/application/push_companies_usecase.dart';
 import 'package:money_pulse/sync/application/push_customers_usecase.dart';
 import 'package:money_pulse/sync/application/push_transactions_usecase.dart';
+import 'package:money_pulse/sync/application/push_products_usecase.dart';
+import 'package:money_pulse/sync/application/push_transaction_items_usecase.dart';
+import 'package:money_pulse/sync/application/push_debts_usecase.dart';
+import 'package:money_pulse/sync/application/push_stock_levels_usecase.dart';
+import 'package:money_pulse/sync/application/push_stock_movements_usecase.dart';
 import 'package:money_pulse/sync/application/sync_all_usecase.dart';
 
 import '../infrastructure/repositories/sync_state_repository_sqflite.dart';
@@ -101,6 +106,89 @@ final transactionPushUseCaseProvider = Provider<PushTransactionsUseCase>((ref) {
   );
 });
 
+final productPushUseCaseProvider = Provider<PushProductsUseCase>((ref) {
+  final api = ref.read(_apiProvider);
+  final dbRaw = ref.read(dbProvider).db;
+  final port = ProductSyncPortSqflite(dbRaw);
+  final changeLog = ref.read(_changeLogRepoProvider);
+  final syncState = ref.read(_syncStateRepoProvider);
+  final logger = ref.read(syncLoggerProvider);
+  return PushProductsUseCase(
+    port: port,
+    api: api,
+    changeLog: changeLog,
+    syncState: syncState,
+    logger: logger,
+  );
+});
+
+final transactionItemPushUseCaseProvider =
+    Provider<PushTransactionItemsUseCase>((ref) {
+      final api = ref.read(_apiProvider);
+      final dbRaw = ref.read(dbProvider).db;
+      final port = TransactionItemSyncPortSqflite(dbRaw);
+      final changeLog = ref.read(_changeLogRepoProvider);
+      final syncState = ref.read(_syncStateRepoProvider);
+      final logger = ref.read(syncLoggerProvider);
+      return PushTransactionItemsUseCase(
+        port: port,
+        api: api,
+        changeLog: changeLog,
+        syncState: syncState,
+        logger: logger,
+      );
+    });
+
+final debtPushUseCaseProvider = Provider<PushDebtsUseCase>((ref) {
+  final api = ref.read(_apiProvider);
+  final dbRaw = ref.read(dbProvider).db;
+  final port = DebtSyncPortSqflite(dbRaw);
+  final changeLog = ref.read(_changeLogRepoProvider);
+  final syncState = ref.read(_syncStateRepoProvider);
+  final logger = ref.read(syncLoggerProvider);
+  return PushDebtsUseCase(
+    port: port,
+    api: api,
+    changeLog: changeLog,
+    syncState: syncState,
+    logger: logger,
+  );
+});
+
+final stockLevelPushUseCaseProvider = Provider<PushStockLevelsUseCase>((ref) {
+  final api = ref.read(_apiProvider);
+  final dbRaw = ref.read(dbProvider).db;
+  final port = StockLevelSyncPortSqflite(dbRaw);
+  final changeLog = ref.read(_changeLogRepoProvider);
+  final syncState = ref.read(_syncStateRepoProvider);
+  final logger = ref.read(syncLoggerProvider);
+  return PushStockLevelsUseCase(
+    port: port,
+    api: api,
+    changeLog: changeLog,
+    syncState: syncState,
+    logger: logger,
+  );
+});
+
+final stockMovementPushUseCaseProvider = Provider<PushStockMovementsUseCase>((
+  ref,
+) {
+  final api = ref.read(_apiProvider);
+  final dbRaw = ref.read(dbProvider).db;
+  final port = StockMovementSyncPortSqflite(dbRaw);
+  final changeLog = ref.read(_changeLogRepoProvider);
+  final syncState = ref.read(_syncStateRepoProvider);
+  final logger = ref.read(syncLoggerProvider);
+  return PushStockMovementsUseCase(
+    port: port,
+    api: api,
+    changeLog: changeLog,
+    syncState: syncState,
+    logger: logger,
+  );
+});
+
 final syncAllUseCaseProvider = Provider<SyncAllUseCase>((ref) {
   final logger = ref.read(syncLoggerProvider);
   final policy = ref.read(syncPolicyProvider);
@@ -110,6 +198,11 @@ final syncAllUseCaseProvider = Provider<SyncAllUseCase>((ref) {
     companies: ref.read(companyPushUseCaseProvider),
     customers: ref.read(customerPushUseCaseProvider),
     transactions: ref.read(transactionPushUseCaseProvider),
+    products: ref.read(productPushUseCaseProvider),
+    items: ref.read(transactionItemPushUseCaseProvider),
+    debts: ref.read(debtPushUseCaseProvider),
+    stockLevels: ref.read(stockLevelPushUseCaseProvider),
+    stockMovements: ref.read(stockMovementPushUseCaseProvider),
     policy: policy,
     logger: logger,
   );

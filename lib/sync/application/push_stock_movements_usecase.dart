@@ -37,10 +37,7 @@ class PushStockMovementsUseCase implements PushPort {
     Future<Map<String, Object?>?> build(ChangeLogEntry e) async {
       final entity = await port.findById(e.entityId);
       if (entity == null) return null;
-      final t = SyncDeltaTypeExt.fromOp(
-        e.operation,
-        deleted: entity.deletedAt != null,
-      );
+      final t = SyncDeltaTypeExt.fromOp(e.operation);
       final dto = StockMovementDeltaDto.fromEntity(
         entity,
         t,

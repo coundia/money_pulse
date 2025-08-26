@@ -4,6 +4,8 @@ class TransactionItem extends Equatable {
   final String id;
   final String transactionId;
   final String? productId;
+  final String? localId;
+  final String? remoteId;
   final String? label;
   final int quantity;
   final String? unitId;
@@ -33,6 +35,8 @@ class TransactionItem extends Equatable {
     this.syncAt,
     this.version = 0,
     this.isDirty = true,
+    this.remoteId,
+    this.localId,
   });
 
   TransactionItem copyWith({
