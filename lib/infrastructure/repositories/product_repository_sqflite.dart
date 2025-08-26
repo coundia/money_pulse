@@ -6,6 +6,8 @@ import 'package:money_pulse/infrastructure/db/app_database.dart';
 import 'package:money_pulse/domain/products/entities/product.dart';
 import 'package:money_pulse/domain/products/repositories/product_repository.dart';
 
+import '../../sync/infrastructure/change_log_helper.dart';
+
 class ProductRepositorySqflite implements ProductRepository {
   final AppDatabase _db;
   ProductRepositorySqflite(this._db);
@@ -79,6 +81,14 @@ class ProductRepositorySqflite implements ProductRepository {
         [productId, companyId],
       );
       if (exists.isNotEmpty) continue;
+
+      String id = Uuid().v4();
+      await upsertChangeLogPending(
+        txn,
+        entityTable: 'stock_level',
+        entityId: id,
+        operation: 'INSERT',
+      );
       await txn.insert('stock_level', {
         'productVariantId': productId,
         'companyId': companyId,
@@ -86,7 +96,7 @@ class ProductRepositorySqflite implements ProductRepository {
         'stockAllocated': 0,
         'createdAt': now,
         'updatedAt': now,
-        'id': Uuid().v4(),
+        'id': id,
       }, conflictAlgorithm: ConflictAlgorithm.ignore);
     }
   }

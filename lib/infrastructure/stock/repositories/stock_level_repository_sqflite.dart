@@ -335,7 +335,7 @@ class StockLevelRepositorySqflite implements StockLevelRepository {
       );
 
       final curRow = await txn.rawQuery(
-        'SELECT stockOnHand FROM stock_level WHERE productVariantId=? AND companyId=? LIMIT 1',
+        'SELECT stockOnHand, id FROM stock_level WHERE productVariantId=? AND companyId=? LIMIT 1',
         [productVariantId, companyId],
       );
       final cur = (curRow.isEmpty
@@ -344,13 +344,14 @@ class StockLevelRepositorySqflite implements StockLevelRepository {
       final next = cur + delta;
       final newVal = next < 0 ? 0 : next;
 
+      String idStock = curRow.first['id'] as String;
+
       await txn.rawUpdate(
-        'UPDATE stock_level SET stockOnHand=?, updatedAt=? WHERE productVariantId=? AND companyId=?',
-        [newVal, now, productVariantId, companyId],
+        'UPDATE stock_level SET stockOnHand=?, updatedAt=? WHERE id=?',
+        [newVal, now, idStock],
       );
 
       final idMvts = const Uuid().v4();
-      final idStock = const Uuid().v4();
 
       await txn.insert('stock_movement', {
         'type_stock_movement': 'ADJUST',
@@ -368,8 +369,9 @@ class StockLevelRepositorySqflite implements StockLevelRepository {
         txn,
         table: 'stock_level',
         entityId: idStock,
-        op: 'INSERT',
+        op: 'UPDATE',
       );
+
       await _upsertChangeLog(
         txn,
         table: 'stock_movement',
@@ -397,7 +399,7 @@ class StockLevelRepositorySqflite implements StockLevelRepository {
       );
 
       final curRow = await txn.rawQuery(
-        'SELECT stockOnHand FROM stock_level WHERE productVariantId=? AND companyId=? LIMIT 1',
+        'SELECT stockOnHand , id FROM stock_level WHERE productVariantId=? AND companyId=? LIMIT 1',
         [productVariantId, companyId],
       );
       final cur = (curRow.isEmpty
@@ -406,6 +408,8 @@ class StockLevelRepositorySqflite implements StockLevelRepository {
       final safeTarget = target < 0 ? 0 : target;
       final delta = safeTarget - cur;
       if (delta == 0) return;
+
+      final idStock = curRow.first['id'] as String;
 
       await txn.rawUpdate(
         'UPDATE stock_level SET stockOnHand=?, updatedAt=? WHERE productVariantId=? AND companyId=?',
@@ -417,7 +421,6 @@ class StockLevelRepositorySqflite implements StockLevelRepository {
           : (delta > 0 ? 'INC' : 'DEC');
 
       final idMvts = const Uuid().v4();
-      final idStock = const Uuid().v4();
 
       await txn.insert('stock_movement', {
         'type_stock_movement': 'ADJUST',
@@ -435,7 +438,7 @@ class StockLevelRepositorySqflite implements StockLevelRepository {
         txn,
         table: 'stock_level',
         entityId: idStock,
-        op: 'INSERT',
+        op: 'UPDATE',
       );
       await _upsertChangeLog(
         txn,
