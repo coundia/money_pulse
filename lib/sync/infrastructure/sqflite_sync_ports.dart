@@ -6,7 +6,12 @@ import 'package:money_pulse/domain/categories/entities/category.dart';
 
 import '../../domain/company/entities/company.dart';
 import '../../domain/customer/entities/customer.dart';
+import '../../domain/debts/entities/debt.dart';
+import '../../domain/products/entities/product.dart';
+import '../../domain/stock/entities/stock_level.dart';
+import '../../domain/stock/entities/stock_movement.dart';
 import '../../domain/transactions/entities/transaction_entry.dart';
+import '../../domain/transactions/entities/transaction_item.dart';
 import '../application/_ports.dart';
 import '../application/_pull_ports.dart';
 
@@ -243,5 +248,230 @@ class CompanySyncPortSqflite implements CompanySyncPort {
     );
     if (rows.isEmpty) return null;
     return Company.fromMap(rows.first);
+  }
+}
+
+class ProductSyncPortSqflite implements ProductSyncPort {
+  final Database db;
+  ProductSyncPortSqflite(this.db);
+
+  String get entityTable => 'product';
+
+  @override
+  Future<List<Product>> findDirty({int limit = 200}) async {
+    final rows = await db.query(
+      entityTable,
+      where: 'isDirty = 1 AND deletedAt IS NULL',
+      orderBy: 'updatedAt DESC',
+      limit: limit,
+    );
+    return rows.map(Product.fromMap).toList();
+  }
+
+  @override
+  Future<void> markSynced(Iterable<String> ids, DateTime at) async {
+    final iso = at.toUtc().toIso8601String();
+    final batch = db.batch();
+    for (final id in ids) {
+      batch.update(
+        entityTable,
+        {'isDirty': 0, 'syncAt': iso, 'updatedAt': iso},
+        where: 'id = ?',
+        whereArgs: [id],
+      );
+    }
+    await batch.commit(noResult: true);
+  }
+
+  @override
+  Future<Product?> findById(String id) async {
+    final rows = await db.query(
+      entityTable,
+      where: 'id = ?',
+      whereArgs: [id],
+      limit: 1,
+    );
+    if (rows.isEmpty) return null;
+    return Product.fromMap(rows.first);
+  }
+}
+
+class TransactionItemSyncPortSqflite implements TransactionItemSyncPort {
+  final Database db;
+  TransactionItemSyncPortSqflite(this.db);
+
+  String get entityTable => 'transaction_item';
+
+  @override
+  Future<List<TransactionItem>> findDirty({int limit = 200}) async {
+    final rows = await db.query(
+      entityTable,
+      where: 'isDirty = 1 AND deletedAt IS NULL',
+      orderBy: 'updatedAt DESC',
+      limit: limit,
+    );
+    return rows.map(TransactionItem.fromMap).toList();
+  }
+
+  @override
+  Future<void> markSynced(Iterable<String> ids, DateTime at) async {
+    final iso = at.toUtc().toIso8601String();
+    final batch = db.batch();
+    for (final id in ids) {
+      batch.update(
+        entityTable,
+        {'isDirty': 0, 'syncAt': iso, 'updatedAt': iso},
+        where: 'id = ?',
+        whereArgs: [id],
+      );
+    }
+    await batch.commit(noResult: true);
+  }
+
+  @override
+  Future<TransactionItem?> findById(String id) async {
+    final rows = await db.query(
+      entityTable,
+      where: 'id = ?',
+      whereArgs: [id],
+      limit: 1,
+    );
+    if (rows.isEmpty) return null;
+    return TransactionItem.fromMap(rows.first);
+  }
+}
+
+class StockLevelSyncPortSqflite implements StockLevelSyncPort {
+  final Database db;
+  StockLevelSyncPortSqflite(this.db);
+
+  String get entityTable => 'stock_level';
+
+  @override
+  Future<List<StockLevel>> findDirty({int limit = 200}) async {
+    final rows = await db.query(
+      entityTable,
+      where: 'isDirty = 1', // supprimé "deletedAt IS NULL" car pas de champ
+      orderBy: 'updatedAt DESC',
+      limit: limit,
+    );
+    return rows.map(StockLevel.fromMap).toList();
+  }
+
+  @override
+  Future<void> markSynced(Iterable<String> ids, DateTime at) async {
+    final iso = at.toUtc().toIso8601String();
+    final batch = db.batch();
+    for (final id in ids) {
+      batch.update(
+        entityTable,
+        {'isDirty': 0, 'syncAt': iso, 'updatedAt': iso},
+        where: 'id = ?',
+        whereArgs: [int.tryParse(id) ?? -1],
+      );
+    }
+    await batch.commit(noResult: true);
+  }
+
+  @override
+  Future<StockLevel?> findById(String id) async {
+    final rows = await db.query(
+      entityTable,
+      where: 'id = ?',
+      whereArgs: [int.tryParse(id) ?? -1],
+      limit: 1,
+    );
+    if (rows.isEmpty) return null;
+    return StockLevel.fromMap(rows.first);
+  }
+}
+
+class StockMovementSyncPortSqflite implements StockMovementSyncPort {
+  final Database db;
+  StockMovementSyncPortSqflite(this.db);
+
+  String get entityTable => 'stock_movement';
+
+  @override
+  Future<List<StockMovement>> findDirty({int limit = 200}) async {
+    final rows = await db.query(
+      entityTable,
+      where: 'isDirty = 1 AND deletedAt IS NULL',
+      orderBy: 'updatedAt DESC',
+      limit: limit,
+    );
+    return rows.map(StockMovement.fromMap).toList();
+  }
+
+  @override
+  Future<void> markSynced(Iterable<String> ids, DateTime at) async {
+    final iso = at.toUtc().toIso8601String();
+    final batch = db.batch();
+    for (final id in ids) {
+      batch.update(
+        entityTable,
+        {'isDirty': 0, 'syncAt': iso, 'updatedAt': iso},
+        where: 'id = ?',
+        whereArgs: [int.tryParse(id) ?? -1],
+      );
+    }
+    await batch.commit(noResult: true);
+  }
+
+  @override
+  Future<StockMovement?> findById(String id) async {
+    final rows = await db.query(
+      entityTable,
+      where: 'id = ?',
+      whereArgs: [int.tryParse(id) ?? -1],
+      limit: 1,
+    );
+    if (rows.isEmpty) return null;
+    return StockMovement.fromMap(rows.first);
+  }
+}
+
+class DebtSyncPortSqflite implements DebtSyncPort {
+  final Database db;
+  DebtSyncPortSqflite(this.db);
+
+  String get entityTable => 'debt';
+
+  @override
+  Future<List<Debt>> findDirty({int limit = 200}) async {
+    final rows = await db.query(
+      entityTable,
+      where: 'isDirty = 1 AND deletedAt IS NULL',
+      orderBy: 'updatedAt DESC',
+      limit: limit,
+    );
+    return rows.map(Debt.fromMap).toList();
+  }
+
+  @override
+  Future<void> markSynced(Iterable<String> ids, DateTime at) async {
+    final iso = at.toUtc().toIso8601String();
+    final batch = db.batch();
+    for (final id in ids) {
+      batch.update(
+        entityTable,
+        {'isDirty': 0, 'syncAt': iso, 'updatedAt': iso},
+        where: 'id = ?',
+        whereArgs: [id],
+      );
+    }
+    await batch.commit(noResult: true);
+  }
+
+  @override
+  Future<Debt?> findById(String id) async {
+    final rows = await db.query(
+      entityTable,
+      where: 'id = ?',
+      whereArgs: [id],
+      limit: 1,
+    );
+    if (rows.isEmpty) return null;
+    return Debt.fromMap(rows.first);
   }
 }

@@ -116,26 +116,7 @@ CREATE TABLE IF NOT EXISTS  sync_state (
   lastCursor TEXT,
   updatedAt TEXT DEFAULT (datetime('now')) NOT NULL
 );
-  
-
-CREATE TABLE IF NOT EXISTS unit (
-  id TEXT PRIMARY KEY,
-  remoteId TEXT,
-    localId TEXT,
-  code TEXT NOT NULL,
-  name TEXT,
-  description TEXT,
-  createdAt TEXT DEFAULT (datetime('now')),
-  updatedAt TEXT DEFAULT (datetime('now')),
-  deletedAt TEXT,
-  syncAt TEXT,
-  version INTEGER DEFAULT 0,
-  isDirty INTEGER DEFAULT 1
-);
-
-CREATE UNIQUE INDEX IF NOT EXISTS uq_unit_code_active ON unit(code) WHERE deletedAt IS NULL;
-CREATE INDEX IF NOT EXISTS idx_unit_dirty ON unit(isDirty);
-CREATE INDEX IF NOT EXISTS idx_unit_deleted ON unit(deletedAt);
+ 
  
 
 CREATE TABLE IF NOT EXISTS product (

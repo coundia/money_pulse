@@ -1,5 +1,4 @@
 /* Pull ports contracts: how to upsert remote payloads into local storage and compute max syncAt. */
-import '../../domain/transactions/entities/transaction_entry.dart';
 
 typedef Json = Map<String, Object?>;
 
@@ -8,10 +7,32 @@ abstract class AccountPullPort {
   String get entityTable;
 }
 
-abstract class TransactionSyncPort {
-  Future<List<TransactionEntry>> findDirty({int limit = 200});
-  Future<void> markSynced(Iterable<String> ids, DateTime at);
+abstract class ProductPullPort {
+  String get entityTable;
+  Future<int> adoptRemoteIds(List<Json> items);
+  Future<({int upserts, DateTime? maxSyncAt})> upsertRemote(List<Json> items);
+}
 
-  /// Utile pour reconstruire un payload depuis le change_log
-  Future<TransactionEntry?> findById(String id);
+abstract class TransactionItemPullPort {
+  String get entityTable;
+  Future<int> adoptRemoteIds(List<Json> items);
+  Future<({int upserts, DateTime? maxSyncAt})> upsertRemote(List<Json> items);
+}
+
+abstract class StockLevelPullPort {
+  String get entityTable;
+  Future<int> adoptRemoteIds(List<Json> items);
+  Future<({int upserts, DateTime? maxSyncAt})> upsertRemote(List<Json> items);
+}
+
+abstract class StockMovementPullPort {
+  String get entityTable;
+  Future<int> adoptRemoteIds(List<Json> items);
+  Future<({int upserts, DateTime? maxSyncAt})> upsertRemote(List<Json> items);
+}
+
+abstract class DebtPullPort {
+  String get entityTable;
+  Future<int> adoptRemoteIds(List<Json> items);
+  Future<({int upserts, DateTime? maxSyncAt})> upsertRemote(List<Json> items);
 }
