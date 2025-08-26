@@ -278,14 +278,6 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
             title: 'Données',
             children: [
               _tile(
-                icon: Icons.system_update_alt_rounded,
-                title: 'Mettre à niveau le schéma',
-                subtitle:
-                    'Créer les tables/index manquants sans supprimer les données',
-                onTap: _busy ? null : _upgradeDbSchema,
-              ),
-              _divider(),
-              _tile(
                 icon: Icons.storage_rounded,
                 title: 'État de synchronisation',
                 subtitle: 'Dernière synchro et curseur par entité',
