@@ -70,7 +70,7 @@ class AccountDeltaDto {
   }
 
   Map<String, Object?> toJson() => {
-    if (id != null) 'id': id,
+    'id': remoteId ?? id,
     'localId': localId,
     'code': code,
     'description': description,

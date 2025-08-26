@@ -167,7 +167,7 @@ class _CustomerFormPanelState extends ConsumerState<CustomerFormPanel> {
       await repo.update(entity);
     }
     if (mounted) {
-      Navigator.of(context).pop<Customer>(entity);
+      Navigator.of(context).pop<bool>(true);
     }
   }
 

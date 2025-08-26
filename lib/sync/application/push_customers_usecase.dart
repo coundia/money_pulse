@@ -38,14 +38,12 @@ class PushCustomersUseCase implements PushPort {
     Future<Map<String, Object?>?> build(ChangeLogEntry e) async {
       final c = await port.findById(e.entityId);
       if (c == null) return null;
-      final t = SyncDeltaTypeExt.fromOp(
-        e.operation,
-        deleted: c.deletedAt != null,
-      );
+      final t = SyncDeltaTypeExt.fromOp(e.operation);
       final now = DateTime.now().toUtc();
       final dto = CustomerDeltaDto.fromEntity(c, t, now).toJson();
       dto['localId'] = c.id;
       dto['remoteId'] = c.remoteId;
+      dto['type'] = e.operation?.toUpperCase();
       return dto;
     }
 

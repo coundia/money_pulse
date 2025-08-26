@@ -59,7 +59,7 @@ class ProductDeltaDto {
   }
 
   Map<String, Object?> toJson() => {
-    if (id != null) 'id': id,
+    'id': remoteId ?? id,
     'localId': localId,
     'remoteId': remoteId,
     'code': code,

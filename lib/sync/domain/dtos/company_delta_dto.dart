@@ -74,7 +74,7 @@ class CompanyDeltaDto {
   }
 
   Map<String, Object?> toJson() => {
-    'id': id,
+    'id': remoteId ?? id,
     'remoteId': remoteId,
     'localId': localId,
     'code': code,
