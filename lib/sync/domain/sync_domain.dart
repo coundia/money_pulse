@@ -11,6 +11,7 @@ enum SyncDomain {
   debts,
   stockLevels,
   stockMovements,
+  accountUsers,
 }
 
 extension SyncDomainKey on SyncDomain {
@@ -38,6 +39,8 @@ extension SyncDomainKey on SyncDomain {
         return 'stockLevels';
       case SyncDomain.stockMovements:
         return 'stockMovements';
+      case SyncDomain.accountUsers:
+        return 'accountUsers';
     }
   }
 }

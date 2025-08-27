@@ -44,6 +44,7 @@ class PullAllUseCase {
   final PullPort? stockMovements;
   final PullPort? transactions;
   final PullPort? items;
+  final PullPort? accountUsers;
 
   final SyncPolicy policy;
   final SyncLogger logger;
@@ -62,6 +63,7 @@ class PullAllUseCase {
     this.items,
     required this.policy,
     required this.logger,
+    this.accountUsers,
   });
 
   Future<PullSummary> pullAll() async {
@@ -78,6 +80,7 @@ class PullAllUseCase {
     final sms = await _maybe(SyncDomain.stockMovements, stockMovements);
     final txs = await _maybe(SyncDomain.transactions, transactions);
     final itms = await _maybe(SyncDomain.items, items);
+    final ausr = await _maybe(SyncDomain.items, accountUsers);
 
     logger.info('Pull done');
     return PullSummary(

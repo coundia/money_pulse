@@ -1,4 +1,4 @@
-/* Riverpod providers for pull use cases including Company. */
+/* Riverpod providers for pull use cases, now includes accountUser and wires it into PullAllUseCase. */
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:sqflite/sqflite.dart' show Database;
 
@@ -18,6 +18,7 @@ import 'package:money_pulse/sync/application/pull_transaction_items_usecase.dart
 import 'package:money_pulse/sync/application/pull_debts_usecase.dart';
 import 'package:money_pulse/sync/application/pull_stock_levels_usecase.dart';
 import 'package:money_pulse/sync/application/pull_stock_movements_usecase.dart';
+import 'package:money_pulse/sync/application/pull_account_users_usecase.dart';
 import 'package:money_pulse/sync/infrastructure/sync_policy_provider.dart';
 
 import '../../infrastructure/repositories/sync_state_repository_sqflite.dart';
@@ -32,6 +33,7 @@ import 'pull_ports/transaction_item_pull_port_sqflite.dart';
 import 'pull_ports/debt_pull_port_sqflite.dart';
 import 'pull_ports/stock_level_pull_port_sqflite.dart';
 import 'pull_ports/stock_movement_pull_port_sqflite.dart';
+import 'pull_ports/account_user_pull_port_sqflite.dart';
 
 final pullBaseUriProvider = Provider<String>(
   (ref) => ref.watch(baseUriProvider),
@@ -138,6 +140,15 @@ final pullStockMovementsUseCaseProvider = Provider<PullPort>((ref) {
   return PullStockMovementsUseCase(port, api, syncState, logger);
 });
 
+final pullAccountUsersUseCaseProvider = Provider<PullPort>((ref) {
+  final api = ref.read(_apiProvider);
+  final logger = ref.read(syncLoggerProvider);
+  final db = ref.read(dbProvider).db as Database;
+  final port = AccountUserPullPortSqflite(db);
+  final syncState = ref.read(_syncStateRepoProvider);
+  return PullAccountUsersUseCase(port, api, syncState, logger);
+});
+
 final pullAllUseCaseProvider = Provider<PullAllUseCase>((ref) {
   final policy = ref.read(syncPolicyProvider);
   final logger = ref.read(syncLoggerProvider);
@@ -152,6 +163,7 @@ final pullAllUseCaseProvider = Provider<PullAllUseCase>((ref) {
     debts: ref.read(pullDebtsUseCaseProvider),
     stockLevels: ref.read(pullStockLevelsUseCaseProvider),
     stockMovements: ref.read(pullStockMovementsUseCaseProvider),
+    accountUsers: ref.read(pullAccountUsersUseCaseProvider),
     policy: policy,
     logger: logger,
   );

@@ -8,6 +8,7 @@ class AccountUser {
   final String? role;
   final String? status;
   final String? invitedBy;
+  final String? createdBy;
   final DateTime? invitedAt;
   final DateTime? acceptedAt;
   final DateTime? revokedAt;
@@ -40,6 +41,7 @@ class AccountUser {
     this.isDirty = 1,
     this.remoteId,
     this.localId,
+    this.createdBy,
   });
 
   AccountUser copyWith({

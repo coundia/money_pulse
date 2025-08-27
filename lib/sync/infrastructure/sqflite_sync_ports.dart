@@ -4,6 +4,7 @@ import 'package:sqflite/sqflite.dart';
 import 'package:money_pulse/domain/accounts/entities/account.dart';
 import 'package:money_pulse/domain/categories/entities/category.dart';
 
+import '../../domain/accounts/entities/account_user.dart';
 import '../../domain/company/entities/company.dart';
 import '../../domain/customer/entities/customer.dart';
 import '../../domain/debts/entities/debt.dart';
@@ -473,5 +474,50 @@ class DebtSyncPortSqflite implements DebtSyncPort {
     );
     if (rows.isEmpty) return null;
     return Debt.fromMap(rows.first);
+  }
+}
+
+class AccountUserSyncPortSqflite implements AccountUserSyncPort {
+  final Database db;
+  AccountUserSyncPortSqflite(this.db);
+
+  String get entityTable => 'account_users';
+
+  @override
+  Future<List<AccountUser>> findDirty({int limit = 200}) async {
+    final rows = await db.query(
+      entityTable,
+      where: 'isDirty = 1 AND deletedAt IS NULL',
+      orderBy: 'updatedAt DESC',
+      limit: limit,
+    );
+    return rows.map(AccountUser.fromMap).toList();
+  }
+
+  @override
+  Future<void> markSynced(Iterable<String> ids, DateTime at) async {
+    final iso = at.toUtc().toIso8601String();
+    final batch = db.batch();
+    for (final id in ids) {
+      batch.update(
+        entityTable,
+        {'isDirty': 0, 'syncAt': iso, 'updatedAt': iso},
+        where: 'id = ?',
+        whereArgs: [id],
+      );
+    }
+    await batch.commit(noResult: true);
+  }
+
+  @override
+  Future<AccountUser?> findById(String id) async {
+    final rows = await db.query(
+      entityTable,
+      where: 'id = ?',
+      whereArgs: [id],
+      limit: 1,
+    );
+    if (rows.isEmpty) return null;
+    return AccountUser.fromMap(rows.first);
   }
 }

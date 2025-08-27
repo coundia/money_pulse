@@ -1,6 +1,7 @@
 import 'package:money_pulse/domain/accounts/entities/account.dart';
 import 'package:money_pulse/domain/categories/entities/category.dart';
 
+import '../../domain/accounts/entities/account_user.dart';
 import '../../domain/company/entities/company.dart';
 import '../../domain/customer/entities/customer.dart';
 import '../../domain/stock/entities/stock_level.dart';
@@ -72,4 +73,10 @@ abstract class DebtSyncPort {
   Future<List<Debt>> findDirty({int limit = 200});
   Future<void> markSynced(Iterable<String> ids, DateTime at);
   Future<Debt?> findById(String id);
+}
+
+abstract class AccountUserSyncPort {
+  Future<List<AccountUser>> findDirty({int limit = 200});
+  Future<void> markSynced(Iterable<String> ids, DateTime at);
+  Future<AccountUser?> findById(String id);
 }

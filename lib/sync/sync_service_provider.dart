@@ -1,4 +1,4 @@
-/* Riverpod providers for push use cases including Company, plus SyncAll composition. */
+/* Riverpod providers for push use cases, now includes accountUser and wires it into SyncAllUseCase. */
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:sqflite/sqflite.dart' show Database;
 
@@ -19,6 +19,7 @@ import 'package:money_pulse/sync/application/push_transaction_items_usecase.dart
 import 'package:money_pulse/sync/application/push_debts_usecase.dart';
 import 'package:money_pulse/sync/application/push_stock_levels_usecase.dart';
 import 'package:money_pulse/sync/application/push_stock_movements_usecase.dart';
+import 'package:money_pulse/sync/application/push_account_users_usecase.dart';
 import 'package:money_pulse/sync/application/sync_all_usecase.dart';
 
 import '../infrastructure/repositories/sync_state_repository_sqflite.dart';
@@ -189,6 +190,22 @@ final stockMovementPushUseCaseProvider = Provider<PushStockMovementsUseCase>((
   );
 });
 
+final accountUserPushUseCaseProvider = Provider<PushAccountUsersUseCase>((ref) {
+  final api = ref.read(_apiProvider);
+  final dbRaw = ref.read(dbProvider).db;
+  final port = AccountUserSyncPortSqflite(dbRaw);
+  final changeLog = ref.read(_changeLogRepoProvider);
+  final syncState = ref.read(_syncStateRepoProvider);
+  final logger = ref.read(syncLoggerProvider);
+  return PushAccountUsersUseCase(
+    port: port,
+    api: api,
+    changeLog: changeLog,
+    syncState: syncState,
+    logger: logger,
+  );
+});
+
 final syncAllUseCaseProvider = Provider<SyncAllUseCase>((ref) {
   final logger = ref.read(syncLoggerProvider);
   final policy = ref.read(syncPolicyProvider);
@@ -203,6 +220,7 @@ final syncAllUseCaseProvider = Provider<SyncAllUseCase>((ref) {
     debts: ref.read(debtPushUseCaseProvider),
     stockLevels: ref.read(stockLevelPushUseCaseProvider),
     stockMovements: ref.read(stockMovementPushUseCaseProvider),
+    accountUsers: ref.read(accountUserPushUseCaseProvider),
     policy: policy,
     logger: logger,
   );

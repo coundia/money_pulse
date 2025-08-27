@@ -1,7 +1,4 @@
-/* Orchestrates all push use cases in FK-safe order. 
- * Nothing is mandatory: each PushPort is nullable and skipped if not wired.
- * Also consults SyncPolicy and logs every step.
- */
+// Orchestrates all push use cases in FK-safe order, includes accountUsers.
 import 'push_port.dart';
 import '../infrastructure/sync_logger.dart';
 import 'sync_policy.dart';
@@ -19,6 +16,7 @@ class SyncSummary {
   final int debts;
   final int stockLevels;
   final int stockMovements;
+  final int accountUsers;
 
   const SyncSummary({
     required this.categories,
@@ -32,6 +30,7 @@ class SyncSummary {
     required this.debts,
     required this.stockLevels,
     required this.stockMovements,
+    required this.accountUsers,
   });
 
   SyncSummary copyWith({
@@ -46,6 +45,7 @@ class SyncSummary {
     int? debts,
     int? stockLevels,
     int? stockMovements,
+    int? accountUsers,
   }) {
     return SyncSummary(
       categories: categories ?? this.categories,
@@ -59,12 +59,12 @@ class SyncSummary {
       debts: debts ?? this.debts,
       stockLevels: stockLevels ?? this.stockLevels,
       stockMovements: stockMovements ?? this.stockMovements,
+      accountUsers: accountUsers ?? this.accountUsers,
     );
   }
 }
 
 class SyncAllUseCase {
-  // ⬇️ Nothing mandatory: all ports are nullable and will be skipped if null.
   final PushPort? categories;
   final PushPort? accounts;
   final PushPort? transactions;
@@ -76,6 +76,7 @@ class SyncAllUseCase {
   final PushPort? debts;
   final PushPort? stockLevels;
   final PushPort? stockMovements;
+  final PushPort? accountUsers;
 
   final SyncPolicy policy;
   final SyncLogger logger;
@@ -92,14 +93,13 @@ class SyncAllUseCase {
     this.debts,
     this.stockLevels,
     this.stockMovements,
+    this.accountUsers,
     required this.policy,
     required this.logger,
   });
 
   Future<SyncSummary> syncAll({int batchSize = 200}) async {
     logger.info('Sync start');
-
-    // FK-safe order
     final accs = await _maybe(SyncDomain.accounts, accounts, batchSize);
     final cats = await _maybe(SyncDomain.categories, categories, batchSize);
     final uts = await _maybe(SyncDomain.units, units, batchSize);
@@ -115,7 +115,7 @@ class SyncAllUseCase {
     );
     final txs = await _maybe(SyncDomain.transactions, transactions, batchSize);
     final itms = await _maybe(SyncDomain.items, items, batchSize);
-
+    final aus = await _maybe(SyncDomain.accountUsers, accountUsers, batchSize);
     logger.info('Sync done');
     return SyncSummary(
       categories: cats,
@@ -129,22 +129,19 @@ class SyncAllUseCase {
       debts: dbts,
       stockLevels: sls,
       stockMovements: sms,
+      accountUsers: aus,
     );
   }
 
   Future<int> _maybe(SyncDomain domain, PushPort? port, int batchSize) async {
-    // Not wired at all → skip silently with info log
     if (port == null) {
       logger.info('Sync ${domain.key}: skipped (not wired)');
       return 0;
     }
-
-    // Disabled by policy → skip
     if (!policy.enabled(domain)) {
       logger.info('Sync ${domain.key}: disabled');
       return 0;
     }
-
     try {
       logger.info('Sync ${domain.key}: start');
       final n = await port.execute(batchSize: batchSize);
