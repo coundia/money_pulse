@@ -1,29 +1,23 @@
-/* Home page scaffold with menu-based refresh, full remount, and hot restart entry. Adds a Share button that opens an Under-Construction right drawer. */
+// Home page scaffold with menu-based refresh, full remount, and hot restart entry.
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-
 import 'package:money_pulse/presentation/app/providers.dart';
 import 'package:money_pulse/presentation/app/account_selection.dart';
 import 'package:money_pulse/presentation/widgets/right_drawer.dart';
 import 'package:money_pulse/presentation/app/restart_app.dart';
-
 import 'package:money_pulse/presentation/features/settings/settings_page.dart';
 import 'package:money_pulse/presentation/features/transactions/transaction_form_sheet.dart';
 import 'package:money_pulse/presentation/features/transactions/pages/transaction_list_page.dart';
 import 'package:money_pulse/presentation/features/transactions/search/txn_search_delegate.dart';
-
 import 'package:money_pulse/presentation/features/products/product_list_page.dart';
 import 'package:money_pulse/presentation/features/customers/customer_list_page.dart';
 import 'package:money_pulse/presentation/features/pos/pos_page.dart';
-
 import 'package:money_pulse/presentation/features/accounts/account_page.dart';
 import 'package:money_pulse/presentation/features/categories/category_list_page.dart';
-
 import 'package:money_pulse/domain/accounts/entities/account.dart';
 import 'package:money_pulse/domain/transactions/entities/transaction_entry.dart';
 import 'package:sqflite/sqlite_api.dart';
-
 import '../../../sync/infrastructure/pull_ports/account_pull_port_sqflite.dart';
 import '../../../sync/infrastructure/pull_providers.dart';
 import '../../../sync/infrastructure/sync_api_client.dart';
@@ -33,20 +27,15 @@ import '../transactions/controllers/transaction_list_controller.dart';
 import '../transactions/prefs/summary_card_prefs_panel.dart';
 import '../transactions/providers/transaction_list_providers.dart'
     show transactionListItemsProvider;
-
 import 'prefs/home_privacy_prefs_provider.dart';
 import 'widgets/account_picker_sheet.dart';
 import 'widgets/period_picker_sheet.dart';
-
 import 'prefs/home_ui_prefs_provider.dart';
 import 'prefs/home_ui_prefs_panel.dart';
-
 import 'widgets/home_app_bar_title.dart';
-
 import 'package:money_pulse/onboarding/presentation/providers/access_session_provider.dart';
 import 'package:money_pulse/sync/sync_service_provider.dart';
-
-// ⬇️ Import du drawer "Page en construction"
+import 'package:money_pulse/onboarding/presentation/flows/logout_and_purge_flow.dart';
 import 'package:money_pulse/presentation/widgets/under_construction_drawer.dart'
     hide showRightDrawer;
 
@@ -93,10 +82,8 @@ class _HomePageState extends ConsumerState<HomePage> {
 
   Future<void> _showAccountPicker() async {
     if (!mounted) return;
-
     final repo = ref.read(accountRepoProvider);
     final selectedIdPref = ref.read(selectedAccountIdProvider);
-
     final accountsFuture = ref
         .read(balanceProvider.notifier)
         .load()
@@ -130,11 +117,9 @@ class _HomePageState extends ConsumerState<HomePage> {
       } catch (_) {
         await repo.update(picked.copyWith(isDefault: true));
       }
-
       ref.read(selectedAccountIdProvider.notifier).state = picked.id;
       final prefs = await SharedPreferences.getInstance();
       await prefs.setString(kLastAccountIdKey, picked.id);
-
       await _softReload();
       _hardRemount();
     }
@@ -206,16 +191,11 @@ class _HomePageState extends ConsumerState<HomePage> {
   Future<void> _runSyncAll() async {
     final ok = await requireAccess(context, ref);
     if (!mounted || !ok) return;
-
     final logger = ref.read(syncLoggerProvider);
     logger.info('************** PUSH *****');
-
     try {
       logger.info('UI: trigger syncAll');
-      final s = await syncAllTables(ref);
-      logger.info(
-        'UI: syncAll success cats=${s.categories} accs=${s.accounts} txs=${s.transactions} uts=${s.units} prods=${s.products} items=${s.items} comps=${s.companies} custs=${s.customers} debts=${s.debts} sl=${s.stockLevels} sm=${s.stockMovements}',
-      );
+      await syncAllTables(ref);
     } catch (e, st) {
       logger.error('UI: syncAll failed', e, st);
       if (!mounted) return;
@@ -251,26 +231,18 @@ class _HomePageState extends ConsumerState<HomePage> {
     setState(() => pageIdx = v);
   }
 
-  // ========== à REMPLACER : _openShareDrawer ==========
   Future<void> _openShareDrawer() async {
-    // 1) Tenter d'utiliser le compte sélectionné (le "défaut" côté UI)
     Account? acc = ref
         .read(selectedAccountProvider)
         .maybeWhen(data: (a) => a, orElse: () => null);
-
-    // 2) S'il est nul, on s'assure qu'un compte est sélectionné (ensureSelectedAccount)
     if (acc == null) {
       try {
         await ref.read(ensureSelectedAccountProvider.future);
         acc = ref
             .read(selectedAccountProvider)
             .maybeWhen(data: (a) => a, orElse: () => null);
-      } catch (_) {
-        // ignore, on tombera sur le picker juste en dessous
-      }
+      } catch (_) {}
     }
-
-    // 3) Toujours rien ? Ouvrir le picker de comptes pour que l’utilisateur choisisse
     if (acc == null) {
       final repo = ref.read(accountRepoProvider);
       final accountsFuture = repo.findAllActive();
@@ -279,11 +251,9 @@ class _HomePageState extends ConsumerState<HomePage> {
         accountsFuture: accountsFuture,
         selectedAccountId: ref.read(selectedAccountIdProvider),
       );
-      if (picked == null) return; // annulé
+      if (picked == null) return;
       acc = picked;
     }
-
-    // 4) Ouvrir l’écran de partage en plein écran avec le compte choisi (défaut + fallback description/code)
     await openAccountShareScreen<void>(
       context,
       accountId: acc!.id,
@@ -299,7 +269,6 @@ class _HomePageState extends ConsumerState<HomePage> {
     final uiPrefs = ref.watch(homeUiPrefsProvider);
     final privacyAsync = ref.watch(homePrivacyPrefsProvider);
     final accessGrant = ref.watch(accessSessionProvider);
-
     final hide = privacyAsync.maybeWhen(
       data: (p) => p.hideBalance,
       orElse: () => false,
@@ -324,12 +293,16 @@ class _HomePageState extends ConsumerState<HomePage> {
                 onSelected: (action) async {
                   switch (action) {
                     case 'refresh':
+                      await _runPullAll();
                       await _refreshAll(remount: true);
                       break;
                     case 'login':
                       {
                         final ok = await requireAccess(context, ref);
                         if (!mounted || !ok) break;
+
+                        await _runPullAll();
+
                         ScaffoldMessenger.of(context).showSnackBar(
                           const SnackBar(
                             content: Text('Connecté avec succès.'),
@@ -339,11 +312,7 @@ class _HomePageState extends ConsumerState<HomePage> {
                       }
                     case 'logout':
                       {
-                        await ref.read(accessSessionProvider.notifier).clear();
-                        if (!mounted) break;
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(content: Text('Déconnecté.')),
-                        );
+                        await runLogoutAndPurgeFlow(context, ref);
                         break;
                       }
                     case 'search':
@@ -381,15 +350,12 @@ class _HomePageState extends ConsumerState<HomePage> {
                         break;
                       }
                     case 'personnalisation':
-                      if (!mounted) break;
                       await openSummaryPrefs();
                       break;
                     case 'ui':
-                      if (!mounted) break;
                       await openUiPrefs();
                       break;
                     case 'manageCategories':
-                      if (!mounted) break;
                       await Navigator.of(context).push(
                         MaterialPageRoute(
                           builder: (_) => const CategoryListPage(),
@@ -397,7 +363,6 @@ class _HomePageState extends ConsumerState<HomePage> {
                       );
                       break;
                     case 'manageAccounts':
-                      if (!mounted) break;
                       await Navigator.of(context).push(
                         MaterialPageRoute(
                           builder: (_) => const AccountListPage(),
@@ -405,7 +370,6 @@ class _HomePageState extends ConsumerState<HomePage> {
                       );
                       break;
                     case 'clients':
-                      if (!mounted) break;
                       await Navigator.of(context).push(
                         MaterialPageRoute(
                           builder: (_) => const CustomerListPage(),
@@ -413,7 +377,6 @@ class _HomePageState extends ConsumerState<HomePage> {
                       );
                       break;
                     case 'produits':
-                      if (!mounted) break;
                       await Navigator.of(context).push(
                         MaterialPageRoute(
                           builder: (_) => const ProductListPage(),
@@ -421,7 +384,6 @@ class _HomePageState extends ConsumerState<HomePage> {
                       );
                       break;
                     case 'settings':
-                      if (!mounted) break;
                       await Navigator.of(context).push(
                         MaterialPageRoute(builder: (_) => const SettingsPage()),
                       );
@@ -524,6 +486,11 @@ class _HomePageState extends ConsumerState<HomePage> {
                           accessGrant == null
                               ? 'Se connecter'
                               : 'Se déconnecter',
+                        ),
+                        subtitle: Text(
+                          accessGrant != null
+                              ? accessGrant.email
+                              : 'Hors ligne',
                         ),
                       ),
                     ),

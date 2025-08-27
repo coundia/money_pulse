@@ -15,6 +15,8 @@ import 'package:money_pulse/presentation/features/sync/sync_state_list_page.dart
 import 'package:money_pulse/presentation/shared/formatters.dart';
 import 'package:money_pulse/presentation/widgets/right_drawer.dart';
 import 'package:money_pulse/onboarding/presentation/providers/access_session_provider.dart';
+import 'package:money_pulse/onboarding/presentation/flows/logout_and_purge_flow.dart';
+import '../../../sync/infrastructure/pull_providers.dart';
 import '../../app/app_exit/app_exit.dart';
 import '../products/product_list_page.dart';
 import 'widgets/confirm_panel.dart';
@@ -55,6 +57,24 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
     final ok = await requireAccess(context, ref);
     if (!mounted) return;
     if (ok) {
+      try {
+        final sum = await pullAllTables(ref);
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              'Import terminé • Comptes: ${sum.accounts}, '
+              'Catégories: ${sum.categories}, Clients: ${sum.customers}',
+            ),
+          ),
+        );
+      } catch (e) {
+        if (!mounted) return;
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('Échec import: $e')));
+      }
+
       ScaffoldMessenger.of(
         context,
       ).showSnackBar(const SnackBar(content: Text('Connecté avec succès.')));
@@ -64,21 +84,9 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
 
   Future<void> _logout() async {
     if (!mounted || _busy) return;
-    final ok = await _confirm(
-      icon: Icons.logout,
-      title: 'Se déconnecter ?',
-      message:
-          'Vous perdrez l’accès aux actions protégées. Les données locales restent sur l’appareil.',
-      confirmLabel: 'Se déconnecter',
-      cancelLabel: 'Annuler',
-    );
-    if (!ok) return;
-    await ref.read(accessSessionProvider.notifier).clear();
-    if (!mounted) return;
-    ScaffoldMessenger.of(
-      context,
-    ).showSnackBar(const SnackBar(content: Text('Déconnecté.')));
-    setState(() {});
+    setState(() => _busy = true);
+    await runLogoutAndPurgeFlow(context, ref);
+    if (mounted) setState(() => _busy = false);
   }
 
   Future<void> _upgradeDbSchema() async {
@@ -197,7 +205,7 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
                 icon: isLoggedIn ? Icons.logout : Icons.login,
                 title: isLoggedIn ? 'Se déconnecter' : 'Se connecter',
                 subtitle: isLoggedIn
-                    ? 'Désactiver l’accès aux fonctions protégées'
+                    ? session.email
                     : 'Activer la synchronisation et le partage sécurisé etc...',
                 onTap: _busy ? null : (isLoggedIn ? _logout : _login),
               ),
