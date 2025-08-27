@@ -68,4 +68,28 @@ class HttpAccessRepository implements AccessRepository {
       grantedAt: DateTime.now().toUtc(),
     );
   }
+
+  @override
+  Future<void> forgotPassword(String username) async {
+    final res = await client.post(
+      _uri('/api/auth/forgot-password'),
+      headers: {'Content-Type': 'application/json', 'accept': '*/*'},
+      body: jsonEncode({'username': username}),
+    );
+    if (res.statusCode < 200 || res.statusCode >= 300) {
+      throw Exception('forgotPassword failed');
+    }
+  }
+
+  @override
+  Future<void> resetPassword(String token, String newPassword) async {
+    final res = await client.post(
+      _uri('/api/auth/reset-password'),
+      headers: {'Content-Type': 'application/json', 'accept': '*/*'},
+      body: jsonEncode({'token': token, 'newPassword': newPassword}),
+    );
+    if (res.statusCode < 200 || res.statusCode >= 300) {
+      throw Exception('resetPassword failed');
+    }
+  }
 }

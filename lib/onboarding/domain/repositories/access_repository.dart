@@ -10,4 +10,6 @@ abstract class AccessRepository {
   });
 
   Future<AccessGrant> login(String username, String password);
+  Future<void> forgotPassword(String username);
+  Future<void> resetPassword(String token, String newPassword);
 }
