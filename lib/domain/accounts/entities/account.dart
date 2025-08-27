@@ -12,6 +12,7 @@ class Account {
   final int balanceLimit;
 
   final String? code;
+  final String? createdBy;
   final String? description;
   final String? status;
   final String? currency;
@@ -49,6 +50,7 @@ class Account {
     required this.updatedAt,
     this.deletedAt,
     this.syncAt,
+    this.createdBy,
     this.version = 0,
     this.isDirty = true,
   });
@@ -66,6 +68,7 @@ class Account {
     String? code,
     String? description,
     String? status,
+    String? createdBy,
     String? currency,
     String? typeAccount,
     DateTime? dateStartAccount,
@@ -102,6 +105,7 @@ class Account {
       syncAt: syncAt ?? this.syncAt,
       version: version ?? this.version,
       isDirty: isDirty ?? this.isDirty,
+      createdBy: createdBy ?? this.createdBy,
     );
   }
 
@@ -129,6 +133,7 @@ class Account {
       code: map['code'] as String?,
       description: map['description'] as String?,
       status: map['status'] as String?,
+      createdBy: map['status'] as String?,
       currency: map['currency'] as String?,
       typeAccount: map['typeAccount'] as String?,
       dateStartAccount: _parseDate(map['dateStartAccount']),
@@ -160,6 +165,7 @@ class Account {
       'status': status,
       'currency': currency,
       'typeAccount': typeAccount,
+      'createdBy': createdBy,
       'dateStartAccount': _fmt(dateStartAccount),
       'dateEndAccount': _fmt(dateEndAccount),
       'isDefault': isDefault ? 1 : 0,

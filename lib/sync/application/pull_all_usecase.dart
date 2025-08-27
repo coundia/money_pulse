@@ -16,6 +16,7 @@ class PullSummary {
   final int stockMovements;
   final int transactions;
   final int items;
+  final int accountUsers; // ⬅️ added
 
   const PullSummary({
     required this.accounts,
@@ -29,6 +30,7 @@ class PullSummary {
     required this.stockMovements,
     required this.transactions,
     required this.items,
+    required this.accountUsers,
   });
 }
 
@@ -80,7 +82,7 @@ class PullAllUseCase {
     final sms = await _maybe(SyncDomain.stockMovements, stockMovements);
     final txs = await _maybe(SyncDomain.transactions, transactions);
     final itms = await _maybe(SyncDomain.items, items);
-    final ausr = await _maybe(SyncDomain.items, accountUsers);
+    final aus = await _maybe(SyncDomain.accountUsers, accountUsers);
 
     logger.info('Pull done');
     return PullSummary(
@@ -95,6 +97,7 @@ class PullAllUseCase {
       stockMovements: sms,
       transactions: txs,
       items: itms,
+      accountUsers: aus,
     );
   }
 

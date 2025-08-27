@@ -8,4 +8,6 @@ abstract class AccessRepository {
     required AccessIdentity identity,
     required String code,
   });
+
+  Future<AccessGrant> login(String username, String password);
 }

@@ -72,7 +72,7 @@ class AccountUserDeltaDto {
   }
 
   Map<String, Object?> toJson() => {
-    if (id != null) 'id': id,
+    'id': remoteId ?? id,
     'localId': localId,
     'remoteId': remoteId,
     'account': account,
@@ -88,5 +88,6 @@ class AccountUserDeltaDto {
     'createdBy': createdBy,
     'syncAt': syncAt,
     'operation': operation,
+    'type': operation.toUpperCase(),
   };
 }

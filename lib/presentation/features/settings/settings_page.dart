@@ -113,8 +113,8 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
     final messenger = ScaffoldMessenger.maybeOf(context);
     final ok = await _confirm(
       icon: Icons.delete_forever_rounded,
-      title: 'Réinitialiser la base de données ?',
-      message: 'Toutes les données locales seront supprimées puis recréées.',
+      title: 'Effacer les données ?',
+      message: 'Toutes les données  seront supprimées.',
       confirmLabel: 'Réinitialiser',
       cancelLabel: 'Annuler',
     );
@@ -297,8 +297,8 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
               _divider(),
               ListTile(
                 leading: const Icon(Icons.delete_forever_rounded),
-                title: const Text('Réinitialiser la base de données'),
-                subtitle: const Text('Supprimer puis recréer la base locale'),
+                title: const Text('Effacer les données'),
+                subtitle: const Text('Supprimer  toutes les données .'),
                 trailing: _busy
                     ? const SizedBox(
                         height: 20,

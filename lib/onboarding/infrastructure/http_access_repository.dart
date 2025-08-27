@@ -9,6 +9,8 @@ class HttpAccessRepository implements AccessRepository {
   final http.Client client;
   final Uri baseUri;
 
+  Uri _uri(String path) => baseUri.resolve(path);
+
   const HttpAccessRepository({required this.client, required this.baseUri});
 
   @override
@@ -42,6 +44,28 @@ class HttpAccessRepository implements AccessRepository {
       email: identity.email ?? '',
       token: (data['token'] as String?) ?? '',
       grantedAt: DateTime.now(),
+    );
+  }
+
+  @override
+  Future<AccessGrant> login(String username, String password) async {
+    final res = await client.post(
+      _uri('/api/auth/login'),
+      headers: {'Content-Type': 'application/json', 'accept': '*/*'},
+      body: jsonEncode({'username': username, 'password': password}),
+    );
+    if (res.statusCode < 200 || res.statusCode >= 300) {
+      throw Exception('login failed');
+    }
+    final map = jsonDecode(res.body) as Map<String, dynamic>;
+    final code = map['code'] is num ? (map['code'] as num).toInt() : -1;
+    final token = map['token']?.toString() ?? '';
+    final uname = map['username']?.toString() ?? username;
+    if (code != 1 || token.isEmpty) throw Exception('login invalid response');
+    return AccessGrant(
+      email: uname,
+      token: token,
+      grantedAt: DateTime.now().toUtc(),
     );
   }
 }

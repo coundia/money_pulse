@@ -1,10 +1,12 @@
-// Right-drawer form to choose email or phone as identity, then request a code; fills source with installation ID.
+// Right-drawer form to choose identity and request a code, with shortcut to password login.
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../providers/access_repo_provider.dart';
 import '../../domain/models/access_identity.dart';
 import 'package:money_pulse/presentation/app/installation_id_provider.dart';
+import 'access_password_login_panel.dart';
+import '../../domain/entities/access_grant.dart';
 
 class AccessEmailRequestResult {
   final AccessIdentity identity;
@@ -79,7 +81,6 @@ class _AccessEmailRequestPanelState
     try {
       final email = _mode == IdentityMode.email ? _emailCtrl.text.trim() : '';
       final phone = _mode == IdentityMode.phone ? _phoneCtrl.text.trim() : '';
-
       final source = await ref.read(installationIdProvider.future);
 
       final identity = AccessIdentity(
@@ -104,6 +105,19 @@ class _AccessEmailRequestPanelState
       );
     } finally {
       if (mounted) setState(() => _sending = false);
+    }
+  }
+
+  Future<void> _openPasswordLogin() async {
+    final grant = await Navigator.of(context).push<AccessGrant>(
+      PageRouteBuilder(
+        opaque: false,
+        pageBuilder: (_, __, ___) => const AccessPasswordLoginPanel(),
+        transitionDuration: const Duration(milliseconds: 0),
+      ),
+    );
+    if (grant != null && mounted) {
+      Navigator.of(context).pop(grant);
     }
   }
 
@@ -149,7 +163,7 @@ class _AccessEmailRequestPanelState
                         child: Column(
                           mainAxisSize: MainAxisSize.min,
                           children: [
-                            Text(
+                            const Text(
                               'Choisissez votre méthode et saisissez votre contact pour recevoir un code de confirmation.',
                               textAlign: TextAlign.center,
                             ),
@@ -169,10 +183,16 @@ class _AccessEmailRequestPanelState
                                   const SizedBox(height: 12),
                                   _messageField(),
                                   const SizedBox(height: 16),
-                                  SizedBox(
-                                    width: 220,
-                                    height: 48,
-                                    child: _primaryBtn(),
+                                  Row(
+                                    children: [
+                                      SizedBox(
+                                        width: 220,
+                                        height: 48,
+                                        child: _primaryBtn(),
+                                      ),
+                                      const SizedBox(width: 12),
+                                      Expanded(child: _passwordBtn()),
+                                    ],
                                   ),
                                 ],
                               )
@@ -189,6 +209,12 @@ class _AccessEmailRequestPanelState
                                     width: double.infinity,
                                     height: 48,
                                     child: _primaryBtn(),
+                                  ),
+                                  const SizedBox(height: 8),
+                                  SizedBox(
+                                    width: double.infinity,
+                                    height: 48,
+                                    child: _passwordBtn(),
                                   ),
                                 ],
                               ),
@@ -317,6 +343,17 @@ class _AccessEmailRequestPanelState
           : const Icon(Icons.send),
       label: const Text('Recevoir le code'),
       style: ElevatedButton.styleFrom(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      ),
+    );
+  }
+
+  Widget _passwordBtn() {
+    return OutlinedButton.icon(
+      onPressed: _openPasswordLogin,
+      icon: const Icon(Icons.login),
+      label: const Text('Se connecter avec mot de passe'),
+      style: OutlinedButton.styleFrom(
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
       ),
     );

@@ -1,6 +1,7 @@
 // Riverpod providers wiring for access repository and use cases.
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:http/http.dart' as http;
+import '../../application/login_with_password_usecase.dart';
 import '../../domain/repositories/access_repository.dart';
 import '../../infrastructure/http_access_repository.dart';
 import '../../application/request_access_usecase.dart';
@@ -25,4 +26,11 @@ final requestAccessUseCaseProvider = Provider<RequestAccessUseCase>((ref) {
 final verifyAccessUseCaseProvider = Provider<VerifyAccessUseCase>((ref) {
   final repo = ref.read(accessRepoProvider);
   return VerifyAccessUseCase(repo);
+});
+
+final loginWithPasswordUseCaseProvider = Provider<LoginWithPasswordUseCase>((
+  ref,
+) {
+  final repo = ref.read(accessRepoProvider);
+  return LoginWithPasswordUseCase(repo);
 });

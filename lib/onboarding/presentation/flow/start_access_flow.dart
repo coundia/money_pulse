@@ -1,4 +1,4 @@
-// Flow: collect identity then enter code; both in right-drawers.
+// Flow: collect identity or password login, then verify; both in right-drawers.
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../presentation/widgets/right_drawer.dart';
@@ -11,14 +11,19 @@ Future<AccessGrant?> startAccessFlow(
   WidgetRef ref, {
   String? prefillEmail,
 }) async {
-  final emailRes = await showRightDrawer<AccessEmailRequestResult?>(
+  final first = await showRightDrawer<dynamic>(
     context,
     child: AccessEmailRequestPanel(initialEmail: prefillEmail),
     widthFraction: 0.86,
     heightFraction: 1.0,
   );
-  if (emailRes == null) return null;
+  if (first == null) return null;
 
+  if (first is AccessGrant) {
+    return first;
+  }
+
+  final emailRes = first as AccessEmailRequestResult;
   final grant = await showRightDrawer<AccessGrant?>(
     context,
     child: AccessCodeVerifyPanel(identity: emailRes.identity),

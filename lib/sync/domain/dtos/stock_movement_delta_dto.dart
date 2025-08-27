@@ -65,5 +65,6 @@ class StockMovementDeltaDto {
     'syncAt': syncAt,
 
     'operation': operation,
+    'type': operation.toLowerCase(),
   };
 }

@@ -26,12 +26,16 @@ import '../../domain/sync/repositories/change_log_repository.dart';
 import '../../domain/transactions/repositories/transaction_item_repository.dart';
 import '../../infrastructure/sync/change_log_sqlite_repository.dart';
 import '../../infrastructure/transactions/repositories/transaction_item_repository_impl.dart';
+import '../../onboarding/presentation/providers/access_session_provider.dart';
 import '../features/debts/debt_repo_provider.dart';
 
 final dbProvider = Provider<AppDatabase>((ref) => AppDatabase.I);
 
 final accountRepoProvider = Provider<AccountRepository>((ref) {
-  return AccountRepositorySqflite(ref.read(dbProvider));
+  final appDb = ref.read(dbProvider);
+
+  String? getUserId() => ref.read(accessSessionProvider)?.email;
+  return AccountRepositorySqflite(appDb, getUserId: getUserId);
 });
 
 final categoryRepoProvider = Provider<CategoryRepository>((ref) {

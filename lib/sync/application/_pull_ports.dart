@@ -1,5 +1,4 @@
-/* Pull ports contracts: how to upsert remote payloads into local storage and compute max syncAt. */
-
+/* Pull ports contracts: upsert remote payloads and compute max syncAt. */
 typedef Json = Map<String, Object?>;
 
 abstract class AccountPullPort {
@@ -33,6 +32,12 @@ abstract class StockMovementPullPort {
 
 abstract class DebtPullPort {
   String get entityTable;
+  Future<int> adoptRemoteIds(List<Json> items);
+  Future<({int upserts, DateTime? maxSyncAt})> upsertRemote(List<Json> items);
+}
+
+abstract class AccountUserPullPort {
+  String get entityTable; // should be 'account_users'
   Future<int> adoptRemoteIds(List<Json> items);
   Future<({int upserts, DateTime? maxSyncAt})> upsertRemote(List<Json> items);
 }

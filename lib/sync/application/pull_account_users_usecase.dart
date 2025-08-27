@@ -1,4 +1,4 @@
-// Pull use case for account_users: cursor by syncAt + upsert.
+/* Pull use case for account_users: cursor by syncAt + upsert. */
 import 'package:money_pulse/sync/application/pull_port.dart';
 import 'package:money_pulse/sync/infrastructure/sync_api_client.dart';
 import 'package:money_pulse/sync/infrastructure/sync_logger.dart';
