@@ -3,6 +3,8 @@ import 'package:flutter/material.dart';
 import 'package:money_pulse/domain/accounts/entities/account.dart';
 import 'package:money_pulse/presentation/shared/formatters.dart';
 
+import '../account_share_screen.dart';
+
 class AccountDetailsPanel extends StatelessWidget {
   final Account account;
   final VoidCallback? onEdit;
@@ -87,6 +89,14 @@ class AccountDetailsPanel extends StatelessWidget {
       return r.clamp(0, 1);
     }
 
+    void _openShare(BuildContext context) {
+      openAccountShareScreen<void>(
+        context,
+        accountId: account.id,
+        accountName: account.code ?? 'Compte',
+      );
+    }
+
     final goalRatio = hasGoal ? _ratio(current, goal) : 0.0;
     final limitRatio = hasLimit ? _ratio(current, limit) : 0.0;
 
@@ -97,12 +107,13 @@ class AccountDetailsPanel extends StatelessWidget {
       appBar: AppBar(
         title: const Text('Détails du compte'),
         actions: [
-          if (onShare != null)
+          if (onShare != null || true) // keep icon even without callback
             IconButton(
               tooltip: 'Partager',
-              onPressed: onShare,
+              onPressed: onShare ?? () => _openShare(context),
               icon: const Icon(Icons.ios_share),
             ),
+
           PopupMenuButton<String>(
             tooltip: 'Actions',
             onSelected: (v) {

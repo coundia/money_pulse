@@ -17,6 +17,7 @@ import 'package:money_pulse/domain/accounts/entities/account.dart';
 import 'package:money_pulse/domain/accounts/repositories/account_repository.dart';
 
 import 'account_repo_provider.dart';
+import 'account_share_screen.dart';
 import 'providers/account_list_providers.dart';
 import 'widgets/account_tile.dart';
 import 'widgets/account_context_menu.dart';
@@ -161,11 +162,11 @@ class _AccountListPageState extends ConsumerState<AccountListPage> {
   }
 
   Future<void> _share(Account a) async {
-    final text =
-        'Compte: ${a.code ?? '—'}\nSolde: ${_fmtMoney(a.balance, a.currency)}\nDevise: ${a.currency ?? '—'}\nType: ${a.typeAccount ?? '—'}\nPériode: ${_fmtDate(a.dateStartAccount)} → ${_fmtDate(a.dateEndAccount)}\nMis à jour: ${_fmtDate(a.updatedAt)}';
-
-    print(" ******  _share text ****** ");
-    print(text);
+    await openAccountShareScreen<void>(
+      context,
+      accountId: a.id,
+      accountName: a.code ?? 'Compte',
+    );
   }
 
   Future<void> _adjustBalance(Account acc) async {
