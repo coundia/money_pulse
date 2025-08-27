@@ -236,9 +236,7 @@ class _AccountUserTileState extends ConsumerState<AccountUserTile> {
   @override
   Widget build(BuildContext context) {
     final dt = _updatedAtLike;
-    final subtitle = dt != null
-        ? 'MAJ : ${Formatters.dateFull(dt.toLocal())}'
-        : '';
+    final subtitle = dt != null ? Formatters.dateShort(dt.toLocal()) : '';
 
     return Material(
       color: Colors.transparent,
@@ -275,30 +273,17 @@ class _AccountUserTileState extends ConsumerState<AccountUserTile> {
                     maxLines: 1,
                     style: Theme.of(context).textTheme.bodySmall,
                   ),
-                ],
-              ),
-            ),
-            const SizedBox(width: 8),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
+                  const SizedBox(height: 4),
                   Text(
-                    _displayIdentity,
+                    subtitle,
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
-                    style: Theme.of(context).textTheme.bodyLarge,
+                    style: Theme.of(context).textTheme.bodySmall,
                   ),
-                  if (subtitle.isNotEmpty)
-                    Text(
-                      subtitle,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: Theme.of(context).textTheme.bodySmall,
-                    ),
                 ],
               ),
             ),
+
             const SizedBox(width: 8),
             if (_busy)
               const SizedBox(
