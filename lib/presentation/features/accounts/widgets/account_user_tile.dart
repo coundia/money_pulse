@@ -1,4 +1,4 @@
-/* Reusable row tile for an account member with clear identity, compact chips, menu actions, and drawer confirmation. */
+/* Reusable row tile for an account member with identity caption, compact chips, wrapped action bar to avoid horizontal overflow, and drawer confirmation. */
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:money_pulse/domain/accounts/entities/account_user.dart';
@@ -34,6 +34,12 @@ class _AccountUserTileState extends ConsumerState<AccountUserTile> {
                     : (m.phone?.trim().isNotEmpty == true
                           ? m.phone!.trim()
                           : 'Membre')));
+  }
+
+  String get _identityShort {
+    final s = _displayIdentity;
+    const maxLen = 14;
+    return s.length <= maxLen ? s : '${s.substring(0, maxLen - 1)}…';
   }
 
   String get _roleLabel {
@@ -162,6 +168,71 @@ class _AccountUserTileState extends ConsumerState<AccountUserTile> {
     }
   }
 
+  Widget _actionsBar() {
+    return ConstrainedBox(
+      constraints: const BoxConstraints(maxWidth: 220),
+      child: Align(
+        alignment: Alignment.centerRight,
+        child: Wrap(
+          alignment: WrapAlignment.end,
+          crossAxisAlignment: WrapCrossAlignment.center,
+          spacing: 6,
+          runSpacing: 4,
+          children: [
+            Tooltip(
+              message: 'Rôle : $_roleLabel',
+              child: InputChip(
+                isEnabled: false,
+                avatar: Icon(_roleIcon, size: 16),
+                label: Text(_roleLabel),
+                visualDensity: const VisualDensity(
+                  horizontal: -2,
+                  vertical: -2,
+                ),
+                materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+              ),
+            ),
+            Tooltip(
+              message: 'Statut : $_statusLabel',
+              child: InputChip(
+                isEnabled: false,
+                avatar: Icon(_statusIcon, size: 16),
+                label: Text(_statusLabel),
+                visualDensity: const VisualDensity(
+                  horizontal: -2,
+                  vertical: -2,
+                ),
+                materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+              ),
+            ),
+            PopupMenuButton<String>(
+              tooltip: 'Actions',
+              itemBuilder: (context) => const [
+                PopupMenuItem(value: 'viewer', child: Text('Mettre Lecteur')),
+                PopupMenuItem(value: 'editor', child: Text('Mettre Éditeur')),
+                PopupMenuDivider(),
+                PopupMenuItem(value: 'revoke', child: Text('Révoquer l’accès')),
+              ],
+              onSelected: (v) async {
+                switch (v) {
+                  case 'viewer':
+                    await _changeRole('VIEWER');
+                    break;
+                  case 'editor':
+                    await _changeRole('EDITOR');
+                    break;
+                  case 'revoke':
+                    await _revoke();
+                    break;
+                }
+              },
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final dt = _updatedAtLike;
@@ -175,23 +246,39 @@ class _AccountUserTileState extends ConsumerState<AccountUserTile> {
         padding: const EdgeInsets.symmetric(vertical: 6, horizontal: 8),
         child: Row(
           children: [
-            CircleAvatar(
-              radius: 18,
-              child: Text(
-                _displayIdentity.isEmpty
-                    ? '👤'
-                    : _displayIdentity
-                          .replaceAll(RegExp(r'[^a-zA-Z0-9@._+\s-]'), ' ')
-                          .trim()
-                          .split(RegExp(r'[\s._@-]+'))
-                          .where((e) => e.isNotEmpty)
-                          .take(2)
-                          .map((e) => e[0].toUpperCase())
-                          .join(),
-                style: const TextStyle(fontWeight: FontWeight.w600),
+            SizedBox(
+              width: 64,
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  CircleAvatar(
+                    radius: 18,
+                    child: Text(
+                      _displayIdentity.isEmpty
+                          ? '👤'
+                          : _displayIdentity
+                                .replaceAll(RegExp(r'[^a-zA-Z0-9@._+\s-]'), ' ')
+                                .trim()
+                                .split(RegExp(r'[\s._@-]+'))
+                                .where((e) => e.isNotEmpty)
+                                .take(2)
+                                .map((e) => e[0].toUpperCase())
+                                .join(),
+                      style: const TextStyle(fontWeight: FontWeight.w600),
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    _identityShort,
+                    textAlign: TextAlign.center,
+                    overflow: TextOverflow.ellipsis,
+                    maxLines: 1,
+                    style: Theme.of(context).textTheme.bodySmall,
+                  ),
+                ],
               ),
             ),
-            const SizedBox(width: 12),
+            const SizedBox(width: 8),
             Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -220,64 +307,7 @@ class _AccountUserTileState extends ConsumerState<AccountUserTile> {
                 child: CircularProgressIndicator(strokeWidth: 2),
               )
             else
-              Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Tooltip(
-                    message: 'Rôle : $_roleLabel',
-                    child: InputChip(
-                      isEnabled: false,
-                      avatar: Icon(_roleIcon, size: 16),
-                      label: Text(_roleLabel),
-                      visualDensity: VisualDensity.compact,
-                      materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                    ),
-                  ),
-                  const SizedBox(width: 6),
-                  Tooltip(
-                    message: 'Statut : $_statusLabel',
-                    child: InputChip(
-                      isEnabled: false,
-                      avatar: Icon(_statusIcon, size: 16),
-                      label: Text(_statusLabel),
-                      visualDensity: VisualDensity.compact,
-                      materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                    ),
-                  ),
-                  const SizedBox(width: 6),
-                  PopupMenuButton<String>(
-                    tooltip: 'Actions',
-                    itemBuilder: (context) => const [
-                      PopupMenuItem(
-                        value: 'viewer',
-                        child: Text('Mettre Lecteur'),
-                      ),
-                      PopupMenuItem(
-                        value: 'editor',
-                        child: Text('Mettre Éditeur'),
-                      ),
-                      PopupMenuDivider(),
-                      PopupMenuItem(
-                        value: 'revoke',
-                        child: Text('Révoquer l’accès'),
-                      ),
-                    ],
-                    onSelected: (v) async {
-                      switch (v) {
-                        case 'viewer':
-                          await _changeRole('VIEWER');
-                          break;
-                        case 'editor':
-                          await _changeRole('EDITOR');
-                          break;
-                        case 'revoke':
-                          await _revoke();
-                          break;
-                      }
-                    },
-                  ),
-                ],
-              ),
+              Flexible(child: _actionsBar()),
           ],
         ),
       ),
