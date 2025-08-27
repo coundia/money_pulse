@@ -27,6 +27,9 @@ CREATE TABLE IF NOT EXISTS  account (
   deletedAt TEXT,
   syncAt TEXT,
   version INTEGER DEFAULT 0,
+
+  isShared INTEGER DEFAULT 0,
+  createdBy TEXT,
   isDirty INTEGER DEFAULT 1
 );
 
@@ -45,6 +48,10 @@ CREATE TABLE IF NOT EXISTS  category (
   updatedAt TEXT DEFAULT (datetime('now')),
   deletedAt TEXT,
   syncAt TEXT,
+  
+  isShared INTEGER DEFAULT 0,
+  createdBy TEXT,
+
   version INTEGER DEFAULT 0,
   isDirty INTEGER DEFAULT 1
 );
@@ -56,7 +63,7 @@ CREATE INDEX idx_category_deleted ON category(deletedAt);
 CREATE TABLE IF NOT EXISTS  transaction_entry (
   id TEXT PRIMARY KEY,
   remoteId TEXT,
-    localId TEXT,
+  localId TEXT,
   code TEXT,
   description TEXT,
   amount INTEGER DEFAULT 0,
@@ -75,6 +82,8 @@ CREATE TABLE IF NOT EXISTS  transaction_entry (
   deletedAt TEXT,
   syncAt TEXT,
   version INTEGER DEFAULT 0,
+  
+  createdBy TEXT,
   isDirty INTEGER DEFAULT 1
 );
 
@@ -100,6 +109,7 @@ CREATE TABLE  IF NOT EXISTS change_log (
   createdAt TEXT DEFAULT (datetime('now')) NOT NULL,
   updatedAt TEXT DEFAULT (datetime('now')) NOT NULL,
   processedAt TEXT,
+   createdBy TEXT,
   UNIQUE(entityTable, entityId, status)
 );
 
@@ -114,6 +124,7 @@ CREATE TABLE IF NOT EXISTS  sync_state (
   entityTable TEXT NOT NULL UNIQUE,
   lastSyncAt TEXT,
   lastCursor TEXT,
+   createdBy TEXT,
   updatedAt TEXT DEFAULT (datetime('now')) NOT NULL
 );
   
@@ -137,6 +148,7 @@ CREATE TABLE IF NOT EXISTS product (
  
   deletedAt TEXT,
   syncAt TEXT,
+   createdBy TEXT,
   version INTEGER DEFAULT 0,
   isDirty INTEGER DEFAULT 1
 );
@@ -165,6 +177,7 @@ CREATE TABLE IF NOT EXISTS transaction_item (
   updatedAt TEXT DEFAULT (datetime('now')),
   deletedAt TEXT,
   syncAt TEXT,
+   createdBy TEXT,
   version INTEGER DEFAULT 0,
   isDirty INTEGER DEFAULT 1
 );
@@ -202,6 +215,7 @@ CREATE TABLE IF NOT EXISTS company (
   updatedAt TEXT DEFAULT (datetime('now')),
   deletedAt TEXT,
   syncAt TEXT,
+   createdBy TEXT,
   version INTEGER DEFAULT 0,
   isDirty INTEGER DEFAULT 1
 );
@@ -243,6 +257,7 @@ CREATE TABLE IF NOT EXISTS customer (
   updatedAt TEXT DEFAULT (datetime('now')),
   deletedAt TEXT,
   syncAt TEXT,
+   createdBy TEXT,
   version INTEGER DEFAULT 0,
   isDirty INTEGER DEFAULT 1
 );
@@ -278,6 +293,7 @@ CREATE TABLE stock_level
         syncAt TEXT,
   version INTEGER DEFAULT 0,
   isDirty INTEGER DEFAULT 1,
+   createdBy TEXT,
     companyId        TEXT                           
         REFERENCES company(id) ON DELETE CASCADE
 );
@@ -305,6 +321,7 @@ CREATE TABLE IF NOT EXISTS stock_movement (
   syncAt TEXT,
   version INTEGER DEFAULT 0,
   isDirty INTEGER DEFAULT 1,
+   createdBy TEXT,
   createdAt         TEXT DEFAULT (datetime('now')),
   updatedAt         TEXT DEFAULT (datetime('now'))
 
@@ -331,9 +348,39 @@ CREATE TABLE IF NOT EXISTS debt (
   updatedAt TEXT DEFAULT (datetime('now')),
   deletedAt TEXT,
   syncAt TEXT,
+   createdBy TEXT,
   version INTEGER DEFAULT 0,
   isDirty INTEGER DEFAULT 1
 );
 
 CREATE INDEX IF NOT EXISTS uq_debt_code_active ON debt(code) WHERE deletedAt IS NULL;
-  
+   
+
+CREATE TABLE IF NOT EXISTS account_users (
+  id TEXT PRIMARY KEY,
+  account TEXT NOT NULL,
+  user TEXT,
+  email TEXT,
+  phone TEXT,
+  role TEXT,
+  status TEXT,
+  invitedBy TEXT,
+  invitedAt TEXT DEFAULT (datetime('now')),
+  acceptedAt TEXT,
+  revokedAt TEXT,
+  createdAt TEXT DEFAULT (datetime('now')),
+  updatedAt TEXT DEFAULT (datetime('now')),
+  deletedAt TEXT,
+  syncAt TEXT,
+  version INTEGER DEFAULT 0,
+  isDirty INTEGER DEFAULT 1,
+  remoteId TEXT,
+   createdBy TEXT,
+  localId TEXT
+);
+
+CREATE INDEX IF NOT EXISTS idx_accusers_account ON account_users(account);
+CREATE INDEX IF NOT EXISTS idx_accusers_user    ON account_users(user);
+CREATE INDEX IF NOT EXISTS idx_accusers_status  ON account_users(status);
+CREATE INDEX IF NOT EXISTS idx_accusers_updated ON account_users(updatedAt);
+CREATE INDEX IF NOT EXISTS idx_accusers_dirty   ON account_users(isDirty);
