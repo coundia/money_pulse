@@ -4,6 +4,7 @@ class AccountUser {
   final String account;
   final String? user;
   final String? email;
+  final String? identity;
   final String? phone;
   final String? role;
   final String? status;
@@ -20,6 +21,7 @@ class AccountUser {
   final int isDirty;
   final String? remoteId;
   final String? localId;
+  final String? message;
 
   const AccountUser({
     required this.id,
@@ -27,6 +29,8 @@ class AccountUser {
     this.user,
     this.email,
     this.phone,
+    this.identity,
+    this.message,
     this.role,
     this.status,
     this.invitedBy,
@@ -53,6 +57,8 @@ class AccountUser {
     String? role,
     String? status,
     String? invitedBy,
+    String? identity,
+    String? message,
     DateTime? invitedAt,
     DateTime? acceptedAt,
     DateTime? revokedAt,
@@ -71,6 +77,8 @@ class AccountUser {
       user: user ?? this.user,
       email: email ?? this.email,
       phone: phone ?? this.phone,
+      message: message ?? this.message,
+      identity: identity ?? this.identity,
       role: role ?? this.role,
       status: status ?? this.status,
       invitedBy: invitedBy ?? this.invitedBy,
@@ -110,6 +118,7 @@ class AccountUser {
       isDirty: (m['isDirty'] as int?) ?? 1,
       remoteId: m['remoteId'] as String?,
       localId: m['localId'] as String?,
+      message: m['message'] as String?,
     );
   }
 
@@ -135,6 +144,8 @@ class AccountUser {
       'isDirty': isDirty,
       'remoteId': remoteId,
       'localId': localId,
+      'identity': identity,
+      'message': message,
     }..removeWhere((k, v) => v == null);
   }
 }

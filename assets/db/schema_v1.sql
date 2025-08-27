@@ -362,6 +362,7 @@ CREATE TABLE IF NOT EXISTS account_users (
   user TEXT,
   email TEXT,
   phone TEXT,
+  identify TEXT,
   role TEXT,
   status TEXT,
   invitedBy TEXT,

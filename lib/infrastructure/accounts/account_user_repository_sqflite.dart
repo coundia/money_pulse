@@ -1,4 +1,4 @@
-/* Sqflite repository for account_users with dirty flag and change_log writes. */
+/* Sqflite repository for account_users with identity/message support, safe version bump, COALESCE ordering, and change_log writes. */
 import 'package:sqflite/sqflite.dart';
 import 'package:uuid/uuid.dart';
 import 'package:money_pulse/domain/accounts/entities/account_user.dart';
@@ -8,41 +8,51 @@ class AccountUserRepositorySqflite implements AccountUserRepository {
   final Database db;
   AccountUserRepositorySqflite(this.db);
 
+  Future<void> _ensureColumns() async {
+    final info = await db.rawQuery('PRAGMA table_info(account_users)');
+    bool hasIdentity = info.any((c) => (c['name'] as String?) == 'identity');
+    bool hasMessage = info.any((c) => (c['name'] as String?) == 'message');
+    if (!hasIdentity) {
+      await db.execute('ALTER TABLE account_users ADD COLUMN identity TEXT');
+    }
+    if (!hasMessage) {
+      await db.execute('ALTER TABLE account_users ADD COLUMN message TEXT');
+    }
+  }
+
   @override
   Future<List<AccountUser>> listByAccount(String accountId, {String? q}) async {
+    await _ensureColumns();
     final where = StringBuffer('account = ? AND deletedAt IS NULL');
     final args = <Object?>[accountId];
     if (q != null && q.trim().isNotEmpty) {
       where.write(
-        ' AND (LOWER(COALESCE(email,"")) LIKE ? OR LOWER(COALESCE(phone,"")) LIKE ? OR LOWER(COALESCE(user,"")) LIKE ?)',
+        ' AND (LOWER(COALESCE(identity,"")) LIKE ? OR LOWER(COALESCE(email,"")) LIKE ? OR LOWER(COALESCE(phone,"")) LIKE ? OR LOWER(COALESCE(user,"")) LIKE ?)',
       );
       final like = '%${q.toLowerCase()}%';
-      args.addAll([like, like, like]);
+      args.addAll([like, like, like, like]);
     }
     final rows = await db.query(
       'account_users',
       where: where.toString(),
       whereArgs: args,
-      orderBy: 'updatedAt DESC',
+      orderBy: 'COALESCE(updatedAt, createdAt, invitedAt) DESC',
     );
     return rows.map(AccountUser.fromMap).toList();
   }
 
   @override
   Future<void> invite(AccountUser au) async {
+    await _ensureColumns();
     final id = au.id.isNotEmpty ? au.id : const Uuid().v4();
-    final now = DateTime.now().toUtc().toIso8601String();
-    final map =
-        au
-            .copyWith(
-              invitedAt: DateTime.now().toUtc(),
-              createdAt: DateTime.now().toUtc(),
-              updatedAt: DateTime.now().toUtc(),
-              isDirty: 1,
-              version: au.version + 1,
-            )
-            .toMap()
-          ..putIfAbsent('id', () => id);
+    final patched = au.copyWith(
+      invitedAt: DateTime.now().toUtc(),
+      createdAt: DateTime.now().toUtc(),
+      updatedAt: DateTime.now().toUtc(),
+      isDirty: 1,
+      version: (au.version ?? 0) + 1,
+    );
+    final map = patched.toMap()..putIfAbsent('id', () => id);
     await db.insert(
       'account_users',
       map,
