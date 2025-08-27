@@ -163,11 +163,9 @@ class _AccountListPageState extends ConsumerState<AccountListPage> {
   Future<void> _share(Account a) async {
     final text =
         'Compte: ${a.code ?? '—'}\nSolde: ${_fmtMoney(a.balance, a.currency)}\nDevise: ${a.currency ?? '—'}\nType: ${a.typeAccount ?? '—'}\nPériode: ${_fmtDate(a.dateStartAccount)} → ${_fmtDate(a.dateEndAccount)}\nMis à jour: ${_fmtDate(a.updatedAt)}';
-    await Clipboard.setData(ClipboardData(text: text));
-    if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Détails copiés dans le presse-papiers')),
-    );
+
+    print(" ******  _share text ****** ");
+    print(text);
   }
 
   Future<void> _adjustBalance(Account acc) async {

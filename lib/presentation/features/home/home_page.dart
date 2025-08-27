@@ -1,4 +1,4 @@
-/* Home page scaffold with menu-based refresh, full remount, and hot restart entry. */
+/* Home page scaffold with menu-based refresh, full remount, and hot restart entry. Adds a Share button that opens an Under-Construction right drawer. */
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -36,7 +36,6 @@ import '../transactions/providers/transaction_list_providers.dart'
 import 'prefs/home_privacy_prefs_provider.dart';
 import 'widgets/account_picker_sheet.dart';
 import 'widgets/period_picker_sheet.dart';
-import 'widgets/share_account_dialog.dart';
 
 import 'prefs/home_ui_prefs_provider.dart';
 import 'prefs/home_ui_prefs_panel.dart';
@@ -45,6 +44,10 @@ import 'widgets/home_app_bar_title.dart';
 
 import 'package:money_pulse/onboarding/presentation/providers/access_session_provider.dart';
 import 'package:money_pulse/sync/sync_service_provider.dart';
+
+// ⬇️ Import du drawer "Page en construction"
+import 'package:money_pulse/presentation/widgets/under_construction_drawer.dart'
+    hide showRightDrawer;
 
 class HomePage extends ConsumerStatefulWidget {
   const HomePage({super.key});
@@ -90,7 +93,6 @@ class _HomePageState extends ConsumerState<HomePage> {
   Future<void> _showAccountPicker() async {
     if (!mounted) return;
 
-    // 1) Load/prepare accounts and normalize default BEFORE opening the picker.
     final repo = ref.read(accountRepoProvider);
     final selectedIdPref = ref.read(selectedAccountIdProvider);
 
@@ -99,10 +101,8 @@ class _HomePageState extends ConsumerState<HomePage> {
         .load()
         .then((_) => repo.findAllActive())
         .then((list) async {
-          // Ensure exactly one default exists.
           final defaults = list.where((a) => a.isDefault).toList();
           if (list.isNotEmpty && defaults.length != 1) {
-            // Prefer previously-selected account if present; otherwise first.
             final target = list.firstWhere(
               (a) => a.id == (selectedIdPref ?? ''),
               orElse: () => list.first,
@@ -110,23 +110,19 @@ class _HomePageState extends ConsumerState<HomePage> {
             try {
               await repo.setDefault(target.id);
             } catch (_) {
-              // Fallback: mark chosen one as default directly.
               await repo.update(target.copyWith(isDefault: true));
             }
-            // Reload list after normalization.
             return await repo.findAllActive();
           }
           return list;
         });
 
-    // 2) Show picker with normalized default selection.
     final picked = await showAccountPickerSheet(
       context: context,
       accountsFuture: accountsFuture,
       selectedAccountId: ref.read(selectedAccountIdProvider),
     );
 
-    // 3) On pick: make the picked account the (only) default, persist and refresh.
     if (picked != null) {
       try {
         await repo.setDefault(picked.id);
@@ -154,10 +150,6 @@ class _HomePageState extends ConsumerState<HomePage> {
       ref.invalidate(transactionListItemsProvider);
       _hardRemount();
     }
-  }
-
-  Future<void> _showShareDialog(Account acc) async {
-    await showShareAccountDialog(context: context, acc: acc);
   }
 
   Future<void> openSummaryPrefs() async {
@@ -221,9 +213,7 @@ class _HomePageState extends ConsumerState<HomePage> {
       logger.info('UI: trigger syncAll');
       final s = await syncAllTables(ref);
       logger.info(
-        'UI: syncAll success cats=${s.categories} accs=${s.accounts} txs=${s.transactions} '
-        'uts=${s.units} prods=${s.products} items=${s.items} comps=${s.companies} '
-        'custs=${s.customers} debts=${s.debts} sl=${s.stockLevels} sm=${s.stockMovements}',
+        'UI: syncAll success cats=${s.categories} accs=${s.accounts} txs=${s.transactions} uts=${s.units} prods=${s.products} items=${s.items} comps=${s.companies} custs=${s.customers} debts=${s.debts} sl=${s.stockLevels} sm=${s.stockMovements}',
       );
     } catch (e, st) {
       logger.error('UI: syncAll failed', e, st);
@@ -260,6 +250,18 @@ class _HomePageState extends ConsumerState<HomePage> {
     setState(() => pageIdx = v);
   }
 
+  Future<void> _openShareDrawer() async {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      showUnderConstructionDrawer<void>(
+        context,
+        featureName: 'Partage de compte',
+        widthFraction: 0.86,
+        heightFraction: 0.96,
+        barrierDismissible: true,
+      );
+    });
+  }
+
   @override
   Widget build(BuildContext context) {
     final accAsync = ref.watch(selectedAccountProvider);
@@ -293,7 +295,6 @@ class _HomePageState extends ConsumerState<HomePage> {
                     case 'refresh':
                       await _refreshAll(remount: true);
                       break;
-
                     case 'login':
                       {
                         final ok = await requireAccess(context, ref);
@@ -345,11 +346,7 @@ class _HomePageState extends ConsumerState<HomePage> {
                       {
                         final ok = await requireAccess(context, ref);
                         if (!mounted || !ok) break;
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(
-                            content: Text('Accès vérifié. partage todo.'),
-                          ),
-                        );
+                        await _openShareDrawer();
                         break;
                       }
                     case 'personnalisation':
@@ -410,7 +407,6 @@ class _HomePageState extends ConsumerState<HomePage> {
                         title: Text('Rafraîchir'),
                       ),
                     ),
-
                     PopupMenuItem(
                       value: 'search',
                       child: ListTile(
@@ -418,7 +414,6 @@ class _HomePageState extends ConsumerState<HomePage> {
                         title: Text('Rechercher'),
                       ),
                     ),
-
                     PopupMenuItem(
                       value: 'period',
                       child: ListTile(
@@ -431,6 +426,13 @@ class _HomePageState extends ConsumerState<HomePage> {
                       child: ListTile(
                         leading: Icon(Icons.sync),
                         title: Text('Synchroniser'),
+                      ),
+                    ),
+                    PopupMenuItem(
+                      value: 'share',
+                      child: ListTile(
+                        leading: Icon(Icons.ios_share),
+                        title: Text('Partager le compte'),
                       ),
                     ),
                     PopupMenuDivider(),

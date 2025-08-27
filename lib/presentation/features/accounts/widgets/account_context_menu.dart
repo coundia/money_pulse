@@ -1,5 +1,4 @@
-// Context menu for account tile with common actions.
-
+/* Context menu for account tile; actions deferred to next frame to avoid layout conflicts with drawers. */
 import 'package:flutter/material.dart';
 
 Future<void> showAccountContextMenu(
@@ -17,6 +16,10 @@ Future<void> showAccountContextMenu(
   String? currency,
   DateTime? updatedAt,
 }) async {
+  void runNext(VoidCallback cb) {
+    WidgetsBinding.instance.addPostFrameCallback((_) => cb());
+  }
+
   final overlay = Overlay.of(context).context.findRenderObject() as RenderBox;
   final selected = await showMenu<String>(
     context: context,
@@ -69,24 +72,25 @@ Future<void> showAccountContextMenu(
       ),
     ],
   );
+
   switch (selected) {
     case 'view':
-      onView();
+      runNext(onView);
       break;
     case 'default':
-      onMakeDefault();
+      runNext(onMakeDefault);
       break;
     case 'edit':
-      onEdit();
-      break;
-    case 'delete':
-      onDelete();
-      break;
-    case 'share':
-      onShare();
+      runNext(onEdit);
       break;
     case 'adjust':
-      onAdjustBalance();
+      runNext(onAdjustBalance);
+      break;
+    case 'share':
+      runNext(onShare); // <- ouvrira UnderConstructionDrawer
+      break;
+    case 'delete':
+      runNext(onDelete);
       break;
     default:
       break;
