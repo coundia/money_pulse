@@ -28,6 +28,7 @@ import '../../../sync/infrastructure/pull_ports/account_pull_port_sqflite.dart';
 import '../../../sync/infrastructure/pull_providers.dart';
 import '../../../sync/infrastructure/sync_api_client.dart';
 import '../../../sync/infrastructure/sync_logger.dart';
+import '../accounts/account_share_screen.dart';
 import '../transactions/controllers/transaction_list_controller.dart';
 import '../transactions/prefs/summary_card_prefs_panel.dart';
 import '../transactions/providers/transaction_list_providers.dart'
@@ -250,16 +251,46 @@ class _HomePageState extends ConsumerState<HomePage> {
     setState(() => pageIdx = v);
   }
 
+  // ========== à REMPLACER : _openShareDrawer ==========
   Future<void> _openShareDrawer() async {
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      showUnderConstructionDrawer<void>(
-        context,
-        featureName: 'Partage de compte',
-        widthFraction: 0.86,
-        heightFraction: 0.96,
-        barrierDismissible: true,
+    // 1) Tenter d'utiliser le compte sélectionné (le "défaut" côté UI)
+    Account? acc = ref
+        .read(selectedAccountProvider)
+        .maybeWhen(data: (a) => a, orElse: () => null);
+
+    // 2) S'il est nul, on s'assure qu'un compte est sélectionné (ensureSelectedAccount)
+    if (acc == null) {
+      try {
+        await ref.read(ensureSelectedAccountProvider.future);
+        acc = ref
+            .read(selectedAccountProvider)
+            .maybeWhen(data: (a) => a, orElse: () => null);
+      } catch (_) {
+        // ignore, on tombera sur le picker juste en dessous
+      }
+    }
+
+    // 3) Toujours rien ? Ouvrir le picker de comptes pour que l’utilisateur choisisse
+    if (acc == null) {
+      final repo = ref.read(accountRepoProvider);
+      final accountsFuture = repo.findAllActive();
+      final picked = await showAccountPickerSheet(
+        context: context,
+        accountsFuture: accountsFuture,
+        selectedAccountId: ref.read(selectedAccountIdProvider),
       );
-    });
+      if (picked == null) return; // annulé
+      acc = picked;
+    }
+
+    // 4) Ouvrir l’écran de partage en plein écran avec le compte choisi (défaut + fallback description/code)
+    await openAccountShareScreen<void>(
+      context,
+      accountId: acc!.id,
+      accountName: acc.description?.isNotEmpty == true
+          ? acc.description
+          : acc.code,
+    );
   }
 
   @override
