@@ -1,4 +1,4 @@
-/* Sqflite repository for account_users with identity/message support, safe version bump, COALESCE ordering, and change_log writes. */
+/* Sqflite repository that ensures 'identity' and 'message' columns exist, migrates legacy 'identify' -> 'identity', and logs changes. */
 import 'package:sqflite/sqflite.dart';
 import 'package:uuid/uuid.dart';
 import 'package:money_pulse/domain/accounts/entities/account_user.dart';
@@ -11,12 +11,22 @@ class AccountUserRepositorySqflite implements AccountUserRepository {
   Future<void> _ensureColumns() async {
     final info = await db.rawQuery('PRAGMA table_info(account_users)');
     bool hasIdentity = info.any((c) => (c['name'] as String?) == 'identity');
+    bool hasIdentifyLegacy = info.any(
+      (c) => (c['name'] as String?) == 'identify',
+    );
     bool hasMessage = info.any((c) => (c['name'] as String?) == 'message');
+
     if (!hasIdentity) {
       await db.execute('ALTER TABLE account_users ADD COLUMN identity TEXT');
+      hasIdentity = true;
     }
     if (!hasMessage) {
       await db.execute('ALTER TABLE account_users ADD COLUMN message TEXT');
+    }
+    if (hasIdentifyLegacy && hasIdentity) {
+      await db.execute(
+        'UPDATE account_users SET identity = COALESCE(identity, identify) WHERE identify IS NOT NULL',
+      );
     }
   }
 
@@ -50,7 +60,7 @@ class AccountUserRepositorySqflite implements AccountUserRepository {
       createdAt: DateTime.now().toUtc(),
       updatedAt: DateTime.now().toUtc(),
       isDirty: 1,
-      version: (au.version ?? 0) + 1,
+      version: (au.version) + 1,
     );
     final map = patched.toMap()..putIfAbsent('id', () => id);
     await db.insert(

@@ -1,4 +1,4 @@
-/* Entity describing an account sharing membership with role and status. */
+/* Entity describing an account sharing membership with role and status; maps identity from either 'identity' or legacy 'identify'. */
 class AccountUser {
   final String id;
   final String account;
@@ -119,6 +119,7 @@ class AccountUser {
       remoteId: m['remoteId'] as String?,
       localId: m['localId'] as String?,
       message: m['message'] as String?,
+      identity: (m['identity'] ?? m['identify']) as String?,
     );
   }
 
