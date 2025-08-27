@@ -1,9 +1,12 @@
-// Right-drawer to login with username and password with Enter-to-validate.
+// Right-drawer to login with username and password with Enter-to-validate and forgot-password flow.
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../domain/entities/access_grant.dart';
 import '../providers/access_repo_provider.dart';
+import 'access_forgot_password_panel.dart';
+import 'access_reset_password_panel.dart';
+import 'package:money_pulse/presentation/widgets/right_drawer.dart';
 
 class AccessPasswordLoginPanel extends ConsumerStatefulWidget {
   const AccessPasswordLoginPanel({super.key});
@@ -51,6 +54,36 @@ class _AccessPasswordLoginPanelState
       );
     } finally {
       if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  Future<void> _openForgotFlow() async {
+    final sent = await showRightDrawer<bool?>(
+      context,
+      child: AccessForgotPasswordPanel(
+        initialUsername: _userCtrl.text.trim().isNotEmpty
+            ? _userCtrl.text.trim()
+            : null,
+      ),
+      widthFraction: 0.86,
+      heightFraction: 1.0,
+    );
+    if (sent == true && mounted) {
+      final resetOk = await showRightDrawer<bool?>(
+        context,
+        child: const AccessResetPasswordPanel(),
+        widthFraction: 0.86,
+        heightFraction: 1.0,
+      );
+      if (resetOk == true && mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Mot de passe mis à jour. Connectez-vous.'),
+          ),
+        );
+        _passCtrl.clear();
+        _userFocus.requestFocus();
+      }
     }
   }
 
@@ -116,6 +149,15 @@ class _AccessPasswordLoginPanelState
                               width: isWide ? 200 : double.infinity,
                               height: 48,
                               child: _primaryBtn(),
+                            ),
+                            const SizedBox(height: 8),
+                            Align(
+                              alignment: Alignment.centerRight,
+                              child: TextButton.icon(
+                                onPressed: _openForgotFlow,
+                                icon: const Icon(Icons.help_outline),
+                                label: const Text('Mot de passe oublié ?'),
+                              ),
                             ),
                           ],
                         ),

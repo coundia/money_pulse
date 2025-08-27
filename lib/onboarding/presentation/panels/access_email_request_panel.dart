@@ -1,4 +1,4 @@
-// Right-drawer form to choose identity and request a code, with shortcut to password login.
+// Right-drawer form to choose identity and request a code, with shortcut to password login via right-drawer.
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -7,6 +7,7 @@ import '../../domain/models/access_identity.dart';
 import 'package:money_pulse/presentation/app/installation_id_provider.dart';
 import 'access_password_login_panel.dart';
 import '../../domain/entities/access_grant.dart';
+import 'package:money_pulse/presentation/widgets/right_drawer.dart';
 
 class AccessEmailRequestResult {
   final AccessIdentity identity;
@@ -109,12 +110,11 @@ class _AccessEmailRequestPanelState
   }
 
   Future<void> _openPasswordLogin() async {
-    final grant = await Navigator.of(context).push<AccessGrant>(
-      PageRouteBuilder(
-        opaque: false,
-        pageBuilder: (_, __, ___) => const AccessPasswordLoginPanel(),
-        transitionDuration: const Duration(milliseconds: 0),
-      ),
+    final grant = await showRightDrawer<AccessGrant?>(
+      context,
+      child: const AccessPasswordLoginPanel(),
+      widthFraction: 0.86,
+      heightFraction: 1.0,
     );
     if (grant != null && mounted) {
       Navigator.of(context).pop(grant);
