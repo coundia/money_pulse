@@ -37,6 +37,10 @@ class Formatters {
     return DateFormat.yMd('fr_FR').add_Hm().format(dt);
   }
 
+  static String dateVeryShort(DateTime dt) {
+    return DateFormat.yMd('fr_FR').format(dt);
+  }
+
   static String timeHm(DateTime dt) {
     return DateFormat.Hm('fr_FR').format(dt);
   }

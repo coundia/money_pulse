@@ -1,5 +1,7 @@
-/* Reusable row tile for an account member with identity caption, compact chips, wrapped action bar to avoid horizontal overflow, and drawer confirmation. */
+/* Row tile for account member: compact avatar + identity caption, responsive action chips with wrap, no horizontal overflow, accessible menu, and confirm drawer on revoke. */
+import 'dart:math' as math;
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:money_pulse/domain/accounts/entities/account_user.dart';
 import 'package:money_pulse/presentation/features/accounts/providers/account_user_repo_provider.dart';
@@ -22,6 +24,7 @@ class AccountUserTile extends ConsumerStatefulWidget {
 
 class _AccountUserTileState extends ConsumerState<AccountUserTile> {
   bool _busy = false;
+  final _menuKey = GlobalKey<PopupMenuButtonState<String>>();
 
   String get _displayIdentity {
     final m = widget.member;
@@ -36,10 +39,19 @@ class _AccountUserTileState extends ConsumerState<AccountUserTile> {
                           : 'Membre')));
   }
 
-  String get _identityShort {
-    final s = _displayIdentity;
-    const maxLen = 14;
-    return s.length <= maxLen ? s : '${s.substring(0, maxLen - 1)}…';
+  String _initials(String s) {
+    final parts =
+        s
+            .replaceAll(RegExp(r'[^a-zA-Z0-9@._+\s-]'), ' ')
+            .trim()
+            .split(RegExp(r'[\s._@-]+'))
+          ..removeWhere((e) => e.isEmpty);
+    if (parts.isEmpty) return '👤';
+    if (parts.length == 1) {
+      final p = parts.first;
+      return p.length >= 2 ? p.substring(0, 2).toUpperCase() : p.toUpperCase();
+    }
+    return (parts.first[0] + parts.last[0]).toUpperCase();
   }
 
   String get _roleLabel {
@@ -168,9 +180,13 @@ class _AccountUserTileState extends ConsumerState<AccountUserTile> {
     }
   }
 
-  Widget _actionsBar() {
+  Widget _actionsBar(BuildContext context) {
+    final w = MediaQuery.sizeOf(context).width;
+    final maxW = math.max(180.0, math.min(w * 0.54, 360.0));
+    final showRoleChip = w >= 360;
+
     return ConstrainedBox(
-      constraints: const BoxConstraints(maxWidth: 220),
+      constraints: BoxConstraints(maxWidth: maxW),
       child: Align(
         alignment: Alignment.centerRight,
         child: Wrap(
@@ -179,19 +195,20 @@ class _AccountUserTileState extends ConsumerState<AccountUserTile> {
           spacing: 6,
           runSpacing: 4,
           children: [
-            Tooltip(
-              message: 'Rôle : $_roleLabel',
-              child: InputChip(
-                isEnabled: false,
-                avatar: Icon(_roleIcon, size: 16),
-                label: Text(_roleLabel),
-                visualDensity: const VisualDensity(
-                  horizontal: -2,
-                  vertical: -2,
+            if (showRoleChip)
+              Tooltip(
+                message: 'Rôle : $_roleLabel',
+                child: InputChip(
+                  isEnabled: false,
+                  avatar: Icon(_roleIcon, size: 16),
+                  label: Text(_roleLabel),
+                  visualDensity: const VisualDensity(
+                    horizontal: -2,
+                    vertical: -2,
+                  ),
+                  materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
                 ),
-                materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
               ),
-            ),
             Tooltip(
               message: 'Statut : $_statusLabel',
               child: InputChip(
@@ -206,6 +223,7 @@ class _AccountUserTileState extends ConsumerState<AccountUserTile> {
               ),
             ),
             PopupMenuButton<String>(
+              key: _menuKey,
               tooltip: 'Actions',
               itemBuilder: (context) => const [
                 PopupMenuItem(value: 'viewer', child: Text('Mettre Lecteur')),
@@ -236,64 +254,72 @@ class _AccountUserTileState extends ConsumerState<AccountUserTile> {
   @override
   Widget build(BuildContext context) {
     final dt = _updatedAtLike;
-    final subtitle = dt != null ? Formatters.dateShort(dt.toLocal()) : '';
+    final showSubtitle = MediaQuery.sizeOf(context).width >= 380;
+    final subtitle = dt != null && showSubtitle
+        ? Formatters.dateVeryShort(dt.toLocal())
+        : null;
 
-    return Material(
-      color: Colors.transparent,
-      child: Padding(
-        padding: const EdgeInsets.symmetric(vertical: 6, horizontal: 8),
-        child: Row(
-          children: [
-            SizedBox(
-              width: 64,
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  CircleAvatar(
-                    radius: 18,
-                    child: Text(
-                      _displayIdentity.isEmpty
-                          ? '👤'
-                          : _displayIdentity
-                                .replaceAll(RegExp(r'[^a-zA-Z0-9@._+\s-]'), ' ')
-                                .trim()
-                                .split(RegExp(r'[\s._@-]+'))
-                                .where((e) => e.isNotEmpty)
-                                .take(2)
-                                .map((e) => e[0].toUpperCase())
-                                .join(),
-                      style: const TextStyle(fontWeight: FontWeight.w600),
+    final identity = _displayIdentity;
+    final identityShort = identity.length <= 14
+        ? identity
+        : '${identity.substring(0, 13)}…';
+
+    return Semantics(
+      label: 'Membre $identity',
+      button: false,
+      child: InkWell(
+        onLongPress: () {
+          HapticFeedback.selectionClick();
+          _menuKey.currentState?.showButtonMenu();
+        },
+        borderRadius: BorderRadius.circular(12),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(vertical: 6, horizontal: 8),
+          child: Row(
+            children: [
+              SizedBox(
+                width: 76,
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    CircleAvatar(
+                      radius: 18,
+                      child: Text(
+                        identity.isEmpty ? '👤' : _initials(identity),
+                        style: const TextStyle(fontWeight: FontWeight.w600),
+                      ),
                     ),
-                  ),
-                  const SizedBox(height: 4),
-                  Text(
-                    _identityShort,
-                    textAlign: TextAlign.center,
-                    overflow: TextOverflow.ellipsis,
-                    maxLines: 1,
-                    style: Theme.of(context).textTheme.bodySmall,
-                  ),
-                  const SizedBox(height: 4),
-                  Text(
-                    subtitle,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: Theme.of(context).textTheme.bodySmall,
-                  ),
-                ],
+                    const SizedBox(height: 4),
+                    Text(
+                      identityShort,
+                      textAlign: TextAlign.center,
+                      overflow: TextOverflow.ellipsis,
+                      maxLines: 1,
+                      style: Theme.of(context).textTheme.bodySmall,
+                    ),
+                    if (subtitle != null) ...[
+                      const SizedBox(height: 4),
+                      Text(
+                        subtitle,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: Theme.of(context).textTheme.bodySmall,
+                      ),
+                    ],
+                  ],
+                ),
               ),
-            ),
-
-            const SizedBox(width: 8),
-            if (_busy)
-              const SizedBox(
-                width: 20,
-                height: 20,
-                child: CircularProgressIndicator(strokeWidth: 2),
-              )
-            else
-              Flexible(child: _actionsBar()),
-          ],
+              const SizedBox(width: 8),
+              if (_busy)
+                const SizedBox(
+                  width: 20,
+                  height: 20,
+                  child: CircularProgressIndicator(strokeWidth: 2),
+                )
+              else
+                Expanded(child: _actionsBar(context)),
+            ],
+          ),
         ),
       ),
     );
