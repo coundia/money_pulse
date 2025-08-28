@@ -106,7 +106,7 @@ CREATE TABLE  IF NOT EXISTS change_log (
   operation TEXT,
   payload TEXT,
   status TEXT,
-  attempts INTEGER NOT NULL DEFAULT 0,
+  attempts INTEGER  DEFAULT 0,
   error TEXT,
     account TEXT,
   createdAt TEXT DEFAULT (datetime('now')) NOT NULL,
@@ -124,7 +124,7 @@ CREATE TABLE IF NOT EXISTS  sync_state (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   remoteId TEXT,
     localId TEXT,
-  entityTable TEXT NOT NULL UNIQUE,
+  entityTable TEXT  ,
   lastSyncAt TEXT,
   lastCursor TEXT,
     account TEXT,
@@ -168,15 +168,15 @@ CREATE INDEX IF NOT EXISTS idx_product_deleted ON product(deletedAt);
  
 CREATE TABLE IF NOT EXISTS transaction_item (
   id TEXT PRIMARY KEY,
-  transactionId TEXT NOT NULL,   
+  transactionId TEXT  ,   
   productId TEXT,  
   remoteId TEXT,    
     localId TEXT,          
   label TEXT,                     
-  quantity INTEGER NOT NULL DEFAULT 1 CHECK(quantity >= 0),    
+  quantity INTEGER  DEFAULT 1  ,    
   unitId TEXT,                   
-  unitPrice INTEGER NOT NULL DEFAULT 0 CHECK(unitPrice >= 0),  
-  total INTEGER NOT NULL DEFAULT 0 CHECK(total >= 0),       
+  unitPrice INTEGER  ,  
+  total INTEGER  ,       
   notes TEXT,
   createdAt TEXT DEFAULT (datetime('now')),
   updatedAt TEXT DEFAULT (datetime('now')),
@@ -202,7 +202,7 @@ CREATE TABLE IF NOT EXISTS company (
   id TEXT PRIMARY KEY,
   remoteId TEXT,
     localId TEXT,
-  code TEXT NOT NULL,
+  code TEXT  ,
   name TEXT ,
   description TEXT,
   phone TEXT,
@@ -271,12 +271,7 @@ CREATE TABLE IF NOT EXISTS customer (
 
 CREATE   INDEX IF NOT EXISTS uq_customer_code_active
   ON customer(code) WHERE deletedAt IS NULL;
-
-CREATE  INDEX IF NOT EXISTS uq_customer_email_active
-  ON customer(email) WHERE email IS NOT NULL AND deletedAt IS NULL;
-
-CREATE  INDEX IF NOT EXISTS uq_customer_phone_active
-  ON customer(phone) WHERE phone IS NOT NULL AND deletedAt IS NULL;
+ 
 
 -- Index de recherche usuels
 CREATE INDEX IF NOT EXISTS idx_customer_fullname ON customer(fullName);
@@ -368,7 +363,7 @@ CREATE INDEX IF NOT EXISTS uq_debt_code_active ON debt(code) WHERE deletedAt IS 
 
 CREATE TABLE IF NOT EXISTS account_users (
   id TEXT PRIMARY KEY,
-  account TEXT NOT NULL,
+  account TEXT  ,
   user TEXT,
   email TEXT,
   phone TEXT,

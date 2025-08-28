@@ -38,6 +38,9 @@ class TransactionItemPullPortSqflite {
     if (items.isEmpty) return 0;
     int changed = 0;
 
+    print(" items ++++=");
+    print(items);
+
     await db.transaction((txn) async {
       for (final r in items) {
         final remoteId = _asStr(r['id']) ?? _asStr(r['remoteId']);
@@ -119,7 +122,7 @@ class TransactionItemPullPortSqflite {
       for (final r in items) {
         final remoteId = _asStr(r['id']) ?? _asStr(r['remoteId']);
         final localId = _asStr(r['localId']);
-        final transactionId = _asStr(r['transactionId']);
+        final transaction = _asStr(r['transaction']);
         final productId = _asStr(r['productId']);
         final label = _asStr(r['label']);
         final unitId = _asStr(r['unitId']);
@@ -134,7 +137,7 @@ class TransactionItemPullPortSqflite {
         final base = <String, Object?>{
           'remoteId': remoteId,
           'localId': localId,
-          'transactionId': transactionId,
+          'transactionId': transaction,
           'productId': productId,
           'label': label,
           'unitId': unitId,
