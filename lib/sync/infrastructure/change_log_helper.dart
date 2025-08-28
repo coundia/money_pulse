@@ -1,4 +1,4 @@
-/* Reusable helper to upsert a change_log row (INSERT or UPDATE on conflict). */
+// Helper to upsert change_log row with optional account/createdBy.
 import 'dart:convert';
 import 'package:sqflite/sqflite.dart';
 import 'package:uuid/uuid.dart';
@@ -12,6 +12,8 @@ Future<void> upsertChangeLogPending(
   DateTime? at,
   String? logId,
   String status = 'PENDING',
+  String? accountId,
+  String? createdBy,
 }) async {
   final idLog = logId ?? const Uuid().v4();
   final nowIso = (at ?? DateTime.now().toUtc()).toIso8601String();
@@ -25,13 +27,15 @@ Future<void> upsertChangeLogPending(
   await exec.rawInsert(
     '''
     INSERT INTO change_log(
-      id, entityTable, entityId, operation, payload, status, createdAt, updatedAt
+      id, entityTable, entityId, operation, payload, status, createdAt, updatedAt, account, createdBy
     )
-    VALUES(?,?,?,?,?,?,?,?)
+    VALUES(?,?,?,?,?,?,?,?,?,?)
     ON CONFLICT(entityTable, entityId, status) DO UPDATE SET
       operation=excluded.operation,
       updatedAt=excluded.updatedAt,
-      payload=excluded.payload
+      payload=excluded.payload,
+      account=COALESCE(excluded.account, change_log.account),
+      createdBy=COALESCE(excluded.createdBy, change_log.createdBy)
     ''',
     [
       idLog,
@@ -42,6 +46,8 @@ Future<void> upsertChangeLogPending(
       status,
       nowIso,
       nowIso,
+      accountId,
+      createdBy,
     ],
   );
 }

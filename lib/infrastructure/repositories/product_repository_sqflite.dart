@@ -1,4 +1,12 @@
-// Sqflite product repository with normalization, stock_level ensuring, and updatedAt-desc ordering.
+// lib/infrastructure/products/product_repository_sqflite.dart
+//
+// Sqflite product repository using ChangeTrackedExec helpers:
+// - Normalization + UTC timestamps
+// - insertTracked / updateTracked / softDeleteTracked -> auto isDirty, updatedAt,
+//   version bump (on update/delete), and change_log upsert
+// - Automatic stock_level bootstrap per company (also via insertTracked)
+// - UpdatedAt-desc ordering for lists
+//
 import 'package:sqflite/sqflite.dart';
 import 'package:uuid/uuid.dart';
 
@@ -6,13 +14,14 @@ import 'package:money_pulse/infrastructure/db/app_database.dart';
 import 'package:money_pulse/domain/products/entities/product.dart';
 import 'package:money_pulse/domain/products/repositories/product_repository.dart';
 
-import '../../sync/infrastructure/change_log_helper.dart';
+// ⬅️ Extension with insertTracked / updateTracked / softDeleteTracked
+import 'package:money_pulse/sync/infrastructure/change_tracked_exec.dart';
 
 class ProductRepositorySqflite implements ProductRepository {
   final AppDatabase _db;
   ProductRepositorySqflite(this._db);
 
-  String _now() => DateTime.now().toIso8601String();
+  String _nowUtcIso() => DateTime.now().toUtc().toIso8601String();
 
   String? _trimOrNull(String? s) {
     if (s == null) return null;
@@ -49,19 +58,16 @@ class ProductRepositorySqflite implements ProductRepository {
 
   Product _prepCreate(Product p) {
     final n = _normalize(p);
-    return n.copyWith(
-      createdAt: DateTime.now(),
-      updatedAt: DateTime.now(),
-      version: 0,
-      isDirty: 1,
-    );
+    final now = DateTime.now().toUtc();
+    return n.copyWith(createdAt: now, updatedAt: now, version: 0, isDirty: 1);
   }
 
   Product _prepUpdate(Product p) {
     final n = _normalize(p);
     return n.copyWith(
-      updatedAt: DateTime.now(),
-      version: p.version + 1,
+      updatedAt: DateTime.now().toUtc(),
+      version:
+          p.version + 1, // updateTracked will bump again; we’ll drop it in map
       isDirty: 1,
     );
   }
@@ -70,55 +76,52 @@ class ProductRepositorySqflite implements ProductRepository {
 
   Future<void> _ensureStockLevels(Transaction txn, String productId) async {
     final companies = await txn.rawQuery(
-      "SELECT id FROM company WHERE deletedAt IS NULL",
+      'SELECT id FROM company WHERE deletedAt IS NULL',
     );
-    final now = _now();
+    final now = _nowUtcIso();
+
     for (final c in companies) {
       final companyId = (c['id'] as String?) ?? '';
       if (companyId.isEmpty) continue;
+
       final exists = await txn.rawQuery(
-        "SELECT id FROM stock_level WHERE productVariantId=? AND companyId=? LIMIT 1",
+        'SELECT id FROM stock_level WHERE productVariantId=? AND companyId=? LIMIT 1',
         [productId, companyId],
       );
       if (exists.isNotEmpty) continue;
 
-      String id = Uuid().v4();
-      await upsertChangeLogPending(
-        txn,
-        entityTable: 'stock_level',
-        entityId: id,
+      final id = const Uuid().v4();
+      // insertTracked will stamp timestamps/isDirty and upsert change_log
+      await txn.insertTracked(
+        'stock_level',
+        {
+          'id': id,
+          'productVariantId': productId,
+          'companyId': companyId,
+          'stockOnHand': 0,
+          'stockAllocated': 0,
+          'createdAt': now,
+          'updatedAt': now,
+          'version': 0,
+        },
         operation: 'INSERT',
+        // If your stock_level table has an 'account' column, ChangeTrackedExec
+        // will auto-stamp it; otherwise it’s a no-op.
       );
-      await txn.insert('stock_level', {
-        'productVariantId': productId,
-        'companyId': companyId,
-        'stockOnHand': 0,
-        'stockAllocated': 0,
-        'createdAt': now,
-        'updatedAt': now,
-        'id': id,
-      }, conflictAlgorithm: ConflictAlgorithm.ignore);
     }
   }
+
+  // ---------- CRUD ----------
 
   @override
   Future<Product> create(Product product) async {
     final p = _prepCreate(product);
     await _db.tx((txn) async {
-      await txn.insert(
-        'product',
-        p.toMap(),
-        conflictAlgorithm: ConflictAlgorithm.abort,
-      );
+      // Product insert (auto-stamp + changelog)
+      await txn.insertTracked('product', p.toMap(), operation: 'INSERT');
+
+      // Bootstrap per-company stock levels (each via insertTracked)
       await _ensureStockLevels(txn, p.id);
-      final idLog = const Uuid().v4();
-      await txn.rawInsert(
-        'INSERT INTO change_log(id, entityTable, entityId, operation, payload, status, createdAt, updatedAt) '
-        'VALUES(?,?,?,?,?,?,?,?) '
-        'ON CONFLICT(entityTable, entityId, status) DO UPDATE '
-        'SET operation=excluded.operation, updatedAt=excluded.updatedAt, payload=excluded.payload',
-        [idLog, 'product', p.id, 'INSERT', null, 'PENDING', _now(), _now()],
-      );
     });
     return p;
   }
@@ -127,42 +130,27 @@ class ProductRepositorySqflite implements ProductRepository {
   Future<void> update(Product product) async {
     final p = _prepUpdate(product);
     await _db.tx((txn) async {
-      await txn.update(
+      final map = p.toMap()
+        ..remove('version'); // updateTracked will version++ for us
+      await txn.updateTracked(
         'product',
-        p.toMap(),
+        map,
         where: 'id = ?',
         whereArgs: [p.id],
-        conflictAlgorithm: ConflictAlgorithm.abort,
-      );
-      final idLog = const Uuid().v4();
-      await txn.rawInsert(
-        'INSERT INTO change_log(id, entityTable, entityId, operation, payload, status, createdAt, updatedAt) '
-        'VALUES(?,?,?,?,?,?,?,?) '
-        'ON CONFLICT(entityTable, entityId, status) DO UPDATE '
-        'SET operation=excluded.operation, updatedAt=excluded.updatedAt, payload=excluded.payload',
-        [idLog, 'product', p.id, 'UPDATE', null, 'PENDING', _now(), _now()],
+        entityId: p.id,
+        operation: 'UPDATE',
       );
     });
   }
 
   @override
   Future<void> softDelete(String id) async {
-    final now = _now();
     await _db.tx((txn) async {
-      await txn.rawUpdate(
-        'UPDATE product SET deletedAt=?, isDirty=1, version=version+1, updatedAt=? WHERE id=?',
-        [now, now, id],
-      );
-      final idLog = const Uuid().v4();
-      await txn.rawInsert(
-        'INSERT INTO change_log(id, entityTable, entityId, operation, payload, status, createdAt, updatedAt) '
-        'VALUES(?,?,?,?,?,?,?,?) '
-        'ON CONFLICT(entityTable, entityId, status) DO UPDATE '
-        'SET operation=excluded.operation, updatedAt=excluded.updatedAt, payload=excluded.payload',
-        [idLog, 'product', id, 'DELETE', null, 'PENDING', now, now],
-      );
+      await txn.softDeleteTracked('product', entityId: id);
     });
   }
+
+  // ---------- Queries ----------
 
   @override
   Future<Product?> findById(String id) async {
@@ -206,12 +194,19 @@ class ProductRepositorySqflite implements ProductRepository {
       '''
       SELECT * FROM product
       WHERE deletedAt IS NULL
-        AND lower(coalesce(name,'') || ' ' || coalesce(code,'') || ' ' || coalesce(barcode,'') || ' ' || coalesce(statuses,'')) LIKE ?
-      ORDER BY updatedAt DESC, COALESCE(name, code) COLLATE NOCASE ASC, code COLLATE NOCASE ASC
+        AND lower(
+          COALESCE(name,'') || ' ' ||
+          COALESCE(code,'') || ' ' ||
+          COALESCE(barcode,'') || ' ' ||
+          COALESCE(statuses,'')
+        ) LIKE ?
+      ORDER BY updatedAt DESC,
+               COALESCE(name, code) COLLATE NOCASE ASC,
+               code COLLATE NOCASE ASC
       LIMIT ?
       ''',
       [q, limit],
     );
-    return rows.map((e) => _from(e)).toList();
+    return rows.map(_from).toList();
   }
 }

@@ -1,18 +1,29 @@
-// Repository handling stock movements with atomic change_log and direct stock_level impact (no double counting).
+// lib/infrastructure/stock/stock_movement_repository_sqflite.dart
+//
+// StockMovement repository refactored to use ChangeTrackedExec helpers:
+// - insertTracked / updateTracked for auto UTC timestamps, isDirty, version++, and change_log upsert
+// - Atomic stock_level impact with tracked updates (no double counting)
+// - Idempotent ensure stock_level row
+// - Hard delete for movements (table has no deletedAt), with manual change_log upsert
+//
 import 'package:sqflite/sqflite.dart';
 import 'package:uuid/uuid.dart';
+
 import '../../../infrastructure/db/app_database.dart';
 import '../../../domain/stock/entities/stock_movement.dart';
 import '../../../domain/stock/repositories/stock_movement_repository.dart';
 import '../../../sync/infrastructure/change_log_helper.dart';
+import '../../../sync/infrastructure/change_tracked_exec.dart';
 
 class StockMovementRepositorySqflite implements StockMovementRepository {
   final AppDatabase app;
   late final Database db;
+
   StockMovementRepositorySqflite(this.app) : db = app.db;
 
-  String _nowIso() => DateTime.now().toIso8601String();
+  String _nowUtcIso() => DateTime.now().toUtc().toIso8601String();
 
+  /// Ensure a stock_level row exists for (productVariantId, companyId) and return its map (id, onHand, allocated).
   Future<Map<String, Object?>> _ensureLevelRow(
     Transaction txn, {
     required String productVariantId,
@@ -24,8 +35,9 @@ class StockMovementRepositorySqflite implements StockMovementRepository {
       [productVariantId, companyId],
     );
     if (rows.isNotEmpty) return rows.first;
+
     final id = const Uuid().v4();
-    await txn.insert('stock_level', {
+    await txn.insertTracked('stock_level', {
       'id': id,
       'productVariantId': productVariantId,
       'companyId': companyId,
@@ -33,16 +45,13 @@ class StockMovementRepositorySqflite implements StockMovementRepository {
       'stockAllocated': 0,
       'createdAt': nowIso,
       'updatedAt': nowIso,
-    });
-    await upsertChangeLogPending(
-      txn,
-      entityTable: 'stock_level',
-      entityId: id,
-      operation: 'INSERT',
-    );
+      'version': 0,
+    }, operation: 'INSERT');
+
     return {'id': id, 'stockOnHand': 0, 'stockAllocated': 0};
   }
 
+  /// Apply the logical impact of a movement to stock_level using tracked update.
   Future<void> _applyImpact(
     Transaction txn, {
     required String type,
@@ -50,7 +59,7 @@ class StockMovementRepositorySqflite implements StockMovementRepository {
     required String productVariantId,
     required String companyId,
     required String nowIso,
-    required int multiplier,
+    required int multiplier, // +1 apply, -1 revert
   }) async {
     final base = await _ensureLevelRow(
       txn,
@@ -82,33 +91,58 @@ class StockMovementRepositorySqflite implements StockMovementRepository {
         deltaOn = qty * multiplier;
         break;
       default:
-        deltaOn = 0;
-        deltaAl = 0;
+        break;
     }
 
     final newOn = (onHand + deltaOn) < 0 ? 0 : (onHand + deltaOn);
     final newAl = (allocated + deltaAl) < 0 ? 0 : (allocated + deltaAl);
 
-    await txn.rawUpdate(
-      'UPDATE stock_level SET stockOnHand=?, stockAllocated=?, updatedAt=? WHERE productVariantId=? AND companyId=?',
-      [newOn, newAl, nowIso, productVariantId, companyId],
-    );
-
+    // Update the row with tracked helper (auto updatedAt/isDirty/version++ + change_log)
     final idRow = await txn.rawQuery(
       'SELECT id FROM stock_level WHERE productVariantId=? AND companyId=? LIMIT 1',
       [productVariantId, companyId],
     );
     final idStock =
         (idRow.isNotEmpty ? (idRow.first['id'] as String?) : null) ?? '';
+    if (idStock.isEmpty) return;
 
-    if (idStock.isNotEmpty) {
-      await upsertChangeLogPending(
-        txn,
-        entityTable: 'stock_level',
-        entityId: idStock,
-        operation: 'UPDATE',
-      );
-    }
+    await txn.updateTracked(
+      'stock_level',
+      {'stockOnHand': newOn, 'stockAllocated': newAl},
+      where: 'id = ?',
+      whereArgs: [idStock],
+      entityId: idStock,
+      operation: 'UPDATE',
+    );
+  }
+
+  /// Insert a stock movement row using tracked helper; returns inserted id.
+  Future<String> _insertMovement(
+    Transaction txn, {
+    required String type, // IN | OUT | ADJUST | ALLOCATE | RELEASE
+    required int quantity,
+    required String companyId,
+    required String productVariantId,
+    String? orderLineId,
+    String? discriminator,
+    DateTime? createdAt,
+  }) async {
+    final id = const Uuid().v4();
+    await txn.insertTracked('stock_movement', {
+      'id': id,
+      'type_stock_movement': type,
+      'quantity': quantity.abs(),
+      'companyId': companyId,
+      'productVariantId': productVariantId,
+      'orderLineId': orderLineId,
+      'discriminator': discriminator,
+      'createdAt': (createdAt ?? DateTime.now().toUtc()).toIso8601String(),
+      // updatedAt/isDirty/version handled by insertTracked
+      'syncAt': null,
+      'remoteId': null,
+      'localId': null,
+    }, operation: 'INSERT');
+    return id;
   }
 
   @override
@@ -184,29 +218,28 @@ class StockMovementRepositorySqflite implements StockMovementRepository {
 
   @override
   Future<int> create(StockMovement m) async {
-    final id = (m.id is String && (m.id as String).isNotEmpty)
-        ? m.id as String
-        : const Uuid().v4();
-    final now = _nowIso();
+    final now = _nowUtcIso();
 
     return await db.transaction<int>((txn) async {
-      final inserted = await txn.insert('stock_movement', {
-        'id': id,
+      // 1) Insert movement (tracked)
+      final inserted = await txn.insertTracked('stock_movement', {
+        'id': (m.id is String && (m.id as String).isNotEmpty)
+            ? m.id
+            : const Uuid().v4(),
         'type_stock_movement': m.type,
         'quantity': m.quantity,
         'companyId': m.companyId,
         'productVariantId': m.productVariantId,
         'orderLineId': m.orderLineId,
         'discriminator': m.discriminator,
-        'createdAt': m.createdAt.toIso8601String(),
-        'updatedAt': now,
+        'createdAt': m.createdAt.toUtc().toIso8601String(),
+        // updatedAt/isDirty/version handled by helper
         'syncAt': null,
-        'version': 0,
-        'isDirty': 1,
         'remoteId': null,
         'localId': null,
-      }, conflictAlgorithm: ConflictAlgorithm.abort);
+      }, operation: 'INSERT');
 
+      // 2) Apply impact (tracked update on stock_level)
       await _applyImpact(
         txn,
         type: m.type,
@@ -217,20 +250,15 @@ class StockMovementRepositorySqflite implements StockMovementRepository {
         multiplier: 1,
       );
 
-      await upsertChangeLogPending(
-        txn,
-        entityTable: 'stock_movement',
-        entityId: id,
-        operation: 'INSERT',
-      );
       return inserted;
     });
   }
 
   @override
   Future<void> update(StockMovement m) async {
-    final now = _nowIso();
+    final now = _nowUtcIso();
     await db.transaction((txn) async {
+      // Load previous
       final prevRows = await txn.query(
         'stock_movement',
         where: 'id = ?',
@@ -238,27 +266,9 @@ class StockMovementRepositorySqflite implements StockMovementRepository {
         limit: 1,
       );
       if (prevRows.isEmpty) return;
-
       final prev = StockMovement.fromMap(prevRows.first);
 
-      await txn.update(
-        'stock_movement',
-        {
-          'type_stock_movement': m.type,
-          'quantity': m.quantity,
-          'companyId': m.companyId,
-          'productVariantId': m.productVariantId,
-          'orderLineId': m.orderLineId,
-          'discriminator': m.discriminator,
-          'updatedAt': now,
-          'isDirty': 1,
-          'version': (prevRows.first['version'] as int? ?? 0) + 1,
-        },
-        where: 'id = ?',
-        whereArgs: [m.id],
-        conflictAlgorithm: ConflictAlgorithm.abort,
-      );
-
+      // 1) Revert previous impact
       await _applyImpact(
         txn,
         type: prev.type,
@@ -269,6 +279,25 @@ class StockMovementRepositorySqflite implements StockMovementRepository {
         multiplier: -1,
       );
 
+      // 2) Update movement (tracked)
+      await txn.updateTracked(
+        'stock_movement',
+        {
+          'type_stock_movement': m.type,
+          'quantity': m.quantity,
+          'companyId': m.companyId,
+          'productVariantId': m.productVariantId,
+          'orderLineId': m.orderLineId,
+          'discriminator': m.discriminator,
+          // updatedAt/isDirty/version handled by helper
+        },
+        where: 'id = ?',
+        whereArgs: [m.id],
+        entityId: m.id as String,
+        operation: 'UPDATE',
+      );
+
+      // 3) Apply new impact
       await _applyImpact(
         txn,
         type: m.type,
@@ -278,20 +307,14 @@ class StockMovementRepositorySqflite implements StockMovementRepository {
         nowIso: now,
         multiplier: 1,
       );
-
-      await upsertChangeLogPending(
-        txn,
-        entityTable: 'stock_movement',
-        entityId: m.id as String,
-        operation: 'UPDATE',
-      );
     });
   }
 
   @override
   Future<void> delete(String id) async {
-    final now = _nowIso();
+    final now = _nowUtcIso();
     await db.transaction((txn) async {
+      // Load previous
       final prevRows = await txn.query(
         'stock_movement',
         where: 'id = ?',
@@ -301,8 +324,10 @@ class StockMovementRepositorySqflite implements StockMovementRepository {
       if (prevRows.isEmpty) return;
       final prev = StockMovement.fromMap(prevRows.first);
 
+      // 1) Hard delete (no deletedAt column on stock_movement)
       await txn.delete('stock_movement', where: 'id = ?', whereArgs: [id]);
 
+      // 2) Revert impact
       await _applyImpact(
         txn,
         type: prev.type,
@@ -313,6 +338,7 @@ class StockMovementRepositorySqflite implements StockMovementRepository {
         multiplier: -1,
       );
 
+      // 3) Manually log DELETE (since softDeleteTracked isn't applicable)
       await upsertChangeLogPending(
         txn,
         entityTable: 'stock_movement',
@@ -368,8 +394,8 @@ class StockMovementRepositorySqflite implements StockMovementRepository {
       unitPriceCents: (m['unitPriceCents'] as int?) ?? 0,
       totalCents: (m['totalCents'] as int?) ?? 0,
       createdAt:
-          DateTime.tryParse((m['createdAt'] as String?) ?? '') ??
-          DateTime.now(),
+          DateTime.tryParse((m['createdAt'] as String?) ?? '')?.toUtc() ??
+          DateTime.now().toUtc(),
       orderLineId: m['orderLineId'] as String?,
     );
   }

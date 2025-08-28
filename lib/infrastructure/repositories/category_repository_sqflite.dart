@@ -1,17 +1,13 @@
-// Sqflite repository for categories with change-log tracking and updatedAt-desc ordering.
-import 'package:flutter/material.dart';
-import 'package:uuid/uuid.dart';
+// Sqflite repository for categories using tracked insert/update/delete with change_log.
 import 'package:sqflite/sqflite.dart';
-
 import 'package:money_pulse/infrastructure/db/app_database.dart';
 import 'package:money_pulse/domain/categories/entities/category.dart';
 import 'package:money_pulse/domain/categories/repositories/category_repository.dart';
+import 'package:money_pulse/sync/infrastructure/change_tracked_exec.dart';
 
 class CategoryRepositorySqflite implements CategoryRepository {
   final AppDatabase _db;
   CategoryRepositorySqflite(this._db);
-
-  String _now() => DateTime.now().toIso8601String();
 
   @override
   Future<Category> create(Category category) async {
@@ -21,20 +17,9 @@ class CategoryRepositorySqflite implements CategoryRepository {
       isDirty: true,
       typeEntry: category.typeEntry.toUpperCase(),
     );
+
     await _db.tx((txn) async {
-      await txn.insert(
-        'category',
-        c.toMap(),
-        conflictAlgorithm: ConflictAlgorithm.abort,
-      );
-      final idLog = const Uuid().v4();
-      await txn.rawInsert(
-        'INSERT INTO change_log(id, entityTable, entityId, operation, payload, status, createdAt, updatedAt) '
-        'VALUES(?,?,?,?,?,?,?,?) '
-        'ON CONFLICT(entityTable, entityId, status) DO UPDATE '
-        'SET operation=excluded.operation, updatedAt=excluded.updatedAt, payload=excluded.payload',
-        [idLog, 'category', c.id, 'INSERT', null, 'PENDING', _now(), _now()],
-      );
+      await txn.insertTracked('category', c.toMap());
     });
     return c;
   }
@@ -47,22 +32,22 @@ class CategoryRepositorySqflite implements CategoryRepository {
       isDirty: true,
       typeEntry: category.typeEntry.toUpperCase(),
     );
+
     await _db.tx((txn) async {
-      await txn.update(
+      await txn.updateTracked(
         'category',
         c.toMap(),
         where: 'id=?',
         whereArgs: [c.id],
-        conflictAlgorithm: ConflictAlgorithm.abort,
+        entityId: c.id,
       );
-      final idLog = const Uuid().v4();
-      await txn.rawInsert(
-        'INSERT INTO change_log(id, entityTable, entityId, operation, payload, status, createdAt, updatedAt) '
-        'VALUES(?,?,?,?,?,?,?,?) '
-        'ON CONFLICT(entityTable, entityId, status) DO UPDATE '
-        'SET operation=excluded.operation, updatedAt=excluded.updatedAt, payload=excluded.payload',
-        [idLog, 'category', c.id, 'UPDATE', null, 'PENDING', _now(), _now()],
-      );
+    });
+  }
+
+  @override
+  Future<void> softDelete(String id) async {
+    await _db.tx((txn) async {
+      await txn.softDeleteTracked('category', entityId: id);
     });
   }
 
@@ -98,24 +83,5 @@ class CategoryRepositorySqflite implements CategoryRepository {
       orderBy: 'updatedAt DESC, code ASC',
     );
     return rows.map(Category.fromMap).toList();
-  }
-
-  @override
-  Future<void> softDelete(String id) async {
-    final now = _now();
-    await _db.tx((txn) async {
-      await txn.rawUpdate(
-        'UPDATE category SET deletedAt=?, isDirty=1, version=version+1, updatedAt=? WHERE id=?',
-        [now, now, id],
-      );
-      final idLog = const Uuid().v4();
-      await txn.rawInsert(
-        'INSERT INTO change_log(id, entityTable, entityId, operation, payload, status, createdAt, updatedAt) '
-        'VALUES(?,?,?,?,?,?,?,?) '
-        'ON CONFLICT(entityTable, entityId, status) DO UPDATE '
-        'SET operation=excluded.operation, updatedAt=excluded.updatedAt, payload=excluded.payload',
-        [idLog, 'category', id, 'DELETE', null, 'PENDING', now, now],
-      );
-    });
   }
 }

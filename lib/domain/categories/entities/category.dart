@@ -93,6 +93,7 @@ class Category {
       localId: (m['localId'] as String?) ?? id, // fallback for old rows
       remoteId: m['remoteId'] as String?,
       code: m['code'] as String,
+      account: m['account'] as String?,
       description: m['description'] as String?,
       createdAt: _parseDate(m['createdAt']) ?? DateTime.now(),
       updatedAt: _parseDate(m['updatedAt']) ?? DateTime.now(),
@@ -111,6 +112,7 @@ class Category {
       'localId': localId,
       'remoteId': remoteId,
       'code': code,
+      'account': account,
       'description': description,
       'createdAt': f(createdAt),
       'updatedAt': f(updatedAt),

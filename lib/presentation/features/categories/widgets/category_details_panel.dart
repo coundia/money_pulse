@@ -102,6 +102,7 @@ class CategoryDetailsPanel extends ConsumerWidget {
           KeyValueRow(label: 'Type', value: c.typeEntry ?? '—'),
           const SizedBox(height: 8),
           KeyValueRow(label: 'ID distant', value: c.remoteId ?? '—'),
+          KeyValueRow(label: 'ID compte', value: c.account ?? '—'),
           const Divider(height: 24),
           KeyValueRow(label: 'Créée le', value: _fmtDate(c.createdAt)),
           KeyValueRow(label: 'Mis à jour le', value: _fmtDate(c.updatedAt)),

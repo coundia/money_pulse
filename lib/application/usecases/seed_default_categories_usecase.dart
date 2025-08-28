@@ -15,21 +15,21 @@ class SeedDefaultCategoriesUseCase {
 
     final defaults = [
       //sortie
-      {'code': 'Courses', 'type': 'DEBIT'},
+      /*{'code': 'Courses', 'type': 'DEBIT'},
       {'code': 'Loyer', 'type': 'DEBIT'},
       {'code': 'Transport', 'type': 'DEBIT'},
       {'code': 'Internet', 'type': 'DEBIT'},
       {'code': 'Eau', 'type': 'DEBIT'},
       {'code': 'Electricité', 'type': 'DEBIT'},
       {'code': 'Dons', 'type': 'DEBIT'},
-      {'code': 'Achat', 'type': 'DEBIT'},
+      {'code': 'Achat', 'type': 'DEBIT'},*/
       {'code': 'Autres', 'type': 'DEBIT'},
       //entree
-      {'code': 'salaire', 'type': 'CREDIT'},
+      /* {'code': 'salaire', 'type': 'CREDIT'},
       {'code': 'remboursement', 'type': 'CREDIT'},
       {'code': 'vente', 'type': 'CREDIT'},
       {'code': 'cadeaux', 'type': 'CREDIT'},
-      {'code': 'prestations', 'type': 'CREDIT'},
+      {'code': 'prestations', 'type': 'CREDIT'},*/
       {'code': 'Autres', 'type': 'CREDIT'},
     ];
 

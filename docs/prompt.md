@@ -46,3 +46,8 @@ Inspire toi de ceci
     return ProductRepositorySqflite(db);
   });
   >>
+
+
+
+
+give improved code en utilisant ChangeTrackedExec

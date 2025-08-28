@@ -1,185 +1,127 @@
-// Sqflite-backed transaction repository; list queries are ordered by updatedAt DESC.
-import 'package:uuid/uuid.dart';
+// lib/infrastructure/transactions/transaction_repository_sqflite.dart
+//
+// Sqflite-backed transaction repository using ChangeTrackedExec helpers:
+// - UTC timestamps
+// - Centralized balance math (DEBIT = -, CREDIT = +)
+// - Proper undo/apply when account changes
+// - Auto change_log + version bump via insertTracked/updateTracked/softDeleteTracked
+// - List queries ordered by updatedAt DESC
+//
 import 'package:sqflite/sqflite.dart';
+
 import 'package:money_pulse/infrastructure/db/app_database.dart';
 import 'package:money_pulse/domain/transactions/entities/transaction_entry.dart';
 import 'package:money_pulse/domain/transactions/repositories/transaction_repository.dart';
+
+//  extension with insertTracked / updateTracked / softDeleteTracked
+import 'package:money_pulse/sync/infrastructure/change_tracked_exec.dart';
 
 class TransactionRepositorySqflite implements TransactionRepository {
   final AppDatabase _db;
   TransactionRepositorySqflite(this._db);
 
-  String _now() => DateTime.now().toIso8601String();
+  String _nowUtcIso() => DateTime.now().toUtc().toIso8601String();
+
+  /// DEBIT decreases balance; CREDIT increases balance.
+  int _signedAmount(String typeEntry, int amount) {
+    return typeEntry.toUpperCase() == 'DEBIT' ? -amount : amount;
+  }
+
+  Future<void> _adjustAccount(
+    Transaction txn, {
+    required String accountId,
+    required int delta,
+  }) async {
+    if (accountId.isEmpty || delta == 0) return;
+    final now = _nowUtcIso();
+
+    // Mark the account row as changed (logs + version++).
+    // We pass a benign field to satisfy update(), real arithmetic happens just after.
+    await txn.updateTracked(
+      'account',
+      {'updatedAt': now}, // updateTracked overwrites updatedAt/isDirty anyway
+      where: 'id=?',
+      whereArgs: [accountId],
+      entityId: accountId,
+      operation: 'UPDATE',
+    );
+
+    // Arithmetic update (no extra changelog/version bump here).
+    await txn.rawUpdate(
+      'UPDATE account SET balance = COALESCE(balance,0) + ?, updatedAt=? WHERE id=?',
+      [delta, now, accountId],
+    );
+  }
 
   @override
   Future<TransactionEntry> create(TransactionEntry e) async {
     final entry = e.copyWith(
-      updatedAt: DateTime.now(),
-      version: 0,
+      updatedAt: DateTime.now().toUtc(),
+      version: 0, // on INSERT we keep 0; server sync can reconcile
       isDirty: true,
     );
+
     await _db.tx((txn) async {
-      await txn.insert(
+      // Insert txn (auto-stamp + changelog)
+      await txn.insertTracked(
         'transaction_entry',
         entry.toMap(),
-        conflictAlgorithm: ConflictAlgorithm.abort,
+        operation: 'INSERT',
       );
-      if (entry.typeEntry == 'DEBIT') {
-        await txn.rawUpdate(
-          'UPDATE account SET balance=balance-?, isDirty=1, version=version+1, updatedAt=? WHERE id=?',
-          [entry.amount, _now(), entry.accountId],
-        );
-      } else {
-        await txn.rawUpdate(
-          'UPDATE account SET balance=balance+?, isDirty=1, version=version+1, updatedAt=? WHERE id=?',
-          [entry.amount, _now(), entry.accountId],
-        );
+
+      // Apply account delta if accountId present
+      final accId = entry.accountId ?? '';
+      if (accId.isNotEmpty) {
+        final delta = _signedAmount(entry.typeEntry, entry.amount);
+        await _adjustAccount(txn, accountId: accId, delta: delta);
       }
-      final idLogTx = const Uuid().v4();
-      await txn.rawInsert(
-        'INSERT INTO change_log(id, entityTable, entityId, operation, payload, status, createdAt, updatedAt) VALUES(?,?,?,?,?,?,?,?) '
-        'ON CONFLICT(entityTable, entityId, status) DO UPDATE SET operation=excluded.operation, updatedAt=excluded.updatedAt, payload=excluded.payload',
-        [
-          idLogTx,
-          'transaction_entry',
-          entry.id,
-          'INSERT',
-          null,
-          'PENDING',
-          _now(),
-          _now(),
-        ],
-      );
-      final idLogAcc = const Uuid().v4();
-      await txn.rawInsert(
-        'INSERT INTO change_log(id, entityTable, entityId, operation, payload, status, createdAt, updatedAt) VALUES(?,?,?,?,?,?,?,?) '
-        'ON CONFLICT(entityTable, entityId, status) DO UPDATE SET operation=excluded.operation, updatedAt=excluded.updatedAt, payload=excluded.payload',
-        [
-          idLogAcc,
-          'account',
-          entry.accountId,
-          'UPDATE',
-          null,
-          'PENDING',
-          _now(),
-          _now(),
-        ],
-      );
     });
+
     return entry;
   }
 
   @override
-  Future<void> update(TransactionEntry entry) async {
+  Future<void> update(TransactionEntry next) async {
     await _db.tx((txn) async {
       final rows = await txn.query(
         'transaction_entry',
         where: 'id=?',
-        whereArgs: [entry.id],
+        whereArgs: [next.id],
         limit: 1,
       );
       if (rows.isEmpty) return;
-      final old = TransactionEntry.fromMap(rows.first);
-      final now = _now();
 
-      if (old.accountId == entry.accountId) {
-        int delta = 0;
-        delta += old.typeEntry == 'DEBIT' ? old.amount : -old.amount;
-        delta += entry.typeEntry == 'DEBIT' ? -entry.amount : entry.amount;
-        if (delta != 0) {
-          await txn.rawUpdate(
-            'UPDATE account SET balance=balance+?, isDirty=1, version=version+1, updatedAt=? WHERE id=?',
-            [delta, now, entry.accountId],
-          );
-          final idLogAcc = const Uuid().v4();
-          await txn.rawInsert(
-            'INSERT INTO change_log(id, entityTable, entityId, operation, payload, status, createdAt, updatedAt) VALUES(?,?,?,?,?,?,?,?) '
-            'ON CONFLICT(entityTable, entityId, status) DO UPDATE SET operation=excluded.operation, updatedAt=excluded.updatedAt, payload=excluded.payload',
-            [
-              idLogAcc,
-              'account',
-              entry.accountId,
-              'UPDATE',
-              null,
-              'PENDING',
-              now,
-              now,
-            ],
-          );
-        }
-      } else {
-        final undoOld = old.typeEntry == 'DEBIT' ? old.amount : -old.amount;
-        final applyNew = entry.typeEntry == 'DEBIT'
-            ? -entry.amount
-            : entry.amount;
-        await txn.rawUpdate(
-          'UPDATE account SET balance=balance+?, isDirty=1, version=version+1, updatedAt=? WHERE id=?',
-          [undoOld, now, old.accountId],
-        );
-        await txn.rawUpdate(
-          'UPDATE account SET balance=balance+?, isDirty=1, version=version+1, updatedAt=? WHERE id=?',
-          [applyNew, now, entry.accountId],
-        );
-        final idLogAcc1 = const Uuid().v4();
-        final idLogAcc2 = const Uuid().v4();
-        await txn.rawInsert(
-          'INSERT INTO change_log(id, entityTable, entityId, operation, payload, status, createdAt, updatedAt) VALUES(?,?,?,?,?,?,?,?) '
-          'ON CONFLICT(entityTable, entityId, status) DO UPDATE SET operation=excluded.operation, updatedAt=excluded.updatedAt, payload=excluded.payload',
-          [
-            idLogAcc1,
-            'account',
-            old.accountId,
-            'UPDATE',
-            null,
-            'PENDING',
-            now,
-            now,
-          ],
-        );
-        await txn.rawInsert(
-          'INSERT INTO change_log(id, entityTable, entityId, operation, payload, status, createdAt, updatedAt) VALUES(?,?,?,?,?,?,?,?) '
-          'ON CONFLICT(entityTable, entityId, status) DO UPDATE SET operation=excluded.operation, updatedAt=excluded.updatedAt, payload=excluded.payload',
-          [
-            idLogAcc2,
-            'account',
-            entry.accountId,
-            'UPDATE',
-            null,
-            'PENDING',
-            now,
-            now,
-          ],
-        );
+      final prev = TransactionEntry.fromMap(rows.first);
+
+      // ---- Balance adjustments (undo previous, apply new) ----
+      final prevAcc = prev.accountId ?? '';
+      final nextAcc = next.accountId ?? '';
+
+      if (prevAcc.isNotEmpty) {
+        final undo = -_signedAmount(prev.typeEntry, prev.amount);
+        await _adjustAccount(txn, accountId: prevAcc, delta: undo);
+      }
+      if (nextAcc.isNotEmpty) {
+        final apply = _signedAmount(next.typeEntry, next.amount);
+        await _adjustAccount(txn, accountId: nextAcc, delta: apply);
       }
 
-      final updated = entry.copyWith(
-        updatedAt: DateTime.now(),
-        version: old.version + 1,
+      // ---- Persist transaction changes (auto version++ & changelog) ----
+      final updated = next.copyWith(
+        updatedAt: DateTime.now().toUtc(),
         isDirty: true,
-        createdAt: old.createdAt,
-      );
-      await txn.update(
-        'transaction_entry',
-        updated.toMap(),
-        where: 'id=?',
-        whereArgs: [entry.id],
-        conflictAlgorithm: ConflictAlgorithm.abort,
+        createdAt: prev.createdAt,
+        // ⚠️ Don't bump version here; updateTracked will do it.
       );
 
-      final idLogTx = const Uuid().v4();
-      await txn.rawInsert(
-        'INSERT INTO change_log(id, entityTable, entityId, operation, payload, status, createdAt, updatedAt) VALUES(?,?,?,?,?,?,?,?) '
-        'ON CONFLICT(entityTable, entityId, status) DO UPDATE SET operation=excluded.operation, updatedAt=excluded.updatedAt, payload=excluded.payload',
-        [
-          idLogTx,
-          'transaction_entry',
-          entry.id,
-          'UPDATE',
-          null,
-          'PENDING',
-          now,
-          now,
-        ],
+      final map = updated.toMap()..remove('version');
+      await txn.updateTracked(
+        'transaction_entry',
+        map,
+        where: 'id=?',
+        whereArgs: [updated.id],
+        entityId: updated.id,
+        operation: 'UPDATE',
       );
     });
   }
@@ -194,44 +136,18 @@ class TransactionRepositorySqflite implements TransactionRepository {
         limit: 1,
       );
       if (rows.isEmpty) return;
+
       final entry = TransactionEntry.fromMap(rows.first);
-      final now = _now();
-      await txn.rawUpdate(
-        'UPDATE transaction_entry SET deletedAt=?, isDirty=1, version=version+1, updatedAt=? WHERE id=?',
-        [now, now, id],
-      );
-      if (entry.typeEntry == 'DEBIT') {
-        await txn.rawUpdate(
-          'UPDATE account SET balance=balance+?, isDirty=1, version=version+1, updatedAt=? WHERE id=?',
-          [entry.amount, now, entry.accountId],
-        );
-      } else {
-        await txn.rawUpdate(
-          'UPDATE account SET balance=balance-?, isDirty=1, version=version+1, updatedAt=? WHERE id=?',
-          [entry.amount, now, entry.accountId],
-        );
+
+      // Mark deleted (auto changelog)
+      await txn.softDeleteTracked('transaction_entry', entityId: id);
+
+      // Revert account effect if any
+      final accId = entry.accountId ?? '';
+      if (accId.isNotEmpty) {
+        final revert = -_signedAmount(entry.typeEntry, entry.amount);
+        await _adjustAccount(txn, accountId: accId, delta: revert);
       }
-      final idLogTx = const Uuid().v4();
-      await txn.rawInsert(
-        'INSERT INTO change_log(id, entityTable, entityId, operation, payload, status, createdAt, updatedAt) VALUES(?,?,?,?,?,?,?,?) '
-        'ON CONFLICT(entityTable, entityId, status) DO UPDATE SET operation=excluded.operation, updatedAt=excluded.updatedAt, payload=excluded.payload',
-        [idLogTx, 'transaction_entry', id, 'DELETE', null, 'PENDING', now, now],
-      );
-      final idLogAcc = const Uuid().v4();
-      await txn.rawInsert(
-        'INSERT INTO change_log(id, entityTable, entityId, operation, payload, status, createdAt, updatedAt) VALUES(?,?,?,?,?,?,?,?) '
-        'ON CONFLICT(entityTable, entityId, status) DO UPDATE SET operation=excluded.operation, updatedAt=excluded.updatedAt, payload=excluded.payload',
-        [
-          idLogAcc,
-          'account',
-          entry.accountId,
-          'UPDATE',
-          null,
-          'PENDING',
-          now,
-          now,
-        ],
-      );
     });
   }
 
@@ -268,16 +184,24 @@ class TransactionRepositorySqflite implements TransactionRepository {
     DateTime month, {
     String? typeEntry,
   }) async {
-    final start = DateTime(month.year, month.month, 1).toIso8601String();
-    final end = DateTime(month.year, month.month + 1, 1).toIso8601String();
+    final start = DateTime.utc(month.year, month.month, 1).toIso8601String();
+    final end =
+        (month.month == 12
+                ? DateTime.utc(month.year + 1, 1, 1)
+                : DateTime.utc(month.year, month.month + 1, 1))
+            .toIso8601String();
+
     final where = StringBuffer(
-      'accountId=? AND deletedAt IS NULL AND dateTransaction >= ? AND dateTransaction < ?',
+      'accountId=? AND deletedAt IS NULL '
+      'AND dateTransaction >= ? AND dateTransaction < ?',
     );
     final args = <Object?>[accountId, start, end];
+
     if (typeEntry != null) {
       where.write(' AND typeEntry = ?');
       args.add(typeEntry);
     }
+
     final rows = await _db.db.query(
       'transaction_entry',
       where: where.toString(),
@@ -294,23 +218,17 @@ class TransactionRepositorySqflite implements TransactionRepository {
     DateTime to, {
     String? typeEntry,
   }) async {
+    final fromIso = from.toUtc().toIso8601String();
+    final toIso = to.toUtc().toIso8601String();
+
     final where = StringBuffer(
-      // Inclure les transactions du compte sélectionné
-      // OU les dettes (typeEntry='DEBT') sans compte (accountId IS NULL)
       '(accountId = ? OR (accountId IS NULL AND typeEntry = "DEBT")) '
       'AND deletedAt IS NULL '
       'AND dateTransaction >= ? '
       'AND dateTransaction < ?',
     );
+    final args = <Object?>[accountId, fromIso, toIso];
 
-    final args = <Object?>[
-      accountId,
-      from.toIso8601String(),
-      to.toIso8601String(),
-    ];
-
-    // Si un filtre de type est demandé (DEBIT/CREDIT/etc.), on l’applique.
-    // => Les dettes n’apparaîtront que si `typeEntry` est null (vue "Tous").
     if (typeEntry != null) {
       where.write(' AND typeEntry = ?');
       args.add(typeEntry);
