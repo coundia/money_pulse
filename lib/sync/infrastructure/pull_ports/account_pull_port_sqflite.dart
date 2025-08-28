@@ -68,18 +68,28 @@ class AccountPullPortSqflite {
         final localId = _asStr(r['localId']);
         if (remoteId == null || localId == null) continue;
 
-        // Row by localId?
+        // 1) Ligne locale (PK == localId) ?
         final localRows = await txn.query(
-          'account',
+          entityTable,
           where: 'id = ?',
           whereArgs: [localId],
           limit: 1,
         );
 
         if (localRows.isNotEmpty) {
-          // Set linkage on the local row
+          final row = localRows.first;
+          final curRemoteId = _asStr(row['remoteId']);
+          final curLocalId = _asStr(row['localId']);
+
+          // Déjà câblé → SKIP (ne touche pas change_log)
+          if (curRemoteId == remoteId &&
+              (curLocalId == null || curLocalId == localId)) {
+            continue;
+          }
+
+          // Câblage à faire
           await txn.update(
-            'account',
+            entityTable,
             {'remoteId': remoteId, 'localId': localId, 'isDirty': 1},
             where: 'id = ?',
             whereArgs: [localId],
@@ -87,41 +97,52 @@ class AccountPullPortSqflite {
 
           await upsertChangeLogPending(
             txn,
-            entityTable: 'account',
+            entityTable: entityTable,
             entityId: localId,
             operation: 'UPDATE',
           );
 
-          // If a duplicate row exists under remoteId, drop it (keep local PK)
+          // Supprimer un éventuel doublon (PK == remoteId) seulement si on a vraiment câblé
           if (remoteId != localId) {
             final dup = await txn.query(
-              'account',
+              entityTable,
               where: 'id = ?',
               whereArgs: [remoteId],
               limit: 1,
             );
             if (dup.isNotEmpty) {
               await txn.delete(
-                'account',
+                entityTable,
                 where: 'id = ?',
                 whereArgs: [remoteId],
               );
             }
           }
+
           changed++;
           continue;
         }
 
-        // No row by localId → maybe we already have the remote row
+        // 2) Sinon, tenter la ligne dont la PK == remoteId
         final remoteRows = await txn.query(
-          'account',
+          entityTable,
           where: 'id = ?',
           whereArgs: [remoteId],
           limit: 1,
         );
         if (remoteRows.isNotEmpty) {
+          final row = remoteRows.first;
+          final curRemoteId = _asStr(row['remoteId']);
+          final curLocalId = _asStr(row['localId']);
+
+          // Déjà câblé → SKIP (ne touche pas change_log)
+          if (curRemoteId == remoteId && curLocalId == localId) {
+            continue;
+          }
+
+          // Câblage à faire
           await txn.update(
-            'account',
+            entityTable,
             {'remoteId': remoteId, 'localId': localId, 'isDirty': 1},
             where: 'id = ?',
             whereArgs: [remoteId],
@@ -129,14 +150,14 @@ class AccountPullPortSqflite {
 
           await upsertChangeLogPending(
             txn,
-            entityTable: 'account',
-            entityId: localId,
+            entityTable: entityTable,
+            entityId: remoteId,
             operation: 'UPDATE',
           );
 
           changed++;
         }
-        // else: nothing yet; upsertRemote will handle insert
+        // Sinon : insertion traitée plus tard par upsertRemote()
       }
     });
 

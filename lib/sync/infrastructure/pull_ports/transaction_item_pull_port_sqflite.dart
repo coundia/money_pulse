@@ -44,43 +44,61 @@ class TransactionItemPullPortSqflite {
         final localId = _asStr(r['localId']);
         if (remoteId == null || localId == null) continue;
 
+        // 1) Ligne locale par id == localId ?
         final localRows = await txn.query(
           entityTable,
           where: 'id = ?',
           whereArgs: [localId],
           limit: 1,
         );
+
         if (localRows.isNotEmpty) {
+          final local = localRows.first;
+          final alreadyRemote = _asStr(local['remoteId']);
+          final alreadyLocal = _asStr(local['localId']);
+
+          // --- Déjà câblé à ce remoteId → skip
+          if (alreadyRemote == remoteId &&
+              (alreadyLocal == null || alreadyLocal == localId)) {
+            continue;
+          }
+
+          // Sinon, on câble le lien (remoteId/localId) et on log
           await txn.update(
             entityTable,
             {'remoteId': remoteId, 'localId': localId, 'isDirty': 1},
             where: 'id = ?',
             whereArgs: [localId],
           );
-
           await upsertChangeLogPending(
             txn,
             entityTable: entityTable,
             entityId: localId,
             operation: 'UPDATE',
           );
-          final dup = await txn.query(
-            entityTable,
-            where: 'id = ?',
-            whereArgs: [remoteId],
-            limit: 1,
-          );
-          if (dup.isNotEmpty && remoteId != localId) {
-            await txn.delete(
+
+          // S'il existe un doublon dont la PK == remoteId, on le supprime
+          if (remoteId != localId) {
+            final dup = await txn.query(
               entityTable,
               where: 'id = ?',
               whereArgs: [remoteId],
+              limit: 1,
             );
+            if (dup.isNotEmpty) {
+              await txn.delete(
+                entityTable,
+                where: 'id = ?',
+                whereArgs: [remoteId],
+              );
+            }
           }
+
           changed++;
           continue;
         }
 
+        // 2) Pas de ligne par localId → tenter la ligne dont la PK == remoteId
         final remoteRows = await txn.query(
           entityTable,
           where: 'id = ?',
@@ -88,21 +106,29 @@ class TransactionItemPullPortSqflite {
           limit: 1,
         );
         if (remoteRows.isNotEmpty) {
+          final row = remoteRows.first;
+          final curRemote = _asStr(row['remoteId']);
+          final curLocal = _asStr(row['localId']);
+
+          // Si déjà identique → skip
+          final needsUpdate = (curRemote != remoteId) || (curLocal != localId);
+          if (!needsUpdate) continue;
+
           await txn.update(
             entityTable,
             {'remoteId': remoteId, 'localId': localId, 'isDirty': 1},
             where: 'id = ?',
             whereArgs: [remoteId],
           );
-
           await upsertChangeLogPending(
             txn,
             entityTable: entityTable,
-            entityId: localId,
+            entityId: remoteId,
             operation: 'UPDATE',
           );
           changed++;
         }
+        // 3) Sinon, rien à faire ici (l'upsert insérera plus tard)
       }
     });
 
