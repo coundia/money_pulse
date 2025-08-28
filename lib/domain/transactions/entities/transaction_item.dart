@@ -18,6 +18,7 @@ class TransactionItem extends Equatable {
   final DateTime? syncAt;
   final int version;
   final bool isDirty;
+  final String? account;
 
   const TransactionItem({
     required this.id,
@@ -29,6 +30,7 @@ class TransactionItem extends Equatable {
     required this.unitPrice,
     required this.total,
     this.notes,
+    this.account,
     required this.createdAt,
     required this.updatedAt,
     this.deletedAt,

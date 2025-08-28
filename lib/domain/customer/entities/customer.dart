@@ -28,6 +28,7 @@ class Customer extends Equatable {
   final DateTime? syncAt;
   final int version;
   final bool isDirty;
+  final String? account;
 
   const Customer({
     required this.id,
@@ -45,6 +46,7 @@ class Customer extends Equatable {
     this.companyId,
     this.addressLine1,
     this.addressLine2,
+    this.account,
     this.city,
     this.region,
     this.country,

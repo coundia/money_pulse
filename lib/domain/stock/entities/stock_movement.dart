@@ -11,6 +11,7 @@ class StockMovement {
   final DateTime updatedAt;
   final String? localId;
   final String? remoteId;
+  final String? account;
 
   const StockMovement({
     required this.id,
@@ -19,6 +20,7 @@ class StockMovement {
     required this.companyId,
     required this.productVariantId,
     this.orderLineId,
+    this.account,
     this.discriminator,
     this.remoteId,
     this.localId,

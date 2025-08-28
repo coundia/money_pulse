@@ -11,6 +11,7 @@ class StockLevel {
   final bool isDirty;
   final String? localId;
   final String? remoteId;
+  final String? account;
 
   StockLevel({
     required this.id,
@@ -20,6 +21,7 @@ class StockLevel {
     required this.stockAllocated,
     required this.createdAt,
     required this.updatedAt,
+    this.account,
     this.syncAt,
     this.remoteId,
     this.localId,

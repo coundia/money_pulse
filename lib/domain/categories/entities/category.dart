@@ -9,24 +9,20 @@ class Category {
   /// Remote identifier if synced with a server
   final String? remoteId;
 
-  /// Short code / label (ex: "Alimentation")
   final String code;
 
-  /// Optional description
   final String? description;
 
-  /// Timestamps
   final DateTime createdAt;
   final DateTime updatedAt;
   final DateTime? deletedAt;
   final DateTime? syncAt;
 
-  /// Versionning & dirty flags
   final int version;
   final bool isDirty;
 
-  /// 'DEBIT' (dépense) ou 'CREDIT' (revenu)
   final String typeEntry;
+  final String? account;
 
   static const String debit = 'DEBIT';
   static const String credit = 'CREDIT';
@@ -41,6 +37,7 @@ class Category {
     required this.updatedAt,
     this.deletedAt,
     this.syncAt,
+    this.account,
     this.version = 0,
     this.isDirty = true,
     this.typeEntry = debit,

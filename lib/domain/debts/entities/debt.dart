@@ -11,6 +11,7 @@ class Debt {
   final int balanceDebt;
   final DateTime? dueDate;
   final String? statuses;
+  final String? account;
   final String? customerId;
   final DateTime createdAt;
   final DateTime updatedAt;
@@ -23,6 +24,7 @@ class Debt {
     required this.id,
     this.remoteId,
     this.localId,
+    this.account,
     this.code,
     this.notes,
     this.balance = 0,

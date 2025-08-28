@@ -17,11 +17,13 @@ class Product {
   final DateTime? syncAt;
   final int version;
   final int isDirty;
+  final String? account;
 
   const Product({
     required this.id,
     this.remoteId,
     this.localId,
+    this.account,
     this.code,
     this.name,
     this.description,

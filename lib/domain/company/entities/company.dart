@@ -25,6 +25,7 @@ class Company extends Equatable {
   final DateTime? syncAt;
   final int version;
   final bool isDirty;
+  final String? account;
 
   const Company({
     required this.id,
@@ -50,6 +51,7 @@ class Company extends Equatable {
     this.deletedAt,
     this.syncAt,
     this.version = 0,
+    this.account,
     this.isDirty = true,
   });
 

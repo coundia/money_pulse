@@ -52,6 +52,8 @@ CREATE TABLE IF NOT EXISTS  category (
   isShared INTEGER DEFAULT 0,
   createdBy TEXT,
 
+  account TEXT,
+
   version INTEGER DEFAULT 0,
   isDirty INTEGER DEFAULT 1
 );
@@ -106,6 +108,7 @@ CREATE TABLE  IF NOT EXISTS change_log (
   status TEXT,
   attempts INTEGER NOT NULL DEFAULT 0,
   error TEXT,
+    account TEXT,
   createdAt TEXT DEFAULT (datetime('now')) NOT NULL,
   updatedAt TEXT DEFAULT (datetime('now')) NOT NULL,
   processedAt TEXT,
@@ -124,6 +127,7 @@ CREATE TABLE IF NOT EXISTS  sync_state (
   entityTable TEXT NOT NULL UNIQUE,
   lastSyncAt TEXT,
   lastCursor TEXT,
+    account TEXT,
    createdBy TEXT,
   updatedAt TEXT DEFAULT (datetime('now')) NOT NULL
 );
@@ -176,6 +180,7 @@ CREATE TABLE IF NOT EXISTS transaction_item (
   createdAt TEXT DEFAULT (datetime('now')),
   updatedAt TEXT DEFAULT (datetime('now')),
   deletedAt TEXT,
+    account TEXT,
   syncAt TEXT,
    createdBy TEXT,
   version INTEGER DEFAULT 0,
@@ -258,6 +263,7 @@ CREATE TABLE IF NOT EXISTS customer (
   deletedAt TEXT,
   syncAt TEXT,
    createdBy TEXT,
+     account TEXT,
   version INTEGER DEFAULT 0,
   isDirty INTEGER DEFAULT 1
 );
@@ -292,6 +298,7 @@ CREATE TABLE stock_level
         REFERENCES product(id) ON DELETE CASCADE,
         syncAt TEXT,
   version INTEGER DEFAULT 0,
+    account TEXT,
   isDirty INTEGER DEFAULT 1,
    createdBy TEXT,
     companyId        TEXT                           
@@ -318,6 +325,7 @@ CREATE TABLE IF NOT EXISTS stock_movement (
   productVariantId  TEXT ,
   orderLineId       TEXT,
   discriminator     TEXT,
+    account TEXT,
   syncAt TEXT,
   version INTEGER DEFAULT 0,
   isDirty INTEGER DEFAULT 1,
@@ -343,6 +351,7 @@ CREATE TABLE IF NOT EXISTS debt (
   balanceDebt INTEGER DEFAULT 0,
   dueDate TEXT,
   statuses TEXT ,
+    account TEXT,
   customerId TEXT,
   createdAt TEXT DEFAULT (datetime('now')),
   updatedAt TEXT DEFAULT (datetime('now')),

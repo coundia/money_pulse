@@ -29,6 +29,7 @@ class TransactionEntry {
   final DateTime? syncAt;
   final int version;
   final bool isDirty;
+  final String? account;
 
   const TransactionEntry({
     required this.id,
@@ -45,6 +46,7 @@ class TransactionEntry {
     this.accountId,
     this.categoryId,
     this.companyId,
+    this.account,
     this.customerId,
     required this.createdAt,
     required this.updatedAt,
