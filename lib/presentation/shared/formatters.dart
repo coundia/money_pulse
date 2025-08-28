@@ -89,4 +89,11 @@ class Formatters {
     final s = major.toStringAsFixed(decimals);
     return group ? _fracFr(decimals).format(major) : s.replaceAll('.', ',');
   }
+
+  static String? trimOrNull(Object? v) {
+    final s = (v is String) ? v : (v?.toString());
+    if (s == null) return null;
+    final t = s.trim();
+    return t.isEmpty ? null : t;
+  }
 }

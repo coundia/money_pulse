@@ -1,4 +1,5 @@
 // DTO for product delta payloads.
+import 'package:money_pulse/presentation/shared/formatters.dart';
 import 'package:money_pulse/sync/domain/sync_delta_type.dart';
 import 'package:money_pulse/sync/domain/sync_delta_type_ext.dart';
 
@@ -37,25 +38,34 @@ class ProductDeltaDto {
     required this.operation,
   });
 
+  static String? _trimOrNull(Object? v) {
+    return Formatters.trimOrNull(v);
+  }
+
   factory ProductDeltaDto.fromEntity(dynamic p, SyncDeltaType t, DateTime now) {
     final isUpdateOrDelete = t != SyncDeltaType.create;
     final nowIso = (now.isUtc ? now : now.toUtc()).toIso8601String();
     final localId = (p.localId as String?) ?? (p.id as String);
 
+    final rawCode = _trimOrNull(p.code);
+    final rawName = _trimOrNull(p.name);
+    final normalizedCode = rawCode ?? rawName;
+    final normalizedName = rawName ?? rawCode;
+
     return ProductDeltaDto._(
       id: isUpdateOrDelete ? p.remoteId as String? : null,
       localId: localId,
-      account: p.account as String?,
-      remoteId: p.remoteId as String?,
-      code: p.code ?? p.name,
-      name: p.name ?? p.code,
-      description: p.description as String?,
-      barcode: p.barcode as String?,
-      unitId: p.unitId as String?,
-      categoryId: p.categoryId as String?,
+      account: _trimOrNull(p.account),
+      remoteId: _trimOrNull(p.remoteId),
+      code: normalizedCode,
+      name: normalizedName,
+      description: _trimOrNull(p.description),
+      barcode: _trimOrNull(p.barcode),
+      unitId: _trimOrNull(p.unitId),
+      categoryId: _trimOrNull(p.categoryId),
       defaultPrice: p.defaultPrice as int?,
       purchasePrice: p.purchasePrice as int?,
-      statuses: p.statuses as String?,
+      statuses: _trimOrNull(p.statuses),
       syncAt: nowIso,
       operation: t.op,
     );

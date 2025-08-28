@@ -10,6 +10,7 @@ class DebtPullPortSqflite {
 
   String get entityTable => 'debt';
 
+  // ---------- helpers ----------
   int _asInt(Object? v, {int fallback = 0}) {
     if (v == null) return fallback;
     if (v is int) return v;
@@ -34,6 +35,14 @@ class DebtPullPortSqflite {
     return DateTime.tryParse(norm)?.toUtc();
   }
 
+  bool _differs(Map<String, Object?> a, Map<String, Object?> b) {
+    for (final k in a.keys) {
+      if ('${a[k]}' != '${b[k]}') return true;
+    }
+    return false;
+  }
+
+  // ---------- Pass 1: adopt remote ids (never modify PK `id`) ----------
   Future<int> adoptRemoteIds(List<Json> items) async {
     if (items.isEmpty) return 0;
     int changed = 0;
@@ -44,42 +53,60 @@ class DebtPullPortSqflite {
         final localId = _asStr(r['localId']);
         if (remoteId == null || localId == null) continue;
 
+        // 1) row with PK == localId ?
         final localRows = await txn.query(
           entityTable,
           where: 'id = ?',
           whereArgs: [localId],
           limit: 1,
         );
+
         if (localRows.isNotEmpty) {
+          final row = localRows.first;
+          final curRemoteId = _asStr(row['remoteId']);
+          final curLocalId = _asStr(row['localId']);
+
+          // Already wired → SKIP (no changelog)
+          if (curRemoteId == remoteId &&
+              (curLocalId == null || curLocalId == localId)) {
+            continue;
+          }
+
           await txn.update(
             entityTable,
             {'remoteId': remoteId, 'localId': localId, 'isDirty': 1},
             where: 'id = ?',
             whereArgs: [localId],
           );
+
           await upsertChangeLogPending(
             txn,
             entityTable: entityTable,
             entityId: localId,
             operation: 'UPDATE',
           );
-          final dup = await txn.query(
-            entityTable,
-            where: 'id = ?',
-            whereArgs: [remoteId],
-            limit: 1,
-          );
-          if (dup.isNotEmpty && remoteId != localId) {
-            await txn.delete(
+
+          // Drop possible duplicate row with PK == remoteId (keep local PK)
+          if (remoteId != localId) {
+            final dup = await txn.query(
               entityTable,
               where: 'id = ?',
               whereArgs: [remoteId],
+              limit: 1,
             );
+            if (dup.isNotEmpty) {
+              await txn.delete(
+                entityTable,
+                where: 'id = ?',
+                whereArgs: [remoteId],
+              );
+            }
           }
           changed++;
           continue;
         }
 
+        // 2) row with PK == remoteId ?
         final remoteRows = await txn.query(
           entityTable,
           where: 'id = ?',
@@ -87,26 +114,39 @@ class DebtPullPortSqflite {
           limit: 1,
         );
         if (remoteRows.isNotEmpty) {
+          final row = remoteRows.first;
+          final curRemoteId = _asStr(row['remoteId']);
+          final curLocalId = _asStr(row['localId']);
+
+          // Already wired → SKIP
+          if (curRemoteId == remoteId && curLocalId == localId) {
+            continue;
+          }
+
           await txn.update(
             entityTable,
             {'remoteId': remoteId, 'localId': localId, 'isDirty': 1},
             where: 'id = ?',
             whereArgs: [remoteId],
           );
+
           await upsertChangeLogPending(
             txn,
             entityTable: entityTable,
-            entityId: localId,
+            entityId: remoteId,
             operation: 'UPDATE',
           );
+
           changed++;
         }
+        // else: insert will be handled in upsertRemote()
       }
     });
 
     return changed;
   }
 
+  // ---------- Pass 2: upsert (no PK change on UPDATE; skip no-ops) ----------
   Future<({int upserts, DateTime? maxSyncAt})> upsertRemote(
     List<Json> items,
   ) async {
@@ -130,6 +170,7 @@ class DebtPullPortSqflite {
         final remoteSyncAt = _asUtc(r['syncAt']);
         if (maxAt == null || remoteSyncAt.isAfter(maxAt!)) maxAt = remoteSyncAt;
 
+        // Base fields (exclude 'id' so we never change PK on UPDATE)
         final base = <String, Object?>{
           'remoteId': remoteId,
           'localId': localId,
@@ -143,6 +184,7 @@ class DebtPullPortSqflite {
           'syncAt': remoteSyncAt.toIso8601String(),
         };
 
+        // Find target row
         Map<String, Object?>? target;
         if (remoteId != null) {
           final t1 = await txn.query(
@@ -182,15 +224,28 @@ class DebtPullPortSqflite {
         }
 
         if (target != null) {
+          // UPDATE path
           final localUpdatedAt = _parseLocalDate(target['updatedAt']);
           final keepLocal =
               localUpdatedAt != null && localUpdatedAt.isAfter(remoteSyncAt);
+
           final merged = Map<String, Object?>.from(base);
           if (keepLocal) {
+            // keep local balances / dirty bit
+            merged['balance'] = target['balance'];
+            merged['balanceDebt'] = target['balanceDebt'];
             merged['isDirty'] = target['isDirty'];
           } else {
             merged['isDirty'] = 0;
           }
+
+          // Skip no-op updates
+          final currentComparable = Map<String, Object?>.from(target)
+            ..remove('id'); // ignore PK when comparing
+          if (!_differs(merged, currentComparable)) {
+            continue;
+          }
+
           await txn.update(
             entityTable,
             merged,
@@ -199,12 +254,14 @@ class DebtPullPortSqflite {
           );
           upserts++;
         } else {
+          // INSERT path — safe PK set
+          final newId =
+              localId ??
+              remoteId ??
+              DateTime.now().microsecondsSinceEpoch.toString();
           final createdAt = remoteSyncAt.toIso8601String();
           await txn.insert(entityTable, {
-            'id':
-                remoteId ??
-                localId ??
-                DateTime.now().microsecondsSinceEpoch.toString(),
+            'id': newId,
             ...base,
             'createdAt': createdAt,
             'updatedAt': createdAt,
