@@ -38,9 +38,6 @@ class TransactionItemPullPortSqflite {
     if (items.isEmpty) return 0;
     int changed = 0;
 
-    print(" items ++++=");
-    print(items);
-
     await db.transaction((txn) async {
       for (final r in items) {
         final remoteId = _asStr(r['id']) ?? _asStr(r['remoteId']);
@@ -60,6 +57,7 @@ class TransactionItemPullPortSqflite {
             where: 'id = ?',
             whereArgs: [localId],
           );
+
           await upsertChangeLogPending(
             txn,
             entityTable: entityTable,
@@ -96,6 +94,7 @@ class TransactionItemPullPortSqflite {
             where: 'id = ?',
             whereArgs: [remoteId],
           );
+
           await upsertChangeLogPending(
             txn,
             entityTable: entityTable,
