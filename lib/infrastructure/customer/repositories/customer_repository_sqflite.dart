@@ -1,6 +1,17 @@
-// Sqflite repository keeping balances in create/update operations.
+// lib/infrastructure/customer/customer_repository_sqflite.dart
+//
+// Customer repository refactored to use ChangeTrackedExec helpers.
+// - insertTracked / updateTracked / softDeleteTracked centralize:
+//   * UTC timestamps (updatedAt), isDirty=1
+//   * version++ on UPDATE/DELETE
+//   * change_log upsert (PENDING)
+//   * optional account stamping via `account` column
+// - Keeps existing query features (search, filters, paging)
+//
+import 'package:money_pulse/sync/infrastructure/change_tracked_exec.dart';
 import 'package:uuid/uuid.dart';
 import 'package:sqflite/sqflite.dart';
+
 import 'package:money_pulse/infrastructure/db/app_database.dart';
 import 'package:money_pulse/domain/customer/entities/customer.dart';
 import 'package:money_pulse/domain/customer/repositories/customer_repository.dart';
@@ -9,12 +20,14 @@ class CustomerRepositorySqflite implements CustomerRepository {
   final AppDatabase db;
   CustomerRepositorySqflite(this.db);
 
+  // ---------- Reads ----------
+
   @override
   Future<Customer?> findById(String id) async {
     return db.tx((txn) async {
       final rows = await txn.query(
         'customer',
-        where: 'id=?',
+        where: 'id = ?',
         whereArgs: [id],
         limit: 1,
       );
@@ -30,17 +43,25 @@ class CustomerRepositorySqflite implements CustomerRepository {
       final args = <Object?>[];
 
       if (q.onlyActive) where.add('deletedAt IS NULL');
+
       if ((q.companyId ?? '').isNotEmpty) {
         where.add('companyId = ?');
         args.add(q.companyId);
       }
+
       if ((q.search ?? '').trim().isNotEmpty) {
+        final term = '%${q.search!.trim().toLowerCase()}%';
         where.add(
-          '(fullName LIKE ? OR phone LIKE ? OR email LIKE ? OR code LIKE ?)',
+          '('
+          'lower(COALESCE(fullName,"")) LIKE ? OR '
+          'lower(COALESCE(phone,""))    LIKE ? OR '
+          'lower(COALESCE(email,""))    LIKE ? OR '
+          'lower(COALESCE(code,""))     LIKE ?'
+          ')',
         );
-        final v = '%${q.search!.trim()}%';
-        args.addAll([v, v, v, v]);
+        args.addAll([term, term, term, term]);
       }
+
       if (q.hasOpenDebt != null) {
         final existsSql = '''
           EXISTS(SELECT 1 FROM debt d
@@ -53,7 +74,7 @@ class CustomerRepositorySqflite implements CustomerRepository {
       }
 
       final orderBy = q.orderByUpdatedAtDesc
-          ? 'updatedAt DESC'
+          ? 'datetime(updatedAt) DESC'
           : 'fullName COLLATE NOCASE ASC';
 
       final rows = await txn.query(
@@ -75,17 +96,25 @@ class CustomerRepositorySqflite implements CustomerRepository {
       final args = <Object?>[];
 
       if (q.onlyActive) where.add('deletedAt IS NULL');
+
       if ((q.companyId ?? '').isNotEmpty) {
         where.add('companyId = ?');
         args.add(q.companyId);
       }
+
       if ((q.search ?? '').trim().isNotEmpty) {
+        final term = '%${q.search!.trim().toLowerCase()}%';
         where.add(
-          '(fullName LIKE ? OR phone LIKE ? OR email LIKE ? OR code LIKE ?)',
+          '('
+          'lower(COALESCE(fullName,"")) LIKE ? OR '
+          'lower(COALESCE(phone,""))    LIKE ? OR '
+          'lower(COALESCE(email,""))    LIKE ? OR '
+          'lower(COALESCE(code,""))     LIKE ?'
+          ')',
         );
-        final v = '%${q.search!.trim()}%';
-        args.addAll([v, v, v, v]);
+        args.addAll([term, term, term, term]);
       }
+
       if (q.hasOpenDebt != null) {
         final existsSql = '''
           EXISTS(SELECT 1 FROM debt d
@@ -98,7 +127,8 @@ class CustomerRepositorySqflite implements CustomerRepository {
       }
 
       final res = await txn.rawQuery(
-        'SELECT COUNT(*) AS c FROM customer ${where.isEmpty ? '' : 'WHERE ${where.join(' AND ')}'}',
+        'SELECT COUNT(*) AS c FROM customer '
+        '${where.isEmpty ? '' : 'WHERE ${where.join(' AND ')}'}',
         args,
       );
       final v = res.first['c'];
@@ -108,39 +138,32 @@ class CustomerRepositorySqflite implements CustomerRepository {
     });
   }
 
+  // ---------- Writes (ChangeTrackedExec) ----------
+
   @override
   Future<String> create(Customer c) async {
-    final now = DateTime.now();
     final id = c.id.isNotEmpty ? c.id : const Uuid().v4();
-    final fullName = (c.fullName.trim().isEmpty)
+    final fullName = c.fullName.trim().isEmpty
         ? _joinName(c.firstName, c.lastName)
         : c.fullName;
 
-    final data = c
+    final toInsert = c
         .copyWith(
           id: id,
           fullName: fullName,
-          createdAt: c.createdAt,
-          updatedAt: now,
+          // createdAt may be set by entity; insertTracked will ensure updatedAt/isDirty
+          version: c.version, // keep as provided (often 0)
           isDirty: true,
-          version: c.version,
         )
         .toMap();
 
     await db.tx((txn) async {
-      await txn.insert(
+      await txn.insertTracked(
         'customer',
-        data,
-        conflictAlgorithm: ConflictAlgorithm.abort,
-      );
-      final idLog = const Uuid().v4();
-      String now = DateTime.now().toIso8601String();
-      await txn.rawInsert(
-        'INSERT INTO change_log(id, entityTable, entityId, operation, payload, status, createdAt, updatedAt) '
-        'VALUES(?,?,?,?,?,?,?,?) '
-        'ON CONFLICT(entityTable, entityId, status) DO UPDATE '
-        'SET operation=excluded.operation, updatedAt=excluded.updatedAt, payload=excluded.payload',
-        [idLog, 'customer', c.id, 'INSERT', null, 'PENDING', now, now],
+        toInsert,
+        operation: 'INSERT',
+        // accountColumn: 'account' (default) — column exists in schema
+        // preferredAccountId / createdBy can be passed if you have them
       );
     });
     return id;
@@ -148,66 +171,64 @@ class CustomerRepositorySqflite implements CustomerRepository {
 
   @override
   Future<void> update(Customer c) async {
-    final now = DateTime.now();
-    final fullName = (c.fullName.trim().isEmpty)
+    final fullName = c.fullName.trim().isEmpty
         ? _joinName(c.firstName, c.lastName)
         : c.fullName;
 
-    final next = c.copyWith(
+    final toUpdate = c.copyWith(
       fullName: fullName,
-      updatedAt: now,
-      isDirty: true,
-      version: c.version + 1,
+      isDirty: true, // updateTracked will keep it 1
+      // version++ is handled in updateTracked
     );
-    await db.tx((txn) async {
-      await txn.update(
-        'customer',
-        next.toMap(),
-        where: 'id=?',
-        whereArgs: [c.id],
-      );
 
-      final idLog = const Uuid().v4();
-      String now = DateTime.now().toIso8601String();
-      await txn.rawInsert(
-        'INSERT INTO change_log(id, entityTable, entityId, operation, payload, status, createdAt, updatedAt) '
-        'VALUES(?,?,?,?,?,?,?,?) '
-        'ON CONFLICT(entityTable, entityId, status) DO UPDATE '
-        'SET operation=excluded.operation, updatedAt=excluded.updatedAt, payload=excluded.payload',
-        [idLog, 'customer', c.id, 'UPDATE', null, 'PENDING', now, now],
+    await db.tx((txn) async {
+      await txn.updateTracked(
+        'customer',
+        toUpdate.toMap(),
+        where: 'id = ?',
+        whereArgs: [c.id],
+        entityId: c.id,
+        operation: 'UPDATE',
       );
     });
   }
 
   @override
   Future<void> softDelete(String id, {DateTime? at}) async {
-    final now = at ?? DateTime.now();
+    final when = (at ?? DateTime.now()).toUtc().toIso8601String();
     await db.tx((txn) async {
-      await txn.update(
+      // softDeleteTracked stamps updatedAt/isDirty, bumps version, writes change_log
+      await txn.softDeleteTracked('customer', entityId: id);
+      // If you want to force a specific timestamp, you can follow-up with updateTracked:
+      await txn.updateTracked(
         'customer',
-        {
-          'deletedAt': now.toIso8601String(),
-          'updatedAt': now.toIso8601String(),
-          'isDirty': 1,
-        },
-        where: 'id=?',
+        {'updatedAt': when},
+        where: 'id = ?',
         whereArgs: [id],
+        entityId: id,
+        operation: 'UPDATE',
       );
     });
   }
 
   @override
   Future<void> restore(String id) async {
-    final now = DateTime.now();
     await db.tx((txn) async {
-      await txn.update(
+      await txn.updateTracked(
         'customer',
-        {'deletedAt': null, 'updatedAt': now.toIso8601String(), 'isDirty': 1},
-        where: 'id=?',
+        {
+          'deletedAt': null,
+          // updatedAt/isDirty handled inside updateTracked
+        },
+        where: 'id = ?',
         whereArgs: [id],
+        entityId: id,
+        operation: 'UPDATE',
       );
     });
   }
+
+  // ---------- Helpers ----------
 
   static String _joinName(String? first, String? last) {
     final f = (first ?? '').trim();

@@ -12,6 +12,7 @@ class DebtDeltaDto {
   final int? balanceDebt;
   final String? dueDate;
   final String? statuses;
+  final String? account;
   final String? customerId;
   final String syncAt;
   final String operation;
@@ -23,6 +24,7 @@ class DebtDeltaDto {
     required this.code,
     required this.notes,
     required this.balance,
+    required this.account,
     required this.balanceDebt,
     required this.dueDate,
     required this.statuses,
@@ -39,6 +41,7 @@ class DebtDeltaDto {
       id: isUpdateOrDelete ? d.remoteId as String? : null,
       localId: localId,
       remoteId: d.remoteId as String?,
+      account: d.account as String?,
       code: d.code as String?,
       notes: d.notes as String?,
       balance: d.balance as int?,
@@ -57,6 +60,7 @@ class DebtDeltaDto {
     'remoteId': remoteId,
     'code': code,
     'notes': notes,
+    'account': account,
     'balance': balance,
     'balanceDebt': balanceDebt,
     'dueDate': dueDate,

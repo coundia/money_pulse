@@ -139,6 +139,7 @@ CREATE TABLE IF NOT EXISTS product (
   remoteId TEXT,
     localId TEXT,
   code TEXT,                   
+  account TEXT,                   
   name TEXT,                  
   description TEXT,
   barcode TEXT,              

@@ -10,11 +10,13 @@ class StockLevelDeltaDto {
   final String? companyId;
   final int? stockOnHand;
   final int? stockAllocated;
+  final String? account;
   final String syncAt;
   final String operation;
 
   StockLevelDeltaDto._({
     required this.id,
+    required this.account,
     required this.localId,
     required this.remoteId,
     required this.productVariantId,
@@ -36,6 +38,7 @@ class StockLevelDeltaDto {
     return StockLevelDeltaDto._(
       id: isUpdateOrDelete ? s.remoteId : null,
       localId: localId,
+      account: s.account as String?,
       remoteId: s.remoteId as String?,
       productVariantId: s.productVariantId as String?,
       companyId: s.companyId as String?,
@@ -52,6 +55,7 @@ class StockLevelDeltaDto {
     'remoteId': remoteId,
     'productVariant': productVariantId,
     'company': companyId,
+    'account': account,
     'stockOnHand': stockOnHand,
     'stockAllocated': stockAllocated,
     'syncAt': syncAt,

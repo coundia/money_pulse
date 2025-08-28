@@ -8,6 +8,7 @@ class CategoryDeltaDto {
   final String? localId;
   final String code;
   final String? description;
+  final String? account;
   final String type;
   final String typeEntry;
   final DateTime updatedAt;
@@ -15,6 +16,7 @@ class CategoryDeltaDto {
   CategoryDeltaDto({
     required this.id,
     this.remoteId,
+    this.account,
     this.localId,
     this.name,
     required this.code,
@@ -34,6 +36,7 @@ class CategoryDeltaDto {
       remoteId: c.remoteId,
       localId: c.localId,
       code: c.code,
+      account: c.account,
       name: c.code,
       description: c.description,
       type: t.name,
@@ -46,6 +49,7 @@ class CategoryDeltaDto {
     'id': remoteId ?? id,
     'remoteId': remoteId,
     'localId': localId,
+    'account': account,
     'code': code,
     'name': code,
     'description': description,

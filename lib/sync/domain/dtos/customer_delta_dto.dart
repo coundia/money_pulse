@@ -18,6 +18,7 @@ class CustomerDeltaDto {
   final String? notes;
   final String? status;
   final String? companyId;
+  final String? account;
   final String? addressLine1;
   final String? addressLine2;
   final String? city;
@@ -34,6 +35,7 @@ class CustomerDeltaDto {
     this.code,
     this.firstName,
     this.lastName,
+    this.account,
     this.fullName,
     required this.balance,
     required this.balanceDebt,
@@ -76,6 +78,7 @@ class CustomerDeltaDto {
       addressLine2: c.addressLine2,
       city: c.city,
       region: c.region,
+      account: c.account,
       country: c.country,
       postalCode: c.postalCode,
       type: t.name,
@@ -91,6 +94,7 @@ class CustomerDeltaDto {
     'firstName': firstName,
     'lastName': lastName,
     'fullName': fullName,
+    'account': account,
     'balance': balance,
     'balanceDebt': balanceDebt,
     'phone': phone,

@@ -139,6 +139,7 @@ class Category {
     String? localId,
     String? remoteId,
     String? code,
+    String? account,
     String? description,
     DateTime? createdAt,
     DateTime? updatedAt,
@@ -158,6 +159,7 @@ class Category {
       localId: localId ?? this.localId,
       remoteId: remoteId ?? this.remoteId,
       code: code ?? this.code,
+      account: account ?? this.account,
       description: description ?? this.description,
       createdAt: createdAt ?? this.createdAt,
       updatedAt: updatedAt ?? this.updatedAt,
@@ -185,6 +187,7 @@ class Category {
         other.createdAt == createdAt &&
         other.updatedAt == updatedAt &&
         other.deletedAt == deletedAt &&
+        other.account == account &&
         other.syncAt == syncAt &&
         other.version == version &&
         other.isDirty == isDirty &&

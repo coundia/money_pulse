@@ -12,6 +12,7 @@ class StockMovementDeltaDto {
   final String? productVariantId;
   final String? orderLineId;
   final String? discriminator;
+  final String? account;
   final String syncAt;
   final String operation;
 
@@ -21,6 +22,7 @@ class StockMovementDeltaDto {
     required this.remoteId,
     required this.typeStockMovement,
     required this.quantity,
+    required this.account,
     required this.companyId,
     required this.productVariantId,
     required this.orderLineId,
@@ -40,6 +42,7 @@ class StockMovementDeltaDto {
     return StockMovementDeltaDto._(
       id: isUpdateOrDelete ? m.remoteId : null,
       localId: localId,
+      account: m.account as String?,
       remoteId: m.remoteId as String?,
       typeStockMovement: m.type as String?,
       quantity: m.quantity as int?,
@@ -58,6 +61,7 @@ class StockMovementDeltaDto {
     'remoteId': remoteId,
     'typeStockMovement': typeStockMovement,
     'quantity': quantity,
+    'account': account,
     'company': companyId,
     'productVariant': productVariantId,
     'orderLineId': orderLineId,

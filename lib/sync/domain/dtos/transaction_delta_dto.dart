@@ -15,6 +15,7 @@ class TransactionDeltaDto {
   final String? account;
   final String? category;
   final String? company;
+
   final String? customer;
   final DateTime dateTransaction;
   final String? status;
@@ -23,13 +24,14 @@ class TransactionDeltaDto {
     required this.id,
     this.remoteId,
     this.localId,
+    required this.account,
     this.code,
     this.description,
     required this.amount,
     required this.typeEntry,
     required this.type,
     required this.updatedAt,
-    this.account,
+
     this.syncAt,
     this.category,
     this.company,

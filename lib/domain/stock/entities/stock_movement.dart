@@ -33,6 +33,7 @@ class StockMovement {
     String? type,
     int? quantity,
     String? companyId,
+    String? account,
     String? productVariantId,
     String? orderLineId,
     String? discriminator,
@@ -43,6 +44,7 @@ class StockMovement {
       id: id,
       type: type ?? this.type,
       quantity: quantity ?? this.quantity,
+      account: account ?? this.account,
       companyId: companyId ?? this.companyId,
       productVariantId: productVariantId ?? this.productVariantId,
       orderLineId: orderLineId ?? this.orderLineId,
@@ -60,6 +62,7 @@ class StockMovement {
       companyId: (m['companyId'] as String),
       productVariantId: (m['productVariantId'] as String),
       orderLineId: m['orderLineId'] as String?,
+      account: m['account'] as String?,
       discriminator: m['discriminator'] as String?,
       createdAt:
           DateTime.tryParse((m['createdAt'] as String?) ?? '') ??
@@ -76,6 +79,7 @@ class StockMovement {
       'type_stock_movement': type,
       'quantity': quantity,
       'companyId': companyId,
+      'account': account,
       'productVariantId': productVariantId,
       'orderLineId': orderLineId,
       'discriminator': discriminator,

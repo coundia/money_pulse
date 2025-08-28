@@ -33,6 +33,7 @@ class StockLevel {
     required String id,
     String? productVariantId,
     String? companyId,
+    String? account,
     int? stockOnHand,
     int? stockAllocated,
     DateTime? createdAt,
@@ -43,6 +44,7 @@ class StockLevel {
   }) {
     return StockLevel(
       id: id,
+      account: account,
       productVariantId: productVariantId ?? this.productVariantId,
       companyId: companyId ?? this.companyId,
       stockOnHand: stockOnHand ?? this.stockOnHand,
@@ -66,6 +68,7 @@ class StockLevel {
       id: (map['id'] as String?) ?? map['id']?.toString() ?? '',
       productVariantId: map['productVariantId'] as String? ?? '',
       companyId: map['companyId'] as String? ?? '',
+      account: map['account'] as String? ?? '',
       stockOnHand: (map['stockOnHand'] as int?) ?? 0,
       stockAllocated: (map['stockAllocated'] as int?) ?? 0,
       createdAt: _parse(map['createdAt']) ?? DateTime.now(),
@@ -82,6 +85,7 @@ class StockLevel {
       'id': id,
       'productVariantId': productVariantId,
       'companyId': companyId,
+      'account': account,
       'stockOnHand': stockOnHand,
       'stockAllocated': stockAllocated,
       'createdAt': _fmt(createdAt),

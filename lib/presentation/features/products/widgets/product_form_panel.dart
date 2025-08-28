@@ -222,6 +222,17 @@ class _ProductFormPanelState extends State<ProductFormPanel> {
                 padding: const EdgeInsets.all(16),
                 children: [
                   TextFormField(
+                    focusNode: _fName,
+                    controller: _name,
+                    textInputAction: TextInputAction.next,
+                    onFieldSubmitted: (_) => _fCode.requestFocus(),
+                    decoration: _dec('Nom', helper: 'Obligatoire', ctrl: _name),
+                    validator: _required,
+                    autofocus: true,
+                  ),
+
+                  const SizedBox(height: 16),
+                  TextFormField(
                     controller: _priceSell,
                     keyboardType: const TextInputType.numberWithOptions(
                       decimal: true,
@@ -236,7 +247,6 @@ class _ProductFormPanelState extends State<ProductFormPanel> {
                       ctrl: _priceSell,
                     ),
                     validator: _required,
-                    autofocus: true,
                   ),
                   const SizedBox(height: 12),
                   TextFormField(
@@ -255,28 +265,15 @@ class _ProductFormPanelState extends State<ProductFormPanel> {
                       ctrl: _priceBuy,
                     ),
                   ),
-                  const SizedBox(height: 16),
-                  TextFormField(
-                    focusNode: _fName,
-                    controller: _name,
-                    textInputAction: TextInputAction.next,
-                    onFieldSubmitted: (_) => _fCode.requestFocus(),
-                    decoration: _dec('Nom', helper: 'Obligatoire', ctrl: _name),
-                    validator: _required,
-                  ),
                   const SizedBox(height: 12),
                   TextFormField(
                     focusNode: _fCode,
                     controller: _code,
                     textInputAction: TextInputAction.next,
                     onFieldSubmitted: (_) => _fBarcode.requestFocus(),
-                    decoration: _dec(
-                      'Code (SKU)',
-                      helper: 'Obligatoire',
-                      ctrl: _code,
-                    ),
-                    validator: _required,
+                    decoration: _dec('Code (SKU)', ctrl: _code),
                   ),
+
                   const SizedBox(height: 12),
                   TextFormField(
                     focusNode: _fBarcode,

@@ -12,6 +12,7 @@ class ProductDeltaDto {
   final String? barcode;
   final String? unitId;
   final String? categoryId;
+  final String? account;
   final int? defaultPrice;
   final int? purchasePrice;
   final String? statuses;
@@ -32,6 +33,7 @@ class ProductDeltaDto {
     required this.purchasePrice,
     required this.statuses,
     required this.syncAt,
+    required this.account,
     required this.operation,
   });
 
@@ -43,6 +45,7 @@ class ProductDeltaDto {
     return ProductDeltaDto._(
       id: isUpdateOrDelete ? p.remoteId as String? : null,
       localId: localId,
+      account: p.account as String?,
       remoteId: p.remoteId as String?,
       code: p.code ?? p.name,
       name: p.name ?? p.code,
@@ -67,6 +70,7 @@ class ProductDeltaDto {
     'description': description,
     'barcode': barcode,
     'unitId': unitId,
+    'account': account,
     'category': categoryId,
     'defaultPrice': defaultPrice,
     'purchasePrice': purchasePrice,

@@ -14,6 +14,7 @@ class TransactionItemDeltaDto {
   final int? unitPrice;
   final int? total;
   final String? notes;
+  final String? account;
   final String syncAt;
   final String operation;
 
@@ -24,6 +25,7 @@ class TransactionItemDeltaDto {
     required this.transactionId,
     required this.productId,
     required this.label,
+    required this.account,
     required this.quantity,
     required this.unitId,
     required this.unitPrice,
@@ -44,6 +46,7 @@ class TransactionItemDeltaDto {
     return TransactionItemDeltaDto._(
       id: isUpdateOrDelete ? it.remoteId as String? : null,
       localId: localId,
+      account: it.account as String?,
       remoteId: it.remoteId as String?,
       transactionId: it.transactionId as String?,
       productId: it.productId as String?,
@@ -65,6 +68,7 @@ class TransactionItemDeltaDto {
     'transaction': transactionId,
     'product': productId,
     'label': label,
+    'account': account,
     'quantity': quantity,
     'unitId': unitId,
     'unitPrice': unitPrice,

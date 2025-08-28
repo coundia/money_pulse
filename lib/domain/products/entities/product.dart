@@ -51,6 +51,7 @@ class Product {
     String? barcode,
     String? unitId,
     String? categoryId,
+    String? account,
     int? defaultPrice,
     int? purchasePrice,
     String? statuses,
@@ -79,6 +80,7 @@ class Product {
       syncAt: syncAt ?? this.syncAt,
       version: version ?? this.version,
       isDirty: isDirty ?? this.isDirty,
+      account: account ?? this.account,
     );
   }
 
@@ -94,6 +96,7 @@ class Product {
     remoteId: m['remoteId'] as String?,
     code: m['code'] as String?,
     name: m['name'] as String?,
+    account: m['account'] as String?,
     description: m['description'] as String?,
     barcode: m['barcode'] as String?,
     unitId: m['unitId'] as String?,
@@ -126,6 +129,7 @@ class Product {
     'deletedAt': deletedAt?.toIso8601String(),
     'syncAt': syncAt?.toIso8601String(),
     'version': version,
+    'account': account,
     'isDirty': isDirty,
   };
 }
