@@ -341,7 +341,6 @@ class _AccountShareScreenState extends ConsumerState<AccountShareScreen> {
 
                   final createdByPhone = _normalizePhone(createdBy);
                   final accessGrant = ref.read(accessSessionProvider);
-
                   final createdByL = accessGrant?.username;
 
                   final canManageThisMember =
