@@ -1,4 +1,4 @@
-/* Row tile for account member: compact avatar + identity caption, responsive action chips with wrap, no horizontal overflow, accessible menu, and confirm drawer on revoke. */
+/* Row tile for account member with responsive chips, accessible menu, revoke confirm drawer, and optional accept/view callbacks. */
 import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -12,10 +12,14 @@ import 'package:money_pulse/presentation/features/settings/widgets/confirm_panel
 class AccountUserTile extends ConsumerStatefulWidget {
   final AccountUser member;
   final VoidCallback onChanged;
+  final Future<void> Function(AccountUser m)? onAccept;
+  final VoidCallback? onView;
   const AccountUserTile({
     super.key,
     required this.member,
     required this.onChanged,
+    this.onAccept,
+    this.onView,
   });
 
   @override
@@ -98,6 +102,12 @@ class _AccountUserTileState extends ConsumerState<AccountUserTile> {
     }
   }
 
+  bool get _canAccept {
+    final isPending = (widget.member.status ?? '').toUpperCase() == 'PENDING';
+    final isOwner = (widget.member.role ?? '').toUpperCase() == 'OWNER';
+    return isPending && !isOwner;
+  }
+
   DateTime? get _updatedAtLike =>
       widget.member.updatedAt ??
       widget.member.createdAt ??
@@ -152,6 +162,33 @@ class _AccountUserTileState extends ConsumerState<AccountUserTile> {
         return 'Éditeur';
       default:
         return 'Lecteur';
+    }
+  }
+
+  Future<void> _accept() async {
+    if (_busy || !_canAccept) return;
+    setState(() => _busy = true);
+    try {
+      if (widget.onAccept != null) {
+        await widget.onAccept!(widget.member);
+      } else {
+        final repo = ref.read(accountUserRepoProvider);
+        await repo.accept(widget.member.id);
+      }
+      if (mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(const SnackBar(content: Text('Invitation acceptée.')));
+      }
+      widget.onChanged();
+    } catch (_) {
+      if (mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(const SnackBar(content: Text('Échec de l’acceptation')));
+      }
+    } finally {
+      if (mounted) setState(() => _busy = false);
     }
   }
 
@@ -222,14 +259,34 @@ class _AccountUserTileState extends ConsumerState<AccountUserTile> {
                 materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
               ),
             ),
+            if (_canAccept)
+              Tooltip(
+                message: 'Accepter l’invitation',
+                child: FilledButton.icon(
+                  onPressed: _accept,
+                  icon: const Icon(Icons.check),
+                  label: const Text('Accepter'),
+                ),
+              ),
             PopupMenuButton<String>(
               key: _menuKey,
               tooltip: 'Actions',
-              itemBuilder: (context) => const [
-                PopupMenuItem(value: 'viewer', child: Text('Mettre Lecteur')),
-                PopupMenuItem(value: 'editor', child: Text('Mettre Éditeur')),
-                PopupMenuDivider(),
-                PopupMenuItem(value: 'revoke', child: Text('Révoquer l’accès')),
+              itemBuilder: (context) => [
+                const PopupMenuItem(
+                  value: 'viewer',
+                  child: Text('Mettre Lecteur'),
+                ),
+                const PopupMenuItem(
+                  value: 'editor',
+                  child: Text('Mettre Éditeur'),
+                ),
+                if (_canAccept)
+                  const PopupMenuItem(value: 'accept', child: Text('Accepter')),
+                const PopupMenuDivider(),
+                const PopupMenuItem(
+                  value: 'revoke',
+                  child: Text('Révoquer l’accès'),
+                ),
               ],
               onSelected: (v) async {
                 switch (v) {
@@ -238,6 +295,9 @@ class _AccountUserTileState extends ConsumerState<AccountUserTile> {
                     break;
                   case 'editor':
                     await _changeRole('EDITOR');
+                    break;
+                  case 'accept':
+                    await _accept();
                     break;
                   case 'revoke':
                     await _revoke();
@@ -268,6 +328,7 @@ class _AccountUserTileState extends ConsumerState<AccountUserTile> {
       label: 'Membre $identity',
       button: false,
       child: InkWell(
+        onTap: widget.onView,
         onLongPress: () {
           HapticFeedback.selectionClick();
           _menuKey.currentState?.showButtonMenu();

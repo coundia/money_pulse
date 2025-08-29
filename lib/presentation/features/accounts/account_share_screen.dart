@@ -1,6 +1,4 @@
-/* Full-screen page to invite and manage account sharing asking only for a single "Identifiant" field
-   (email, login or phone auto-detected) plus an optional message. It auto-fills email/phone before saving,
-   keeps enter-to-submit, preview of last two members, and a right-drawer to view all members. */
+/* Full-screen page to invite and manage account sharing with identity auto-detect, enter-to-submit, duplicate guard, preview with accept action, and right-drawer to view all members. */
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -31,19 +29,30 @@ class _AccountShareScreenState extends ConsumerState<AccountShareScreen> {
   final _identCtrl = TextEditingController();
   final _messageCtrl = TextEditingController();
   final _scrollCtrl = ScrollController();
+  final _identFocus = FocusNode();
+  final _messageFocus = FocusNode();
 
   bool _sending = false;
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback(
+      (_) => _identFocus.requestFocus(),
+    );
+  }
 
   @override
   void dispose() {
     _identCtrl.dispose();
     _messageCtrl.dispose();
     _scrollCtrl.dispose();
+    _identFocus.dispose();
+    _messageFocus.dispose();
     super.dispose();
   }
 
   bool _isEmail(String v) => RegExp(r'^[^@]+@[^@]+\.[^@]+$').hasMatch(v.trim());
-
   bool _isPhone(String v) => RegExp(r'^[0-9 +()-]{6,}$').hasMatch(v.trim());
 
   bool get _identValid {
@@ -51,7 +60,7 @@ class _AccountShareScreenState extends ConsumerState<AccountShareScreen> {
     if (v.isEmpty) return false;
     if (_isEmail(v)) return true;
     if (_isPhone(v)) return true;
-    return v.length >= 2; // login minimal
+    return v.length >= 2;
   }
 
   DateTime _sortKey(AccountUser m) {
@@ -60,6 +69,55 @@ class _AccountShareScreenState extends ConsumerState<AccountShareScreen> {
             m.invitedAt ??
             DateTime.fromMillisecondsSinceEpoch(0))
         .toUtc();
+  }
+
+  Future<void> _pasteIntoIdent() async {
+    final data = await Clipboard.getData(Clipboard.kTextPlain);
+    final text = (data?.text ?? '').trim();
+    if (text.isEmpty) return;
+    _identCtrl.text = text;
+    setState(() {});
+  }
+
+  Future<void> _acceptMember(AccountUser m) async {
+    try {
+      final repo = ref.read(accountUserRepoProvider);
+      await repo.accept(m.id);
+      ref.invalidate(accountUserListProvider(widget.accountId));
+      if (mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(const SnackBar(content: Text('Invitation acceptée')));
+      }
+    } catch (_) {
+      if (mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(const SnackBar(content: Text('Échec de l’acceptation')));
+      }
+    }
+  }
+
+  Future<bool> _existsDuplicate(
+    String ident, {
+    String? email,
+    String? phone,
+  }) async {
+    try {
+      final repo = ref.read(accountUserRepoProvider);
+      final list = await repo.listByAccount(widget.accountId, q: ident);
+      bool same(AccountUser x) {
+        final i = (x.identity ?? '').trim().toLowerCase();
+        final e = (x.email ?? '').trim().toLowerCase();
+        final p = (x.phone ?? '').trim();
+        final identL = ident.trim().toLowerCase();
+        return i == identL || e == identL || p == phone?.trim();
+      }
+
+      return list.any(same);
+    } catch (_) {
+      return false;
+    }
   }
 
   Future<void> _invite() async {
@@ -71,6 +129,7 @@ class _AccountShareScreenState extends ConsumerState<AccountShareScreen> {
       return;
     }
 
+    if (_sending) return;
     setState(() => _sending = true);
     try {
       final repo = ref.read(accountUserRepoProvider);
@@ -83,6 +142,15 @@ class _AccountShareScreenState extends ConsumerState<AccountShareScreen> {
         email = ident;
       } else if (_isPhone(ident)) {
         phone = ident;
+      }
+
+      if (await _existsDuplicate(ident, email: email, phone: phone)) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Cet identifiant existe déjà.')),
+          );
+        }
+        return;
       }
 
       final au = AccountUser(
@@ -107,6 +175,7 @@ class _AccountShareScreenState extends ConsumerState<AccountShareScreen> {
       _identCtrl.clear();
       _messageCtrl.clear();
       ref.invalidate(accountUserListProvider(widget.accountId));
+      _identFocus.requestFocus();
 
       if (mounted) {
         ScaffoldMessenger.of(
@@ -139,14 +208,33 @@ class _AccountShareScreenState extends ConsumerState<AccountShareScreen> {
   Widget _identField() {
     return TextFormField(
       controller: _identCtrl,
-      decoration: const InputDecoration(
+      focusNode: _identFocus,
+      decoration: InputDecoration(
         labelText: 'Identifiant',
         hintText: 'E-mail, login ou téléphone',
-        prefixIcon: Icon(Icons.person_outline),
-        border: OutlineInputBorder(),
+        prefixIcon: const Icon(Icons.person_outline),
+        suffixIcon: PopupMenuButton<String>(
+          tooltip: 'Options',
+          icon: const Icon(Icons.more_vert),
+          itemBuilder: (context) => const [
+            PopupMenuItem(value: 'paste', child: Text('Coller')),
+            PopupMenuItem(value: 'clear', child: Text('Effacer')),
+          ],
+          onSelected: (v) async {
+            if (v == 'paste') await _pasteIntoIdent();
+            if (v == 'clear') {
+              _identCtrl.clear();
+              setState(() {});
+              _identFocus.requestFocus();
+            }
+          },
+        ),
+        helperText: 'Exemples : email@domaine.sn ou +221 77 123 45 67',
+        border: const OutlineInputBorder(),
         isDense: true,
       ),
       textInputAction: TextInputAction.next,
+      onChanged: (_) => setState(() {}),
       onFieldSubmitted: (_) => _invite(),
       validator: (_) => _identValid ? null : 'Identifiant invalide',
     );
@@ -155,6 +243,7 @@ class _AccountShareScreenState extends ConsumerState<AccountShareScreen> {
   Widget _messageField() {
     return TextFormField(
       controller: _messageCtrl,
+      focusNode: _messageFocus,
       decoration: const InputDecoration(
         labelText: 'Message',
         hintText: 'Message optionnel pour le destinataire',
@@ -226,6 +315,8 @@ class _AccountShareScreenState extends ConsumerState<AccountShareScreen> {
                       onChanged: () => ref.invalidate(
                         accountUserListProvider(widget.accountId),
                       ),
+                      onAccept: _acceptMember,
+                      onView: _openMembersPanel,
                     ),
                   ),
                 ),
@@ -266,48 +357,49 @@ class _AccountShareScreenState extends ConsumerState<AccountShareScreen> {
         child: LayoutBuilder(
           builder: (context, c) {
             final isWide = c.maxWidth > 680;
-
-            return SingleChildScrollView(
-              controller: _scrollCtrl,
-              padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
-              child: Center(
-                child: ConstrainedBox(
-                  constraints: const BoxConstraints(maxWidth: 920),
-                  child: Form(
-                    key: _formKey,
-                    autovalidateMode: AutovalidateMode.onUserInteraction,
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.stretch,
-                      children: [
-                        Card(
-                          elevation: 0,
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(12),
-                            side: BorderSide(
-                              color: Theme.of(
-                                context,
-                              ).colorScheme.outlineVariant,
-                            ),
-                          ),
-                          child: Padding(
-                            padding: const EdgeInsets.all(12),
-                            child: Shortcuts(
-                              shortcuts: const {
-                                SingleActivator(LogicalKeyboardKey.enter):
-                                    ActivateIntent(),
-                                SingleActivator(LogicalKeyboardKey.numpadEnter):
-                                    ActivateIntent(),
-                              },
-                              child: Actions(
-                                actions: {
-                                  ActivateIntent:
-                                      CallbackAction<ActivateIntent>(
-                                        onInvoke: (e) {
-                                          _invite();
-                                          return null;
-                                        },
-                                      ),
-                                },
+            return Shortcuts(
+              shortcuts: const {
+                SingleActivator(LogicalKeyboardKey.enter): ActivateIntent(),
+                SingleActivator(LogicalKeyboardKey.numpadEnter):
+                    ActivateIntent(),
+                SingleActivator(LogicalKeyboardKey.enter, control: true):
+                    ActivateIntent(),
+                SingleActivator(LogicalKeyboardKey.enter, meta: true):
+                    ActivateIntent(),
+              },
+              child: Actions(
+                actions: {
+                  ActivateIntent: CallbackAction<ActivateIntent>(
+                    onInvoke: (e) {
+                      _invite();
+                      return null;
+                    },
+                  ),
+                },
+                child: SingleChildScrollView(
+                  controller: _scrollCtrl,
+                  padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
+                  child: Center(
+                    child: ConstrainedBox(
+                      constraints: const BoxConstraints(maxWidth: 920),
+                      child: Form(
+                        key: _formKey,
+                        autovalidateMode: AutovalidateMode.onUserInteraction,
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.stretch,
+                          children: [
+                            Card(
+                              elevation: 0,
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(12),
+                                side: BorderSide(
+                                  color: Theme.of(
+                                    context,
+                                  ).colorScheme.outlineVariant,
+                                ),
+                              ),
+                              child: Padding(
+                                padding: const EdgeInsets.all(12),
                                 child: Column(
                                   crossAxisAlignment:
                                       CrossAxisAlignment.stretch,
@@ -332,7 +424,9 @@ class _AccountShareScreenState extends ConsumerState<AccountShareScreen> {
                                       width: double.infinity,
                                       height: 48,
                                       child: ElevatedButton.icon(
-                                        onPressed: _sending ? null : _invite,
+                                        onPressed: (_sending || !_identValid)
+                                            ? null
+                                            : _invite,
                                         icon: _sending
                                             ? const SizedBox(
                                                 width: 18,
@@ -346,24 +440,17 @@ class _AccountShareScreenState extends ConsumerState<AccountShareScreen> {
                                                 Icons.person_add_alt_1,
                                               ),
                                         label: const Text('Inviter'),
-                                        style: ElevatedButton.styleFrom(
-                                          shape: RoundedRectangleBorder(
-                                            borderRadius: BorderRadius.circular(
-                                              12,
-                                            ),
-                                          ),
-                                        ),
                                       ),
                                     ),
                                   ],
                                 ),
                               ),
                             ),
-                          ),
+                            const SizedBox(height: 12),
+                            _membersPreview(listAsync),
+                          ],
                         ),
-                        const SizedBox(height: 12),
-                        _membersPreview(listAsync),
-                      ],
+                      ),
                     ),
                   ),
                 ),

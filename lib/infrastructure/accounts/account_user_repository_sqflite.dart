@@ -1,4 +1,4 @@
-/* Sqflite repository that ensures 'identity' and 'message' columns exist, migrates legacy 'identify' -> 'identity', and logs changes. */
+/* Sqflite repository for AccountUser with invite/list/search/role/revoke/accept and change log. */
 import 'package:sqflite/sqflite.dart';
 import 'package:uuid/uuid.dart';
 import 'package:money_pulse/domain/accounts/entities/account_user.dart';
@@ -36,10 +36,10 @@ class AccountUserRepositorySqflite implements AccountUserRepository {
     final where = StringBuffer('account = ? AND deletedAt IS NULL');
     final args = <Object?>[accountId];
     if (q != null && q.trim().isNotEmpty) {
+      final like = '%${q.toLowerCase()}%';
       where.write(
         ' AND (LOWER(COALESCE(identity,"")) LIKE ? OR LOWER(COALESCE(email,"")) LIKE ? OR LOWER(COALESCE(phone,"")) LIKE ? OR LOWER(COALESCE(user,"")) LIKE ?)',
       );
-      final like = '%${q.toLowerCase()}%';
       args.addAll([like, like, like, like]);
     }
     final rows = await db.query(
@@ -55,12 +55,13 @@ class AccountUserRepositorySqflite implements AccountUserRepository {
   Future<void> invite(AccountUser au) async {
     await _ensureColumns();
     final id = au.id.isNotEmpty ? au.id : const Uuid().v4();
+    final now = DateTime.now().toUtc();
     final patched = au.copyWith(
-      invitedAt: DateTime.now().toUtc(),
-      createdAt: DateTime.now().toUtc(),
-      updatedAt: DateTime.now().toUtc(),
+      invitedAt: now,
+      createdAt: now,
+      updatedAt: now,
       isDirty: 1,
-      version: (au.version) + 1,
+      version: au.version + 1,
     );
     final map = patched.toMap()..putIfAbsent('id', () => id);
     await db.insert(
@@ -73,26 +74,50 @@ class AccountUserRepositorySqflite implements AccountUserRepository {
 
   @override
   Future<void> updateRole(String id, String role) async {
+    await _ensureColumns();
     final now = DateTime.now().toUtc().toIso8601String();
-    await db.update(
-      'account_users',
-      {'role': role, 'updatedAt': now, 'isDirty': 1},
-      where: 'id = ?',
-      whereArgs: [id],
+    await db.rawUpdate(
+      'UPDATE account_users SET role=?, updatedAt=?, isDirty=1, version=COALESCE(version,0)+1 WHERE id=?',
+      [role, now, id],
     );
     await _logChange(id, 'UPDATE');
   }
 
   @override
   Future<void> revoke(String id) async {
+    await _ensureColumns();
     final now = DateTime.now().toUtc().toIso8601String();
-    await db.update(
-      'account_users',
-      {'status': 'REVOKED', 'revokedAt': now, 'updatedAt': now, 'isDirty': 1},
-      where: 'id = ?',
-      whereArgs: [id],
+    await db.rawUpdate(
+      'UPDATE account_users SET status="REVOKED", revokedAt=?, updatedAt=?, isDirty=1, version=COALESCE(version,0)+1 WHERE id=?',
+      [now, now, id],
     );
     await _logChange(id, 'UPDATE');
+  }
+
+  @override
+  Future<AccountUser> accept(String id, {DateTime? when}) async {
+    await _ensureColumns();
+    final t = (when ?? DateTime.now().toUtc()).toIso8601String();
+    final updated = await db.rawUpdate(
+      'UPDATE account_users '
+      'SET status="ACCEPTED", acceptedAt=?, updatedAt=?, isDirty=1, version=COALESCE(version,0)+1 '
+      'WHERE id=? AND (status IS NULL OR status="PENDING")',
+      [t, t, id],
+    );
+    await _logChange(id, 'UPDATE');
+    final row = await db.query(
+      'account_users',
+      where: 'id=?',
+      whereArgs: [id],
+      limit: 1,
+    );
+    if (row.isEmpty) {
+      throw StateError('AccountUser not found');
+    }
+    if (updated == 0 && (row.first['status'] as String?) == 'REVOKED') {
+      throw StateError('Cannot accept a revoked invitation');
+    }
+    return AccountUser.fromMap(row.first);
   }
 
   Future<void> _logChange(String entityId, String op) async {

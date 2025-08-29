@@ -6,4 +6,5 @@ abstract class AccountUserRepository {
   Future<void> invite(AccountUser accountUser);
   Future<void> updateRole(String id, String role);
   Future<void> revoke(String id);
+  Future<AccountUser> accept(String id, {DateTime? when});
 }
