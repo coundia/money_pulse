@@ -121,6 +121,13 @@ class CompanyPullPortSqflite {
             whereArgs: [localId],
           );
 
+          await upsertChangeLogPending(
+            txn,
+            entityTable: entityTable,
+            entityId: localId,
+            operation: 'UPDATE',
+          );
+
           // supprimer doublon éventuel (PK == remoteId)
           if (remoteId != localId) {
             final dup = await txn.query(
@@ -206,16 +213,6 @@ class CompanyPullPortSqflite {
 
         final remoteSyncAt = _asUtc(r['syncAt']);
         if (maxAt == null || remoteSyncAt.isAfter(maxAt!)) maxAt = remoteSyncAt;
-
-        //force update for next
-        if (_asStr(r['remoteId']) == null) {
-          await upsertChangeLogPending(
-            txn,
-            entityTable: entityTable,
-            entityId: remoteId ?? "-",
-            operation: 'UPDATE',
-          );
-        }
 
         // base pour UPDATE (sans 'id')
         final baseData = <String, Object?>{
@@ -338,6 +335,16 @@ class CompanyPullPortSqflite {
             'isDirty': 0,
           }, conflictAlgorithm: ConflictAlgorithm.abort);
           upserts++;
+
+          //force update for next
+          if (_asStr(r['remoteId']) == null) {
+            await upsertChangeLogPending(
+              txn,
+              entityTable: entityTable,
+              entityId: idToUse ?? "-",
+              operation: 'UPDATE',
+            );
+          }
         }
       }
     });

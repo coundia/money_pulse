@@ -1,14 +1,31 @@
-// Use case to append a sale to customer's open debt; updates customer balanceDebt and stock OUT.
+// lib/application/use_cases/add_sale_to_debt_use_case.dart
+//
+// Use case to append a sale to a customer's OPEN debt.
+// - UTC timestamps
+// - Safe math (qty/unitPrice >= 0)
+// - Creates transaction_entry (type=DEBT) + transaction_item rows
+// - Creates OUT stock_movement per line
+// - Updates stock_level (clamped >= 0) per product/company
+// - Updates debt balance via repository + customer.balanceDebt
+// - Logs all mutations with upsertChangeLogPending (no custom logger)
+
 import 'package:uuid/uuid.dart';
 import 'package:sqflite/sqflite.dart';
+
 import 'package:money_pulse/infrastructure/db/app_database.dart';
 import 'package:money_pulse/domain/debts/entities/debt.dart';
 import 'package:money_pulse/domain/debts/repositories/debt_repository.dart';
+import 'package:money_pulse/sync/infrastructure/change_log_helper.dart';
 
 class AddSaleToDebtUseCase {
   final AppDatabase db;
   final DebtRepository debtRepo;
   AddSaleToDebtUseCase(this.db, this.debtRepo);
+
+  String _nowUtcIso() => DateTime.now().toUtc().toIso8601String();
+  int _asInt(Object? v) =>
+      v is int ? v : (v is num ? v.toInt() : int.tryParse('${v ?? 0}') ?? 0);
+  int _nzPos(int v) => v < 0 ? 0 : v;
 
   Future<String> execute({
     required String customerId,
@@ -18,32 +35,39 @@ class AddSaleToDebtUseCase {
     required DateTime when,
     required List<Map<String, Object?>> lines,
   }) async {
-    final txId = const Uuid().v4();
-    final nowIso = DateTime.now().toIso8601String();
+    if (lines.isEmpty) {
+      throw ArgumentError('lines cannot be empty');
+    }
 
-    int total(List<Map<String, Object?>> ls) {
+    final txId = const Uuid().v4();
+    final whenIso = (when.isUtc ? when : when.toUtc()).toIso8601String();
+    final nowIso = _nowUtcIso();
+
+    int totalCents(List<Map<String, Object?>> ls) {
       var sum = 0;
       for (final e in ls) {
-        final q = (e['quantity'] as int?) ?? 1;
-        final u = (e['unitPrice'] as int?) ?? 0;
+        final q = _nzPos(_asInt(e['quantity']));
+        final u = _nzPos(_asInt(e['unitPrice']));
         sum += q * u;
       }
       return sum;
     }
 
-    final totalCents = total(lines);
+    final total = totalCents(lines);
 
     await db.tx((txn) async {
+      // Ensure OPEN debt for customer
       final Debt open = await debtRepo.upsertOpenForCustomerTx(txn, customerId);
 
+      // ---- transaction_entry (DEBT) ----
       await txn.insert('transaction_entry', {
         'id': txId,
         'remoteId': null,
         'code': null,
         'description': description,
-        'amount': totalCents,
+        'amount': total,
         'typeEntry': 'DEBT',
-        'dateTransaction': when.toIso8601String(),
+        'dateTransaction': whenIso,
         'status': 'DEBT',
         'entityName': 'CUSTOMER',
         'entityId': customerId,
@@ -58,22 +82,35 @@ class AddSaleToDebtUseCase {
         'syncAt': null,
         'version': 0,
         'isDirty': 1,
-      });
+      }, conflictAlgorithm: ConflictAlgorithm.abort);
 
+      await upsertChangeLogPending(
+        txn,
+        entityTable: 'transaction_entry',
+        entityId: txId,
+        operation: 'INSERT',
+      );
+
+      // ---- transaction_item rows + stock_movement (OUT) per line ----
       for (final e in lines) {
         final itemId = const Uuid().v4();
-        final qty = (e['quantity'] as int?) ?? 1;
-        final unit = (e['unitPrice'] as int?) ?? 0;
-        final total = qty * unit;
+        final qty = _nzPos(_asInt(e['quantity']));
+        final unit = _nzPos(_asInt(e['unitPrice']));
+        final tot = qty * unit;
+        final productId = e['productId']?.toString();
+        final label = e['label']?.toString();
+        final unitId = e['unitId']?.toString();
+
+        // Insert item
         await txn.insert('transaction_item', {
           'id': itemId,
           'transactionId': txId,
-          'productId': e['productId'] as String?,
-          'label': e['label'] as String?,
+          'productId': productId,
+          'label': label,
           'quantity': qty,
-          'unitId': e['unitId'] as String?,
+          'unitId': unitId,
           'unitPrice': unit,
-          'total': total,
+          'total': tot,
           'notes': null,
           'createdAt': nowIso,
           'updatedAt': nowIso,
@@ -81,30 +118,47 @@ class AddSaleToDebtUseCase {
           'syncAt': null,
           'version': 0,
           'isDirty': 1,
-        });
+        }, conflictAlgorithm: ConflictAlgorithm.abort);
 
-        final pid = e['productId']?.toString() ?? '';
-        if (pid.isNotEmpty && qty > 0 && (companyId ?? '').isNotEmpty) {
-          final movementId = await txn.insert('stock_movement', {
+        await upsertChangeLogPending(
+          txn,
+          entityTable: 'transaction_item',
+          entityId: itemId,
+          operation: 'INSERT',
+        );
+
+        // Stock movement (OUT) for sell on debt → affects stock
+        if ((companyId ?? '').isNotEmpty &&
+            (productId ?? '').isNotEmpty &&
+            qty > 0) {
+          final mvtId = const Uuid().v4();
+          await txn.insert('stock_movement', {
+            'id': mvtId,
             'type_stock_movement': 'OUT',
             'quantity': qty,
             'companyId': companyId,
-            'productVariantId': pid,
+            'productVariantId': productId,
             'orderLineId': itemId,
             'discriminator': 'TXN',
             'createdAt': nowIso,
             'updatedAt': nowIso,
-          });
-          await _upsertChangeLog(
+            'syncAt': null,
+            'version': 0,
+            'isDirty': 1,
+            'remoteId': null,
+            'localId': null,
+          }, conflictAlgorithm: ConflictAlgorithm.abort);
+
+          await upsertChangeLogPending(
             txn,
-            'stock_movement',
-            '$movementId',
-            'INSERT',
-            nowIso,
+            entityTable: 'stock_movement',
+            entityId: mvtId,
+            operation: 'INSERT',
           );
         }
       }
 
+      // ---- Aggregate & apply stock level adjustments (OUT) ----
       await _applyStockAdjustments(
         txn: txn,
         lines: lines,
@@ -112,20 +166,71 @@ class AddSaleToDebtUseCase {
         nowIso: nowIso,
       );
 
-      final newBalance = open.balance + totalCents;
+      // ---- Update debt balance (repository already logs change_log) ----
+      final newBalance = open.balance + total;
       await debtRepo.updateBalanceTx(txn, open.id, newBalance);
 
+      // ---- Update customer.balanceDebt and log ----
       await txn.rawUpdate(
         'UPDATE customer '
-        'SET balanceDebt = COALESCE(balanceDebt,0) + ?, updatedAt=?, isDirty=1 '
+        'SET balanceDebt = CASE '
+        '  WHEN COALESCE(balanceDebt,0) + ? < 0 THEN 0 '
+        '  ELSE COALESCE(balanceDebt,0) + ? '
+        'END, '
+        'updatedAt=?, isDirty=1, version=COALESCE(version,0)+1 '
         'WHERE id=?',
-        [totalCents, nowIso, customerId],
+        [total, total, nowIso, customerId],
       );
 
-      await _upsertChangeLog(txn, 'transaction_entry', txId, 'INSERT', nowIso);
+      await upsertChangeLogPending(
+        txn,
+        entityTable: 'customer',
+        entityId: customerId,
+        operation: 'UPDATE',
+      );
     });
 
     return txId;
+  }
+
+  // Ensure a stock_level row exists for (productVariantId, companyId) and return its id + current onHand
+  Future<(String id, int onHand)> _ensureLevelRow(
+    Transaction txn, {
+    required String productVariantId,
+    required String companyId,
+    required String nowIso,
+  }) async {
+    final r = await txn.rawQuery(
+      'SELECT id, stockOnHand FROM stock_level WHERE productVariantId=? AND companyId=? LIMIT 1',
+      [productVariantId, companyId],
+    );
+    if (r.isNotEmpty) {
+      final id = (r.first['id'] as String?) ?? '';
+      final on = (r.first['stockOnHand'] as int?) ?? 0;
+      return (id, on);
+    }
+
+    final id = const Uuid().v4();
+    await txn.insert('stock_level', {
+      'id': id,
+      'productVariantId': productVariantId,
+      'companyId': companyId,
+      'stockOnHand': 0,
+      'stockAllocated': 0,
+      'createdAt': nowIso,
+      'updatedAt': nowIso,
+      'version': 0,
+      'isDirty': 1,
+    }, conflictAlgorithm: ConflictAlgorithm.abort);
+
+    await upsertChangeLogPending(
+      txn,
+      entityTable: 'stock_level',
+      entityId: id,
+      operation: 'INSERT',
+    );
+
+    return (id, 0);
   }
 
   Future<void> _applyStockAdjustments({
@@ -134,90 +239,44 @@ class AddSaleToDebtUseCase {
     required String? companyId,
     required String nowIso,
   }) async {
-    if ((companyId ?? '').isEmpty) return;
+    final company = companyId ?? '';
+    if (company.isEmpty) return;
 
+    // Sum OUT quantities per product
     final Map<String, int> totalsByVariant = {};
     for (final e in lines) {
-      final pid = e['productId']?.toString();
-      final qty = (e['quantity'] as int?) ?? 0;
-      if (pid == null || pid.isEmpty || qty <= 0) continue;
+      final pid = e['productId']?.toString() ?? '';
+      final qty = _nzPos(_asInt(e['quantity']));
+      if (pid.isEmpty || qty <= 0) continue;
       totalsByVariant[pid] = (totalsByVariant[pid] ?? 0) + qty;
     }
     if (totalsByVariant.isEmpty) return;
 
     for (final entry in totalsByVariant.entries) {
       final pvId = entry.key;
-      final qty = -entry.value;
+      final dec = entry.value; // OUT => decrease
 
-      final row = await txn.rawQuery(
-        'SELECT id FROM stock_level WHERE productVariantId=? AND companyId=? LIMIT 1',
-        [pvId, companyId],
+      final (idStock, onHand) = await _ensureLevelRow(
+        txn,
+        productVariantId: pvId,
+        companyId: company,
+        nowIso: nowIso,
       );
 
-      if (row.isEmpty) {
-        await txn.insert('stock_level', {
-          'productVariantId': pvId,
-          'companyId': companyId,
-          'stockOnHand': 0,
-          'stockAllocated': 0,
-          'createdAt': nowIso,
-          'updatedAt': nowIso,
-        }, conflictAlgorithm: ConflictAlgorithm.ignore);
-        await _upsertChangeLog(
-          txn,
-          'stock_level',
-          '$pvId@$companyId',
-          'INSERT',
-          nowIso,
-        );
-      }
+      final next = onHand - dec;
+      final clamped = next < 0 ? 0 : next;
 
       await txn.rawUpdate(
-        'UPDATE stock_level SET stockOnHand = COALESCE(stockOnHand,0) + ?, updatedAt=? WHERE productVariantId=? AND companyId=?',
-        [qty, nowIso, pvId, companyId],
+        'UPDATE stock_level SET stockOnHand=?, updatedAt=?, isDirty=1, version=COALESCE(version,0)+1 WHERE id=?',
+        [clamped, nowIso, idStock],
       );
-      await _upsertChangeLog(
+
+      await upsertChangeLogPending(
         txn,
-        'stock_level',
-        '$pvId@$companyId',
-        'UPDATE',
-        nowIso,
+        entityTable: 'stock_level',
+        entityId: idStock,
+        operation: 'UPDATE',
       );
     }
-  }
-
-  Future<void> _upsertChangeLog(
-    Transaction txn,
-    String entityTable,
-    String entityId,
-    String operation,
-    String nowIso,
-  ) async {
-    final idLog = const Uuid().v4();
-    await txn.rawInsert(
-      '''
-      INSERT INTO change_log(
-        id, entityTable, entityId, operation, payload, status, attempts, error, createdAt, updatedAt, processedAt
-      )
-      VALUES(?,?,?,?,?,?,?,?,?,?,?)
-      ON CONFLICT(entityTable, entityId, status) DO UPDATE SET
-        operation=excluded.operation,
-        updatedAt=excluded.updatedAt,
-        payload=excluded.payload
-      ''',
-      [
-        idLog,
-        entityTable,
-        entityId,
-        operation,
-        null,
-        'PENDING',
-        0,
-        null,
-        nowIso,
-        nowIso,
-        null,
-      ],
-    );
   }
 }

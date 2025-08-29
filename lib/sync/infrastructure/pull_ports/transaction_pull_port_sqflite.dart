@@ -181,16 +181,6 @@ class TransactionPullPortSqflite {
         final dateTransaction = _asStr(r['dateTransaction']);
         final status = _asStr(r['status']);
 
-        //force update for next, if remoteId is null
-        if (_asStr(r['remoteId']) == null) {
-          await upsertChangeLogPending(
-            txn,
-            entityTable: entityTable,
-            entityId: localId ?? "-",
-            operation: 'UPDATE',
-          );
-        }
-
         final remoteSyncAt = _asUtc(r['syncAt']);
         if (maxAt == null || remoteSyncAt.isAfter(maxAt!)) maxAt = remoteSyncAt;
 
@@ -308,6 +298,16 @@ class TransactionPullPortSqflite {
           }, conflictAlgorithm: ConflictAlgorithm.abort);
 
           // No change_log on INSERT from remote
+
+          //force update for next
+          if (_asStr(r['remoteId']) == null) {
+            await upsertChangeLogPending(
+              txn,
+              entityTable: entityTable,
+              entityId: localId ?? '-',
+              operation: 'UPDATE',
+            );
+          }
           upserts++;
         }
       }

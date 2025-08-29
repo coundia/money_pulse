@@ -70,7 +70,7 @@ class OutboxPusher {
 
     if (validDeltas.isEmpty) {
       print(
-        "+++++++++ pending ++++++++++++++++++++++++++++++++++++++++++++++++",
+        "+++++++++ pending ++++++++++++++++++++++++++++++++++++++++++++++++ ERROR ##### ",
       );
       print(pending);
 

@@ -57,12 +57,7 @@ class StockMovementPullPortSqflite {
             where: 'localId = ?',
             whereArgs: [localId],
           );
-          await upsertChangeLogPending(
-            txn,
-            entityTable: entityTable,
-            entityId: localId,
-            operation: 'UPDATE',
-          );
+
           changed++;
           continue;
         }
@@ -80,12 +75,7 @@ class StockMovementPullPortSqflite {
             where: 'remoteId = ?',
             whereArgs: [remoteId],
           );
-          await upsertChangeLogPending(
-            txn,
-            entityTable: entityTable,
-            entityId: localId,
-            operation: 'UPDATE',
-          );
+
           changed++;
         }
       }
@@ -113,16 +103,6 @@ class StockMovementPullPortSqflite {
         final productVariantId = _asStr(r['productVariantId']);
         final orderLineId = _asStr(r['orderLineId']);
         final discriminator = _asStr(r['discriminator']);
-
-        //force update for next
-        if (_asStr(r['remoteId']) == null) {
-          await upsertChangeLogPending(
-            txn,
-            entityTable: entityTable,
-            entityId: localId ?? "-",
-            operation: 'UPDATE',
-          );
-        }
 
         if (productVariantId == null) {
           continue;
@@ -189,6 +169,15 @@ class StockMovementPullPortSqflite {
             'isDirty': 0,
           }, conflictAlgorithm: ConflictAlgorithm.abort);
           upserts++;
+          //force update for next
+          if (_asStr(r['remoteId']) == null) {
+            await upsertChangeLogPending(
+              txn,
+              entityTable: entityTable,
+              entityId: localId ?? '-',
+              operation: 'UPDATE',
+            );
+          }
         }
       }
     });

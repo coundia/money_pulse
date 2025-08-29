@@ -171,15 +171,6 @@ class CategoryPullPortSqflite {
         final remoteSyncAt = _asUtc(r['syncAt']);
         if (maxAt == null || remoteSyncAt.isAfter(maxAt!)) maxAt = remoteSyncAt;
 
-        if (_asStr(r['remoteId']) == null) {
-          await upsertChangeLogPending(
-            txn,
-            entityTable: entityTable,
-            entityId: localId ?? "-",
-            operation: 'UPDATE',
-          );
-        }
-
         // Base UPDATE payload (sans 'id')
         final baseData = <String, Object?>{
           'remoteId': remoteId,
@@ -285,6 +276,15 @@ class CategoryPullPortSqflite {
             'isDirty': 0,
           }, conflictAlgorithm: ConflictAlgorithm.abort);
           upserts++;
+
+          if (_asStr(r['remoteId']) == null) {
+            await upsertChangeLogPending(
+              txn,
+              entityTable: entityTable,
+              entityId: idToUse ?? "-",
+              operation: 'UPDATE',
+            );
+          }
         }
       }
     });

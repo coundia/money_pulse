@@ -1,4 +1,12 @@
-// Sqflite pull port for transaction items with id adoption and conflict-aware upsert.
+// lib/sync/infrastructure/pull_ports/transaction_item_pull_port_sqflite.dart
+//
+// Sqflite pull port for transaction items with:
+// - Pass 1: adopt remote ids using `localId` (never change PK `id`)
+// - Pass 2: conflict-aware upsert
+//   • Compare remote.syncAt vs local.updatedAt: keep newer
+//   • When inserting and remoteId is NULL, set remoteId = id we insert
+//   • Do NOT emit fake "force update" logs; insertion sets remoteId immediately
+
 import 'package:sqflite/sqflite.dart';
 import '../change_log_helper.dart';
 
@@ -10,6 +18,7 @@ class TransactionItemPullPortSqflite {
 
   String get entityTable => 'transaction_item';
 
+  // ---------- Helpers ----------
   int _asInt(Object? v, {int fallback = 0}) {
     if (v == null) return fallback;
     if (v is int) return v;
@@ -34,6 +43,7 @@ class TransactionItemPullPortSqflite {
     return DateTime.tryParse(norm)?.toUtc();
   }
 
+  // ---------- Pass 1: adopt remote ids (mapping only) ----------
   Future<int> adoptRemoteIds(List<Json> items) async {
     if (items.isEmpty) return 0;
     int changed = 0;
@@ -44,7 +54,7 @@ class TransactionItemPullPortSqflite {
         final localId = _asStr(r['localId']);
         if (remoteId == null || localId == null) continue;
 
-        // 1) Ligne locale par id == localId ?
+        // 1) Local row by PK == localId ?
         final localRows = await txn.query(
           entityTable,
           where: 'id = ?',
@@ -54,23 +64,24 @@ class TransactionItemPullPortSqflite {
 
         if (localRows.isNotEmpty) {
           final local = localRows.first;
-          final alreadyRemote = _asStr(local['remoteId']);
-          final alreadyLocal = _asStr(local['localId']);
+          final curRemote = _asStr(local['remoteId']);
+          final curLocal = _asStr(local['localId']);
 
-          // --- Déjà câblé à ce remoteId → skip
-          if (alreadyRemote == remoteId &&
-              (alreadyLocal == null || alreadyLocal == localId) &&
-              alreadyRemote != null) {
+          // Already linked to this remote → skip
+          if (curRemote == remoteId &&
+              (curLocal == null || curLocal == localId) &&
+              curRemote != null) {
             continue;
           }
 
-          // Sinon, on câble le lien (remoteId/localId) et on log
+          // Link (remoteId/localId)
           await txn.update(
             entityTable,
             {'remoteId': remoteId, 'localId': localId, 'isDirty': 1},
             where: 'id = ?',
             whereArgs: [localId],
           );
+
           await upsertChangeLogPending(
             txn,
             entityTable: entityTable,
@@ -78,7 +89,7 @@ class TransactionItemPullPortSqflite {
             operation: 'UPDATE',
           );
 
-          // S'il existe un doublon dont la PK == remoteId, on le supprime
+          // Remove duplicate row with PK == remoteId (keep local PK)
           if (remoteId != localId) {
             final dup = await txn.query(
               entityTable,
@@ -99,7 +110,7 @@ class TransactionItemPullPortSqflite {
           continue;
         }
 
-        // 2) Pas de ligne par localId → tenter la ligne dont la PK == remoteId
+        // 2) Try row whose PK == remoteId
         final remoteRows = await txn.query(
           entityTable,
           where: 'id = ?',
@@ -111,9 +122,10 @@ class TransactionItemPullPortSqflite {
           final curRemote = _asStr(row['remoteId']);
           final curLocal = _asStr(row['localId']);
 
-          // Si déjà identique → skip
-          final needsUpdate = (curRemote != remoteId) || (curLocal != localId);
-          if (!needsUpdate) continue;
+          // Identical mapping → skip
+          if (curRemote == remoteId && curLocal == localId) {
+            continue;
+          }
 
           await txn.update(
             entityTable,
@@ -121,21 +133,24 @@ class TransactionItemPullPortSqflite {
             where: 'id = ?',
             whereArgs: [remoteId],
           );
+
           await upsertChangeLogPending(
             txn,
             entityTable: entityTable,
             entityId: remoteId,
             operation: 'UPDATE',
           );
+
           changed++;
         }
-        // 3) Sinon, rien à faire ici (l'upsert insérera plus tard)
+        // else: nothing — insert handled in upsertRemote
       }
     });
 
     return changed;
   }
 
+  // ---------- Pass 2: upsert ----------
   Future<({int upserts, DateTime? maxSyncAt})> upsertRemote(
     List<Json> items,
   ) async {
@@ -146,9 +161,10 @@ class TransactionItemPullPortSqflite {
 
     await db.transaction((txn) async {
       for (final r in items) {
-        final remoteId = _asStr(r['id']) ?? _asStr(r['remoteId']);
+        final remoteIdIn = _asStr(r['id']) ?? _asStr(r['remoteId']);
         final localId = _asStr(r['localId']);
-        final transaction = _asStr(r['transaction']);
+        final transaction =
+            _asStr(r['transaction']) ?? _asStr(r['transactionId']);
         final productId = _asStr(r['productId']);
         final label = _asStr(r['label']);
         final unitId = _asStr(r['unitId']);
@@ -157,21 +173,12 @@ class TransactionItemPullPortSqflite {
         final unitPrice = _asInt(r['unitPrice']);
         final total = _asInt(r['total']);
 
-        //force update for next
-        if (_asStr(r['remoteId']) == null) {
-          await upsertChangeLogPending(
-            txn,
-            entityTable: entityTable,
-            entityId: localId ?? "-",
-            operation: 'UPDATE',
-          );
-        }
-
         final remoteSyncAt = _asUtc(r['syncAt']);
         if (maxAt == null || remoteSyncAt.isAfter(maxAt!)) maxAt = remoteSyncAt;
 
+        // Base map for UPDATE (never include 'id' here)
         final base = <String, Object?>{
-          'remoteId': remoteId,
+          'remoteId': remoteIdIn, // may be null; handled below
           'localId': localId,
           'transactionId': transaction,
           'productId': productId,
@@ -184,12 +191,13 @@ class TransactionItemPullPortSqflite {
           'syncAt': remoteSyncAt.toIso8601String(),
         };
 
+        // ---- Find local target row (without changing PK) ----
         Map<String, Object?>? target;
-        if (remoteId != null) {
+        if (remoteIdIn != null) {
           final t1 = await txn.query(
             entityTable,
             where: 'remoteId = ?',
-            whereArgs: [remoteId],
+            whereArgs: [remoteIdIn],
             limit: 1,
           );
           if (t1.isNotEmpty) target = t1.first;
@@ -197,7 +205,7 @@ class TransactionItemPullPortSqflite {
             final t2 = await txn.query(
               entityTable,
               where: 'id = ?',
-              whereArgs: [remoteId],
+              whereArgs: [remoteIdIn],
               limit: 1,
             );
             if (t2.isNotEmpty) target = t2.first;
@@ -214,15 +222,24 @@ class TransactionItemPullPortSqflite {
         }
 
         if (target != null) {
+          // -------- UPDATE path --------
           final localUpdatedAt = _parseLocalDate(target['updatedAt']);
           final keepLocal =
               localUpdatedAt != null && localUpdatedAt.isAfter(remoteSyncAt);
+
           final merged = Map<String, Object?>.from(base);
+
+          // Do NOT wipe an existing remoteId with null from server
+          if (remoteIdIn == null) {
+            merged['remoteId'] = target['remoteId'];
+          }
+
           if (keepLocal) {
             merged['isDirty'] = target['isDirty'];
           } else {
             merged['isDirty'] = 0;
           }
+
           await txn.update(
             entityTable,
             merged,
@@ -231,18 +248,36 @@ class TransactionItemPullPortSqflite {
           );
           upserts++;
         } else {
+          // -------- INSERT path --------
           final createdAt = remoteSyncAt.toIso8601String();
+
+          // Choose PK to use; then if remoteId is null, set it to this PK before inserting
+          final idToUse =
+              remoteIdIn ??
+              localId ??
+              DateTime.now().microsecondsSinceEpoch.toString();
+
+          final resolvedRemoteId = remoteIdIn ?? idToUse; // <— key change
+
           await txn.insert(entityTable, {
-            'id':
-                remoteId ??
-                localId ??
-                DateTime.now().microsecondsSinceEpoch.toString(),
+            'id': idToUse,
             ...base,
+            'remoteId': resolvedRemoteId, // ensure not null on insert
             'createdAt': createdAt,
             'updatedAt': createdAt,
             'isDirty': 0,
           }, conflictAlgorithm: ConflictAlgorithm.abort);
           upserts++;
+
+          //force update for next
+          if (_asStr(r['remoteId']) == null) {
+            await upsertChangeLogPending(
+              txn,
+              entityTable: entityTable,
+              entityId: localId ?? '-',
+              operation: 'UPDATE',
+            );
+          }
         }
       }
     });

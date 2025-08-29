@@ -203,16 +203,6 @@ class CustomerPullPortSqflite {
         final country = _asStr(r['country']);
         final postalCode = _asStr(r['postalCode']);
 
-        //force update for next
-        if (_asStr(r['remoteId']) == null) {
-          await upsertChangeLogPending(
-            txn,
-            entityTable: entityTable,
-            entityId: localId ?? "-",
-            operation: 'UPDATE',
-          );
-        }
-
         final remoteSyncAt = _asUtc(r['syncAt']);
         if (maxAt == null || remoteSyncAt.isAfter(maxAt!)) maxAt = remoteSyncAt;
 
@@ -340,6 +330,15 @@ class CustomerPullPortSqflite {
           }, conflictAlgorithm: ConflictAlgorithm.abort);
           // No change_log on INSERT from remote
           upserts++;
+
+          if (_asStr(r['remoteId']) == null) {
+            await upsertChangeLogPending(
+              txn,
+              entityTable: entityTable,
+              entityId: idToUse ?? "-",
+              operation: 'UPDATE',
+            );
+          }
         }
       }
     });

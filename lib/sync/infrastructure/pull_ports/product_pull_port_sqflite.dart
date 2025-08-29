@@ -162,16 +162,6 @@ class ProductPullPortSqflite {
         final defaultPrice = _asInt(r['defaultPrice']);
         final purchasePrice = _asInt(r['purchasePrice']);
 
-        //force update for next
-        if (_asStr(r['remoteId']) == null) {
-          await upsertChangeLogPending(
-            txn,
-            entityTable: entityTable,
-            entityId: localId ?? "-",
-            operation: 'UPDATE',
-          );
-        }
-
         final remoteSyncAt = _asUtc(r['syncAt']);
         if (maxAt == null || remoteSyncAt.isAfter(maxAt!)) maxAt = remoteSyncAt;
 
@@ -285,6 +275,16 @@ class ProductPullPortSqflite {
             'isDirty': 0,
           }, conflictAlgorithm: ConflictAlgorithm.abort);
           upserts++;
+
+          //force update for next
+          if (_asStr(r['remoteId']) == null) {
+            await upsertChangeLogPending(
+              txn,
+              entityTable: entityTable,
+              entityId: newId,
+              operation: 'UPDATE',
+            );
+          }
         }
       }
     });

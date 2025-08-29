@@ -211,15 +211,6 @@ class AccountPullPortSqflite {
             r['isDefault'] == 'true';
         final status = _asStr(r['status']);
 
-        if (_asStr(r['remoteId']) == null) {
-          await upsertChangeLogPending(
-            txn,
-            entityTable: entityTable,
-            entityId: localId ?? "-",
-            operation: 'UPDATE',
-          );
-        }
-
         final remoteSyncAt = _asUtc(r['syncAt']);
         if (maxAt == null || remoteSyncAt.isAfter(maxAt!)) maxAt = remoteSyncAt;
 
@@ -341,6 +332,15 @@ class AccountPullPortSqflite {
 
           // INSERTs from pull do not create change_log (they're remote-sourced)
           upserts++;
+
+          if (_asStr(r['remoteId']) == null) {
+            await upsertChangeLogPending(
+              txn,
+              entityTable: entityTable,
+              entityId: idToUse ?? "-",
+              operation: 'UPDATE',
+            );
+          }
         }
       }
     });
