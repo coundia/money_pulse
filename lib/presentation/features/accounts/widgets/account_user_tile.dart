@@ -1,4 +1,4 @@
-/* Row tile for account member with responsive chips, accessible menu, accept action, revoke confirm drawer, and guarded role changes with confirm; only allowed when canManageRoles is true and not targeting an owner. */
+/* Row tile for account member with responsive chips, accessible menu, accept action, revoke confirm drawer, guarded role changes with confirm, and optional delete button without repo changes. */
 import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -18,6 +18,9 @@ class AccountUserTile extends ConsumerStatefulWidget {
   final VoidCallback? onView;
   final bool canManageRoles;
 
+  // NEW: optional delete callback (no repo contract change)
+  final Future<void> Function(AccountUser m)? onDelete;
+
   const AccountUserTile({
     super.key,
     required this.member,
@@ -25,6 +28,7 @@ class AccountUserTile extends ConsumerStatefulWidget {
     this.onAccept,
     this.onView,
     this.canManageRoles = false,
+    this.onDelete,
   });
 
   @override
@@ -154,6 +158,24 @@ class _AccountUserTileState extends ConsumerState<AccountUserTile> {
     return ok == true;
   }
 
+  // NEW: delete confirm (UI-only, uses optional callback)
+  Future<bool> _confirmDelete(BuildContext context) async {
+    final ok = await showRightDrawer<bool>(
+      context,
+      child: const ConfirmPanel(
+        icon: Icons.delete_outline,
+        title: 'Supprimer ce membre ?',
+        message:
+            'Cette action retirera définitivement ce membre de la liste locale.',
+        confirmLabel: 'Supprimer',
+        cancelLabel: 'Annuler',
+      ),
+      widthFraction: 0.86,
+      heightFraction: 0.5,
+    );
+    return ok == true;
+  }
+
   Future<void> _changeRole(String nextRole) async {
     if (_busy) return;
     if (!widget.canManageRoles) {
@@ -265,12 +287,50 @@ class _AccountUserTileState extends ConsumerState<AccountUserTile> {
     }
   }
 
+  // NEW: delete flow (no regression if callback not provided)
+  Future<void> _delete() async {
+    if (_busy || widget.onDelete == null) return;
+    if (_targetIsOwner) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Le propriétaire ne peut pas être supprimé.'),
+          ),
+        );
+      }
+      return;
+    }
+    final ok = await _confirmDelete(context);
+    if (!ok) return;
+
+    setState(() => _busy = true);
+    try {
+      await widget.onDelete!(widget.member);
+      if (mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(const SnackBar(content: Text('Membre supprimé.')));
+      }
+      widget.onChanged();
+    } catch (_) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Échec de la suppression')),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
   Widget _actionsBar(BuildContext context) {
     final w = MediaQuery.sizeOf(context).width;
-    final maxW = math.max(180.0, math.min(w * 0.54, 360.0));
+    final maxW = math.max(180.0, math.min(w * 0.54, 420.0));
     final showRoleChip = w >= 360;
+    final cs = Theme.of(context).colorScheme;
 
     final showRoleChangeItems = widget.canManageRoles && !_targetIsOwner;
+    final canDelete = widget.onDelete != null && !_targetIsOwner;
 
     return ConstrainedBox(
       constraints: BoxConstraints(maxWidth: maxW),
@@ -318,6 +378,29 @@ class _AccountUserTileState extends ConsumerState<AccountUserTile> {
                   label: const Text('Accepter'),
                 ),
               ),
+            if (canDelete)
+              Tooltip(
+                message: 'Supprimer',
+                child: TextButton.icon(
+                  onPressed: _delete,
+                  icon: Icon(Icons.delete_outline, color: cs.error),
+                  label: Text(
+                    'Supprimer',
+                    style: TextStyle(
+                      color: cs.error,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                  style: TextButton.styleFrom(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 10,
+                      vertical: 6,
+                    ),
+                    minimumSize: const Size(0, 0),
+                    tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                  ),
+                ),
+              ),
             PopupMenuButton<String>(
               key: _menuKey,
               tooltip: 'Actions',
@@ -332,13 +415,18 @@ class _AccountUserTileState extends ConsumerState<AccountUserTile> {
                     value: 'editor',
                     child: Text('Mettre Éditeur'),
                   ),
-                if (showRoleChangeItems) const PopupMenuDivider(),
+                if (showRoleChangeItems || canDelete) const PopupMenuDivider(),
                 const PopupMenuItem(
                   value: 'revoke',
                   child: Text('Révoquer l’accès'),
                 ),
                 if (_canAccept)
                   const PopupMenuItem(value: 'accept', child: Text('Accepter')),
+                if (canDelete)
+                  const PopupMenuItem(
+                    value: 'delete',
+                    child: Text('Supprimer'),
+                  ),
               ],
               onSelected: (v) async {
                 switch (v) {
@@ -353,6 +441,9 @@ class _AccountUserTileState extends ConsumerState<AccountUserTile> {
                     break;
                   case 'revoke':
                     await _revoke();
+                    break;
+                  case 'delete':
+                    await _delete();
                     break;
                 }
               },
