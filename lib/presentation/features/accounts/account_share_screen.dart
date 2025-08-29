@@ -14,10 +14,13 @@ import 'package:money_pulse/presentation/features/accounts/panels/account_user_l
 class AccountShareScreen extends ConsumerStatefulWidget {
   final String accountId;
   final String? accountName;
+  final bool canManageRoles;
+
   const AccountShareScreen({
     super.key,
     required this.accountId,
     this.accountName,
+    this.canManageRoles = false,
   });
 
   @override
@@ -128,7 +131,6 @@ class _AccountShareScreenState extends ConsumerState<AccountShareScreen> {
       ).showSnackBar(const SnackBar(content: Text('Identifiant invalide.')));
       return;
     }
-
     if (_sending) return;
     setState(() => _sending = true);
     try {
@@ -317,6 +319,7 @@ class _AccountShareScreenState extends ConsumerState<AccountShareScreen> {
                       ),
                       onAccept: _acceptMember,
                       onView: _openMembersPanel,
+                      canManageRoles: widget.canManageRoles,
                     ),
                   ),
                 ),
@@ -467,12 +470,16 @@ Future<T?> openAccountShareScreen<T>(
   BuildContext context, {
   required String accountId,
   String? accountName,
+  bool canManageRoles = false,
 }) {
   return Navigator.of(context, rootNavigator: true).push<T>(
     MaterialPageRoute(
       fullscreenDialog: true,
-      builder: (_) =>
-          AccountShareScreen(accountId: accountId, accountName: accountName),
+      builder: (_) => AccountShareScreen(
+        accountId: accountId,
+        accountName: accountName,
+        canManageRoles: canManageRoles,
+      ),
     ),
   );
 }

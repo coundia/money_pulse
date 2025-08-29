@@ -1,4 +1,4 @@
-/* Row tile for account member with responsive chips, accessible menu, revoke confirm drawer, and optional accept/view callbacks. */
+/* Row tile for account member with responsive chips, accessible menu, revoke confirm drawer, accept action, and role changes restricted to owner. */
 import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -14,12 +14,15 @@ class AccountUserTile extends ConsumerStatefulWidget {
   final VoidCallback onChanged;
   final Future<void> Function(AccountUser m)? onAccept;
   final VoidCallback? onView;
+  final bool canManageRoles;
+
   const AccountUserTile({
     super.key,
     required this.member,
     required this.onChanged,
     this.onAccept,
     this.onView,
+    this.canManageRoles = false,
   });
 
   @override
@@ -104,8 +107,8 @@ class _AccountUserTileState extends ConsumerState<AccountUserTile> {
 
   bool get _canAccept {
     final isPending = (widget.member.status ?? '').toUpperCase() == 'PENDING';
-    final isOwner = (widget.member.role ?? '').toUpperCase() == 'OWNER';
-    return isPending && !isOwner;
+    final isOwnerTarget = (widget.member.role ?? '').toUpperCase() == 'OWNER';
+    return isPending && !isOwnerTarget;
   }
 
   DateTime? get _updatedAtLike =>
@@ -131,6 +134,16 @@ class _AccountUserTileState extends ConsumerState<AccountUserTile> {
 
   Future<void> _changeRole(String nextRole) async {
     if (_busy) return;
+    if (!widget.canManageRoles) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Seul le propriétaire peut modifier les rôles.'),
+          ),
+        );
+      }
+      return;
+    }
     setState(() => _busy = true);
     try {
       final repo = ref.read(accountUserRepoProvider);
@@ -272,21 +285,23 @@ class _AccountUserTileState extends ConsumerState<AccountUserTile> {
               key: _menuKey,
               tooltip: 'Actions',
               itemBuilder: (context) => [
-                const PopupMenuItem(
-                  value: 'viewer',
-                  child: Text('Mettre Lecteur'),
-                ),
-                const PopupMenuItem(
-                  value: 'editor',
-                  child: Text('Mettre Éditeur'),
-                ),
-                if (_canAccept)
-                  const PopupMenuItem(value: 'accept', child: Text('Accepter')),
-                const PopupMenuDivider(),
+                if (widget.canManageRoles)
+                  const PopupMenuItem(
+                    value: 'viewer',
+                    child: Text('Mettre Lecteur'),
+                  ),
+                if (widget.canManageRoles)
+                  const PopupMenuItem(
+                    value: 'editor',
+                    child: Text('Mettre Éditeur'),
+                  ),
+                if (widget.canManageRoles) const PopupMenuDivider(),
                 const PopupMenuItem(
                   value: 'revoke',
                   child: Text('Révoquer l’accès'),
                 ),
+                if (_canAccept)
+                  const PopupMenuItem(value: 'accept', child: Text('Accepter')),
               ],
               onSelected: (v) async {
                 switch (v) {
