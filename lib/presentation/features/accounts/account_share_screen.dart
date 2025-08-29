@@ -10,6 +10,7 @@ import 'package:money_pulse/presentation/features/accounts/providers/account_use
 import 'package:money_pulse/presentation/features/accounts/widgets/account_user_tile.dart';
 import 'package:money_pulse/presentation/widgets/right_drawer.dart';
 import 'package:money_pulse/presentation/features/accounts/panels/account_user_list_panel.dart';
+import 'package:money_pulse/presentation/app/connected_username_provider.dart';
 
 class AccountShareScreen extends ConsumerStatefulWidget {
   final String accountId;
@@ -261,6 +262,9 @@ class _AccountShareScreenState extends ConsumerState<AccountShareScreen> {
   }
 
   Widget _membersPreview(AsyncValue<List<AccountUser>> listAsync) {
+    final username = ref.watch(connectedUsernameProvider);
+    final usernameL = username?.toLowerCase();
+
     return listAsync.when(
       loading: () => const SizedBox.shrink(),
       error: (e, st) => OutlinedButton.icon(
@@ -309,8 +313,14 @@ class _AccountShareScreenState extends ConsumerState<AccountShareScreen> {
                   ],
                 ),
                 const SizedBox(height: 4),
-                ...preview.map(
-                  (m) => Padding(
+                ...preview.map((m) {
+                  final createdByL = m.createdBy?.trim().toLowerCase();
+                  final canManageThisMember =
+                      widget.canManageRoles ||
+                      (createdByL != null &&
+                          usernameL != null &&
+                          createdByL == usernameL);
+                  return Padding(
                     padding: const EdgeInsets.symmetric(vertical: 4),
                     child: AccountUserTile(
                       member: m,
@@ -319,10 +329,10 @@ class _AccountShareScreenState extends ConsumerState<AccountShareScreen> {
                       ),
                       onAccept: _acceptMember,
                       onView: _openMembersPanel,
-                      canManageRoles: widget.canManageRoles,
+                      canManageRoles: canManageThisMember,
                     ),
-                  ),
-                ),
+                  );
+                }),
               ],
             ),
           ),

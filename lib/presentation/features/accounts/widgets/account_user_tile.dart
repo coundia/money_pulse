@@ -35,6 +35,7 @@ class _AccountUserTileState extends ConsumerState<AccountUserTile> {
 
   String get _displayIdentity {
     final m = widget.member;
+
     return m.identity?.trim().isNotEmpty == true
         ? m.identity!.trim()
         : (m.user?.trim().isNotEmpty == true
