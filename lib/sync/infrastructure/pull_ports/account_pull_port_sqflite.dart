@@ -12,7 +12,6 @@
 // - On INSERT we use remote balances, set isDirty=0, and set updatedAt=remote.syncAt.
 
 import 'package:sqflite/sqflite.dart';
-import 'package:uuid/uuid.dart';
 
 import '../change_log_helper.dart';
 
@@ -58,6 +57,7 @@ class AccountPullPortSqflite {
   ///   If a duplicate row exists with id==remoteId, delete the duplicate (keep local row).
   /// - Else if row exists with id==remoteId → set remoteId and store provided localId (mapping only).
   /// - Never update the primary key `id` here.
+  /// - IMPORTANT: Do **not** write to change_log here (mapping is not a user change).
   Future<int> adoptRemoteIds(List<Json> items) async {
     if (items.isEmpty) return 0;
     int changed = 0;
@@ -68,7 +68,7 @@ class AccountPullPortSqflite {
         final localId = _asStr(r['localId']);
         if (remoteId == null || localId == null) continue;
 
-        // 1) Ligne locale (PK == localId) ?
+        // 1) Is there a row with PK == localId ?
         final localRows = await txn.query(
           entityTable,
           where: 'id = ?',
@@ -78,31 +78,24 @@ class AccountPullPortSqflite {
 
         if (localRows.isNotEmpty) {
           final row = localRows.first;
-          final curRemoteId = _asStr(row['remoteId']);
+          final curRemote = _asStr(row['remoteId']);
           final curLocalId = _asStr(row['localId']);
 
-          // Déjà câblé → SKIP (ne touche pas change_log)
-          if (curRemoteId == remoteId &&
+          // Already correctly linked? → skip (and crucially do not touch change_log)
+          if (curRemote == remoteId &&
               (curLocalId == null || curLocalId == localId)) {
             continue;
           }
 
-          // Câblage à faire
+          // Update only the linkage fields; leave isDirty as-is (no outbox)
           await txn.update(
             entityTable,
-            {'remoteId': remoteId, 'localId': localId, 'isDirty': 1},
+            {'remoteId': remoteId, 'localId': localId},
             where: 'id = ?',
             whereArgs: [localId],
           );
 
-          await upsertChangeLogPending(
-            txn,
-            entityTable: entityTable,
-            entityId: localId,
-            operation: 'UPDATE',
-          );
-
-          // Supprimer un éventuel doublon (PK == remoteId) seulement si on a vraiment câblé
+          // If a duplicate row exists under remoteId, drop it (keep local PK)
           if (remoteId != localId) {
             final dup = await txn.query(
               entityTable,
@@ -118,12 +111,11 @@ class AccountPullPortSqflite {
               );
             }
           }
-
           changed++;
           continue;
         }
 
-        // 2) Sinon, tenter la ligne dont la PK == remoteId
+        // 2) Else: maybe we already have the server row with PK == remoteId
         final remoteRows = await txn.query(
           entityTable,
           where: 'id = ?',
@@ -132,32 +124,25 @@ class AccountPullPortSqflite {
         );
         if (remoteRows.isNotEmpty) {
           final row = remoteRows.first;
-          final curRemoteId = _asStr(row['remoteId']);
+          final curRemote = _asStr(row['remoteId']);
           final curLocalId = _asStr(row['localId']);
 
-          // Déjà câblé → SKIP (ne touche pas change_log)
-          if (curRemoteId == remoteId && curLocalId == localId) {
+          // Already mapped? → skip
+          if (curRemote == remoteId && curLocalId == localId) {
             continue;
           }
 
-          // Câblage à faire
+          // Update linkage only; do not mark dirty / do not log change_log
           await txn.update(
             entityTable,
-            {'remoteId': remoteId, 'localId': localId, 'isDirty': 1},
+            {'remoteId': remoteId, 'localId': localId},
             where: 'id = ?',
             whereArgs: [remoteId],
           );
 
-          await upsertChangeLogPending(
-            txn,
-            entityTable: entityTable,
-            entityId: remoteId,
-            operation: 'UPDATE',
-          );
-
           changed++;
         }
-        // Sinon : insertion traitée plus tard par upsertRemote()
+        // else: nothing; upsertRemote will handle insert
       }
     });
 
@@ -192,8 +177,8 @@ class AccountPullPortSqflite {
         final remoteSyncAt = _asUtc(r['syncAt']);
         if (maxAt == null || remoteSyncAt.isAfter(maxAt!)) maxAt = remoteSyncAt;
 
+        // Base fields for UPDATE (never include 'id' here)
         final baseData = <String, Object?>{
-          'id': localId,
           'remoteId': remoteId,
           'localId': localId,
           'code': code,
@@ -203,7 +188,6 @@ class AccountPullPortSqflite {
           'isDefault': isDefault ? 1 : 0,
           'status': status,
           'syncAt': remoteSyncAt.toIso8601String(),
-          // Do NOT set updatedAt on pull UPDATEs.
         };
 
         final remoteBalances = <String, Object?>{
@@ -219,7 +203,7 @@ class AccountPullPortSqflite {
         Map<String, Object?>? targetRow;
         if (remoteId != null) {
           final byRemoteId = await txn.query(
-            'account',
+            entityTable,
             where: 'remoteId = ?',
             whereArgs: [remoteId],
             limit: 1,
@@ -228,7 +212,7 @@ class AccountPullPortSqflite {
             targetRow = byRemoteId.first;
           } else {
             final byIdEqRemote = await txn.query(
-              'account',
+              entityTable,
               where: 'id = ?',
               whereArgs: [remoteId],
               limit: 1,
@@ -240,7 +224,7 @@ class AccountPullPortSqflite {
         }
         if (targetRow == null && localId != null) {
           final byLocalId = await txn.query(
-            'account',
+            entityTable,
             where: 'id = ?',
             whereArgs: [localId],
             limit: 1,
@@ -271,7 +255,7 @@ class AccountPullPortSqflite {
           }
 
           await txn.update(
-            'account',
+            entityTable,
             merged,
             where: 'id = ?',
             whereArgs: [targetRow['id']],
@@ -279,11 +263,12 @@ class AccountPullPortSqflite {
           upserts++;
         } else {
           // -------- INSERT path (id is new; OK to set) --------
-          // Use remoteSyncAt for updatedAt to avoid "local is newer" illusions.
-
           final createdAt = remoteSyncAt.toIso8601String();
-          await txn.insert('account', {
-            'id': localId ?? remoteId,
+          await txn.insert(entityTable, {
+            'id':
+                localId ??
+                remoteId ??
+                DateTime.now().microsecondsSinceEpoch.toString(),
             ...baseData,
             ...remoteBalances,
             'createdAt': createdAt,
