@@ -40,10 +40,14 @@ class HttpAccessRepository implements AccessRepository {
       throw Exception('VERIFY_CODE_FAILED');
     }
     final data = jsonDecode(res.body) as Map<String, dynamic>;
+    print("connected #### respone");
+    print(data);
     return AccessGrant(
       email: identity.email ?? '',
       token: (data['token'] as String?) ?? '',
       grantedAt: DateTime.now(),
+      username: (data['username'] as String?) ?? identity.email,
+      phone: (data['phone'] as String?) ?? identity.email,
     );
   }
 
@@ -58,6 +62,8 @@ class HttpAccessRepository implements AccessRepository {
       throw Exception('login failed');
     }
     final map = jsonDecode(res.body) as Map<String, dynamic>;
+    print("connected #### respone");
+    print(map);
     final code = map['code'] is num ? (map['code'] as num).toInt() : -1;
     final token = map['token']?.toString() ?? '';
     final uname = map['username']?.toString() ?? username;
@@ -66,6 +72,8 @@ class HttpAccessRepository implements AccessRepository {
       email: uname,
       token: token,
       grantedAt: DateTime.now().toUtc(),
+      username: (map['username'] as String?) ?? uname,
+      phone: (map['phone'] as String?) ?? uname,
     );
   }
 

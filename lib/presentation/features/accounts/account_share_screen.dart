@@ -1,4 +1,4 @@
-/* Full-screen page to invite and manage account sharing with identity auto-detect, enter-to-submit, duplicate guard, preview with accept action, and right-drawer to view all members. */
+/* Full-screen page to invite and manage account sharing with identity auto-detect, enter-to-submit, duplicate guard, preview with accept action, per-member role permission by inviter (username/phone), and right-drawer to view all members. */
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -11,6 +11,8 @@ import 'package:money_pulse/presentation/features/accounts/widgets/account_user_
 import 'package:money_pulse/presentation/widgets/right_drawer.dart';
 import 'package:money_pulse/presentation/features/accounts/panels/account_user_list_panel.dart';
 import 'package:money_pulse/presentation/app/connected_username_provider.dart';
+
+import '../../../onboarding/presentation/providers/access_session_provider.dart';
 
 class AccountShareScreen extends ConsumerStatefulWidget {
   final String accountId;
@@ -156,6 +158,14 @@ class _AccountShareScreenState extends ConsumerState<AccountShareScreen> {
         return;
       }
 
+      final inviterUsername = ref.read(connectedUsernameProvider);
+      final inviterPhone = ref.read(connectedPhoneProvider);
+      final createdBy = (inviterUsername?.trim().isNotEmpty == true)
+          ? inviterUsername!.trim().toLowerCase()
+          : (inviterPhone?.trim().isNotEmpty == true
+                ? _normalizePhone(inviterPhone)
+                : null);
+
       final au = AccountUser(
         id: const Uuid().v4(),
         account: widget.accountId,
@@ -164,7 +174,8 @@ class _AccountShareScreenState extends ConsumerState<AccountShareScreen> {
         phone: phone,
         role: 'VIEWER',
         status: 'PENDING',
-        invitedBy: 'me',
+        invitedBy: createdBy ?? 'me',
+        createdBy: createdBy,
         invitedAt: now,
         createdAt: now,
         updatedAt: now,
@@ -194,6 +205,16 @@ class _AccountShareScreenState extends ConsumerState<AccountShareScreen> {
     } finally {
       if (mounted) setState(() => _sending = false);
     }
+  }
+
+  String? _normalizePhone(String? raw) {
+    final v = raw?.trim() ?? '';
+    if (v.isEmpty) return null;
+    final digitsPlus = v.replaceAll(RegExp(r'[^\d+]'), '');
+    if (digitsPlus.startsWith('00')) return '+${digitsPlus.substring(2)}';
+    if (!digitsPlus.startsWith('+') && digitsPlus.isNotEmpty)
+      return '+$digitsPlus';
+    return digitsPlus;
   }
 
   Future<void> _openMembersPanel() async {
@@ -263,7 +284,9 @@ class _AccountShareScreenState extends ConsumerState<AccountShareScreen> {
 
   Widget _membersPreview(AsyncValue<List<AccountUser>> listAsync) {
     final username = ref.watch(connectedUsernameProvider);
+    final phone = ref.watch(connectedPhoneProvider);
     final usernameL = username?.toLowerCase();
+    final phoneN = _normalizePhone(phone);
 
     return listAsync.when(
       loading: () => const SizedBox.shrink(),
@@ -314,12 +337,22 @@ class _AccountShareScreenState extends ConsumerState<AccountShareScreen> {
                 ),
                 const SizedBox(height: 4),
                 ...preview.map((m) {
-                  final createdByL = m.createdBy?.trim().toLowerCase();
+                  final createdBy = m.createdBy?.trim();
+
+                  final createdByPhone = _normalizePhone(createdBy);
+                  final accessGrant = ref.read(accessSessionProvider);
+
+                  final createdByL = accessGrant?.username;
+
                   final canManageThisMember =
                       widget.canManageRoles ||
                       (createdByL != null &&
                           usernameL != null &&
-                          createdByL == usernameL);
+                          createdByL == usernameL) ||
+                      (createdByPhone != null &&
+                          phoneN != null &&
+                          createdByPhone == phoneN);
+
                   return Padding(
                     padding: const EdgeInsets.symmetric(vertical: 4),
                     child: AccountUserTile(

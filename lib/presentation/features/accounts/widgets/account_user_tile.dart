@@ -1,4 +1,4 @@
-/* Row tile for account member with responsive chips, accessible menu, revoke confirm drawer, accept action, and role changes restricted to owner. */
+/* Row tile for account member with responsive chips, accessible menu, accept action, revoke confirm drawer, and guarded role changes with confirm; only allowed when canManageRoles is true and not targeting an owner. */
 import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -8,6 +8,8 @@ import 'package:money_pulse/presentation/features/accounts/providers/account_use
 import 'package:money_pulse/presentation/shared/formatters.dart';
 import 'package:money_pulse/presentation/widgets/right_drawer.dart';
 import 'package:money_pulse/presentation/features/settings/widgets/confirm_panel.dart';
+
+import '../../../../onboarding/presentation/providers/access_session_provider.dart';
 
 class AccountUserTile extends ConsumerStatefulWidget {
   final AccountUser member;
@@ -35,7 +37,6 @@ class _AccountUserTileState extends ConsumerState<AccountUserTile> {
 
   String get _displayIdentity {
     final m = widget.member;
-
     return m.identity?.trim().isNotEmpty == true
         ? m.identity!.trim()
         : (m.user?.trim().isNotEmpty == true
@@ -112,6 +113,9 @@ class _AccountUserTileState extends ConsumerState<AccountUserTile> {
     return isPending && !isOwnerTarget;
   }
 
+  bool get _targetIsOwner =>
+      (widget.member.role ?? '').toUpperCase() == 'OWNER';
+
   DateTime? get _updatedAtLike =>
       widget.member.updatedAt ??
       widget.member.createdAt ??
@@ -133,18 +137,48 @@ class _AccountUserTileState extends ConsumerState<AccountUserTile> {
     return ok == true;
   }
 
+  Future<bool> _confirmRoleChange(String nextRole) async {
+    final label = _roleLabelFor(nextRole);
+    final ok = await showRightDrawer<bool>(
+      context,
+      child: ConfirmPanel(
+        icon: Icons.manage_accounts,
+        title: 'Changer le rôle ?',
+        message: 'Définir le rôle sur « $label » pour ce membre ?',
+        confirmLabel: 'Changer',
+        cancelLabel: 'Annuler',
+      ),
+      widthFraction: 0.86,
+      heightFraction: 0.5,
+    );
+    return ok == true;
+  }
+
   Future<void> _changeRole(String nextRole) async {
     if (_busy) return;
     if (!widget.canManageRoles) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
-            content: Text('Seul le propriétaire peut modifier les rôles.'),
+            content: Text('Vous n’êtes pas autorisé à modifier les rôles.'),
           ),
         );
       }
       return;
     }
+    if (_targetIsOwner) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Le rôle du propriétaire ne peut pas être modifié.'),
+          ),
+        );
+      }
+      return;
+    }
+    final ok = await _confirmRoleChange(nextRole);
+    if (!ok) return;
+
     setState(() => _busy = true);
     try {
       final repo = ref.read(accountUserRepoProvider);
@@ -236,6 +270,8 @@ class _AccountUserTileState extends ConsumerState<AccountUserTile> {
     final maxW = math.max(180.0, math.min(w * 0.54, 360.0));
     final showRoleChip = w >= 360;
 
+    final showRoleChangeItems = widget.canManageRoles && !_targetIsOwner;
+
     return ConstrainedBox(
       constraints: BoxConstraints(maxWidth: maxW),
       child: Align(
@@ -286,17 +322,17 @@ class _AccountUserTileState extends ConsumerState<AccountUserTile> {
               key: _menuKey,
               tooltip: 'Actions',
               itemBuilder: (context) => [
-                if (widget.canManageRoles)
+                if (showRoleChangeItems)
                   const PopupMenuItem(
                     value: 'viewer',
                     child: Text('Mettre Lecteur'),
                   ),
-                if (widget.canManageRoles)
+                if (showRoleChangeItems)
                   const PopupMenuItem(
                     value: 'editor',
                     child: Text('Mettre Éditeur'),
                   ),
-                if (widget.canManageRoles) const PopupMenuDivider(),
+                if (showRoleChangeItems) const PopupMenuDivider(),
                 const PopupMenuItem(
                   value: 'revoke',
                   child: Text('Révoquer l’accès'),
