@@ -1,5 +1,13 @@
-/* Sqflite pull port for companies: adopt remote ids using localId, then upsert fields, resolve conflicts, and log SYNCED rows in change_log. */
+// lib/sync/infrastructure/pull_ports/company_pull_port_sqflite.dart
+//
+// Sqflite pull port for companies:
+// - Pass 1: adopt remote ids using localId (never change PK `id`, no change_log)
+// - Pass 2: upsert/merge fields with conflict resolution (local.updatedAt vs remote.syncAt)
+// - UPDATE: log to change_log via upsertChangeLogPending **only if material fields changed**
+// - INSERT: no change_log (source = remote); set updatedAt = remote.syncAt
+
 import 'package:sqflite/sqflite.dart';
+import '../change_log_helper.dart';
 
 typedef Json = Map<String, Object?>;
 
@@ -10,11 +18,12 @@ class CompanyPullPortSqflite {
   String get entityTable => 'company';
 
   String? _asStr(Object? v) => v?.toString();
-  int _asInt(Object? v) {
-    if (v == null) return 0;
+
+  int _asInt(Object? v, {int fallback = 0}) {
+    if (v == null) return fallback;
     if (v is int) return v;
     if (v is num) return v.toInt();
-    return int.tryParse(v.toString()) ?? 0;
+    return int.tryParse(v.toString()) ?? fallback;
   }
 
   DateTime _asUtc(Object? v) {
@@ -32,6 +41,51 @@ class CompanyPullPortSqflite {
     return DateTime.tryParse(norm)?.toUtc();
   }
 
+  bool _differs(
+    Map<String, Object?> a,
+    Map<String, Object?> b,
+    Iterable<String> keys,
+  ) {
+    for (final k in keys) {
+      final va = a[k];
+      final vb = b[k];
+      if (va is String && vb is String) {
+        if (va != vb) return true;
+      } else {
+        // normaliser bool/ints pour isDefault
+        if (k == 'isDefault') {
+          final ai = (va is bool) ? (va ? 1 : 0) : _asInt(va, fallback: 0);
+          final bi = (vb is bool) ? (vb ? 1 : 0) : _asInt(vb, fallback: 0);
+          if (ai != bi) return true;
+        } else if ((va ?? '') != (vb ?? '')) {
+          return true;
+        }
+      }
+    }
+    return false;
+  }
+
+  static const _materialKeys = <String>{
+    'remoteId',
+    'localId',
+    'code',
+    'name',
+    'description',
+    'phone',
+    'email',
+    'website',
+    'taxId',
+    'currency',
+    'addressLine1',
+    'addressLine2',
+    'city',
+    'region',
+    'country',
+    'postalCode',
+    'isDefault',
+  };
+
+  // -------- Pass 1: adopt remote ids (no change_log here) --------
   Future<int> adoptRemoteIds(List<Json> items) async {
     if (items.isEmpty) return 0;
     int changed = 0;
@@ -42,21 +96,32 @@ class CompanyPullPortSqflite {
         final localId = _asStr(r['localId']);
         if (remoteId == null || localId == null) continue;
 
+        // 1) Ligne locale (PK == localId) ?
         final localRows = await txn.query(
           entityTable,
           where: 'id = ?',
           whereArgs: [localId],
           limit: 1,
         );
-
         if (localRows.isNotEmpty) {
+          final row = localRows.first;
+          final curRemote = _asStr(row['remoteId']);
+          final curLocal = _asStr(row['localId']);
+
+          // déjà câblé → skip
+          if (curRemote == remoteId &&
+              (curLocal == null || curLocal == localId)) {
+            continue;
+          }
+
           await txn.update(
             entityTable,
-            {'remoteId': remoteId, 'localId': localId, 'isDirty': 1},
+            {'remoteId': remoteId, 'localId': localId},
             where: 'id = ?',
             whereArgs: [localId],
           );
 
+          // supprimer doublon éventuel (PK == remoteId)
           if (remoteId != localId) {
             final dup = await txn.query(
               entityTable,
@@ -76,6 +141,7 @@ class CompanyPullPortSqflite {
           continue;
         }
 
+        // 2) Pas de localId → tenter PK == remoteId
         final remoteRows = await txn.query(
           entityTable,
           where: 'id = ?',
@@ -83,20 +149,30 @@ class CompanyPullPortSqflite {
           limit: 1,
         );
         if (remoteRows.isNotEmpty) {
+          final row = remoteRows.first;
+          final curRemote = _asStr(row['remoteId']);
+          final curLocal = _asStr(row['localId']);
+
+          if (curRemote == remoteId && curLocal == localId) {
+            continue;
+          }
+
           await txn.update(
             entityTable,
-            {'remoteId': remoteId, 'localId': localId, 'isDirty': 1},
+            {'remoteId': remoteId, 'localId': localId},
             where: 'id = ?',
             whereArgs: [remoteId],
           );
           changed++;
         }
+        // sinon: insert géré par upsertRemote
       }
     });
 
     return changed;
   }
 
+  // -------- Pass 2: upsert + log UPDATEs that actually changed material fields --------
   Future<({int upserts, DateTime? maxSyncAt})> upsertRemote(
     List<Json> items,
   ) async {
@@ -117,22 +193,32 @@ class CompanyPullPortSqflite {
         final website = _asStr(r['website']);
         final taxId = _asStr(r['taxId']);
         final currency = _asStr(r['currency']);
-        final addressLine1 = _asStr(r['addressLine1']);
-        final addressLine2 = _asStr(r['addressLine2']);
+        final address1 = _asStr(r['addressLine1']);
+        final address2 = _asStr(r['addressLine2']);
         final city = _asStr(r['city']);
         final region = _asStr(r['region']);
         final country = _asStr(r['country']);
         final postalCode = _asStr(r['postalCode']);
         final isDefault =
-            r['isDefault'] == true ||
+            (r['isDefault'] == true) ||
             r['isDefault'] == 1 ||
             r['isDefault'] == 'true';
 
         final remoteSyncAt = _asUtc(r['syncAt']);
         if (maxAt == null || remoteSyncAt.isAfter(maxAt!)) maxAt = remoteSyncAt;
 
+        //force update for next
+        if (_asStr(r['remoteId']) == null) {
+          await upsertChangeLogPending(
+            txn,
+            entityTable: entityTable,
+            entityId: remoteId ?? "-",
+            operation: 'UPDATE',
+          );
+        }
+
+        // base pour UPDATE (sans 'id')
         final baseData = <String, Object?>{
-          'id': localId,
           'remoteId': remoteId,
           'localId': localId,
           'code': code,
@@ -143,8 +229,8 @@ class CompanyPullPortSqflite {
           'website': website,
           'taxId': taxId,
           'currency': currency,
-          'addressLine1': addressLine1,
-          'addressLine2': addressLine2,
+          'addressLine1': address1,
+          'addressLine2': address2,
           'city': city,
           'region': region,
           'country': country,
@@ -153,17 +239,17 @@ class CompanyPullPortSqflite {
           'syncAt': remoteSyncAt.toIso8601String(),
         };
 
+        // Trouver la cible (ne jamais changer la PK)
         Map<String, Object?>? targetRow;
         if (remoteId != null) {
-          final byRemoteId = await txn.query(
+          final byRemote = await txn.query(
             entityTable,
             where: 'remoteId = ?',
             whereArgs: [remoteId],
             limit: 1,
           );
-          if (byRemoteId.isNotEmpty) {
-            targetRow = byRemoteId.first;
-          } else {
+          if (byRemote.isNotEmpty) targetRow = byRemote.first;
+          if (targetRow == null) {
             final byIdEqRemote = await txn.query(
               entityTable,
               where: 'id = ?',
@@ -173,27 +259,51 @@ class CompanyPullPortSqflite {
             if (byIdEqRemote.isNotEmpty) targetRow = byIdEqRemote.first;
           }
         }
+
         if (targetRow == null && localId != null) {
-          final byLocalId = await txn.query(
+          final byLocal = await txn.query(
             entityTable,
             where: 'id = ?',
             whereArgs: [localId],
             limit: 1,
           );
-          if (byLocalId.isNotEmpty) targetRow = byLocalId.first;
+          if (byLocal.isNotEmpty) targetRow = byLocal.first;
         }
 
         if (targetRow != null) {
+          // UPDATE path
           final localUpdatedAt = _parseLocalDate(targetRow['updatedAt']);
           final keepLocal =
               localUpdatedAt != null && localUpdatedAt.isAfter(remoteSyncAt);
 
           final merged = Map<String, Object?>.from(baseData);
           if (keepLocal) {
+            // garder valeurs locales, juste syncAt rafraîchi
+            for (final k in _materialKeys) {
+              if (k == 'isDefault') {
+                merged[k] = _asInt(targetRow[k], fallback: 0);
+              } else {
+                merged[k] = targetRow[k];
+              }
+            }
             merged['isDirty'] = targetRow['isDirty'];
           } else {
+            // remote gagne
             merged['isDirty'] = 0;
           }
+
+          // log uniquement si des champs matériels changent (ignorer syncAt/isDirty)
+          final currentComparable = {
+            for (final k in _materialKeys) k: targetRow[k],
+          };
+          final mergedComparable = {
+            for (final k in _materialKeys) k: merged[k],
+          };
+          final willLog = _differs(
+            currentComparable,
+            mergedComparable,
+            _materialKeys,
+          );
 
           await txn.update(
             entityTable,
@@ -202,46 +312,31 @@ class CompanyPullPortSqflite {
             whereArgs: [targetRow['id']],
           );
 
-          await txn.insert('change_log', {
-            'id': '${targetRow['id']}-pull',
-            'entityTable': entityTable,
-            'entityId': targetRow['id'],
-            'remoteId': remoteId,
-            'localId': localId,
-            'operation': 'UPDATE',
-            'status': 'SYNCED',
-            'payload': null,
-            'createdAt': DateTime.now().toUtc().toIso8601String(),
-            'updatedAt': DateTime.now().toUtc().toIso8601String(),
-          }, conflictAlgorithm: ConflictAlgorithm.replace);
+          if (willLog) {
+            await upsertChangeLogPending(
+              txn,
+              entityTable: entityTable,
+              entityId: (targetRow['id'] ?? localId ?? remoteId).toString(),
+              operation: 'UPDATE',
+            );
+          }
 
           upserts++;
         } else {
+          // INSERT path — source remote; pas de change_log
           final createdAt = remoteSyncAt.toIso8601String();
-          final id =
-              remoteId ?? DateTime.now().microsecondsSinceEpoch.toString();
+          final idToUse =
+              localId ??
+              remoteId ??
+              DateTime.now().microsecondsSinceEpoch.toString();
 
           await txn.insert(entityTable, {
-            'id': id,
+            'id': idToUse,
             ...baseData,
             'createdAt': createdAt,
             'updatedAt': createdAt,
             'isDirty': 0,
           }, conflictAlgorithm: ConflictAlgorithm.abort);
-
-          await txn.insert('change_log', {
-            'id': '$id-pull',
-            'entityTable': entityTable,
-            'entityId': id,
-            'remoteId': remoteId,
-            'localId': localId,
-            'operation': 'INSERT',
-            'status': 'SYNCED',
-            'payload': null,
-            'createdAt': DateTime.now().toUtc().toIso8601String(),
-            'updatedAt': DateTime.now().toUtc().toIso8601String(),
-          }, conflictAlgorithm: ConflictAlgorithm.replace);
-
           upserts++;
         }
       }

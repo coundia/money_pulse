@@ -114,6 +114,16 @@ class StockMovementPullPortSqflite {
         final orderLineId = _asStr(r['orderLineId']);
         final discriminator = _asStr(r['discriminator']);
 
+        //force update for next
+        if (_asStr(r['remoteId']) == null) {
+          await upsertChangeLogPending(
+            txn,
+            entityTable: entityTable,
+            entityId: localId ?? "-",
+            operation: 'UPDATE',
+          );
+        }
+
         if (productVariantId == null) {
           continue;
         }

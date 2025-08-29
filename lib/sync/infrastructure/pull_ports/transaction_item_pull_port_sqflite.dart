@@ -59,7 +59,8 @@ class TransactionItemPullPortSqflite {
 
           // --- Déjà câblé à ce remoteId → skip
           if (alreadyRemote == remoteId &&
-              (alreadyLocal == null || alreadyLocal == localId)) {
+              (alreadyLocal == null || alreadyLocal == localId) &&
+              alreadyRemote != null) {
             continue;
           }
 
@@ -155,6 +156,16 @@ class TransactionItemPullPortSqflite {
         final quantity = _asInt(r['quantity']);
         final unitPrice = _asInt(r['unitPrice']);
         final total = _asInt(r['total']);
+
+        //force update for next
+        if (_asStr(r['remoteId']) == null) {
+          await upsertChangeLogPending(
+            txn,
+            entityTable: entityTable,
+            entityId: localId ?? "-",
+            operation: 'UPDATE',
+          );
+        }
 
         final remoteSyncAt = _asUtc(r['syncAt']);
         if (maxAt == null || remoteSyncAt.isAfter(maxAt!)) maxAt = remoteSyncAt;

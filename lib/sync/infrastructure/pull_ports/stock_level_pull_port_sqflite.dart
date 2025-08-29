@@ -111,6 +111,16 @@ class StockLevelPullPortSqflite {
         final stockOnHand = _asInt(r['stockOnHand']);
         final stockAllocated = _asInt(r['stockAllocated']);
 
+        //force update for next
+        if (_asStr(r['remoteId']) == null) {
+          await upsertChangeLogPending(
+            txn,
+            entityTable: entityTable,
+            entityId: localId ?? "-",
+            operation: 'UPDATE',
+          );
+        }
+
         if (productVariantId == null) {
           continue;
         }

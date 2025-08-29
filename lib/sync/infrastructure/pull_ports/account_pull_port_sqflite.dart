@@ -10,9 +10,11 @@
 // - If local is newer for balances, we KEEP local balances and KEEP isDirty as-is.
 // - If remote wins, we apply remote balances and set isDirty=0.
 // - On INSERT we use remote balances, set isDirty=0, and set updatedAt=remote.syncAt.
+// - We DO NOT write to change_log during adopt pass.
+// - We DO write to change_log on UPDATEs only when *material* fields changed
+//   (ignoring syncAt-only changes).
 
 import 'package:sqflite/sqflite.dart';
-
 import '../change_log_helper.dart';
 
 typedef Json = Map<String, Object?>;
@@ -50,6 +52,41 @@ class AccountPullPortSqflite {
     return DateTime.tryParse(norm)?.toUtc();
   }
 
+  Object? _normForEq(Object? v) {
+    if (v is num) return v.toInt();
+    return v; // keep strings/nulls as-is
+  }
+
+  bool _hasAnyDiff(
+    Map<String, Object?> a,
+    Map<String, Object?> b,
+    Iterable<String> keys,
+  ) {
+    for (final k in keys) {
+      if (_normForEq(a[k]) != _normForEq(b[k])) return true;
+    }
+    return false;
+  }
+
+  // Keys that matter for "material" updates (we ignore syncAt-only changes)
+  static const _materialKeys = <String>{
+    'remoteId',
+    'localId',
+    'code',
+    'description',
+    'currency',
+    'typeAccount',
+    'isDefault',
+    'status',
+    'balance',
+    'balance_prev',
+    'balance_blocked',
+    'balance_init',
+    'balance_goal',
+    'balance_limit',
+    'isDirty',
+  };
+
   // ---------- Pass 1: adopt remote ids (never modify PK `id`) ----------
 
   /// Wire the server `id` (remoteId) to the local row referenced by `localId`.
@@ -57,7 +94,7 @@ class AccountPullPortSqflite {
   ///   If a duplicate row exists with id==remoteId, delete the duplicate (keep local row).
   /// - Else if row exists with id==remoteId → set remoteId and store provided localId (mapping only).
   /// - Never update the primary key `id` here.
-  /// - IMPORTANT: Do **not** write to change_log here (mapping is not a user change).
+  /// - IMPORTANT: No change_log writes here.
   Future<int> adoptRemoteIds(List<Json> items) async {
     if (items.isEmpty) return 0;
     int changed = 0;
@@ -68,7 +105,7 @@ class AccountPullPortSqflite {
         final localId = _asStr(r['localId']);
         if (remoteId == null || localId == null) continue;
 
-        // 1) Is there a row with PK == localId ?
+        // 1) Row with PK == localId ?
         final localRows = await txn.query(
           entityTable,
           where: 'id = ?',
@@ -81,13 +118,13 @@ class AccountPullPortSqflite {
           final curRemote = _asStr(row['remoteId']);
           final curLocalId = _asStr(row['localId']);
 
-          // Already correctly linked? → skip (and crucially do not touch change_log)
+          // already mapped -> skip
           if (curRemote == remoteId &&
               (curLocalId == null || curLocalId == localId)) {
             continue;
           }
 
-          // Update only the linkage fields; leave isDirty as-is (no outbox)
+          // update linkage only
           await txn.update(
             entityTable,
             {'remoteId': remoteId, 'localId': localId},
@@ -95,7 +132,7 @@ class AccountPullPortSqflite {
             whereArgs: [localId],
           );
 
-          // If a duplicate row exists under remoteId, drop it (keep local PK)
+          // remove duplicate PK==remoteId (keep local PK)
           if (remoteId != localId) {
             final dup = await txn.query(
               entityTable,
@@ -115,7 +152,7 @@ class AccountPullPortSqflite {
           continue;
         }
 
-        // 2) Else: maybe we already have the server row with PK == remoteId
+        // 2) Maybe a row whose PK == remoteId
         final remoteRows = await txn.query(
           entityTable,
           where: 'id = ?',
@@ -127,22 +164,21 @@ class AccountPullPortSqflite {
           final curRemote = _asStr(row['remoteId']);
           final curLocalId = _asStr(row['localId']);
 
-          // Already mapped? → skip
+          // already mapped -> skip
           if (curRemote == remoteId && curLocalId == localId) {
             continue;
           }
 
-          // Update linkage only; do not mark dirty / do not log change_log
+          // update linkage only
           await txn.update(
             entityTable,
             {'remoteId': remoteId, 'localId': localId},
             where: 'id = ?',
             whereArgs: [remoteId],
           );
-
           changed++;
         }
-        // else: nothing; upsertRemote will handle insert
+        // else: INSERT handled in upsertRemote
       }
     });
 
@@ -162,6 +198,7 @@ class AccountPullPortSqflite {
     await db.transaction((txn) async {
       for (final r in items) {
         final remoteId = _asStr(r['id']) ?? _asStr(r['remoteId']);
+
         final localId = _asStr(r['localId']);
         final code = _asStr(r['code']);
         final name = _asStr(r['name']);
@@ -173,6 +210,15 @@ class AccountPullPortSqflite {
             r['isDefault'] == 1 ||
             r['isDefault'] == 'true';
         final status = _asStr(r['status']);
+
+        if (_asStr(r['remoteId']) == null) {
+          await upsertChangeLogPending(
+            txn,
+            entityTable: entityTable,
+            entityId: localId ?? "-",
+            operation: 'UPDATE',
+          );
+        }
 
         final remoteSyncAt = _asUtc(r['syncAt']);
         if (maxAt == null || remoteSyncAt.isAfter(maxAt!)) maxAt = remoteSyncAt;
@@ -254,27 +300,46 @@ class AccountPullPortSqflite {
             merged['isDirty'] = 0; // remote wins → clean
           }
 
+          // Only log when *material* fields actually change (ignore syncAt-only diffs)
+          final current = Map<String, Object?>.from(targetRow);
+          final willLog = _hasAnyDiff(current, merged, _materialKeys);
+
+          // Always update row to keep syncAt fresh; but log only if material change
           await txn.update(
             entityTable,
             merged,
             where: 'id = ?',
             whereArgs: [targetRow['id']],
           );
+
+          if (willLog) {
+            await upsertChangeLogPending(
+              txn,
+              entityTable: entityTable,
+              entityId: (targetRow['id'] ?? localId ?? remoteId).toString(),
+              operation: 'UPDATE',
+            );
+          }
+
           upserts++;
         } else {
           // -------- INSERT path (id is new; OK to set) --------
           final createdAt = remoteSyncAt.toIso8601String();
+          final idToUse =
+              localId ??
+              remoteId ??
+              DateTime.now().microsecondsSinceEpoch.toString();
+
           await txn.insert(entityTable, {
-            'id':
-                localId ??
-                remoteId ??
-                DateTime.now().microsecondsSinceEpoch.toString(),
+            'id': idToUse,
             ...baseData,
             ...remoteBalances,
             'createdAt': createdAt,
             'updatedAt': createdAt,
             'isDirty': 0,
           }, conflictAlgorithm: ConflictAlgorithm.abort);
+
+          // INSERTs from pull do not create change_log (they're remote-sourced)
           upserts++;
         }
       }

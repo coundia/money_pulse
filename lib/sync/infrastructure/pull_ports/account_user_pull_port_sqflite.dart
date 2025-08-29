@@ -1,6 +1,8 @@
 // Sqflite pull port for account_users with adoptRemoteIds + upsertRemote.
 import 'package:sqflite/sqflite.dart';
 
+import '../change_log_helper.dart';
+
 typedef Json = Map<String, Object?>;
 
 class AccountUserPullPortSqflite {
@@ -118,6 +120,15 @@ class AccountUserPullPortSqflite {
         final acceptedAt = _asUtc(r['acceptedAt']);
         final revokedAt = _asUtc(r['revokedAt']);
         final createdBy = _asStr(r['createdBy']);
+
+        if (_asStr(r['remoteId']) == null) {
+          await upsertChangeLogPending(
+            txn,
+            entityTable: entityTable,
+            entityId: localId ?? "-",
+            operation: 'UPDATE',
+          );
+        }
 
         final remoteSyncAt = _asUtc(r['syncAt']);
         if (maxAt == null || remoteSyncAt.isAfter(maxAt!)) maxAt = remoteSyncAt;

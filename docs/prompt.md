@@ -50,4 +50,4 @@ Inspire toi de ceci
 
 
 
-give improved code en utilisant ChangeTrackedExec
+improve and add log in change log when update after pull too use upsertChangeLogPending
