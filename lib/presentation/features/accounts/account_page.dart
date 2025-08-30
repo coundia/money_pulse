@@ -1,6 +1,5 @@
-// Orchestrates accounts list; context menu opens on long-press only (no secondary tap).
-// FR labels, EN code. Highlights the default account with a left accent + "Défaut" badge,
-// clearable search, visible filter status, and small UX touches.
+// Orchestrates accounts list; marks rows as "Partagé" when the connected user isn't the creator (heuristic via account_users membership).
+// FR labels, EN code. Long-press opens the context menu; highlights default account; clearable search & filter chips.
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -15,6 +14,7 @@ import 'package:money_pulse/presentation/widgets/right_drawer.dart';
 
 import 'package:money_pulse/domain/accounts/entities/account.dart';
 import 'package:money_pulse/domain/accounts/repositories/account_repository.dart';
+import 'package:money_pulse/domain/accounts/entities/account_user.dart';
 
 import 'account_repo_provider.dart';
 import 'account_share_screen.dart';
@@ -25,6 +25,9 @@ import 'widgets/account_details_panel.dart';
 import 'widgets/account_form_panel.dart';
 import 'widgets/account_adjust_balance_panel.dart';
 
+import 'package:money_pulse/presentation/app/connected_username_provider.dart';
+import 'providers/account_user_repo_provider.dart';
+
 class AccountListPage extends ConsumerStatefulWidget {
   const AccountListPage({super.key});
   @override
@@ -34,6 +37,8 @@ class AccountListPage extends ConsumerStatefulWidget {
 class _AccountListPageState extends ConsumerState<AccountListPage> {
   late final AccountRepository _repo = ref.read(accountRepoProvider);
   final _searchCtrl = TextEditingController();
+
+  final Map<String, bool> _isCreatorCache = {};
 
   @override
   void initState() {
@@ -211,6 +216,45 @@ class _AccountListPageState extends ConsumerState<AccountListPage> {
     );
   }
 
+  Future<bool> _inferIsCreator(String accountId) async {
+    final me = ref.read(connectedUsernameProvider);
+    if (me == null || me.trim().isEmpty) return true;
+
+    final cached = _isCreatorCache[accountId];
+    if (cached != null) return cached;
+
+    try {
+      final repo = ref.read(accountUserRepoProvider);
+      final rows = await repo.listByAccount(accountId, q: me);
+      final meL = me.trim().toLowerCase();
+
+      bool isMe(AccountUser u) {
+        final i = (u.identity ?? '').trim().toLowerCase();
+        final u1 = (u.user ?? '').trim().toLowerCase();
+        final e = (u.email ?? '').trim().toLowerCase();
+        return i == meL || u1 == meL || e == meL;
+      }
+
+      final mine = rows.where(isMe).toList();
+      if (mine.isEmpty) {
+        _isCreatorCache[accountId] = true;
+        return true;
+      }
+
+      final shared = mine.any((m) {
+        final by = (m.invitedBy ?? m.createdBy)?.trim().toLowerCase();
+        return by == null || by != meL;
+      });
+
+      final isCreator = !shared;
+      _isCreatorCache[accountId] = isCreator;
+      return isCreator;
+    } catch (_) {
+      _isCreatorCache[accountId] = true;
+      return true;
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final asyncList = ref.watch(accountListProvider);
@@ -237,7 +281,6 @@ class _AccountListPageState extends ConsumerState<AccountListPage> {
                             tooltip: 'Effacer',
                             onPressed: () {
                               _searchCtrl.clear();
-                              // listener updates provider
                             },
                             icon: const Icon(Icons.clear),
                           ),
@@ -280,7 +323,7 @@ class _AccountListPageState extends ConsumerState<AccountListPage> {
               ),
             ],
           ),
-          if (selectedType != null) // show active filter chip with quick clear
+          if (selectedType != null)
             Align(
               alignment: Alignment.centerLeft,
               child: Padding(
@@ -347,95 +390,112 @@ class _AccountListPageState extends ConsumerState<AccountListPage> {
     final theme = Theme.of(context);
     final isDefault = a.isDefault;
 
-    final tile = AccountTile(
-      key: ValueKey('tile_${a.id}'),
-      account: a,
-      balanceText: _fmtMoney(a.balance, a.currency),
-      updatedAtText: _fmtDate(a.updatedAt),
-      onView: () => _view(a),
-    );
+    // FIX: ensure a non-nullable Future<bool> for FutureBuilder<bool>
+    final Future<bool> fut = _isCreatorCache.containsKey(a.id)
+        ? Future<bool>.value(_isCreatorCache[a.id]!)
+        : _inferIsCreator(a.id);
 
-    final decorated = Container(
-      key: ValueKey(a.id),
-      decoration: isDefault
-          ? BoxDecoration(
-              color: theme.colorScheme.primary.withOpacity(0.035),
-              border: Border(
-                left: BorderSide(color: theme.colorScheme.primary, width: 4),
-              ),
-            )
-          : null,
-      child: tile,
-    );
+    final decorated = FutureBuilder<bool>(
+      future: fut,
+      builder: (context, snap) {
+        final isCreator = snap.data ?? true;
+        final tile = AccountTile(
+          key: ValueKey('tile_${a.id}'),
+          account: a,
+          balanceText: _fmtMoney(a.balance, a.currency),
+          updatedAtText: _fmtDate(a.updatedAt),
+          isCreator: isCreator,
+          onView: () => _view(a),
+        );
 
-    final content = isDefault
-        ? Stack(
-            children: [
-              decorated,
-              Positioned(
-                right: 10,
-                top: 8,
-                child: Tooltip(
-                  message: 'Compte par défaut',
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 8,
-                      vertical: 4,
-                    ),
-                    decoration: BoxDecoration(
-                      color: theme.colorScheme.primary.withOpacity(0.10),
-                      borderRadius: BorderRadius.circular(999),
-                      border: Border.all(
-                        color: theme.colorScheme.primary.withOpacity(0.35),
-                      ),
-                    ),
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Icon(
-                          Icons.star,
-                          size: 16,
-                          color: theme.colorScheme.primary,
-                        ),
-                        const SizedBox(width: 4),
-                        Text(
-                          'Défaut',
-                          style: theme.textTheme.labelSmall?.copyWith(
-                            color: theme.colorScheme.primary,
-                            fontWeight: FontWeight.w600,
-                          ),
-                        ),
-                      ],
+        final base = Container(
+          key: ValueKey(a.id),
+          decoration: isDefault
+              ? BoxDecoration(
+                  color: theme.colorScheme.primary.withOpacity(0.035),
+                  border: Border(
+                    left: BorderSide(
+                      color: theme.colorScheme.primary,
+                      width: 4,
                     ),
                   ),
-                ),
-              ),
-            ],
-          )
-        : decorated;
+                )
+              : null,
+          child: tile,
+        );
 
-    return GestureDetector(
-      key: ValueKey('row_${a.id}'),
-      behavior: HitTestBehavior.opaque,
-      onLongPressStart: (d) {
-        showAccountContextMenu(
-          context,
-          d.globalPosition,
-          canMakeDefault: !a.isDefault,
-          onView: () => _view(a),
-          onMakeDefault: () => _setDefault(a),
-          onEdit: () => _addOrEdit(existing: a),
-          onDelete: () => _delete(a),
-          onShare: () => _share(a),
-          onAdjustBalance: () => _adjustBalance(a),
-          accountLabel: a.code,
-          balanceCents: a.balance,
-          currency: a.currency,
-          updatedAt: a.updatedAt,
+        final content = isDefault
+            ? Stack(
+                children: [
+                  base,
+                  Positioned(
+                    right: 10,
+                    top: 8,
+                    child: Tooltip(
+                      message: 'Compte par défaut',
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 8,
+                          vertical: 4,
+                        ),
+                        decoration: BoxDecoration(
+                          color: theme.colorScheme.primary.withOpacity(0.10),
+                          borderRadius: BorderRadius.circular(999),
+                          border: Border.all(
+                            color: theme.colorScheme.primary.withOpacity(0.35),
+                          ),
+                        ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(
+                              Icons.star,
+                              size: 16,
+                              color: theme.colorScheme.primary,
+                            ),
+                            const SizedBox(width: 4),
+                            Text(
+                              'Défaut',
+                              style: theme.textTheme.labelSmall?.copyWith(
+                                color: theme.colorScheme.primary,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+              )
+            : base;
+
+        return GestureDetector(
+          key: ValueKey('row_${a.id}'),
+          behavior: HitTestBehavior.opaque,
+          onLongPressStart: (d) {
+            showAccountContextMenu(
+              context,
+              d.globalPosition,
+              canMakeDefault: !a.isDefault,
+              onView: () => _view(a),
+              onMakeDefault: () => _setDefault(a),
+              onEdit: () => _addOrEdit(existing: a),
+              onDelete: () => _delete(a),
+              onShare: () => _share(a),
+              onAdjustBalance: () => _adjustBalance(a),
+              accountLabel: a.code,
+              balanceCents: a.balance,
+              currency: a.currency,
+              updatedAt: a.updatedAt,
+            );
+          },
+          child: content,
         );
       },
-      child: content,
     );
+
+    return decorated;
   }
 
   Widget _empty() {

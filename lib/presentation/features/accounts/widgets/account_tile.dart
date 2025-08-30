@@ -1,4 +1,4 @@
-// Account list row with custom layout; context menu removed inline to ensure it opens via long-press only (handled by parent). FR labels, EN code.
+// Account list row with shared marker when not creator; FR labels, EN code; no inline context menu (handled by parent).
 import 'package:flutter/material.dart';
 import 'package:money_pulse/domain/accounts/entities/account.dart';
 import 'package:money_pulse/presentation/shared/formatters.dart';
@@ -7,6 +7,7 @@ class AccountTile extends StatelessWidget {
   final Account account;
   final String balanceText;
   final String updatedAtText;
+  final bool isCreator; // NEW: mark owner vs shared
   final VoidCallback? onView;
   final VoidCallback? onAdjust; // kept for API compatibility (unused here)
   final VoidCallback? onMakeDefault; // kept for API compatibility (unused here)
@@ -19,6 +20,7 @@ class AccountTile extends StatelessWidget {
     required this.account,
     required this.balanceText,
     required this.updatedAtText,
+    this.isCreator = true, // default: owner
     this.onView,
     this.onAdjust,
     this.onMakeDefault,
@@ -161,26 +163,65 @@ class AccountTile extends StatelessWidget {
                           ),
                         ),
                       ),
+                    if (!isCreator)
+                      Positioned(
+                        left: -4,
+                        top: -4,
+                        child: Container(
+                          padding: const EdgeInsets.all(2),
+                          decoration: BoxDecoration(
+                            color: cs.secondary,
+                            shape: BoxShape.circle,
+                            boxShadow: [
+                              BoxShadow(
+                                color: cs.secondary.withOpacity(.25),
+                                blurRadius: 6,
+                                offset: const Offset(0, 2),
+                              ),
+                            ],
+                          ),
+                          child: Icon(
+                            Icons.group,
+                            size: 12,
+                            color: cs.onSecondary,
+                          ),
+                        ),
+                      ),
                   ],
                 ),
                 const SizedBox(width: 12),
-                // Title + optional progress (no inline menu here)
+                // Title + optional shared tag and progress
                 Expanded(
                   child: Column(
                     mainAxisSize: MainAxisSize.min,
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text(
-                        title,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: Theme.of(context).textTheme.titleMedium
-                            ?.copyWith(fontWeight: FontWeight.w700),
+                      Row(
+                        children: [
+                          Expanded(
+                            child: Text(
+                              title,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: Theme.of(context).textTheme.titleMedium
+                                  ?.copyWith(fontWeight: FontWeight.w700),
+                            ),
+                          ),
+                          if (!isCreator) ...[
+                            const SizedBox(width: 6),
+                            _MiniChip(
+                              icon: Icons.group_outlined,
+                              label: 'Partagé',
+                              bg: cs.secondaryContainer,
+                              fg: cs.onSecondaryContainer,
+                            ),
+                          ],
+                        ],
                       ),
                       const SizedBox(height: 2),
                       Text(
                         [
-                          _typeLabelsFr[type]!,
+                          typeFr,
                           if (updatedAtText.isNotEmpty) updatedAtText,
                         ].join(' · '),
                         maxLines: 1,
@@ -223,7 +264,7 @@ class AccountTile extends StatelessWidget {
                           Text(
                             isOver
                                 ? 'Dépassé de ${_fmt(absRemain)}'
-                                : '$remainingLabel: ${_fmt(absRemain)}',
+                                : 'Restant: ${_fmt(absRemain)}',
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
                             style: Theme.of(context).textTheme.labelMedium
@@ -247,14 +288,14 @@ class AccountTile extends StatelessWidget {
                           runSpacing: 4,
                           alignment: WrapAlignment.end,
                           children: [
-                            if (showGoalChip)
+                            if (isSavings && (goal ?? 0) > 0)
                               _MiniChip(
                                 icon: Icons.flag_outlined,
                                 label: 'Objectif ${_fmt(goal!)}',
                                 bg: cs.tertiaryContainer,
                                 fg: cs.onTertiaryContainer,
                               ),
-                            if (showLimitChip)
+                            if ((isCreditOrBudget) && (limit ?? 0) > 0)
                               _MiniChip(
                                 icon: Icons.speed_rounded,
                                 label: 'Plafond ${_fmt(limit!)}',
