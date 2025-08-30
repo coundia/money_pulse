@@ -1,8 +1,13 @@
-// Sqflite repository for AccountUser with invite/list/search/role/revoke/accept and hard delete with change log.
+// Sqflite repository using ChangeTrackedExec for insert/update/soft-delete with auditing and safe ordering.
+import 'package:money_pulse/sync/infrastructure/change_tracked_exec.dart';
 import 'package:sqflite/sqflite.dart';
 import 'package:uuid/uuid.dart';
 import 'package:money_pulse/domain/accounts/entities/account_user.dart';
 import 'package:money_pulse/domain/accounts/repositories/account_user_repository.dart';
+
+extension _RowRead on Map<String, Object?> {
+  String? s(String k) => this[k]?.toString();
+}
 
 class AccountUserRepositorySqflite implements AccountUserRepository {
   final Database db;
@@ -15,6 +20,7 @@ class AccountUserRepositorySqflite implements AccountUserRepository {
       (c) => (c['name'] as String?) == 'identify',
     );
     bool hasMessage = info.any((c) => (c['name'] as String?) == 'message');
+    bool hasDeletedAt = info.any((c) => (c['name'] as String?) == 'deletedAt');
     if (!hasIdentity) {
       await db.execute('ALTER TABLE account_users ADD COLUMN identity TEXT');
       hasIdentity = true;
@@ -22,11 +28,26 @@ class AccountUserRepositorySqflite implements AccountUserRepository {
     if (!hasMessage) {
       await db.execute('ALTER TABLE account_users ADD COLUMN message TEXT');
     }
+    if (!hasDeletedAt) {
+      await db.execute('ALTER TABLE account_users ADD COLUMN deletedAt TEXT');
+    }
     if (hasIdentifyLegacy && hasIdentity) {
       await db.execute(
         'UPDATE account_users SET identity = COALESCE(identity, identify) WHERE identify IS NOT NULL',
       );
     }
+  }
+
+  Future<String?> _accountIdFor(String id) async {
+    final rows = await db.query(
+      'account_users',
+      columns: ['account'],
+      where: 'id=?',
+      whereArgs: [id],
+      limit: 1,
+    );
+    if (rows.isEmpty) return null;
+    return rows.first.s('account');
   }
 
   @override
@@ -56,6 +77,7 @@ class AccountUserRepositorySqflite implements AccountUserRepository {
     final id = au.id.isNotEmpty ? au.id : const Uuid().v4();
     final now = DateTime.now().toUtc();
     final patched = au.copyWith(
+      id: id,
       invitedAt: now,
       createdAt: now,
       updatedAt: now,
@@ -63,45 +85,68 @@ class AccountUserRepositorySqflite implements AccountUserRepository {
       version: au.version + 1,
     );
     final map = patched.toMap()..putIfAbsent('id', () => id);
-    await db.insert(
+    await db.insertTracked(
       'account_users',
       map,
-      conflictAlgorithm: ConflictAlgorithm.replace,
+      idKey: 'id',
+      accountColumn: 'account',
+      preferredAccountId: patched.account,
+      createdBy: patched.createdBy,
+      operation: 'UPSERT',
     );
-    await _logChange(id, 'UPSERT');
   }
 
   @override
   Future<void> updateRole(String id, String role) async {
     await _ensureColumns();
-    final now = DateTime.now().toUtc().toIso8601String();
-    await db.rawUpdate(
-      'UPDATE account_users SET role=?, updatedAt=?, isDirty=1, version=COALESCE(version,0)+1 WHERE id=?',
-      [role, now, id],
+    final accountId = await _accountIdFor(id);
+    await db.updateTracked(
+      'account_users',
+      {'role': role},
+      where: 'id=?',
+      whereArgs: [id],
+      entityId: id,
+      accountColumn: 'account',
+      preferredAccountId: accountId,
+      createdBy: null,
+      operation: 'UPDATE',
     );
-    await _logChange(id, 'UPDATE');
   }
 
   @override
   Future<void> revoke(String id) async {
     await _ensureColumns();
-    final now = DateTime.now().toUtc().toIso8601String();
-    await db.rawUpdate(
-      'UPDATE account_users SET status="REVOKED", revokedAt=?, updatedAt=?, isDirty=1, version=COALESCE(version,0)+1 WHERE id=?',
-      [now, now, id],
+    final accountId = await _accountIdFor(id);
+    final nowIso = DateTime.now().toUtc().toIso8601String();
+    await db.updateTracked(
+      'account_users',
+      {'status': 'REVOKED', 'revokedAt': nowIso},
+      where: 'id=?',
+      whereArgs: [id],
+      entityId: id,
+      accountColumn: 'account',
+      preferredAccountId: accountId,
+      createdBy: null,
+      operation: 'UPDATE',
     );
-    await _logChange(id, 'UPDATE');
   }
 
   @override
   Future<AccountUser> accept(String id, {DateTime? when}) async {
     await _ensureColumns();
+    final accountId = await _accountIdFor(id);
     final t = (when ?? DateTime.now().toUtc()).toIso8601String();
-    final updated = await db.rawUpdate(
-      'UPDATE account_users SET status="ACCEPTED", acceptedAt=?, updatedAt=?, isDirty=1, version=COALESCE(version,0)+1 WHERE id=? AND (status IS NULL OR status="PENDING")',
-      [t, t, id],
+    final n = await db.updateTracked(
+      'account_users',
+      {'status': 'ACCEPTED', 'acceptedAt': t},
+      where: 'id=? AND (status IS NULL OR status="PENDING")',
+      whereArgs: [id],
+      entityId: id,
+      accountColumn: 'account',
+      preferredAccountId: accountId,
+      createdBy: null,
+      operation: 'UPDATE',
     );
-    await _logChange(id, 'UPDATE');
     final row = await db.query(
       'account_users',
       where: 'id=?',
@@ -111,7 +156,7 @@ class AccountUserRepositorySqflite implements AccountUserRepository {
     if (row.isEmpty) {
       throw StateError('AccountUser not found');
     }
-    if (updated == 0 && (row.first['status'] as String?) == 'REVOKED') {
+    if (n == 0 && (row.first['status'] as String?) == 'REVOKED') {
       throw StateError('Cannot accept a revoked invitation');
     }
     return AccountUser.fromMap(row.first);
@@ -120,18 +165,14 @@ class AccountUserRepositorySqflite implements AccountUserRepository {
   @override
   Future<void> delete(String id) async {
     await _ensureColumns();
-    await db.delete('account_users', where: 'id=?', whereArgs: [id]);
-    await _logChange(id, 'DELETE');
-  }
-
-  Future<void> _logChange(String entityId, String op) async {
-    final now = DateTime.now().toUtc().toIso8601String();
-    final idLog = const Uuid().v4();
-    await db.rawInsert(
-      'INSERT INTO change_log(id, entityTable, entityId, operation, payload, status, attempts, createdAt, updatedAt) '
-      'VALUES(?,?,?,?,?,?,0,?,?) '
-      'ON CONFLICT(entityTable, entityId, status) DO UPDATE SET operation=excluded.operation, updatedAt=excluded.updatedAt',
-      [idLog, 'account_users', entityId, op, null, 'PENDING', now, now],
+    final accountId = await _accountIdFor(id);
+    await db.softDeleteTracked(
+      'account_users',
+      entityId: id,
+      idColumn: 'id',
+      accountColumn: 'account',
+      preferredAccountId: accountId,
+      createdBy: null,
     );
   }
 }

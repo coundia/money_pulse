@@ -36,17 +36,9 @@ class PushAccountUsersUseCase implements PushPort {
 
     Future<Map<String, Object?>?> build(ChangeLogEntry e) async {
       final entity = await port.findById(e.entityId);
-      final t = SyncDeltaTypeExt.fromOp(
-        e.operation,
-        deleted: entity?.deletedAt != null,
-      );
-      if (entity == null && e.operation == 'DELETE') {
-        return {
-          'localId': e.entityId,
-          'operation': 'DELETE',
-          'syncAt': DateTime.now().toUtc().toIso8601String(),
-        };
-      }
+
+      final t = SyncDeltaTypeExt.fromOp(e.operation);
+
       if (entity == null) return null;
 
       final dto = AccountUserDeltaDto.fromEntity(

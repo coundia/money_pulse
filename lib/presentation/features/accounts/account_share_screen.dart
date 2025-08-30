@@ -355,7 +355,7 @@ class _AccountShareScreenState extends ConsumerState<AccountShareScreen> {
                 ...preview.map((m) {
                   final canManageThisMember =
                       widget.canManageRoles || isCreator(m);
-                  final canHardDelete = isCreator(m) || widget.canManageRoles;
+                  final canHardDelete = true;
                   return Padding(
                     padding: const EdgeInsets.symmetric(vertical: 4),
                     child: AccountUserTile(

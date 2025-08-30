@@ -518,6 +518,7 @@ class AccountUserSyncPortSqflite implements AccountUserSyncPort {
       limit: 1,
     );
     if (rows.isEmpty) return null;
+    if (rows.first['account'] == null) return null;
     return AccountUser.fromMap(rows.first);
   }
 }

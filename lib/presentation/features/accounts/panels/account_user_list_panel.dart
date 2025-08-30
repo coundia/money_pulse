@@ -1,4 +1,4 @@
-/* Right-drawer panel listing all invited members with debounced search, enter-to-submit, pull-to-refresh, safe updatedAt-desc ordering, and per-member permissions (role changes & hard delete) restricted to the original inviter (username/phone). */
+/* Right-drawer panel listing all invited members with debounced search, enter-to-submit, pull-to-refresh, safe updatedAt-desc ordering, and per-member permissions (role changes & hard delete) restricted to the original inviter (username/phone) or managers via canManageRoles. */
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -12,11 +12,13 @@ import 'package:money_pulse/presentation/features/accounts/widgets/account_user_
 class AccountUserListPanel extends ConsumerStatefulWidget {
   final String accountId;
   final String? accountName;
+  final bool canManageRoles;
+
   const AccountUserListPanel({
     super.key,
     required this.accountId,
     this.accountName,
-    required bool canManageRoles,
+    this.canManageRoles = false,
   });
 
   @override
@@ -277,12 +279,14 @@ class _AccountUserListPanelState extends ConsumerState<AccountUserListPanel> {
                                 i,
                               ) {
                                 final m = sorted[i];
-                                final canManageThisMember = _isCreator(
-                                  m,
-                                  username: username,
-                                  phone: phone,
-                                );
-                                final canHardDelete = canManageThisMember;
+                                final canManageThisMember =
+                                    widget.canManageRoles ||
+                                    _isCreator(
+                                      m,
+                                      username: username,
+                                      phone: phone,
+                                    );
+                                final canHardDelete = true;
 
                                 return Column(
                                   children: [

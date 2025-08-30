@@ -370,29 +370,7 @@ class _AccountUserTileState extends ConsumerState<AccountUserTile> {
                   label: const Text('Accepter'),
                 ),
               ),
-            if (canDelete)
-              Tooltip(
-                message: 'Supprimer',
-                child: TextButton.icon(
-                  onPressed: _delete,
-                  icon: Icon(Icons.delete_outline, color: cs.error),
-                  label: Text(
-                    'Supprimer',
-                    style: TextStyle(
-                      color: cs.error,
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
-                  style: TextButton.styleFrom(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 10,
-                      vertical: 6,
-                    ),
-                    minimumSize: const Size(0, 0),
-                    tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                  ),
-                ),
-              ),
+
             PopupMenuButton<String>(
               key: _menuKey,
               tooltip: 'Actions',
@@ -412,13 +390,10 @@ class _AccountUserTileState extends ConsumerState<AccountUserTile> {
                   value: 'revoke',
                   child: Text('Révoquer l’accès'),
                 ),
-                if (_canAccept)
-                  const PopupMenuItem(value: 'accept', child: Text('Accepter')),
-                if (canDelete)
-                  const PopupMenuItem(
-                    value: 'delete',
-                    child: Text('Supprimer'),
-                  ),
+
+                const PopupMenuItem(value: 'accept', child: Text('Accepter')),
+
+                const PopupMenuItem(value: 'delete', child: Text('Supprimer')),
               ],
               onSelected: (v) async {
                 switch (v) {
@@ -457,9 +432,6 @@ class _AccountUserTileState extends ConsumerState<AccountUserTile> {
     final identityShort = identity.length <= 14
         ? identity
         : '${identity.substring(0, 13)}…';
-
-    print("identity");
-    print(identity);
 
     return Semantics(
       label: 'Membre $identity',
