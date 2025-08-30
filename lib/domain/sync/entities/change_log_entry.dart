@@ -113,7 +113,7 @@ class ChangeLogEntry {
 
   @override
   String toString() =>
-      'ChangeLogEntry(id=$id, table=$entityTable, entityId=$entityId, op=$operation, status=$status, attempts=$attempts)';
+      'ChangeLogEntry(id=$id, table=$entityTable, entityId=$entityId, operation=$operation, status=$status, attempts=$attempts)';
 
   @override
   bool operator ==(Object other) {

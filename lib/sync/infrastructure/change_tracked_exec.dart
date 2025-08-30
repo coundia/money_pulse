@@ -1,4 +1,4 @@
-// Extension helpers to insert/update/soft-delete with auto-stamping and change_log upsert.
+// Change-tracked insert/update/soft-delete helpers that stamp audit fields and append change_log entries; never updates primary key.
 import 'package:sqflite/sqflite.dart';
 
 import '../../infrastructure/db/account_stamp.dart';
@@ -27,9 +27,6 @@ extension ChangeTrackedExec on DatabaseExecutor {
       column: accountColumn,
       preferredAccountId: preferredAccountId,
     );
-
-    print("*** to save stamped ****");
-    print(stamped);
 
     final n = await insert(
       table,
@@ -60,6 +57,7 @@ extension ChangeTrackedExec on DatabaseExecutor {
     required String where,
     required List<Object?> whereArgs,
     required String entityId,
+    String idKey = 'id',
     String accountColumn = 'account',
     String? preferredAccountId,
     String? createdBy,
@@ -72,16 +70,18 @@ extension ChangeTrackedExec on DatabaseExecutor {
       preferredAccountId: preferredAccountId,
     );
 
+    final data = Map<String, Object?>.from(stamped)..remove(idKey);
+
     final n = await update(
       table,
-      stamped,
+      data,
       where: where,
       whereArgs: whereArgs,
       conflictAlgorithm: ConflictAlgorithm.abort,
     );
 
     await rawUpdate(
-      'UPDATE $table SET version=COALESCE(version,0)+1 WHERE id=?',
+      'UPDATE $table SET version=COALESCE(version,0)+1 WHERE $idKey=?',
       [entityId],
     );
 

@@ -60,6 +60,14 @@ class OutboxPusher {
         continue;
       }
 
+      if (decoded["remoteId"] == null && p.operation == "UPDATE") {
+        continue;
+      }
+
+      if (decoded["id"] == null && p.operation == "UPDATE") {
+        continue;
+      }
+
       if (decoded["remoteId"] == null || decoded["id"] == null) {
         decoded["type"] = "CREATE";
       }
@@ -68,15 +76,11 @@ class OutboxPusher {
       validDeltas.add(decoded);
     }
 
-    print(
-      "+++++++++ validDeltas ++++++++++++++++++++++++++++++++++++++++++++++++   ",
-    );
-    print(validDeltas);
-
     if (validDeltas.isEmpty) {
       print(
         "+++++++++ pending ++++++++++++++++++++++++++++++++++++++++++++++++ ERROR ##### ",
       );
+
       print(pending);
 
       logger.info(

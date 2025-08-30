@@ -14,7 +14,6 @@ import 'package:money_pulse/infrastructure/db/app_database.dart';
 import 'package:money_pulse/domain/products/entities/product.dart';
 import 'package:money_pulse/domain/products/repositories/product_repository.dart';
 
-// ⬅️ Extension with insertTracked / updateTracked / softDeleteTracked
 import 'package:money_pulse/sync/infrastructure/change_tracked_exec.dart';
 
 class ProductRepositorySqflite implements ProductRepository {

@@ -37,10 +37,7 @@ class PushAccountsUseCase implements PushPort {
     Future<Map<String, Object?>?> build(ChangeLogEntry e) async {
       final acc = await port.findById(e.entityId);
       if (acc == null) return null;
-      final t = SyncDeltaTypeExt.fromOp(
-        e.operation,
-        deleted: acc.deletedAt != null,
-      );
+      final t = SyncDeltaTypeExt.fromOp(e.operation);
       final now = DateTime.now().toUtc();
       final dto = AccountDeltaDto.fromEntity(acc, t, now).toJson();
 

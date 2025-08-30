@@ -183,6 +183,7 @@ CREATE TABLE IF NOT EXISTS transaction_item (
   deletedAt TEXT,
     account TEXT,
   syncAt TEXT,
+    code TEXT,
    createdBy TEXT,
   version INTEGER DEFAULT 0,
   isDirty INTEGER DEFAULT 1
@@ -285,6 +286,7 @@ CREATE TABLE stock_level
   id TEXT PRIMARY KEY,
     createdAt        TEXT DEFAULT (datetime('now')) ,
     remoteId TEXT,
+      code TEXT,
       localId TEXT,
     updatedAt        TEXT DEFAULT (datetime('now')) ,
     stockOnHand      INTEGER                        ,
@@ -314,6 +316,7 @@ CREATE INDEX IF NOT EXISTS IDX_stocklevel_product
 CREATE TABLE IF NOT EXISTS stock_movement (
   id TEXT PRIMARY KEY,
   type_stock_movement TEXT ,
+    code TEXT,
   remoteId TEXT,
     localId TEXT,
   quantity          INTEGER  ,
@@ -363,6 +366,7 @@ CREATE INDEX IF NOT EXISTS uq_debt_code_active ON debt(code) WHERE deletedAt IS 
 
 CREATE TABLE IF NOT EXISTS account_users (
   id TEXT PRIMARY KEY,
+  code TEXT,
   account TEXT  ,
   user TEXT,
   email TEXT,
