@@ -1,4 +1,4 @@
-/* Row tile for account member with responsive chips, accessible menu, accept action, revoke confirm drawer, guarded role changes with confirm, and optional delete button without repo changes. */
+// Row tile for account member with context menu, accept/revoke, role change, and optional hard-delete via callback.
 import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -9,16 +9,12 @@ import 'package:money_pulse/presentation/shared/formatters.dart';
 import 'package:money_pulse/presentation/widgets/right_drawer.dart';
 import 'package:money_pulse/presentation/features/settings/widgets/confirm_panel.dart';
 
-import '../../../../onboarding/presentation/providers/access_session_provider.dart';
-
 class AccountUserTile extends ConsumerStatefulWidget {
   final AccountUser member;
   final VoidCallback onChanged;
   final Future<void> Function(AccountUser m)? onAccept;
   final VoidCallback? onView;
   final bool canManageRoles;
-
-  // NEW: optional delete callback (no repo contract change)
   final Future<void> Function(AccountUser m)? onDelete;
 
   const AccountUserTile({
@@ -41,6 +37,7 @@ class _AccountUserTileState extends ConsumerState<AccountUserTile> {
 
   String get _displayIdentity {
     final m = widget.member;
+
     return m.identity?.trim().isNotEmpty == true
         ? m.identity!.trim()
         : (m.user?.trim().isNotEmpty == true
@@ -158,7 +155,6 @@ class _AccountUserTileState extends ConsumerState<AccountUserTile> {
     return ok == true;
   }
 
-  // NEW: delete confirm (UI-only, uses optional callback)
   Future<bool> _confirmDelete(BuildContext context) async {
     final ok = await showRightDrawer<bool>(
       context,
@@ -200,7 +196,6 @@ class _AccountUserTileState extends ConsumerState<AccountUserTile> {
     }
     final ok = await _confirmRoleChange(nextRole);
     if (!ok) return;
-
     setState(() => _busy = true);
     try {
       final repo = ref.read(accountUserRepoProvider);
@@ -287,7 +282,6 @@ class _AccountUserTileState extends ConsumerState<AccountUserTile> {
     }
   }
 
-  // NEW: delete flow (no regression if callback not provided)
   Future<void> _delete() async {
     if (_busy || widget.onDelete == null) return;
     if (_targetIsOwner) {
@@ -302,7 +296,6 @@ class _AccountUserTileState extends ConsumerState<AccountUserTile> {
     }
     final ok = await _confirmDelete(context);
     if (!ok) return;
-
     setState(() => _busy = true);
     try {
       await widget.onDelete!(widget.member);
@@ -328,7 +321,6 @@ class _AccountUserTileState extends ConsumerState<AccountUserTile> {
     final maxW = math.max(180.0, math.min(w * 0.54, 420.0));
     final showRoleChip = w >= 360;
     final cs = Theme.of(context).colorScheme;
-
     final showRoleChangeItems = widget.canManageRoles && !_targetIsOwner;
     final canDelete = widget.onDelete != null && !_targetIsOwner;
 
@@ -461,11 +453,13 @@ class _AccountUserTileState extends ConsumerState<AccountUserTile> {
     final subtitle = dt != null && showSubtitle
         ? Formatters.dateVeryShort(dt.toLocal())
         : null;
-
     final identity = _displayIdentity;
     final identityShort = identity.length <= 14
         ? identity
         : '${identity.substring(0, 13)}…';
+
+    print("identity");
+    print(identity);
 
     return Semantics(
       label: 'Membre $identity',

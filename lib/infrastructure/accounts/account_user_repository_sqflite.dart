@@ -1,4 +1,4 @@
-/* Sqflite repository for AccountUser with invite/list/search/role/revoke/accept and change log. */
+// Sqflite repository for AccountUser with invite/list/search/role/revoke/accept and hard delete with change log.
 import 'package:sqflite/sqflite.dart';
 import 'package:uuid/uuid.dart';
 import 'package:money_pulse/domain/accounts/entities/account_user.dart';
@@ -15,7 +15,6 @@ class AccountUserRepositorySqflite implements AccountUserRepository {
       (c) => (c['name'] as String?) == 'identify',
     );
     bool hasMessage = info.any((c) => (c['name'] as String?) == 'message');
-
     if (!hasIdentity) {
       await db.execute('ALTER TABLE account_users ADD COLUMN identity TEXT');
       hasIdentity = true;
@@ -99,9 +98,7 @@ class AccountUserRepositorySqflite implements AccountUserRepository {
     await _ensureColumns();
     final t = (when ?? DateTime.now().toUtc()).toIso8601String();
     final updated = await db.rawUpdate(
-      'UPDATE account_users '
-      'SET status="ACCEPTED", acceptedAt=?, updatedAt=?, isDirty=1, version=COALESCE(version,0)+1 '
-      'WHERE id=? AND (status IS NULL OR status="PENDING")',
+      'UPDATE account_users SET status="ACCEPTED", acceptedAt=?, updatedAt=?, isDirty=1, version=COALESCE(version,0)+1 WHERE id=? AND (status IS NULL OR status="PENDING")',
       [t, t, id],
     );
     await _logChange(id, 'UPDATE');
@@ -118,6 +115,13 @@ class AccountUserRepositorySqflite implements AccountUserRepository {
       throw StateError('Cannot accept a revoked invitation');
     }
     return AccountUser.fromMap(row.first);
+  }
+
+  @override
+  Future<void> delete(String id) async {
+    await _ensureColumns();
+    await db.delete('account_users', where: 'id=?', whereArgs: [id]);
+    await _logChange(id, 'DELETE');
   }
 
   Future<void> _logChange(String entityId, String op) async {

@@ -1,4 +1,4 @@
-/* Right-drawer panel listing all invited members with debounced search, per-member role permission (inviter username/phone), keyboard shortcuts, pull-to-refresh, and safe updatedAt-desc ordering. */
+/* Right-drawer panel listing all invited members with debounced search, enter-to-submit, pull-to-refresh, safe updatedAt-desc ordering, and per-member permissions (role changes & hard delete) restricted to the original inviter (username/phone). */
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -9,8 +9,6 @@ import 'package:money_pulse/presentation/features/accounts/providers/account_use
 import 'package:money_pulse/presentation/features/accounts/providers/account_user_repo_provider.dart';
 import 'package:money_pulse/presentation/features/accounts/widgets/account_user_tile.dart';
 
-import '../../../../onboarding/presentation/providers/access_session_provider.dart';
-
 class AccountUserListPanel extends ConsumerStatefulWidget {
   final String accountId;
   final String? accountName;
@@ -18,6 +16,7 @@ class AccountUserListPanel extends ConsumerStatefulWidget {
     super.key,
     required this.accountId,
     this.accountName,
+    required bool canManageRoles,
   });
 
   @override
@@ -59,6 +58,21 @@ class _AccountUserListPanelState extends ConsumerState<AccountUserListPanel> {
             m.invitedAt ??
             DateTime.fromMillisecondsSinceEpoch(0))
         .toUtc();
+  }
+
+  bool _isCreator(
+    AccountUser m, {
+    required String? username,
+    required String? phone,
+  }) {
+    final creator = m.createdBy?.trim();
+    final cu = creator?.toLowerCase();
+    final cp = _normalizePhone(creator);
+    final un = username?.toLowerCase();
+    final pn = _normalizePhone(phone);
+    final userOk = cu != null && un != null && cu == un;
+    final phoneOk = cp != null && pn != null && cp == pn;
+    return userOk || phoneOk;
   }
 
   Future<void> _acceptMember(AccountUser m) async {
@@ -257,38 +271,49 @@ class _AccountUserListPanelState extends ConsumerState<AccountUserListPanel> {
                                 ),
                               ),
                             ),
-                            SliverList.separated(
-                              itemCount: sorted.length,
-                              separatorBuilder: (_, __) =>
-                                  const Divider(height: 1),
-                              itemBuilder: (context, i) {
+                            SliverList(
+                              delegate: SliverChildBuilderDelegate((
+                                context,
+                                i,
+                              ) {
                                 final m = sorted[i];
-                                final createdBy = m.createdBy?.trim();
-                                final createdByPhone = _normalizePhone(
-                                  createdBy,
+                                final canManageThisMember = _isCreator(
+                                  m,
+                                  username: username,
+                                  phone: phone,
                                 );
-                                final accessGrant = ref.read(
-                                  accessSessionProvider,
-                                );
-                                final createdByL = accessGrant?.username;
+                                final canHardDelete = canManageThisMember;
 
-                                final canManageThisMember =
-                                    (createdByL != null &&
-                                        username != null &&
-                                        createdByL == username) ||
-                                    (createdByPhone != null &&
-                                        phone != null &&
-                                        createdByPhone == phone);
-
-                                return AccountUserTile(
-                                  member: m,
-                                  onChanged: () => ref.invalidate(
-                                    accountUserListProvider(widget.accountId),
-                                  ),
-                                  onAccept: _acceptMember,
-                                  canManageRoles: canManageThisMember,
+                                return Column(
+                                  children: [
+                                    AccountUserTile(
+                                      member: m,
+                                      onChanged: () => ref.invalidate(
+                                        accountUserListProvider(
+                                          widget.accountId,
+                                        ),
+                                      ),
+                                      onAccept: _acceptMember,
+                                      canManageRoles: canManageThisMember,
+                                      onDelete: canHardDelete
+                                          ? (u) async {
+                                              final repo = ref.read(
+                                                accountUserRepoProvider,
+                                              );
+                                              await repo.delete(u.id);
+                                              ref.invalidate(
+                                                accountUserListProvider(
+                                                  widget.accountId,
+                                                ),
+                                              );
+                                            }
+                                          : null,
+                                    ),
+                                    if (i < sorted.length - 1)
+                                      const Divider(height: 1),
+                                  ],
                                 );
-                              },
+                              }, childCount: sorted.length),
                             ),
                             const SliverToBoxAdapter(
                               child: SizedBox(height: 12),

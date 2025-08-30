@@ -1,4 +1,4 @@
-/* Full-screen page to invite and manage account sharing with identity auto-detect, enter-to-submit, duplicate guard, preview with accept action, per-member role permission by inviter (username/phone), and right-drawer to view all members. */
+// Full-screen page to invite and manage account sharing with identity auto-detect, enter-to-submit, duplicate guard, preview with accept and delete actions, and right-drawer to view more.
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -12,8 +12,6 @@ import 'package:money_pulse/presentation/widgets/right_drawer.dart';
 import 'package:money_pulse/presentation/features/accounts/panels/account_user_list_panel.dart';
 import 'package:money_pulse/presentation/app/connected_username_provider.dart';
 
-import '../../../onboarding/presentation/providers/access_session_provider.dart';
-
 class AccountShareScreen extends ConsumerStatefulWidget {
   final String accountId;
   final String? accountName;
@@ -23,7 +21,7 @@ class AccountShareScreen extends ConsumerStatefulWidget {
     super.key,
     required this.accountId,
     this.accountName,
-    this.canManageRoles = false,
+    this.canManageRoles = true,
   });
 
   @override
@@ -223,6 +221,7 @@ class _AccountShareScreenState extends ConsumerState<AccountShareScreen> {
       child: AccountUserListPanel(
         accountId: widget.accountId,
         accountName: widget.accountName,
+        canManageRoles: widget.canManageRoles,
       ),
       widthFraction: 0.86,
       heightFraction: 1.0,
@@ -307,6 +306,23 @@ class _AccountShareScreenState extends ConsumerState<AccountShareScreen> {
         final sorted = [...members]
           ..sort((a, b) => _sortKey(b).compareTo(_sortKey(a)));
         final preview = sorted.take(2).toList();
+
+        bool isCreator(AccountUser m) {
+          final createdBy = m.invitedBy?.trim();
+          final createdByPhone = _normalizePhone(createdBy);
+          final createdByUser = createdBy?.toLowerCase();
+
+          final userOk =
+              createdByUser != null &&
+              usernameL != null &&
+              createdByUser == usernameL;
+          final phoneOk =
+              createdByPhone != null &&
+              phoneN != null &&
+              createdByPhone == phoneN;
+          return userOk || phoneOk;
+        }
+
         return Card(
           elevation: 0,
           shape: RoundedRectangleBorder(
@@ -337,21 +353,9 @@ class _AccountShareScreenState extends ConsumerState<AccountShareScreen> {
                 ),
                 const SizedBox(height: 4),
                 ...preview.map((m) {
-                  final createdBy = m.createdBy?.trim();
-
-                  final createdByPhone = _normalizePhone(createdBy);
-                  final accessGrant = ref.read(accessSessionProvider);
-                  final createdByL = accessGrant?.username;
-
                   final canManageThisMember =
-                      widget.canManageRoles ||
-                      (createdByL != null &&
-                          usernameL != null &&
-                          createdByL == usernameL) ||
-                      (createdByPhone != null &&
-                          phoneN != null &&
-                          createdByPhone == phoneN);
-
+                      widget.canManageRoles || isCreator(m);
+                  final canHardDelete = isCreator(m) || widget.canManageRoles;
                   return Padding(
                     padding: const EdgeInsets.symmetric(vertical: 4),
                     child: AccountUserTile(
@@ -362,6 +366,15 @@ class _AccountShareScreenState extends ConsumerState<AccountShareScreen> {
                       onAccept: _acceptMember,
                       onView: _openMembersPanel,
                       canManageRoles: canManageThisMember,
+                      onDelete: canHardDelete
+                          ? (u) async {
+                              final repo = ref.read(accountUserRepoProvider);
+                              await repo.delete(u.id);
+                              ref.invalidate(
+                                accountUserListProvider(widget.accountId),
+                              );
+                            }
+                          : null,
                     ),
                   );
                 }),
