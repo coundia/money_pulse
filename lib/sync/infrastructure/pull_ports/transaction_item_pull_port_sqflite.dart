@@ -184,6 +184,7 @@ class TransactionItemPullPortSqflite {
           'productId': productId,
           'label': label,
           'unitId': unitId,
+          'createdBy': _asStr(r['createdBy']) ?? "NA",
           'notes': notes,
           'quantity': quantity,
           'unitPrice': unitPrice,

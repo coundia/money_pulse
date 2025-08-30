@@ -68,6 +68,11 @@ class OutboxPusher {
       validDeltas.add(decoded);
     }
 
+    print(
+      "+++++++++ validDeltas ++++++++++++++++++++++++++++++++++++++++++++++++   ",
+    );
+    print(validDeltas);
+
     if (validDeltas.isEmpty) {
       print(
         "+++++++++ pending ++++++++++++++++++++++++++++++++++++++++++++++++ ERROR ##### ",

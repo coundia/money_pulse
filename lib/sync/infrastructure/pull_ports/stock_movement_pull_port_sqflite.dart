@@ -116,6 +116,7 @@ class StockMovementPullPortSqflite {
           'localId': localId,
           'type_stock_movement': type,
           'quantity': quantity,
+          'createdBy': _asStr(r['createdBy']) ?? "NA",
           'companyId': companyId,
           'productVariantId': productVariantId,
           'orderLineId': orderLineId,

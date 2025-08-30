@@ -216,6 +216,7 @@ class CustomerPullPortSqflite {
           'fullName': fullName,
           'phone': phone,
           'email': email,
+          'createdBy': _asStr(r['createdBy']) ?? "NA",
           'notes': notes,
           'status': status,
           'companyId': companyId,

@@ -220,6 +220,7 @@ class AccountPullPortSqflite {
           'localId': localId,
           'code': code,
           'description': desc,
+          'createdBy': _asStr(r['createdBy']) ?? "NA",
           'currency': currency,
           'typeAccount': typeAccount,
           'isDefault': isDefault ? 1 : 0,

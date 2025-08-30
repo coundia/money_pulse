@@ -220,6 +220,7 @@ class CompanyPullPortSqflite {
           'localId': localId,
           'code': code,
           'name': name,
+          'createdBy': _asStr(r['createdBy']) ?? "NA",
           'description': description,
           'phone': phone,
           'email': email,

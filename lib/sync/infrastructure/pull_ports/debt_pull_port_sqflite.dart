@@ -176,6 +176,7 @@ class DebtPullPortSqflite {
           'localId': localId,
           'code': code,
           'notes': notes,
+          'createdBy': _asStr(r['createdBy']) ?? "NA",
           'statuses': statuses,
           'customerId': customerId,
           'balance': balance,

@@ -193,6 +193,7 @@ class TransactionPullPortSqflite {
           'typeEntry': typeEntry,
           'amount': amount,
           'accountId': accountId,
+          'createdBy': _asStr(r['createdBy']) ?? "NA",
           'categoryId': categoryId,
           'companyId': companyId,
           'customerId': customerId,

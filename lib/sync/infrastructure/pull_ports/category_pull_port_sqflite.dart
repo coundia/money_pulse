@@ -176,6 +176,7 @@ class CategoryPullPortSqflite {
           'remoteId': remoteId,
           'localId': localId,
           'code': code,
+          'createdBy': _asStr(r['createdBy']) ?? "NA",
           'description': desc,
           'typeEntry': typeEntry,
           'syncAt': remoteSyncAt.toIso8601String(),

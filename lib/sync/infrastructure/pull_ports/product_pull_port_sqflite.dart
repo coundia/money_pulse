@@ -171,6 +171,7 @@ class ProductPullPortSqflite {
           'localId': localId,
           'code': code,
           'name': name,
+          'createdBy': _asStr(r['createdBy']) ?? "NA",
           'description': desc,
           'barcode': barcode,
           'unitId': unitId,

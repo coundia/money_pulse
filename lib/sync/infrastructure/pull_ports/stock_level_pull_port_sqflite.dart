@@ -111,6 +111,7 @@ class StockLevelPullPortSqflite {
         final base = <String, Object?>{
           'remoteId': remoteId,
           'localId': localId,
+          'createdBy': _asStr(r['createdBy']) ?? "NA",
           'productVariantId': productVariantId,
           'companyId': companyId,
           'stockOnHand': stockOnHand,
