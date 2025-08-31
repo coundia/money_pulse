@@ -70,9 +70,7 @@ class AdjustBalanceUseCase {
 
       await txn.rawInsert(
         'INSERT INTO change_log(id, entityTable, entityId, operation, payload, status, createdAt, updatedAt) '
-        'VALUES(?,?,?,?,?,?,?,?) '
-        'ON CONFLICT(entityTable, entityId, status) DO UPDATE '
-        'SET operation=excluded.operation, updatedAt=excluded.updatedAt, payload=excluded.payload',
+        'VALUES(?,?,?,?,?,?,?,?) ',
         [
           idLog,
           'transaction_entry',

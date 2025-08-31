@@ -39,6 +39,6 @@ Future<void> upsertChangeLogPending(
       conflictAlgorithm: ConflictAlgorithm.abort,
     );
   } on DatabaseException catch (e) {
-    // throw Exception('change_log insert failed for $entityTable/$entityId: $e');
+    print(' ❌  change_log insert failed for $entityTable/$entityId: $e');
   }
 }

@@ -112,8 +112,7 @@ CREATE TABLE  IF NOT EXISTS change_log (
   createdAt TEXT DEFAULT (datetime('now')) NOT NULL,
   updatedAt TEXT DEFAULT (datetime('now')) NOT NULL,
   processedAt TEXT,
-   createdBy TEXT,
-  UNIQUE(entityTable, entityId, status)
+   createdBy TEXT
 );
 
 CREATE INDEX idx_changelog_status ON change_log(status);
