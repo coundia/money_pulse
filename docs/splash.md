@@ -1,11 +1,23 @@
+```
 Splash natif avec flutter_native_splash pour éviter le “blank frame”.
 
-pubspec.yaml → ajoute flutter_native_splash.
+  flutter pub add flutter_native_splash
+  flutter pub add flutter_launcher_icons
 
-Image simple et couleurs unies, pas de SVG lourd.
 
-Pas de gros travaux sync avant runApp : toute I/O dans le provider.
+ flutter_native_splash:
+  color: "#ffffff"          # Background color
+  image: assets/logo.png    # Your logo (provide correct path)
+  android: true
+  ios: true
+  web: false
 
-Pré-cache des assets critiques dans le home après navigation, pas avant.
 
-Limiter les rebuilds dans le gate; on écoute l’AsyncValue et on navigue une seule fois.
+flutter pub run flutter_native_splash:create
+flutter pub run flutter_launcher_icons
+
+
+flutter clean
+flutter run
+```
+ 

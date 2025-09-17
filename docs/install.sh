@@ -16,3 +16,7 @@ mkdir -p lib/domain/core
 mkdir -p lib/application/usecases
 mkdir -p lib/infrastructure/db lib/infrastructure/repositories
 mkdir -p lib/presentation/app lib/presentation/features/home lib/presentation/features/transactions lib/presentation/features/categories lib/presentation/features/reports lib/presentation/widgets
+
+
+
+flutter pub add flutter_native_splash
