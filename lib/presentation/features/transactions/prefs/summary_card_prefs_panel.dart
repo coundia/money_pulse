@@ -170,6 +170,22 @@ class SummaryCardPrefsPanel extends ConsumerWidget {
             ),
 
             const Divider(height: 24),
+            SwitchListTile.adaptive(
+              title: const Text('Marketplace'),
+              value: prefs.showNavMarketplaceButton,
+              onChanged: prefs.showQuickActions && prefs.showNavShortcuts
+                  ? (v) => ctrl.setShowNavMarketplaceButton(v)
+                  : null,
+            ),
+            SwitchListTile.adaptive(
+              title: const Text('Chatbot'),
+              value: prefs.showNavChatbotButton,
+              onChanged: prefs.showQuickActions && prefs.showNavShortcuts
+                  ? (v) => ctrl.setShowNavChatbotButton(v)
+                  : null,
+            ),
+
+            const Divider(height: 24),
 
             // SwitchListTile.adaptive(
             //   title: const Text('Afficher la barre de navigation en bas'),

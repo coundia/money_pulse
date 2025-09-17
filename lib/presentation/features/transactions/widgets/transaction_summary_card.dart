@@ -206,6 +206,9 @@ class TransactionSummaryCard extends ConsumerWidget {
                       onOpenPos: onOpenPos,
                       onOpenSettings: onOpenSettings,
                       onOpenSearch: onOpenSearch,
+
+                      showNavMarketplaceButton: prefs.showNavMarketplaceButton,
+                      showNavChatbotButton: prefs.showNavChatbotButton,
                     ),
                   if (prefs.showQuickActions) const SizedBox(height: 10),
                   if (prefs.showPeriodHeader)

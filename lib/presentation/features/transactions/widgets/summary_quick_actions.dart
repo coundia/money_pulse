@@ -13,6 +13,10 @@ import 'package:money_pulse/presentation/features/categories/category_list_page.
 import 'package:money_pulse/presentation/features/accounts/account_page.dart';
 import 'package:money_pulse/presentation/features/stock/stock_level_list_page.dart';
 
+import '../../ia/chatbot_page.dart';
+import '../../ia/chatbot_provider.dart';
+import '../../marketplace/marketplace_page.dart';
+
 class SummaryQuickActions extends StatelessWidget {
   final VoidCallback? onAddExpense;
   final VoidCallback? onAddIncome;
@@ -50,6 +54,12 @@ class SummaryQuickActions extends StatelessWidget {
   final VoidCallback? onOpenCategories;
   final VoidCallback? onOpenAccounts;
 
+  final bool showNavMarketplaceButton;
+  final bool showNavChatbotButton;
+
+  final VoidCallback? onOpenMarketplace;
+  final VoidCallback? onOpenChatbot;
+
   const SummaryQuickActions({
     super.key,
     required this.onAddExpense,
@@ -83,6 +93,10 @@ class SummaryQuickActions extends StatelessWidget {
     this.onOpenCustomers,
     this.onOpenCategories,
     this.onOpenAccounts,
+    this.showNavMarketplaceButton = false,
+    this.showNavChatbotButton = false,
+    this.onOpenMarketplace,
+    this.onOpenChatbot,
   });
 
   @override
@@ -344,6 +358,44 @@ class SummaryQuickActions extends StatelessWidget {
               ),
             );
           }
+        }
+
+        if (showNavMarketplaceButton) {
+          buttons.add(
+            _btn(
+              context,
+              label: 'Marketplace',
+              icon: Icons.store_rounded,
+              tone: Theme.of(context).colorScheme.primary,
+              onTap:
+                  onOpenMarketplace ??
+                  () {
+                    Navigator.of(context).push(
+                      MaterialPageRoute(
+                        builder: (_) => const MarketplacePage(),
+                      ),
+                    );
+                  },
+            ),
+          );
+        }
+
+        if (showNavChatbotButton) {
+          buttons.add(
+            _btn(
+              context,
+              label: 'Chatbot',
+              icon: Icons.chat_bubble_rounded,
+              tone: Theme.of(context).colorScheme.secondary,
+              onTap:
+                  onOpenChatbot ??
+                  () {
+                    Navigator.of(context).push(
+                      MaterialPageRoute(builder: (_) => const ChatbotPage()),
+                    );
+                  },
+            ),
+          );
         }
 
         if (buttons.isEmpty) return const SizedBox.shrink();

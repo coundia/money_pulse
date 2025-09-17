@@ -31,6 +31,9 @@ class SummaryCardPrefs {
   final bool showPeriodHeader;
   final bool showMetrics;
 
+  final bool showNavMarketplaceButton;
+  final bool showNavChatbotButton;
+
   const SummaryCardPrefs({
     required this.showQuickActions,
     required this.showExpenseButton,
@@ -51,6 +54,8 @@ class SummaryCardPrefs {
     required this.showNavAccountsButton,
     required this.showPeriodHeader,
     required this.showMetrics,
+    required this.showNavMarketplaceButton,
+    required this.showNavChatbotButton,
   });
 
   factory SummaryCardPrefs.defaults() => const SummaryCardPrefs(
@@ -73,6 +78,8 @@ class SummaryCardPrefs {
     showNavAccountsButton: false,
     showPeriodHeader: false,
     showMetrics: false,
+    showNavMarketplaceButton: false,
+    showNavChatbotButton: false,
   );
 
   SummaryCardPrefs copyWith({
@@ -95,6 +102,8 @@ class SummaryCardPrefs {
     bool? showNavAccountsButton,
     bool? showPeriodHeader,
     bool? showMetrics,
+    bool? showNavMarketplaceButton,
+    bool? showNavChatbotButton,
   }) {
     return SummaryCardPrefs(
       showQuickActions: showQuickActions ?? this.showQuickActions,
@@ -122,6 +131,9 @@ class SummaryCardPrefs {
           showNavAccountsButton ?? this.showNavAccountsButton,
       showPeriodHeader: showPeriodHeader ?? this.showPeriodHeader,
       showMetrics: showMetrics ?? this.showMetrics,
+      showNavMarketplaceButton:
+          showNavMarketplaceButton ?? this.showNavMarketplaceButton,
+      showNavChatbotButton: showNavChatbotButton ?? this.showNavChatbotButton,
     );
   }
 
@@ -145,6 +157,8 @@ class SummaryCardPrefs {
     'showNavAccountsButton': showNavAccountsButton,
     'showPeriodHeader': showPeriodHeader,
     'showMetrics': showMetrics,
+    'showNavMarketplaceButton': showNavMarketplaceButton,
+    'showNavChatbotButton': showNavChatbotButton,
   };
 
   factory SummaryCardPrefs.fromMap(Map<String, dynamic> map) {
@@ -170,6 +184,9 @@ class SummaryCardPrefs {
       showNavAccountsButton: (map['showNavAccountsButton'] as bool?) ?? false,
       showPeriodHeader: (map['showPeriodHeader'] as bool?) ?? false,
       showMetrics: (map['showMetrics'] as bool?) ?? false,
+      showNavMarketplaceButton:
+          (map['showNavMarketplaceButton'] as bool?) ?? false,
+      showNavChatbotButton: (map['showNavChatbotButton'] as bool?) ?? false,
     );
   }
 }
@@ -293,6 +310,16 @@ class SummaryCardPrefsController extends StateNotifier<SummaryCardPrefs> {
 
   Future<void> setShowMetrics(bool v) async {
     state = state.copyWith(showMetrics: v);
+    await _save();
+  }
+
+  Future<void> setShowNavMarketplaceButton(bool v) async {
+    state = state.copyWith(showNavMarketplaceButton: v);
+    await _save();
+  }
+
+  Future<void> setShowNavChatbotButton(bool v) async {
+    state = state.copyWith(showNavChatbotButton: v);
     await _save();
   }
 }
