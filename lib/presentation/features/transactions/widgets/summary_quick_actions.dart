@@ -16,7 +16,6 @@ import 'package:money_pulse/presentation/features/stock/stock_level_list_page.da
 
 import '../../ia/chatbot_page.dart';
 import '../../ia/chatbot_provider.dart';
-import '../../marketplace/marketplace_page.dart';
 
 class SummaryQuickActions extends StatelessWidget {
   final VoidCallback? onAddExpense;
