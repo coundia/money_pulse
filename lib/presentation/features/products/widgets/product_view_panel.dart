@@ -1,14 +1,10 @@
-// Right-drawer product details with responsive header: title never wraps (single-line ellipsis) and price badges flow below on small widths.
-
+import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-
 import 'package:money_pulse/domain/products/entities/product.dart';
 import 'package:money_pulse/presentation/shared/formatters.dart';
 
-import 'package:money_pulse/domain/stock/repositories/stock_level_repository.dart'
-    show StockLevelRow;
-import 'package:money_pulse/presentation/features/stock/providers/stock_level_repo_provider.dart';
+import '../../../products/product_market_button.dart';
 
 class ProductViewPanel extends ConsumerWidget {
   final Product product;
@@ -45,11 +41,6 @@ class ProductViewPanel extends ConsumerWidget {
     ];
     final subtitle = subtitleParts.join('  •  ');
 
-    final q = (product.code?.trim().isNotEmpty ?? false)
-        ? product.code!.trim()
-        : (product.name?.trim() ?? '');
-    final asyncLevels = ref.watch(_stockSearchProvider(q));
-
     final priceBadges = Wrap(
       spacing: 8,
       runSpacing: 8,
@@ -68,21 +59,6 @@ class ProductViewPanel extends ConsumerWidget {
           onPressed: () => Navigator.pop(context),
           tooltip: 'Fermer',
         ),
-        actions: [
-          if (onAdjust != null)
-            IconButton(
-              tooltip: 'Ajuster le stock',
-              icon: const Icon(Icons.tune),
-              onPressed: onAdjust,
-            ),
-          if (onEdit != null)
-            IconButton(
-              tooltip: 'Modifier',
-              icon: const Icon(Icons.edit_outlined),
-              onPressed: onEdit,
-            ),
-          const SizedBox(width: 4),
-        ],
       ),
       body: ListView(
         padding: const EdgeInsets.all(16),
@@ -92,34 +68,6 @@ class ProductViewPanel extends ConsumerWidget {
             subtitle: subtitle,
             priceBadges: priceBadges,
           ),
-
-          const SizedBox(height: 16),
-
-          Wrap(
-            spacing: 8,
-            runSpacing: 8,
-            children: [
-              if ((product.code ?? '').isNotEmpty)
-                const _ChipIcon(text: 'Code', icon: Icons.tag),
-              if ((product.barcode ?? '').isNotEmpty)
-                const _ChipIcon(text: 'EAN', icon: Icons.qr_code_2),
-              if ((categoryLabel ?? '').isNotEmpty)
-                const _ChipIcon(
-                  text: 'Catégorie',
-                  icon: Icons.category_outlined,
-                ),
-              const _ChipIcon(
-                text: 'Produit',
-                icon: Icons.inventory_2_outlined,
-              ),
-              if ((product.statuses ?? '').isNotEmpty)
-                _ChipIcon(
-                  text: product.statuses ?? "-",
-                  icon: Icons.flag_outlined,
-                ),
-            ],
-          ),
-
           const SizedBox(height: 16),
 
           if ((product.description ?? '').isNotEmpty)
@@ -147,49 +95,11 @@ class ProductViewPanel extends ConsumerWidget {
                       : '—',
                 ),
                 _KeyValueRow('Statut', product.statuses ?? "-"),
-                _KeyValueRow('Version', '${product.version}'),
-                _KeyValueRow(
-                  'Marqué à synchroniser',
-                  product.isDirty == 1 ? 'Oui' : 'Non',
-                ),
               ],
             ),
           ),
 
-          _SectionCard(
-            title: 'Métadonnées',
-            child: Column(
-              children: [
-                _KeyValueRow('Créé le', Formatters.dateFull(product.createdAt)),
-                _KeyValueRow(
-                  'Mis à jour le',
-                  Formatters.dateFull(product.updatedAt),
-                ),
-                _KeyValueRow(
-                  'Supprimé le',
-                  product.deletedAt == null
-                      ? '—'
-                      : Formatters.dateFull(product.deletedAt!),
-                ),
-                _KeyValueRow(
-                  'SyncAt',
-                  product.syncAt == null
-                      ? '—'
-                      : Formatters.dateFull(product.syncAt!),
-                ),
-                _KeyValueRow('ID', product.id),
-                _KeyValueRow('Remote ID', product.remoteId ?? '—'),
-              ],
-            ),
-          ),
-
-          OutlinedButton.icon(
-            onPressed: onAdjust,
-            icon: const Icon(Icons.tune),
-            label: const Text('Ajuster le stock'),
-          ),
-
-          const SizedBox(height: 8),
+          const SizedBox(height: 12),
 
           Row(
             children: [
@@ -202,6 +112,14 @@ class ProductViewPanel extends ConsumerWidget {
                   ),
                 ),
               if (onShare != null) const SizedBox(width: 12),
+              Expanded(
+                child: ProductMarketButton(
+                  product: product,
+                  images: [File('tv1.jpg'), File('minibar.jpg')],
+                  baseUri: 'http://127.0.0.1:8095',
+                ),
+              ),
+              const SizedBox(width: 12),
               if (onEdit != null)
                 Expanded(
                   child: FilledButton.tonalIcon(
@@ -212,7 +130,9 @@ class ProductViewPanel extends ConsumerWidget {
                 ),
             ],
           ),
-          const SizedBox(height: 8),
+
+          const SizedBox(height: 12),
+
           if (onDelete != null)
             FilledButton.icon(
               onPressed: onDelete,
@@ -223,7 +143,6 @@ class ProductViewPanel extends ConsumerWidget {
               ),
               label: const Text('Supprimer'),
             ),
-          const SizedBox(height: 16),
         ],
       ),
     );
@@ -324,18 +243,11 @@ class _HeaderBlock extends StatelessWidget {
   }
 }
 
-final _stockSearchProvider = FutureProvider.autoDispose
-    .family<List<StockLevelRow>, String>((ref, query) async {
-      final repo = ref.read(stockLevelRepoProvider);
-      return repo.search(query: query);
-    });
-
 class _SectionCard extends StatelessWidget {
   final String title;
   final Widget child;
-  final Widget? trailing;
 
-  const _SectionCard({required this.title, required this.child, this.trailing});
+  const _SectionCard({required this.title, required this.child});
 
   @override
   Widget build(BuildContext context) {
@@ -348,17 +260,11 @@ class _SectionCard extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            Row(
-              children: [
-                Text(
-                  title,
-                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
-                const Spacer(),
-                if (trailing != null) trailing!,
-              ],
+            Text(
+              title,
+              style: Theme.of(
+                context,
+              ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600),
             ),
             const SizedBox(height: 8),
             Container(
@@ -370,203 +276,6 @@ class _SectionCard extends StatelessWidget {
               child: child,
             ),
           ],
-        ),
-      ),
-    );
-  }
-}
-
-class _ResponsiveStockListOrTable extends StatelessWidget {
-  final List<StockLevelRow> rows;
-  const _ResponsiveStockListOrTable({required this.rows});
-
-  @override
-  Widget build(BuildContext context) {
-    final w = MediaQuery.sizeOf(context).width;
-
-    if (w < 560) {
-      return ListView.separated(
-        shrinkWrap: true,
-        physics: const NeverScrollableScrollPhysics(),
-        itemCount: rows.length,
-        separatorBuilder: (_, __) => const Divider(height: 1),
-        itemBuilder: (_, i) {
-          final e = rows[i];
-          return ListTile(
-            dense: true,
-            title: Text(
-              e.companyLabel,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-            ),
-            subtitle: Wrap(
-              spacing: 6,
-              runSpacing: 6,
-              children: [
-                Chip(
-                  label: Text('Dispo: ${e.stockOnHand}'),
-                  visualDensity: VisualDensity.compact,
-                ),
-                Chip(
-                  label: Text('Alloué: ${e.stockAllocated}'),
-                  visualDensity: VisualDensity.compact,
-                ),
-                Chip(
-                  label: Text(Formatters.dateFull(e.updatedAt)),
-                  visualDensity: VisualDensity.compact,
-                ),
-              ],
-            ),
-          );
-        },
-      );
-    }
-
-    return SingleChildScrollView(
-      scrollDirection: Axis.horizontal,
-      child: DataTable(
-        columnSpacing: 16,
-        headingRowHeight: 36,
-        dataRowMinHeight: 40,
-        dataRowMaxHeight: 48,
-        columns: const [
-          DataColumn(label: Text('Société')),
-          DataColumn(label: Text('Stock dispo')),
-          DataColumn(label: Text('Alloué')),
-          DataColumn(label: Text('Mis à jour')),
-        ],
-        rows: rows
-            .map(
-              (e) => DataRow(
-                cells: [
-                  DataCell(
-                    SizedBox(
-                      width: 280,
-                      child: Text(
-                        e.companyLabel,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                    ),
-                  ),
-                  DataCell(Text('${e.stockOnHand}')),
-                  DataCell(Text('${e.stockAllocated}')),
-                  DataCell(Text(Formatters.dateFull(e.updatedAt))),
-                ],
-              ),
-            )
-            .toList(),
-      ),
-    );
-  }
-}
-
-class _TotalsBar extends StatelessWidget {
-  final int onHand;
-  final int allocated;
-  final DateTime updatedAt;
-  const _TotalsBar({
-    required this.onHand,
-    required this.allocated,
-    required this.updatedAt,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
-    Widget box(String title, String value) => Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-      decoration: BoxDecoration(
-        color: cs.surfaceVariant,
-        borderRadius: BorderRadius.circular(12),
-      ),
-      child: Column(
-        children: [
-          Text(title, style: const TextStyle(fontWeight: FontWeight.w600)),
-          const SizedBox(height: 4),
-          Text(value, textAlign: TextAlign.center),
-        ],
-      ),
-    );
-
-    return LayoutBuilder(
-      builder: (context, c) {
-        if (c.maxWidth < 520) {
-          return Column(
-            children: [
-              box('Total disponible', '$onHand'),
-              const SizedBox(height: 8),
-              box('Total alloué', '$allocated'),
-              const SizedBox(height: 8),
-              box('Dernière MAJ', Formatters.dateFull(updatedAt)),
-            ],
-          );
-        }
-        return Row(
-          children: [
-            Expanded(child: box('Total disponible', '$onHand')),
-            const SizedBox(width: 8),
-            Expanded(child: box('Total alloué', '$allocated')),
-            const SizedBox(width: 8),
-            Expanded(
-              child: box('Dernière MAJ', Formatters.dateFull(updatedAt)),
-            ),
-          ],
-        );
-      },
-    );
-  }
-}
-
-class _EmptyStockCard extends StatelessWidget {
-  final String hint;
-  final VoidCallback? onAdjust;
-  const _EmptyStockCard({required this.hint, this.onAdjust});
-
-  @override
-  Widget build(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
-    return Card(
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Row(
-          children: [
-            Icon(Icons.inventory_2_outlined, color: cs.primary),
-            const SizedBox(width: 12),
-            Expanded(child: Text(hint)),
-            if (onAdjust != null) ...[
-              const SizedBox(width: 12),
-              OutlinedButton.icon(
-                onPressed: onAdjust,
-                icon: const Icon(Icons.tune),
-                label: const Text('Ajuster'),
-              ),
-            ],
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-class _LoadingCard extends StatelessWidget {
-  const _LoadingCard();
-
-  @override
-  Widget build(BuildContext context) {
-    return Card(
-      child: SizedBox(
-        height: 96,
-        child: Center(
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: const [
-              SizedBox(width: 12),
-              CircularProgressIndicator(),
-              SizedBox(width: 12),
-              Text('Chargement du stock…'),
-            ],
-          ),
         ),
       ),
     );
@@ -594,17 +303,6 @@ class _KeyValueRow extends StatelessWidget {
         ],
       ),
     );
-  }
-}
-
-class _ChipIcon extends StatelessWidget {
-  final String text;
-  final IconData icon;
-  const _ChipIcon({required this.text, required this.icon});
-
-  @override
-  Widget build(BuildContext context) {
-    return Chip(avatar: Icon(icon, size: 18), label: Text(text));
   }
 }
 

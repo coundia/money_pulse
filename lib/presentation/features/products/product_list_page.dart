@@ -1,13 +1,18 @@
-// Product list page with no autofocus on open, top filters, refresh, and stock refresh after mutations.
+// Product list orchestration page that loads/searches, opens right-drawers, persists product files selected from the form, and refreshes stock after mutations.
 
+import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:path_provider/path_provider.dart';
 import 'package:uuid/uuid.dart';
 
 import 'package:money_pulse/domain/products/entities/product.dart';
+import 'package:money_pulse/domain/products/entities/product_file.dart';
 import 'package:money_pulse/domain/products/repositories/product_repository.dart';
 import 'package:money_pulse/presentation/features/products/product_repo_provider.dart';
+import 'package:money_pulse/presentation/features/products/product_file_repo_provider.dart';
+import 'package:money_pulse/presentation/widgets/attachments_picker.dart';
 
 import 'package:money_pulse/presentation/app/providers.dart';
 import 'package:money_pulse/presentation/widgets/right_drawer.dart';
@@ -65,9 +70,13 @@ class _ProductListPageState extends ConsumerState<ProductListPage> {
 
   Future<List<Product>> _load() async {
     if (_query.trim().isEmpty) {
-      return _repo.findAllActive();
+      final list = await _repo.findAllActive();
+      list.sort((a, b) => b.updatedAt.compareTo(a.updatedAt));
+      return list;
     }
-    return _repo.searchActive(_query, limit: 300);
+    final list = await _repo.searchActive(_query, limit: 300);
+    list.sort((a, b) => b.updatedAt.compareTo(a.updatedAt));
+    return list;
   }
 
   Future<void> _share(Product p) async {
@@ -101,6 +110,51 @@ class _ProductListPageState extends ConsumerState<ProductListPage> {
       ).showSnackBar(const SnackBar(content: Text('Stock ajusté.')));
       setState(() {});
     }
+  }
+
+  Future<String> _persistBytesToDisk(String name, List<int> bytes) async {
+    final dir = await getApplicationDocumentsDirectory();
+    final folder = Directory('${dir.path}/product_files');
+    if (!await folder.exists()) await folder.create(recursive: true);
+    final id = const Uuid().v4();
+    final filePath = '${folder.path}/$id-$name';
+    final f = File(filePath);
+    await f.writeAsBytes(bytes, flush: true);
+    return filePath;
+  }
+
+  Future<void> _saveFormFiles(
+    String productId,
+    List<PickedAttachment> files,
+  ) async {
+    if (files.isEmpty) return;
+    final repo = ref.read(productFileRepoProvider);
+    final now = DateTime.now();
+
+    final rows = <ProductFile>[];
+    for (int i = 0; i < files.length; i++) {
+      final a = files[i];
+      String? path = a.path;
+      if ((path == null || path.isEmpty) && a.bytes != null) {
+        path = await _persistBytesToDisk(a.name, a.bytes!);
+      }
+      rows.add(
+        ProductFile(
+          id: const Uuid().v4(),
+          productId: productId,
+          fileName: a.name,
+          mimeType: a.mimeType,
+          filePath: path,
+          fileSize: a.size,
+          isDefault: i == 0 ? 1 : 0,
+          createdAt: now,
+          updatedAt: now,
+          isDirty: 1,
+          version: 0,
+        ),
+      );
+    }
+    await repo.createMany(rows);
   }
 
   Future<void> _addOrEdit({Product? existing}) async {
@@ -138,6 +192,7 @@ class _ProductListPageState extends ConsumerState<ProductListPage> {
         isDirty: 1,
       );
       await _repo.create(p);
+      await _saveFormFiles(p.id, res.files);
     } else {
       final updated = existing.copyWith(
         code: res.code,
@@ -152,6 +207,7 @@ class _ProductListPageState extends ConsumerState<ProductListPage> {
         isDirty: 1,
       );
       await _repo.update(updated);
+      await _saveFormFiles(updated.id, res.files);
     }
     if (!mounted) return;
     setState(() {});
@@ -191,6 +247,7 @@ class _ProductListPageState extends ConsumerState<ProductListPage> {
       isDirty: 1,
     );
     await _repo.create(copy);
+    await _saveFormFiles(copy.id, res.files);
     if (!mounted) return;
     setState(() {});
   }
@@ -509,7 +566,6 @@ class _ProductListPageState extends ConsumerState<ProductListPage> {
 class _EmptySection extends StatelessWidget {
   final VoidCallback? onAdd;
   const _EmptySection({required this.onAdd});
-
   const _EmptySection.placeholder() : onAdd = null;
 
   @override

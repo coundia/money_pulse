@@ -393,3 +393,22 @@ CREATE INDEX IF NOT EXISTS idx_accusers_user    ON account_users(user);
 CREATE INDEX IF NOT EXISTS idx_accusers_status  ON account_users(status);
 CREATE INDEX IF NOT EXISTS idx_accusers_updated ON account_users(updatedAt);
 CREATE INDEX IF NOT EXISTS idx_accusers_dirty   ON account_users(isDirty);
+
+CREATE TABLE IF NOT EXISTS product_file (
+  id TEXT PRIMARY KEY,
+  productId TEXT NOT NULL REFERENCES product(id) ON DELETE CASCADE,
+  remoteId TEXT,
+  localId TEXT,
+  fileName TEXT,         -- ex: "tv1.jpg"
+  mimeType TEXT,         -- ex: "image/jpeg"
+  filePath TEXT,         -- chemin local ou storage key
+  fileSize INTEGER,      -- taille en octets
+  isDefault INTEGER DEFAULT 0,  -- image principale
+  createdAt TEXT DEFAULT (datetime('now')),
+  updatedAt TEXT DEFAULT (datetime('now')),
+  deletedAt TEXT,
+  syncAt TEXT,
+  createdBy TEXT,
+  version INTEGER DEFAULT 0,
+  isDirty INTEGER DEFAULT 1
+);

@@ -1,9 +1,12 @@
-// Right-drawer panel to create or edit a product; code and name are required, robust number parsing, and Enter submission.
+// Right-drawer form to create or edit product with amount pad and file attachments.
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:intl/intl.dart';
 import 'package:money_pulse/domain/products/entities/product.dart';
 import 'package:money_pulse/domain/categories/entities/category.dart';
+import 'package:money_pulse/presentation/widgets/attachments_picker.dart';
+
+import '../../transactions/widgets/amount_field_quickpad.dart';
 
 class ProductFormResult {
   final String? code;
@@ -14,6 +17,7 @@ class ProductFormResult {
   final int priceCents;
   final int purchasePriceCents;
   final String status;
+  final List<PickedAttachment> files;
 
   const ProductFormResult({
     this.code,
@@ -24,6 +28,7 @@ class ProductFormResult {
     required this.priceCents,
     this.purchasePriceCents = 0,
     this.status = 'ACTIVE',
+    this.files = const [],
   });
 }
 
@@ -74,6 +79,7 @@ class _ProductFormPanelState extends State<ProductFormPanel> {
 
   String? _categoryId;
   String _status = 'ACTIVE';
+  List<PickedAttachment> _files = const [];
 
   static const List<(String, String)> _statusOptions = [
     ('ACTIVE', 'Actif'),
@@ -137,34 +143,18 @@ class _ProductFormPanelState extends State<ProductFormPanel> {
   String? _required(String? v) =>
       (v == null || v.trim().isEmpty) ? 'Obligatoire' : null;
 
-  InputDecoration _dec(
-    String label, {
-    String? helper,
-    String? hint,
-    TextEditingController? ctrl,
-  }) {
-    return InputDecoration(
-      labelText: label,
-      helperText: helper,
-      hintText: hint,
-      border: const OutlineInputBorder(),
-      isDense: true,
-      contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
-      suffixIcon: (ctrl == null || ctrl.text.isEmpty)
-          ? null
-          : IconButton(
-              tooltip: 'Effacer',
-              icon: const Icon(Icons.clear),
-              onPressed: () => setState(() => ctrl.clear()),
-            ),
-    );
+  String? _validateSku(String? v) {
+    if (v == null || v.trim().isEmpty) return null;
+    final regex = RegExp(r'^[a-zA-Z0-9_-]{3,}$');
+    if (!regex.hasMatch(v)) return 'SKU invalide (min 3 caractères)';
+    return null;
   }
 
   void _submit() {
     if (!_formKey.currentState!.validate()) return;
 
     final result = ProductFormResult(
-      code: _code.text.trim(),
+      code: _code.text.trim().isEmpty ? null : _code.text.trim(),
       name: _name.text.trim(),
       description: _desc.text.trim().isEmpty ? null : _desc.text.trim(),
       barcode: _barcode.text.trim().isEmpty ? null : _barcode.text.trim(),
@@ -174,6 +164,7 @@ class _ProductFormPanelState extends State<ProductFormPanel> {
           ? 0
           : _toCents(_priceBuy.text),
       status: _status,
+      files: _files,
     );
 
     Navigator.pop(context, result);
@@ -205,14 +196,29 @@ class _ProductFormPanelState extends State<ProductFormPanel> {
               onPressed: () => Navigator.pop(context),
               tooltip: 'Fermer',
             ),
-            actions: [
-              FilledButton.icon(
-                onPressed: _submit,
-                icon: const Icon(Icons.check),
-                label: Text(isEdit ? 'Enregistrer' : 'Ajouter'),
+          ),
+          bottomNavigationBar: SafeArea(
+            child: Padding(
+              padding: const EdgeInsets.all(12),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: OutlinedButton(
+                      onPressed: () => Navigator.pop(context),
+                      child: const Text('Annuler'),
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: FilledButton.icon(
+                      onPressed: _submit,
+                      icon: const Icon(Icons.check),
+                      label: Text(isEdit ? 'Enregistrer' : 'Ajouter'),
+                    ),
+                  ),
+                ],
               ),
-              const SizedBox(width: 8),
-            ],
+            ),
           ),
           body: SafeArea(
             child: Form(
@@ -221,30 +227,32 @@ class _ProductFormPanelState extends State<ProductFormPanel> {
               child: ListView(
                 padding: const EdgeInsets.all(16),
                 children: [
+                  AmountFieldQuickPad(
+                    controller: _priceSell,
+                    quickUnits: const [
+                      0,
+                      2000,
+                      5000,
+                      10000,
+                      20000,
+                      50000,
+                      100000,
+                      200000,
+                      300000,
+                      400000,
+                      500000,
+                      1000000,
+                    ],
+                    onChanged: () => setState(() {}),
+                  ),
+                  const SizedBox(height: 16),
                   TextFormField(
                     focusNode: _fName,
                     controller: _name,
                     textInputAction: TextInputAction.next,
                     onFieldSubmitted: (_) => _fCode.requestFocus(),
-                    decoration: _dec('Nom', helper: 'Obligatoire', ctrl: _name),
-                    validator: _required,
-                    autofocus: true,
-                  ),
-
-                  const SizedBox(height: 16),
-                  TextFormField(
-                    controller: _priceSell,
-                    keyboardType: const TextInputType.numberWithOptions(
-                      decimal: true,
-                      signed: false,
-                    ),
-                    inputFormatters: [_numFilter],
-                    textInputAction: TextInputAction.next,
-                    onFieldSubmitted: (_) => _fPriceBuy.requestFocus(),
-                    decoration: _dec(
-                      'Prix de vente (ex: 1500)',
-                      helper: 'Obligatoire',
-                      ctrl: _priceSell,
+                    decoration: const InputDecoration(
+                      labelText: 'Nom du produit',
                     ),
                     validator: _required,
                   ),
@@ -259,10 +267,8 @@ class _ProductFormPanelState extends State<ProductFormPanel> {
                     inputFormatters: [_numFilter],
                     textInputAction: TextInputAction.next,
                     onFieldSubmitted: (_) => _fName.requestFocus(),
-                    decoration: _dec(
-                      "Prix d'achat / coût (ex: 1200)",
-                      helper: 'Optionnel',
-                      ctrl: _priceBuy,
+                    decoration: const InputDecoration(
+                      labelText: "Prix d'achat (optionnel)",
                     ),
                   ),
                   const SizedBox(height: 12),
@@ -271,16 +277,18 @@ class _ProductFormPanelState extends State<ProductFormPanel> {
                     controller: _code,
                     textInputAction: TextInputAction.next,
                     onFieldSubmitted: (_) => _fBarcode.requestFocus(),
-                    decoration: _dec('Code (SKU)', ctrl: _code),
+                    decoration: const InputDecoration(labelText: 'Code (SKU)'),
+                    validator: _validateSku,
                   ),
-
                   const SizedBox(height: 12),
                   TextFormField(
                     focusNode: _fBarcode,
                     controller: _barcode,
                     textInputAction: TextInputAction.next,
                     onFieldSubmitted: (_) => _fDesc.requestFocus(),
-                    decoration: _dec('Code barre (EAN/UPC)', ctrl: _barcode),
+                    decoration: const InputDecoration(
+                      labelText: 'Code barre (EAN/UPC)',
+                    ),
                   ),
                   const SizedBox(height: 12),
                   DropdownButtonFormField<String>(
@@ -294,7 +302,7 @@ class _ProductFormPanelState extends State<ProductFormPanel> {
                         )
                         .toList(),
                     onChanged: (v) => setState(() => _categoryId = v),
-                    decoration: _dec('Catégorie'),
+                    decoration: const InputDecoration(labelText: 'Catégorie'),
                   ),
                   const SizedBox(height: 12),
                   DropdownButtonFormField<String>(
@@ -306,7 +314,7 @@ class _ProductFormPanelState extends State<ProductFormPanel> {
                         )
                         .toList(),
                     onChanged: (v) => setState(() => _status = v ?? 'ACTIVE'),
-                    decoration: _dec('Statut'),
+                    decoration: const InputDecoration(labelText: 'Statut'),
                   ),
                   const SizedBox(height: 16),
                   TextFormField(
@@ -315,8 +323,15 @@ class _ProductFormPanelState extends State<ProductFormPanel> {
                     maxLines: 3,
                     textInputAction: TextInputAction.done,
                     onFieldSubmitted: (_) => _submit(),
-                    decoration: _dec('Description', ctrl: _desc),
+                    decoration: const InputDecoration(labelText: 'Description'),
                   ),
+                  const SizedBox(height: 20),
+                  Text(
+                    'Photos du produit',
+                    style: Theme.of(context).textTheme.titleMedium,
+                  ),
+                  const SizedBox(height: 8),
+                  AttachmentsPicker(onChanged: (items) => _files = items),
                   const SizedBox(height: 10),
                   Text(
                     'Astuce : appuyez sur Entrée pour enregistrer rapidement.',
