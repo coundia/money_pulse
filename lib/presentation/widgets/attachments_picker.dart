@@ -1,5 +1,6 @@
-// Small widget to pick image files with preview, with safe MissingPluginException handling.
+// Small widget to pick image files with preview; supports iOS large files via readStream.
 import 'dart:typed_data';
+import 'dart:io';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -10,6 +11,7 @@ class PickedAttachment {
   final Uint8List? bytes;
   final String? mimeType;
   final int? size;
+  final Stream<List<int>>? readStream;
 
   const PickedAttachment({
     required this.name,
@@ -17,6 +19,7 @@ class PickedAttachment {
     this.bytes,
     this.mimeType,
     this.size,
+    this.readStream,
   });
 }
 
@@ -44,11 +47,12 @@ class _AttachmentsPickerState extends State<AttachmentsPicker> {
       final res = await FilePicker.platform.pickFiles(
         allowMultiple: true,
         type: FileType.image,
-        withData: true,
+        withData: true, // small/medium files
+        withReadStream: true, // large files (iOS iCloud / HEIC)
       );
       if (res == null) return;
+
       final added = res.files.map((f) {
-        // Sur web, bytes est nécessaire; sur mobile/desktop, path fonctionne aussi
         final mime = (f.extension == null || f.extension!.isEmpty)
             ? null
             : 'image/${f.extension}';
@@ -58,8 +62,10 @@ class _AttachmentsPickerState extends State<AttachmentsPicker> {
           bytes: f.bytes,
           size: f.size,
           mimeType: mime,
+          readStream: f.readStream,
         );
       }).toList();
+
       setState(() => _items = [..._items, ...added]);
       widget.onChanged(_items);
     } on MissingPluginException catch (_) {
@@ -67,14 +73,14 @@ class _AttachmentsPickerState extends State<AttachmentsPicker> {
       ScaffoldMessenger.maybeOf(context)?.showSnackBar(
         const SnackBar(
           content: Text(
-            'Sélecteur de fichiers indisponible. Redémarrez l’application après installation du plugin.',
+            'Sélecteur indisponible. Faites un build iOS complet (pod install) puis relancez.',
           ),
         ),
       );
     } on PlatformException catch (e) {
-      ScaffoldMessenger.maybeOf(context)?.showSnackBar(
-        SnackBar(content: Text('Erreur sélection de fichiers: ${e.code}')),
-      );
+      ScaffoldMessenger.maybeOf(
+        context,
+      )?.showSnackBar(SnackBar(content: Text('Erreur sélection: ${e.code}')));
     } catch (e) {
       ScaffoldMessenger.maybeOf(
         context,
@@ -91,6 +97,40 @@ class _AttachmentsPickerState extends State<AttachmentsPicker> {
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
 
+    Widget tile(PickedAttachment p) {
+      final preview = p.bytes != null
+          ? Image.memory(p.bytes!, fit: BoxFit.cover)
+          : const Icon(Icons.image_outlined, size: 32);
+      return Stack(
+        children: [
+          Container(
+            decoration: BoxDecoration(
+              color: cs.surfaceVariant,
+              borderRadius: BorderRadius.circular(12),
+            ),
+            clipBehavior: Clip.antiAlias,
+            child: Center(child: preview),
+          ),
+          Positioned(
+            right: 4,
+            top: 4,
+            child: Material(
+              color: cs.errorContainer,
+              borderRadius: BorderRadius.circular(20),
+              child: InkWell(
+                onTap: () => _removeAt(_items.indexOf(p)),
+                borderRadius: BorderRadius.circular(20),
+                child: const Padding(
+                  padding: EdgeInsets.all(4),
+                  child: Icon(Icons.close, size: 18),
+                ),
+              ),
+            ),
+          ),
+        ],
+      );
+    }
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -103,7 +143,7 @@ class _AttachmentsPickerState extends State<AttachmentsPicker> {
               icon: const Icon(Icons.add_photo_alternate_outlined),
               label: Text(
                 _temporarilyDisabled
-                    ? 'Indisponible (redémarrer l’app)'
+                    ? 'Indisponible (relancer build)'
                     : 'Ajouter des images',
               ),
             ),
@@ -138,40 +178,7 @@ class _AttachmentsPickerState extends State<AttachmentsPicker> {
                   mainAxisSpacing: 8,
                 ),
                 itemCount: _items.length,
-                itemBuilder: (_, i) {
-                  final p = _items[i];
-                  final img = p.bytes != null
-                      ? Image.memory(p.bytes!, fit: BoxFit.cover)
-                      : const Icon(Icons.image_outlined, size: 32);
-                  return Stack(
-                    children: [
-                      Container(
-                        decoration: BoxDecoration(
-                          color: cs.surfaceVariant,
-                          borderRadius: BorderRadius.circular(12),
-                        ),
-                        clipBehavior: Clip.antiAlias,
-                        child: Center(child: img),
-                      ),
-                      Positioned(
-                        right: 4,
-                        top: 4,
-                        child: Material(
-                          color: cs.errorContainer,
-                          borderRadius: BorderRadius.circular(20),
-                          child: InkWell(
-                            onTap: () => _removeAt(i),
-                            borderRadius: BorderRadius.circular(20),
-                            child: const Padding(
-                              padding: EdgeInsets.all(4),
-                              child: Icon(Icons.close, size: 18),
-                            ),
-                          ),
-                        ),
-                      ),
-                    ],
-                  );
-                },
+                itemBuilder: (_, i) => tile(_items[i]),
               );
             },
           ),

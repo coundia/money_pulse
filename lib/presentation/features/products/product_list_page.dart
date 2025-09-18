@@ -1,5 +1,4 @@
-// Product list orchestration page that loads/searches, opens right-drawers, persists product files selected from the form, and refreshes stock after mutations.
-
+// Orchestration page for products list: loads/searches, opens right-drawers, saves product files (path/bytes/stream), and refreshes stock after mutations.
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -123,6 +122,22 @@ class _ProductListPageState extends ConsumerState<ProductListPage> {
     return filePath;
   }
 
+  Future<String> _persistStreamToDisk(
+    String name,
+    Stream<List<int>> stream,
+  ) async {
+    final dir = await getApplicationDocumentsDirectory();
+    final folder = Directory('${dir.path}/product_files');
+    if (!await folder.exists()) await folder.create(recursive: true);
+    final id = const Uuid().v4();
+    final filePath = '${folder.path}/$id-$name';
+    final sink = File(filePath).openWrite();
+    await stream.pipe(sink);
+    await sink.flush();
+    await sink.close();
+    return filePath;
+  }
+
   Future<void> _saveFormFiles(
     String productId,
     List<PickedAttachment> files,
@@ -138,6 +153,7 @@ class _ProductListPageState extends ConsumerState<ProductListPage> {
       if ((path == null || path.isEmpty) && a.bytes != null) {
         path = await _persistBytesToDisk(a.name, a.bytes!);
       }
+
       rows.add(
         ProductFile(
           id: const Uuid().v4(),
@@ -475,7 +491,7 @@ class _ProductListPageState extends ConsumerState<ProductListPage> {
                       onRefresh: _refresh,
                       child: ListView(
                         physics: const AlwaysScrollableScrollPhysics(),
-                        children: [const SizedBox(height: 60)],
+                        children: const [SizedBox(height: 60)],
                       ),
                     );
                   }
@@ -511,10 +527,12 @@ class _ProductListPageState extends ConsumerState<ProductListPage> {
                               ? p.name!
                               : (p.code ?? 'Produit');
                           final subParts = <String>[];
-                          if ((p.description ?? '').isNotEmpty)
+                          if ((p.description ?? '').isNotEmpty) {
                             subParts.add(p.description!);
-                          if (p.statuses != null && p.statuses!.isNotEmpty)
+                          }
+                          if (p.statuses != null && p.statuses!.isNotEmpty) {
                             subParts.add(p.statuses!);
+                          }
                           final sub = subParts.join('  •  ');
                           final qty = stockMap[p.id] ?? 0;
 

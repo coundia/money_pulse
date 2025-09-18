@@ -1,10 +1,13 @@
+// Right-drawer product details panel with inline product files gallery and image-based header avatar.
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+
 import 'package:money_pulse/domain/products/entities/product.dart';
 import 'package:money_pulse/presentation/shared/formatters.dart';
 
 import '../../../products/product_market_button.dart';
+import 'product_files_gallery.dart';
 
 class ProductViewPanel extends ConsumerWidget {
   final Product product;
@@ -51,6 +54,8 @@ class ProductViewPanel extends ConsumerWidget {
       ],
     );
 
+    final filesAsync = ref.watch(productFilesProvider(product.id));
+
     return Scaffold(
       appBar: AppBar(
         title: const Text('Détails du produit'),
@@ -63,11 +68,38 @@ class ProductViewPanel extends ConsumerWidget {
       body: ListView(
         padding: const EdgeInsets.all(16),
         children: [
-          _HeaderBlock(
-            title: title,
-            subtitle: subtitle,
-            priceBadges: priceBadges,
+          filesAsync.when(
+            data: (files) {
+              File? hero;
+              for (final f in files) {
+                final mt = (f.mimeType ?? '').toLowerCase();
+                final p = f.filePath ?? '';
+                if (mt.startsWith('image/') &&
+                    p.isNotEmpty &&
+                    File(p).existsSync()) {
+                  hero = File(p);
+                  break;
+                }
+              }
+              return _HeaderBlock(
+                title: title,
+                subtitle: subtitle,
+                priceBadges: priceBadges,
+                heroImage: hero,
+              );
+            },
+            loading: () => _HeaderBlock(
+              title: title,
+              subtitle: subtitle,
+              priceBadges: priceBadges,
+            ),
+            error: (_, __) => _HeaderBlock(
+              title: title,
+              subtitle: subtitle,
+              priceBadges: priceBadges,
+            ),
           ),
+
           const SizedBox(height: 16),
 
           if ((product.description ?? '').isNotEmpty)
@@ -98,6 +130,8 @@ class ProductViewPanel extends ConsumerWidget {
               ],
             ),
           ),
+
+          ProductFilesGallery(productId: product.id),
 
           const SizedBox(height: 12),
 
@@ -153,15 +187,34 @@ class _HeaderBlock extends StatelessWidget {
   final String title;
   final String subtitle;
   final Widget priceBadges;
+  final File? heroImage;
   const _HeaderBlock({
     required this.title,
     required this.subtitle,
     required this.priceBadges,
+    this.heroImage,
   });
 
   @override
   Widget build(BuildContext context) {
     final isCompact = MediaQuery.sizeOf(context).width < 520;
+
+    final avatar = CircleAvatar(
+      radius: 26,
+      child: heroImage == null
+          ? Text(
+              (title.isNotEmpty ? title.characters.first : '?').toUpperCase(),
+              style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w600),
+            )
+          : ClipOval(
+              child: Image.file(
+                heroImage!,
+                width: 52,
+                height: 52,
+                fit: BoxFit.cover,
+              ),
+            ),
+    );
 
     final titleText = Text(
       title,
@@ -190,17 +243,7 @@ class _HeaderBlock extends StatelessWidget {
           Row(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              CircleAvatar(
-                radius: 26,
-                child: Text(
-                  (title.isNotEmpty ? title.characters.first : '?')
-                      .toUpperCase(),
-                  style: const TextStyle(
-                    fontSize: 20,
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
-              ),
+              avatar,
               const SizedBox(width: 12),
               Expanded(
                 child: Column(
@@ -219,13 +262,7 @@ class _HeaderBlock extends StatelessWidget {
     return Row(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        CircleAvatar(
-          radius: 26,
-          child: Text(
-            (title.isNotEmpty ? title.characters.first : '?').toUpperCase(),
-            style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w600),
-          ),
-        ),
+        avatar,
         const SizedBox(width: 12),
         Expanded(
           child: Column(

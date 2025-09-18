@@ -33,7 +33,7 @@ class ProductFileRepositorySqflite implements ProductFileRepository {
   Future<List<ProductFile>> findByProduct(String productId) async {
     final rows = await db.query(
       'product_file',
-      where: 'productId = ? AND deletedAt IS NULL',
+      where: 'productId = ? ',
       whereArgs: [productId],
     );
     DateTime? p(String? s) =>

@@ -396,14 +396,14 @@ CREATE INDEX IF NOT EXISTS idx_accusers_dirty   ON account_users(isDirty);
 
 CREATE TABLE IF NOT EXISTS product_file (
   id TEXT PRIMARY KEY,
-  productId TEXT NOT NULL REFERENCES product(id) ON DELETE CASCADE,
+  productId TEXT  ,
   remoteId TEXT,
   localId TEXT,
-  fileName TEXT,         -- ex: "tv1.jpg"
-  mimeType TEXT,         -- ex: "image/jpeg"
-  filePath TEXT,         -- chemin local ou storage key
-  fileSize INTEGER,      -- taille en octets
-  isDefault INTEGER DEFAULT 0,  -- image principale
+  fileName TEXT  ,
+  mimeType TEXT,
+  filePath TEXT,
+  fileSize INTEGER,
+  isDefault INTEGER DEFAULT 0,
   createdAt TEXT DEFAULT (datetime('now')),
   updatedAt TEXT DEFAULT (datetime('now')),
   deletedAt TEXT,
