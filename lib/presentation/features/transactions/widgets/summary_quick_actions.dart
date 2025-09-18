@@ -2,6 +2,7 @@
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:money_pulse/marketplace/presentation/marketplace_page.dart';
 
 import 'package:money_pulse/presentation/features/transactions/pages/transaction_list_page.dart';
 import 'package:money_pulse/presentation/features/pos/pos_page.dart';
