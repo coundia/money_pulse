@@ -1,4 +1,5 @@
-// TikTok-like vertical marketplace page consuming REST API with infinite scroll and right-drawer details.
+// TikTok-like vertical marketplace page with REST API, infinite scroll,
+// and per-item horizontal image slider (left↔right) while keeping existing UX.
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../presentation/widgets/right_drawer.dart';
@@ -127,23 +128,37 @@ class _MarketplacePageState extends ConsumerState<MarketplacePage> {
   ) {
     final theme = Theme.of(context);
     final isSaved = state.saved.contains(item.id);
-    final img = item.imageUrls.isNotEmpty ? item.imageUrls.first : null;
-    final multiple = item.imageUrls.length > 1;
+    final urls = item.imageUrls.where((e) => e.trim().isNotEmpty).toList();
+    final multiple = urls.length > 1;
+    final imagesCtrl = PageController();
 
     return Stack(
       fit: StackFit.expand,
       children: [
-        if (img != null)
-          Image.network(
-            img,
-            fit: BoxFit.cover,
-            loadingBuilder: (ctx, child, progress) => progress == null
-                ? child
-                : const Center(child: CircularProgressIndicator()),
-            errorBuilder: (_, __, ___) => const ColoredBox(color: Colors.black),
+        // Horizontal images slider (left↔right). Parent PageView is vertical,
+        // axes are orthogonal so gestures ne se gênent pas.
+        if (urls.isNotEmpty)
+          PageView.builder(
+            controller: imagesCtrl,
+            scrollDirection: Axis.horizontal,
+            itemCount: urls.length,
+            itemBuilder: (_, i) {
+              final u = urls[i];
+              return Image.network(
+                u,
+                fit: BoxFit.cover,
+                loadingBuilder: (ctx, child, progress) => progress == null
+                    ? child
+                    : const Center(child: CircularProgressIndicator()),
+                errorBuilder: (_, __, ___) =>
+                    const ColoredBox(color: Colors.black),
+              );
+            },
           )
         else
           const ColoredBox(color: Colors.black),
+
+        // Gradient overlay for legibility
         Container(
           decoration: BoxDecoration(
             gradient: LinearGradient(
@@ -157,6 +172,8 @@ class _MarketplacePageState extends ConsumerState<MarketplacePage> {
             ),
           ),
         ),
+
+        // Count badge when multiple images
         if (multiple)
           Positioned(
             top: 56,
@@ -176,13 +193,15 @@ class _MarketplacePageState extends ConsumerState<MarketplacePage> {
                   ),
                   const SizedBox(width: 6),
                   Text(
-                    '${item.imageUrls.length}',
+                    '${urls.length}',
                     style: const TextStyle(color: Colors.white),
                   ),
                 ],
               ),
             ),
           ),
+
+        // Product info
         Positioned(
           left: 16,
           bottom: 100,
@@ -221,6 +240,8 @@ class _MarketplacePageState extends ConsumerState<MarketplacePage> {
             ],
           ),
         ),
+
+        // Side actions
         Positioned(
           right: 20,
           bottom: 100,
@@ -263,6 +284,8 @@ class _MarketplacePageState extends ConsumerState<MarketplacePage> {
             ],
           ),
         ),
+
+        // Context menu
         Positioned(
           top: 48,
           right: 12,
