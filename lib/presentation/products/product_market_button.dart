@@ -26,22 +26,21 @@ class _ProductMarketButtonState extends ConsumerState<ProductMarketButton> {
   bool _loading = false;
 
   Future<void> _send() async {
+    if (_loading || widget.images.isEmpty) return;
     setState(() => _loading = true);
     try {
       final repo = ref.read(productMarketplaceRepoProvider(widget.baseUri));
       await repo.pushToMarketplace(widget.product, widget.images);
 
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Produit envoyé au marché !')),
-        );
-      }
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Produit envoyé au marché !')),
+      );
     } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text('Erreur: $e')));
-      }
+      if (!mounted) return;
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('Erreur lors de l’envoi : $e')));
     } finally {
       if (mounted) setState(() => _loading = false);
     }
@@ -49,16 +48,23 @@ class _ProductMarketButtonState extends ConsumerState<ProductMarketButton> {
 
   @override
   Widget build(BuildContext context) {
-    return FilledButton.icon(
-      onPressed: _loading ? null : _send,
-      icon: _loading
-          ? const SizedBox(
-              width: 16,
-              height: 16,
-              child: CircularProgressIndicator(strokeWidth: 2),
-            )
-          : const Icon(Icons.cloud_upload),
-      label: const Text('Envoyer au marché'),
+    final disabled = _loading || widget.images.isEmpty;
+
+    return Tooltip(
+      message: widget.images.isEmpty
+          ? 'Ajoutez au moins une image pour envoyer'
+          : 'Envoyer au marché',
+      child: FilledButton.icon(
+        onPressed: disabled ? null : _send,
+        icon: _loading
+            ? const SizedBox(
+                width: 16,
+                height: 16,
+                child: CircularProgressIndicator(strokeWidth: 2),
+              )
+            : const Icon(Icons.cloud_upload),
+        label: const Text('Envoyer au marché'),
+      ),
     );
   }
 }

@@ -68,12 +68,13 @@ class ProductViewPanel extends ConsumerWidget {
       body: ListView(
         padding: const EdgeInsets.all(16),
         children: [
+          // HEADER (avec avatar image si dispo)
           filesAsync.when(
             data: (files) {
               File? hero;
               for (final f in files) {
                 final mt = (f.mimeType ?? '').toLowerCase();
-                final p = f.filePath ?? '';
+                final p = (f.filePath ?? '').trim();
                 if (mt.startsWith('image/') &&
                     p.isNotEmpty &&
                     File(p).existsSync()) {
@@ -131,38 +132,119 @@ class ProductViewPanel extends ConsumerWidget {
             ),
           ),
 
+          // GALERIE INLINE
           ProductFilesGallery(productId: product.id),
 
           const SizedBox(height: 12),
 
-          Row(
-            children: [
-              if (onShare != null)
-                Expanded(
-                  child: OutlinedButton.icon(
-                    onPressed: onShare,
-                    icon: const Icon(Icons.ios_share),
-                    label: const Text('Partager'),
+          // ACTIONS BASÉES SUR LES FICHIERS CONNUS
+          filesAsync.when(
+            data: (files) {
+              // On récupère la liste de File existants sur le disque, uniquement images (utile pour l’API marketplace)
+              final imageFiles = <File>[];
+              for (final f in files) {
+                final mt = (f.mimeType ?? '').toLowerCase();
+                final p = (f.filePath ?? '').trim();
+                if (mt.startsWith('image/') && p.isNotEmpty) {
+                  final file = File(p);
+                  if (file.existsSync()) imageFiles.add(file);
+                }
+              }
+
+              return Row(
+                children: [
+                  if (onShare != null)
+                    Expanded(
+                      child: OutlinedButton.icon(
+                        onPressed: onShare,
+                        icon: const Icon(Icons.ios_share),
+                        label: const Text('Partager'),
+                      ),
+                    ),
+                  if (onShare != null) const SizedBox(width: 12),
+
+                  // Bouton Envoyer (désactivé si aucune image)
+                  Expanded(
+                    child: ProductMarketButton(
+                      product: product,
+                      images: imageFiles, // <=== images réelles
+                      baseUri: 'http://127.0.0.1:8095',
+                      // accountId: '...', unitId: '...', // si ton API en a besoin
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+
+                  if (onEdit != null)
+                    Expanded(
+                      child: FilledButton.tonalIcon(
+                        onPressed: onEdit,
+                        icon: const Icon(Icons.edit_outlined),
+                        label: const Text('Modifier'),
+                      ),
+                    ),
+                ],
+              );
+            },
+            loading: () => Row(
+              children: [
+                if (onShare != null)
+                  Expanded(
+                    child: OutlinedButton.icon(
+                      onPressed: onShare,
+                      icon: const Icon(Icons.ios_share),
+                      label: const Text('Partager'),
+                    ),
+                  ),
+                if (onShare != null) const SizedBox(width: 12),
+                const Expanded(
+                  child: SizedBox(
+                    height: 40,
+                    child: Center(
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    ),
                   ),
                 ),
-              if (onShare != null) const SizedBox(width: 12),
-              Expanded(
-                child: ProductMarketButton(
-                  product: product,
-                  images: [File('tv1.jpg'), File('minibar.jpg')],
-                  baseUri: 'http://127.0.0.1:8095',
-                ),
-              ),
-              const SizedBox(width: 12),
-              if (onEdit != null)
+                const SizedBox(width: 12),
+                if (onEdit != null)
+                  Expanded(
+                    child: FilledButton.tonalIcon(
+                      onPressed: onEdit,
+                      icon: const Icon(Icons.edit_outlined),
+                      label: const Text('Modifier'),
+                    ),
+                  ),
+              ],
+            ),
+            error: (_, __) => Row(
+              children: [
+                if (onShare != null)
+                  Expanded(
+                    child: OutlinedButton.icon(
+                      onPressed: onShare,
+                      icon: const Icon(Icons.ios_share),
+                      label: const Text('Partager'),
+                    ),
+                  ),
+                if (onShare != null) const SizedBox(width: 12),
+                // En erreur, on désactive l’envoi (pas d’images fiables)
                 Expanded(
-                  child: FilledButton.tonalIcon(
-                    onPressed: onEdit,
-                    icon: const Icon(Icons.edit_outlined),
-                    label: const Text('Modifier'),
+                  child: FilledButton.icon(
+                    onPressed: null,
+                    icon: const Icon(Icons.storefront),
+                    label: const Text('Envoyer'),
                   ),
                 ),
-            ],
+                const SizedBox(width: 12),
+                if (onEdit != null)
+                  Expanded(
+                    child: FilledButton.tonalIcon(
+                      onPressed: onEdit,
+                      icon: const Icon(Icons.edit_outlined),
+                      label: const Text('Modifier'),
+                    ),
+                  ),
+              ],
+            ),
           ),
 
           const SizedBox(height: 12),
