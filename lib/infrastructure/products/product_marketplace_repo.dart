@@ -1,0 +1,148 @@
+// Uploads product + images to marketplace, parses remoteId and updates local product status.
+import 'dart:convert';
+import 'dart:io';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:http/http.dart' as http;
+import 'package:http_parser/http_parser.dart';
+import 'package:money_pulse/domain/products/entities/product.dart';
+import 'package:money_pulse/domain/products/repositories/product_repository.dart';
+import 'package:money_pulse/presentation/features/products/product_repo_provider.dart';
+import '../../sync/infrastructure/sync_headers_provider.dart';
+
+final productMarketplaceRepoProvider =
+    Provider.family<ProductMarketplaceRepo, String>((ref, baseUri) {
+      return ProductMarketplaceRepo(ref, baseUri);
+    });
+
+class ProductMarketplaceRepo {
+  final Ref ref;
+  final String baseUri;
+  ProductMarketplaceRepo(this.ref, this.baseUri);
+
+  Future<Product> pushToMarketplace(Product product, List<File> images) async {
+    if (images.isEmpty) {
+      throw ArgumentError('Aucune image fournie');
+    }
+    if ((product.remoteId ?? '').trim().isNotEmpty ||
+        product.statuses == 'PUBLISHED') {
+      throw StateError('Le produit est déjà publié');
+    }
+
+    final uri = Uri.parse(_join(baseUri, '/api/v1/marketplace'));
+    final req = http.MultipartRequest('POST', uri);
+
+    final baseHeaders = ref.read(syncHeaderBuilderProvider)();
+    final headers = Map<String, String>.from(baseHeaders)
+      ..remove('Content-Type');
+    req.headers.addAll(headers);
+
+    final productMap = _buildProductMap(product);
+    req.files.add(
+      http.MultipartFile.fromString(
+        'product',
+        jsonEncode(productMap),
+        filename: 'product.json',
+        contentType: MediaType('application', 'json'),
+      ),
+    );
+
+    for (final file in images) {
+      if (!await file.exists()) continue;
+      final mime = _mimeFromPath(file.path);
+      req.files.add(
+        await http.MultipartFile.fromPath(
+          'files',
+          file.path,
+          contentType: MediaType.parse(mime),
+        ),
+      );
+    }
+
+    final streamed = await req.send().timeout(const Duration(seconds: 45));
+    final resp = await http.Response.fromStream(streamed);
+    if (resp.statusCode < 200 || resp.statusCode >= 300) {
+      throw HttpException(
+        'HTTP ${resp.statusCode} ${resp.reasonPhrase ?? ''} • ${resp.body}',
+        uri: uri,
+      );
+    }
+
+    String? remoteId =
+        _parseRemoteIdFromBody(resp.body) ??
+        _parseRemoteIdFromHeaders(streamed.headers);
+    final updated = product.copyWith(
+      remoteId: remoteId,
+      statuses: 'PUBLISHED',
+      updatedAt: DateTime.now(),
+      isDirty: 1,
+    );
+
+    final productRepo = ref.read(productRepoProvider);
+    await productRepo.update(updated);
+    return updated;
+  }
+
+  Future<Product> withdrawPublication(Product product) async {
+    final updated = product.copyWith(
+      statuses: 'UNPUBLISHED',
+      updatedAt: DateTime.now(),
+      isDirty: 1,
+    );
+    final productRepo = ref.read(productRepoProvider);
+    await productRepo.update(updated);
+    return updated;
+  }
+
+  Map<String, dynamic> _buildProductMap(Product p) {
+    final map = <String, dynamic>{
+      'remoteId': p.remoteId,
+      'localId': p.localId ?? p.id,
+      'code': p.code ?? p.id,
+      'name': p.name ?? p.code ?? 'Produit',
+      'description': p.description,
+      'barcode': p.barcode,
+      'unit': p.unitId,
+      'syncAt': DateTime.now().toUtc().toIso8601String(),
+      'category': p.categoryId,
+      'account': p.account,
+      'defaultPrice': (p.defaultPrice / 100.0),
+      'statuses': p.statuses,
+      'purchasePrice': (p.purchasePrice / 100.0),
+    };
+    map.removeWhere((_, v) => v == null);
+    return map;
+  }
+
+  String _mimeFromPath(String path) {
+    final lower = path.toLowerCase();
+    if (lower.endsWith('.jpg') || lower.endsWith('.jpeg')) return 'image/jpeg';
+    if (lower.endsWith('.png')) return 'image/png';
+    if (lower.endsWith('.gif')) return 'image/gif';
+    if (lower.endsWith('.webp')) return 'image/webp';
+    return 'image/jpeg';
+  }
+
+  String _join(String base, String path) {
+    final b = base.endsWith('/') ? base.substring(0, base.length - 1) : base;
+    final p = path.startsWith('/') ? path : '/$path';
+    return '$b$p';
+  }
+
+  String? _parseRemoteIdFromBody(String body) {
+    try {
+      final decoded = json.decode(body);
+      if (decoded is Map<String, dynamic>) {
+        final v = (decoded['remoteId'] ?? decoded['id'] ?? '').toString();
+        return v.isEmpty ? null : v;
+      }
+    } catch (_) {}
+    return null;
+  }
+
+  String? _parseRemoteIdFromHeaders(Map<String, String> headers) {
+    final loc = headers['location'] ?? headers['Location'];
+    if (loc == null || loc.isEmpty) return null;
+    final parts = loc.split('/');
+    return parts.isNotEmpty ? parts.last : null;
+  }
+}

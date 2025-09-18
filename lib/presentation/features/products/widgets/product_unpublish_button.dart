@@ -1,43 +1,40 @@
-// Publish button to send a product with images to marketplace.
-import 'dart:io';
+// Button to unpublish a product and mark it dirty locally.
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:money_pulse/domain/products/entities/product.dart';
 import 'package:money_pulse/infrastructure/products/product_marketplace_repo_provider.dart';
 
-class ProductMarketButton extends ConsumerStatefulWidget {
+class ProductUnpublishButton extends ConsumerStatefulWidget {
   final Product product;
-  final List<File> images;
   final String baseUri;
 
-  const ProductMarketButton({
+  const ProductUnpublishButton({
     super.key,
     required this.product,
-    required this.images,
     required this.baseUri,
   });
 
   @override
-  ConsumerState<ProductMarketButton> createState() =>
-      _ProductMarketButtonState();
+  ConsumerState<ProductUnpublishButton> createState() =>
+      _ProductUnpublishButtonState();
 }
 
-class _ProductMarketButtonState extends ConsumerState<ProductMarketButton> {
+class _ProductUnpublishButtonState
+    extends ConsumerState<ProductUnpublishButton> {
   bool _loading = false;
 
-  Future<void> _send() async {
+  Future<void> _unpublish() async {
     if (_loading) return;
     setState(() => _loading = true);
     try {
       final repo = ref.read(productMarketplaceRepoProvider(widget.baseUri));
-      final updated = await repo.pushToMarketplace(
-        widget.product,
-        widget.images,
-      );
+      final updated = await repo.withdrawPublication(widget.product);
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text('Publié: ${updated.name ?? updated.code ?? 'Produit'}'),
+          content: Text(
+            'Publication retirée: ${updated.name ?? updated.code ?? 'Produit'}',
+          ),
         ),
       );
     } catch (e) {
@@ -55,24 +52,16 @@ class _ProductMarketButtonState extends ConsumerState<ProductMarketButton> {
     final isPublished =
         ((widget.product.remoteId ?? '').trim().isNotEmpty) ||
         widget.product.statuses == 'PUBLISHED';
-    final disabled = _loading || isPublished || widget.images.isEmpty;
-    final label = _loading
-        ? 'Envoi…'
-        : isPublished
-        ? 'Déjà publié'
-        : widget.images.isEmpty
-        ? 'Ajouter une image'
-        : 'Publier';
-    return FilledButton.icon(
-      onPressed: disabled ? null : _send,
+    return FilledButton.tonalIcon(
+      onPressed: isPublished && !_loading ? _unpublish : null,
       icon: _loading
           ? const SizedBox(
               width: 18,
               height: 18,
               child: CircularProgressIndicator(strokeWidth: 2),
             )
-          : const Icon(Icons.cloud_upload),
-      label: Text(label),
+          : const Icon(Icons.unpublished_outlined),
+      label: Text(_loading ? 'Retrait…' : 'Retirer publication'),
     );
   }
 }
