@@ -22,8 +22,8 @@ class ProductMarketplaceRepo {
   ProductMarketplaceRepo(this.ref, this.baseUri);
 
   /// Envoie le produit et ses images au endpoint `/api/v1/marketplace`.
-  /// - champ texte `product`: JSON de l'objet produit (voir mapping ci-dessous)
-  /// - champs fichiers `files`: 1..n fichiers image
+  /// - part JSON  "product" (Content-Type: application/json)
+  /// - parts files "files"   (image/jpeg|png|gif|webp)
   Future<void> pushToMarketplace(Product product, List<File> images) async {
     if (images.isEmpty) {
       throw ArgumentError('Aucune image fournie');
@@ -32,27 +32,32 @@ class ProductMarketplaceRepo {
     final uri = Uri.parse(_join(baseUri, '/api/v1/marketplace'));
     final req = http.MultipartRequest('POST', uri);
 
-    // En-têtes: on part des headers globaux, mais on enlève Content-Type,
-    // car http.MultipartRequest gère sa propre boundary.
+    // En-têtes globaux : on retire Content-Type (MultipartRequest gère boundary)
     final baseHeaders = ref.read(syncHeaderBuilderProvider)();
-    final headers = Map<String, String>.from(baseHeaders);
-    headers.remove('Content-Type');
+    final headers = Map<String, String>.from(baseHeaders)
+      ..remove('Content-Type');
     req.headers.addAll(headers);
 
-    // Payload JSON "product" (aligné sur ton cURL)
+    // ---- PART JSON "product" en application/json (clé attendue par @RequestPart("product"))
     final productMap = _buildProductMap(product);
-    req.fields['product'] = jsonEncode(productMap);
+    req.files.add(
+      http.MultipartFile.fromString(
+        'product',
+        jsonEncode(productMap),
+        filename: 'product.json',
+        contentType: MediaType('application', 'json'),
+      ),
+    );
 
-    // Fichiers
+    // ---- PARTS "files" (images)
     for (final file in images) {
       if (!await file.exists()) continue;
       final mime = _mimeFromPath(file.path);
-      final mediaType = MediaType.parse(mime);
       req.files.add(
         await http.MultipartFile.fromPath(
           'files',
           file.path,
-          contentType: mediaType,
+          contentType: MediaType.parse(mime),
         ),
       );
     }
@@ -61,7 +66,7 @@ class ProductMarketplaceRepo {
     final streamed = await req.send();
     final resp = await http.Response.fromStream(streamed);
 
-    // 2xx OK, sinon on renvoie l’erreur avec le body du serveur
+    // 2xx OK, sinon on remonte l’erreur avec le body
     if (resp.statusCode < 200 || resp.statusCode >= 300) {
       throw HttpException(
         'HTTP ${resp.statusCode} ${resp.reasonPhrase ?? ''} • ${resp.body}',
@@ -72,26 +77,25 @@ class ProductMarketplaceRepo {
 
   // ---- Helpers ----
 
-  // Construit le JSON pour le champ "product" de la requête multipart
+  // Construit le JSON pour la part "product"
   Map<String, dynamic> _buildProductMap(Product p) {
     final map = <String, dynamic>{
       'remoteId': p.remoteId,
       'localId': p.id,
-      'code': p.code ?? p.id, // fallback pour éviter vide
+      'code': p.code ?? p.id,
       'name': p.name ?? p.code ?? 'Produit',
       'description': p.description,
       'barcode': p.barcode,
       'unit': p.unitId,
       'syncAt': DateTime.now().toUtc().toIso8601String(),
       'category': p.categoryId,
-      // Si ton entité Product a un champ "account", mets-le ici :
-      // 'account': p.account,
+      // 'account': p.account, // dé-commente si présent dans ton modèle
       'defaultPrice': (p.defaultPrice / 100.0),
       'statuses': p.statuses,
       'purchasePrice': (p.purchasePrice / 100.0),
     };
 
-    // Supprimer les nulls pour un JSON propre
+    // Nettoyage des nulls
     map.removeWhere((_, v) => v == null);
     return map;
   }
@@ -102,11 +106,13 @@ class ProductMarketplaceRepo {
     if (lower.endsWith('.png')) return 'image/png';
     if (lower.endsWith('.gif')) return 'image/gif';
     if (lower.endsWith('.webp')) return 'image/webp';
-    return 'application/octet-stream';
+    // On reste sur image/jpeg par défaut pour éviter application/octet-stream que ton serveur n'accepte pas
+    return 'image/jpeg';
   }
 
   String _join(String base, String path) {
-    if (base.endsWith('/')) base = base.substring(0, base.length - 1);
-    return '$base$path';
+    final b = base.endsWith('/') ? base.substring(0, base.length - 1) : base;
+    final p = path.startsWith('/') ? path : '/$path';
+    return '$b$p';
   }
 }
