@@ -1,4 +1,4 @@
-// TikTok-like vertical marketplace page with API + infinite scroll.
+// TikTok-like vertical marketplace page consuming REST API with infinite scroll and right-drawer details.
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../presentation/widgets/right_drawer.dart';
@@ -7,7 +7,6 @@ import '../application/marketplace_pager_controller.dart';
 import '../domain/entities/marketplace_item.dart';
 import 'product_view_panel.dart';
 
-//new
 class MarketplacePage extends ConsumerStatefulWidget {
   final String baseUri;
   const MarketplacePage({super.key, this.baseUri = 'http://127.0.0.1:8095'});
@@ -90,6 +89,7 @@ class _MarketplacePageState extends ConsumerState<MarketplacePage> {
           IconButton(
             onPressed: () => Navigator.of(context).maybePop(),
             icon: const Icon(Icons.arrow_back, color: Colors.white),
+            tooltip: 'Retour',
           ),
           Expanded(
             child: TextField(
@@ -128,6 +128,7 @@ class _MarketplacePageState extends ConsumerState<MarketplacePage> {
     final theme = Theme.of(context);
     final isSaved = state.saved.contains(item.id);
     final img = item.imageUrls.isNotEmpty ? item.imageUrls.first : null;
+    final multiple = item.imageUrls.length > 1;
 
     return Stack(
       fit: StackFit.expand,
@@ -156,6 +157,32 @@ class _MarketplacePageState extends ConsumerState<MarketplacePage> {
             ),
           ),
         ),
+        if (multiple)
+          Positioned(
+            top: 56,
+            right: 56,
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+              decoration: BoxDecoration(
+                color: Colors.black54,
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: Row(
+                children: [
+                  const Icon(
+                    Icons.photo_library_outlined,
+                    color: Colors.white,
+                    size: 16,
+                  ),
+                  const SizedBox(width: 6),
+                  Text(
+                    '${item.imageUrls.length}',
+                    style: const TextStyle(color: Colors.white),
+                  ),
+                ],
+              ),
+            ),
+          ),
         Positioned(
           left: 16,
           bottom: 100,
@@ -256,9 +283,7 @@ class _MarketplacePageState extends ConsumerState<MarketplacePage> {
             onSelected: (v) {
               if (v == 'view') {
                 showRightDrawer(context, child: ProductViewPanel(item: item));
-              } else if (v == 'save') {
-                notifier.toggleSaved(item.id);
-              } else if (v == 'unsave') {
+              } else if (v == 'save' || v == 'unsave') {
                 notifier.toggleSaved(item.id);
               } else if (v == 'share') {
                 _snack(context, 'Partager ${item.name}');

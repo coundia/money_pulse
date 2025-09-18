@@ -1,7 +1,8 @@
-// Read-only product detail panel for right drawer.
+// Read-only product detail panel with multi-image gallery.
 import 'package:flutter/material.dart';
 import '../../shared/formatters.dart';
 import '../domain/entities/marketplace_item.dart';
+import 'widgets/product_image_gallery.dart';
 
 class ProductViewPanel extends StatelessWidget {
   final MarketplaceItem item;
@@ -9,7 +10,6 @@ class ProductViewPanel extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final img = item.imageUrls.isNotEmpty ? item.imageUrls.first : null;
     return SafeArea(
       child: Column(
         children: [
@@ -38,14 +38,7 @@ class ProductViewPanel extends StatelessWidget {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  if (img != null)
-                    ClipRRect(
-                      borderRadius: BorderRadius.circular(12),
-                      child: AspectRatio(
-                        aspectRatio: 16 / 9,
-                        child: Image.network(img, fit: BoxFit.cover),
-                      ),
-                    ),
+                  ProductImageGallery(imageUrls: item.imageUrls),
                   const SizedBox(height: 16),
                   Text(
                     '${Formatters.amountFromCents(item.defaultPrice * 100)} FCFA',
@@ -60,10 +53,22 @@ class ProductViewPanel extends StatelessWidget {
                       style: Theme.of(context).textTheme.bodyMedium,
                     ),
                   const SizedBox(height: 24),
-                  FilledButton.icon(
-                    onPressed: () {},
-                    icon: const Icon(Icons.shopping_bag),
-                    label: const Text('Commander'),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: FilledButton.icon(
+                          onPressed: () {},
+                          icon: const Icon(Icons.shopping_bag),
+                          label: const Text('Commander'),
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      IconButton.filledTonal(
+                        tooltip: 'Partager',
+                        onPressed: () {},
+                        icon: const Icon(Icons.share),
+                      ),
+                    ],
                   ),
                 ],
               ),
