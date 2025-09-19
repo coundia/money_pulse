@@ -1,6 +1,5 @@
-// Minimal POS product tile with tap flash, optional top image,
-// top-left added check, bottom-left quantity badge, bottom-right decrement button,
-// and safe menu placement.
+// POS tile sans overflow : image auto-réduite selon la hauteur dispo,
+// aucun Spacer, contrôles en overlay, jamais de padding bas "réservé".
 
 import 'dart:io';
 import 'package:characters/characters.dart';
@@ -48,12 +47,6 @@ class _PosProductTileState extends State<PosProductTile> {
 
   String get _price => Formatters.amountFromCents(widget.priceCents);
 
-  Color _stockBg(int qty, ColorScheme cs) =>
-      qty > 0 ? cs.primaryContainer : cs.surface;
-
-  Color _stockFg(int qty, ColorScheme cs) =>
-      qty > 0 ? cs.onPrimaryContainer : cs.onSurfaceVariant;
-
   Future<void> _showMenuAtOffset(BuildContext context, Offset globalPos) async {
     if (widget.onMenuAction == null) return;
     final overlay = Overlay.of(context).context.findRenderObject() as RenderBox;
@@ -90,9 +83,7 @@ class _PosProductTileState extends State<PosProductTile> {
         ),
       ],
     );
-    if (result != null) {
-      await widget.onMenuAction!(result);
-    }
+    if (result != null) await widget.onMenuAction!(result);
   }
 
   void _flashOnce() {
@@ -107,37 +98,14 @@ class _PosProductTileState extends State<PosProductTile> {
     widget.onTap?.call();
   }
 
-  Widget? _buildTopImage() {
-    // Prefer local file, fallback to remote
+  ImageProvider? _imageProvider() {
     if (widget.imagePath != null &&
         widget.imagePath!.isNotEmpty &&
         File(widget.imagePath!).existsSync()) {
-      return ClipRRect(
-        borderRadius: BorderRadius.circular(10),
-        child: AspectRatio(
-          aspectRatio: 1.6, // wide banner-ish
-          child: Image.file(
-            File(widget.imagePath!),
-            fit: BoxFit.cover,
-            errorBuilder: (_, __, ___) =>
-                const Center(child: Icon(Icons.image_not_supported_outlined)),
-          ),
-        ),
-      );
+      return FileImage(File(widget.imagePath!));
     }
     if (widget.imageUrl != null && widget.imageUrl!.isNotEmpty) {
-      return ClipRRect(
-        borderRadius: BorderRadius.circular(10),
-        child: AspectRatio(
-          aspectRatio: 1.6,
-          child: Image.network(
-            widget.imageUrl!,
-            fit: BoxFit.cover,
-            errorBuilder: (_, __, ___) =>
-                const Center(child: Icon(Icons.image_not_supported_outlined)),
-          ),
-        ),
-      );
+      return NetworkImage(widget.imageUrl!);
     }
     return null;
   }
@@ -151,7 +119,6 @@ class _PosProductTileState extends State<PosProductTile> {
     final flashBg = cs.primaryContainer.withOpacity(.22);
     final hoverBg = cs.surfaceVariant.withOpacity(.14);
     final addedBg = cs.primaryContainer.withOpacity(.28);
-
     final bgColor = _flash
         ? flashBg
         : widget.isAdded
@@ -168,17 +135,17 @@ class _PosProductTileState extends State<PosProductTile> {
         (widget.title.isNotEmpty ? widget.title.characters.first : '?')
             .toUpperCase();
 
-    final stockBadge = qty > 0
+    Widget stockBadge() => qty > 0
         ? Container(
             padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
             decoration: BoxDecoration(
-              color: _stockBg(qty, cs),
+              color: cs.primaryContainer,
               borderRadius: BorderRadius.circular(999),
             ),
             child: Text(
               'Stock: $qty',
               style: TextStyle(
-                color: _stockFg(qty, cs),
+                color: cs.onPrimaryContainer,
                 fontWeight: FontWeight.w700,
                 fontSize: 11,
               ),
@@ -186,10 +153,7 @@ class _PosProductTileState extends State<PosProductTile> {
           )
         : const SizedBox.shrink();
 
-    final needsBottomControls =
-        (widget.addedQty > 0) || (widget.onDecrement != null);
-
-    final topImage = _buildTopImage();
+    final imgProvider = _imageProvider();
 
     return FocusableActionDetector(
       mouseCursor: SystemMouseCursors.click,
@@ -230,78 +194,134 @@ class _PosProductTileState extends State<PosProductTile> {
                       border: Border.all(color: borderColor),
                       borderRadius: BorderRadius.circular(12),
                     ),
-                    padding: EdgeInsets.fromLTRB(
-                      10,
-                      10,
-                      10,
-                      needsBottomControls ? 48 : 10,
-                    ),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        if (topImage != null) ...[
-                          topImage,
-                          const SizedBox(height: 8),
-                        ],
-                        Row(
+                    padding: const EdgeInsets.all(10),
+                    child: LayoutBuilder(
+                      builder: (context, c) {
+                        // On dimensionne l’image en fonction de la hauteur disponible
+                        // pour qu’elle ne provoque jamais d’overflow.
+                        const double kImgMax = 72; // hauteur max souhaitée
+                        const double kImgMin = 40; // hauteur min si très serré
+                        const double kHeadRow = 40; // ligne prix + actions
+                        const double kTitleBlock = 46; // titre ~2 lignes
+                        const double kSubBlock = 20; // sous-titre ~1 ligne
+                        const double kMargins =
+                            10 + 8; // padding + spacing internes
+
+                        final baseNeeded =
+                            kHeadRow + kTitleBlock + kSubBlock + kMargins;
+                        final avail = c.maxHeight;
+
+                        // Hauteur image autorisée (peut être 0 si pas d’espace)
+                        double imgH = 0;
+                        if (imgProvider != null) {
+                          final free = (avail - baseNeeded).clamp(0, kImgMax);
+                          imgH = free.toDouble();
+                          if (imgH > 0 && imgH < kImgMin) {
+                            imgH = kImgMin; // on conserve un petit bandeau
+                          }
+                          imgH = imgH.clamp(0, kImgMax);
+                        }
+
+                        return Column(
+                          mainAxisSize: MainAxisSize.max,
+                          crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            if (topImage == null) ...[
-                              CircleAvatar(radius: 18, child: Text(initial)),
-                              const SizedBox(width: 8),
-                            ],
-                            Expanded(
-                              child: Text(
-                                _price,
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                                style: const TextStyle(
-                                  fontWeight: FontWeight.w800,
-                                  fontSize: 16,
+                            if (imgProvider != null && imgH > 0) ...[
+                              ClipRRect(
+                                borderRadius: BorderRadius.circular(10),
+                                child: SizedBox(
+                                  height: imgH,
+                                  width: double.infinity,
+                                  child: Image(
+                                    image: imgProvider,
+                                    fit: BoxFit.cover,
+                                    errorBuilder: (_, __, ___) => const Center(
+                                      child: Icon(
+                                        Icons.image_not_supported_outlined,
+                                      ),
+                                    ),
+                                  ),
                                 ),
                               ),
+                              const SizedBox(height: 8),
+                            ],
+                            Row(
+                              children: [
+                                if (imgH == 0) ...[
+                                  CircleAvatar(
+                                    radius: 18,
+                                    child: Text(initial),
+                                  ),
+                                  const SizedBox(width: 8),
+                                ],
+                                Expanded(
+                                  child: Text(
+                                    _price,
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                    style: const TextStyle(
+                                      fontWeight: FontWeight.w800,
+                                      fontSize: 16,
+                                    ),
+                                  ),
+                                ),
+                                IconButton(
+                                  tooltip: 'Actions',
+                                  icon: const Icon(Icons.more_vert),
+                                  onPressed: () {
+                                    final box =
+                                        context.findRenderObject()
+                                            as RenderBox?;
+                                    if (box == null) return;
+                                    final pos = box.localToGlobal(
+                                      Offset(box.size.width - 8, 36),
+                                    );
+                                    _showMenuAtOffset(context, pos);
+                                  },
+                                ),
+                              ],
                             ),
-                            IconButton(
-                              tooltip: 'Actions',
-                              icon: const Icon(Icons.more_vert),
-                              onPressed: () {
-                                final box =
-                                    context.findRenderObject() as RenderBox?;
-                                if (box == null) return;
-                                final pos = box.localToGlobal(
-                                  Offset(box.size.width - 8, 36),
-                                );
-                                _showMenuAtOffset(context, pos);
-                              },
+                            const SizedBox(height: 8),
+                            // Bloc texte extensible mais borné
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    widget.title,
+                                    maxLines: imgH > 0 ? 1 : 2,
+                                    overflow: TextOverflow.ellipsis,
+                                    style: Theme.of(
+                                      context,
+                                    ).textTheme.titleMedium,
+                                  ),
+                                  if (widget.subtitle != null &&
+                                      widget.subtitle!.isNotEmpty)
+                                    Padding(
+                                      padding: const EdgeInsets.only(top: 2),
+                                      child: Text(
+                                        widget.subtitle!,
+                                        maxLines: 1,
+                                        overflow: TextOverflow.ellipsis,
+                                        style: Theme.of(
+                                          context,
+                                        ).textTheme.bodySmall,
+                                      ),
+                                    ),
+                                ],
+                              ),
                             ),
+                            // Rien en bas : les éléments bas sont en overlay.
                           ],
-                        ),
-                        const SizedBox(height: 8),
-                        Text(
-                          widget.title,
-                          maxLines: 2,
-                          overflow: TextOverflow.ellipsis,
-                          style: Theme.of(context).textTheme.titleMedium,
-                        ),
-                        if (widget.subtitle != null &&
-                            widget.subtitle!.isNotEmpty) ...[
-                          const SizedBox(height: 2),
-                          Text(
-                            widget.subtitle!,
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: Theme.of(context).textTheme.bodySmall,
-                          ),
-                        ],
-                        const Spacer(),
-                        if (qty > 0) stockBadge,
-                      ],
+                        );
+                      },
                     ),
                   ),
                 ),
               ),
             ),
 
-            // Added check
+            // Check ajouté (overlay)
             Positioned(
               left: 8,
               top: 8,
@@ -330,7 +350,10 @@ class _PosProductTileState extends State<PosProductTile> {
               ),
             ),
 
-            // Quantity badge
+            // Stock chip (overlay)
+            if (qty > 0) Positioned(left: 10, bottom: 48, child: stockBadge()),
+
+            // Badge quantité (overlay)
             if (widget.addedQty > 0)
               Positioned(
                 left: 10,
@@ -363,7 +386,7 @@ class _PosProductTileState extends State<PosProductTile> {
                 ),
               ),
 
-            // Decrement button
+            // Bouton décrément (overlay)
             if (widget.onDecrement != null)
               Positioned(
                 right: 8,
