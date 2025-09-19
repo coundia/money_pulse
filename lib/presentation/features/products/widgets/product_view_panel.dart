@@ -1,4 +1,4 @@
-// Right-drawer product details integrating publish/unpublish marketplace actions.
+// Right-drawer product view with details, gallery and publish/unpublish actions; published state handles PUBLISH and PUBLISHED.
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -7,10 +7,28 @@ import 'package:money_pulse/presentation/shared/formatters.dart';
 import '../../../products/product_market_button.dart';
 import 'product_unpublish_button.dart';
 import 'product_files_gallery.dart';
+import 'package:money_pulse/presentation/features/products/product_file_repo_provider.dart';
+
+final _imagesForPublishProvider = FutureProvider.autoDispose
+    .family<List<File>, String>((ref, productId) async {
+      final repo = ref.read(productFileRepoProvider);
+      final rows = await repo.findByProduct(productId);
+      final list = <File>[];
+      for (final r in rows) {
+        final mt = (r.mimeType ?? '').toLowerCase();
+        final p = (r.filePath ?? '').trim();
+        if (mt.startsWith('image/') && p.isNotEmpty) {
+          final f = File(p);
+          if (await f.exists()) list.add(f);
+        }
+      }
+      return list;
+    });
 
 class ProductViewPanel extends ConsumerWidget {
   final Product product;
   final String? categoryLabel;
+  final String marketplaceBaseUri;
   final VoidCallback? onEdit;
   final VoidCallback? onDelete;
   final VoidCallback? onShare;
@@ -19,6 +37,7 @@ class ProductViewPanel extends ConsumerWidget {
   const ProductViewPanel({
     super.key,
     required this.product,
+    required this.marketplaceBaseUri,
     this.categoryLabel,
     this.onEdit,
     this.onDelete,
@@ -26,186 +45,165 @@ class ProductViewPanel extends ConsumerWidget {
     this.onAdjust,
   });
 
-  String _money(int cents) => Formatters.amountFromCents(cents);
-
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final title = (product.name?.isNotEmpty == true)
-        ? product.name!
-        : (product.code ?? 'Produit');
-    final subtitleParts = <String>[
-      if ((product.code ?? '').isNotEmpty) 'Code: ${product.code}',
-      if ((product.barcode ?? '').isNotEmpty) 'EAN: ${product.barcode}',
-      if ((categoryLabel ?? '').isNotEmpty) 'Catégorie: $categoryLabel',
-      if ((product.statuses ?? '').isNotEmpty) 'Statut: ${product.statuses}',
-    ];
-    final subtitle = subtitleParts.join('  •  ');
-    final filesAsync = ref.watch(productFilesProvider(product.id));
+    final p = product;
+    final price = Formatters.amountFromCents(p.defaultPrice);
+    final priceBuy = p.purchasePrice > 0
+        ? Formatters.amountFromCents(p.purchasePrice)
+        : null;
+    final created = Formatters.dateFull(p.createdAt);
+    final updated = Formatters.dateFull(p.updatedAt);
+    final statusesUpper = (p.statuses ?? '').toUpperCase().trim();
+    final published =
+        ((p.remoteId ?? '').trim().isNotEmpty) ||
+        statusesUpper == 'PUBLISH' ||
+        statusesUpper == 'PUBLISHED';
+
+    final imagesAsync = ref.watch(_imagesForPublishProvider(p.id));
 
     return Scaffold(
       appBar: AppBar(
         title: const Text('Détails du produit'),
         leading: IconButton(
           icon: const Icon(Icons.close),
-          onPressed: () => Navigator.pop(context),
+          onPressed: () => Navigator.of(context).maybePop(),
           tooltip: 'Fermer',
         ),
-      ),
-      body: ListView(
-        padding: const EdgeInsets.all(16),
-        children: [
-          _Header(
-            title: title,
-            subtitle: subtitle,
-            price: _money(product.defaultPrice),
-            purchase: product.purchasePrice > 0
-                ? _money(product.purchasePrice)
-                : null,
+        actions: [
+          IconButton(
+            onPressed: onShare,
+            icon: const Icon(Icons.share_outlined),
+            tooltip: 'Partager',
           ),
-          const SizedBox(height: 16),
-          if ((product.description ?? '').isNotEmpty)
-            Card(
-              child: Padding(
-                padding: const EdgeInsets.all(12),
-                child: Text(product.description!),
-              ),
-            ),
-          const SizedBox(height: 12),
-          ProductFilesGallery(productId: product.id),
-          const SizedBox(height: 12),
-          filesAsync.when(
-            data: (files) {
-              final imageFiles = <File>[];
-              for (final f in files) {
-                final mt = (f.mimeType ?? '').toLowerCase();
-                final p = (f.filePath ?? '').trim();
-                if (mt.startsWith('image/') && p.isNotEmpty) {
-                  final file = File(p);
-                  if (file.existsSync()) imageFiles.add(file);
-                }
-              }
-              return Row(
-                children: [
-                  Expanded(
-                    child: ProductMarketButton(
-                      product: product,
-                      images: imageFiles,
-                      baseUri: 'http://127.0.0.1:8095',
-                    ),
-                  ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: ProductUnpublishButton(
-                      product: product,
-                      baseUri: 'http://127.0.0.1:8095',
-                    ),
-                  ),
-                ],
-              );
-            },
-            loading: () => const Center(
-              child: Padding(
-                padding: EdgeInsets.all(12),
-                child: CircularProgressIndicator(strokeWidth: 2),
-              ),
-            ),
-            error: (_, __) => Row(
-              children: [
-                Expanded(
-                  child: FilledButton.icon(
-                    onPressed: null,
-                    icon: const Icon(Icons.storefront),
-                    label: const Text('Publier'),
-                  ),
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: FilledButton.tonalIcon(
-                    onPressed: null,
-                    icon: const Icon(Icons.unpublished_outlined),
-                    label: const Text('Retirer publication'),
-                  ),
-                ),
-              ],
-            ),
+          IconButton(
+            onPressed: onEdit,
+            icon: const Icon(Icons.edit),
+            tooltip: 'Modifier',
           ),
-          const SizedBox(height: 12),
-          Row(
-            children: [
-              if (onShare != null)
-                Expanded(
-                  child: OutlinedButton.icon(
-                    onPressed: onShare,
-                    icon: const Icon(Icons.ios_share),
-                    label: const Text('Partager'),
-                  ),
-                ),
-              if (onShare != null) const SizedBox(width: 12),
-              if (onEdit != null)
-                Expanded(
-                  child: FilledButton.tonalIcon(
-                    onPressed: onEdit,
-                    icon: const Icon(Icons.edit_outlined),
-                    label: const Text('Modifier'),
-                  ),
-                ),
-            ],
+          IconButton(
+            onPressed: onAdjust,
+            icon: const Icon(Icons.inventory_2_outlined),
+            tooltip: 'Ajuster le stock',
           ),
-          const SizedBox(height: 12),
-          if (onDelete != null)
-            FilledButton.icon(
-              onPressed: onDelete,
-              icon: const Icon(Icons.delete_outline),
-              label: const Text('Supprimer'),
-              style: FilledButton.styleFrom(
-                backgroundColor: Theme.of(context).colorScheme.errorContainer,
-                foregroundColor: Theme.of(context).colorScheme.onErrorContainer,
-              ),
-            ),
+          IconButton(
+            onPressed: onDelete,
+            icon: const Icon(Icons.delete_outline),
+            tooltip: 'Supprimer',
+          ),
         ],
       ),
-    );
-  }
-}
+      body: LayoutBuilder(
+        builder: (context, bc) {
+          final maxW = 980.0;
+          final side = bc.maxWidth > maxW ? (bc.maxWidth - maxW) / 2 : 0.0;
 
-class _Header extends StatelessWidget {
-  final String title;
-  final String subtitle;
-  final String price;
-  final String? purchase;
-  const _Header({
-    required this.title,
-    required this.subtitle,
-    required this.price,
-    this.purchase,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final chips = <Widget>[
-      Chip(label: Text('Vente: $price')),
-      if (purchase != null) Chip(label: Text('Coût: $purchase')),
-    ];
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          title,
-          maxLines: 1,
-          overflow: TextOverflow.ellipsis,
-          style: Theme.of(context).textTheme.titleLarge,
-        ),
-        const SizedBox(height: 6),
-        if (subtitle.isNotEmpty)
-          Text(
-            subtitle,
-            maxLines: 2,
-            overflow: TextOverflow.ellipsis,
-            style: Theme.of(context).textTheme.bodySmall,
-          ),
-        const SizedBox(height: 8),
-        Wrap(spacing: 8, runSpacing: 8, children: chips),
-      ],
+          return ListView(
+            padding: EdgeInsets.fromLTRB(side + 16, 16, side + 16, 24),
+            children: [
+              Card(
+                child: Padding(
+                  padding: const EdgeInsets.all(16),
+                  child: Wrap(
+                    runSpacing: 10,
+                    spacing: 16,
+                    crossAxisAlignment: WrapCrossAlignment.center,
+                    children: [
+                      CircleAvatar(
+                        radius: 24,
+                        child: Text(
+                          (p.name?.isNotEmpty == true
+                                  ? p.name!.characters.first
+                                  : 'P')
+                              .toUpperCase(),
+                        ),
+                      ),
+                      Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            p.name ?? 'Produit',
+                            style: Theme.of(context).textTheme.titleLarge,
+                          ),
+                          if ((p.description ?? '').isNotEmpty)
+                            Padding(
+                              padding: const EdgeInsets.only(top: 6),
+                              child: Text(
+                                p.description!,
+                                maxLines: 3,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ),
+                          const SizedBox(height: 8),
+                          Wrap(
+                            spacing: 8,
+                            runSpacing: 8,
+                            children: [
+                              Chip(label: Text('PU: $price')),
+                              if (priceBuy != null)
+                                Chip(label: Text("Achat: $priceBuy")),
+                              if ((categoryLabel ?? '').isNotEmpty)
+                                Chip(label: Text("Catégorie: $categoryLabel")),
+                              Chip(
+                                label: Text(
+                                  published ? 'Publié' : 'Non publié',
+                                ),
+                                backgroundColor: published
+                                    ? Colors.green.withOpacity(.12)
+                                    : Colors.grey.withOpacity(.16),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 6),
+                          Text(
+                            'Créé: $created • Modifié: $updated',
+                            style: Theme.of(context).textTheme.bodySmall,
+                          ),
+                        ],
+                      ),
+                      const SizedBox(width: 12),
+                      imagesAsync.when(
+                        data: (imgs) {
+                          return Wrap(
+                            spacing: 8,
+                            runSpacing: 8,
+                            children: [
+                              ProductMarketButton(
+                                product: p,
+                                images: imgs,
+                                baseUri: marketplaceBaseUri,
+                                statusesCodeAfterPublish: 'PUBLISH',
+                                onDone: () => Navigator.of(context).maybePop(),
+                              ),
+                              ProductUnpublishButton(
+                                product: p,
+                                baseUri: marketplaceBaseUri,
+                                statusesCode: 'UNPUBLISH',
+                                onDone: () => Navigator.of(context).maybePop(),
+                              ),
+                            ],
+                          );
+                        },
+                        loading: () => const Padding(
+                          padding: EdgeInsets.symmetric(horizontal: 8),
+                          child: SizedBox(
+                            width: 24,
+                            height: 24,
+                            child: CircularProgressIndicator(strokeWidth: 2),
+                          ),
+                        ),
+                        error: (e, _) => Text('Erreur images: $e'),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+              const SizedBox(height: 12),
+              ProductFilesGallery(productId: p.id),
+            ],
+          );
+        },
+      ),
     );
   }
 }

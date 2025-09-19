@@ -1,4 +1,4 @@
-// Uploads product + images to marketplace, parses remoteId and updates local product status.
+// Repository to publish/unpublish products to marketplace and sync local state.
 import 'dart:convert';
 import 'dart:io';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -36,23 +36,23 @@ class ProductMarketplaceRepo {
       ..remove('Content-Type');
     req.headers.addAll(headers);
 
-    final productMap = _buildProductMap(product);
+    final map = _buildProductMap(product);
     req.files.add(
       http.MultipartFile.fromString(
         'product',
-        jsonEncode(productMap),
+        jsonEncode(map),
         filename: 'product.json',
         contentType: MediaType('application', 'json'),
       ),
     );
 
-    for (final file in images) {
-      if (!await file.exists()) continue;
-      final mime = _mimeFromPath(file.path);
+    for (final f in images) {
+      if (!await f.exists()) continue;
+      final mime = _mimeFromPath(f.path);
       req.files.add(
         await http.MultipartFile.fromPath(
           'files',
-          file.path,
+          f.path,
           contentType: MediaType.parse(mime),
         ),
       );
@@ -82,15 +82,64 @@ class ProductMarketplaceRepo {
     return updated;
   }
 
-  Future<Product> withdrawPublication(Product product) async {
+  Future<Product> changeRemoteStatus({
+    required Product product,
+    required String statusesCode,
+  }) async {
+    final remoteId = (product.remoteId ?? '').trim();
+    if (remoteId.isEmpty) {
+      throw StateError('remoteId manquant pour ce produit');
+    }
+
+    final uri = Uri.parse(_join(baseUri, '/api/v1/commands/product/$remoteId'));
+    final headers = <String, String>{
+      ...ref.read(syncHeaderBuilderProvider)(),
+      'Content-Type': 'application/json',
+      'accept': 'application/json',
+    };
+
+    final body = jsonEncode(
+      {
+        'remoteId': product.remoteId,
+        'localId': product.localId ?? product.id,
+        'code': product.code ?? product.id,
+        'name': product.name ?? product.code ?? 'Produit',
+        'description': product.description,
+        'barcode': product.barcode,
+        'unit': product.unitId,
+        'syncAt': DateTime.now().toUtc().toIso8601String(),
+        'category': product.categoryId,
+        'account': product.account,
+        'defaultPrice': product.defaultPrice / 100.0,
+        'statuses': statusesCode,
+        'purchasePrice': product.purchasePrice / 100.0,
+      }..removeWhere((k, v) => v == null),
+    );
+
+    final resp = await http.put(uri, headers: headers, body: body);
+    if (resp.statusCode < 200 || resp.statusCode >= 300) {
+      throw HttpException(
+        'HTTP ${resp.statusCode} ${resp.reasonPhrase ?? ''} • ${resp.body}',
+        uri: uri,
+      );
+    }
+
+    final newLocalStatus = statusesCode;
     final updated = product.copyWith(
-      statuses: 'UNPUBLISHED',
+      statuses: newLocalStatus,
       updatedAt: DateTime.now(),
       isDirty: 1,
     );
     final productRepo = ref.read(productRepoProvider);
     await productRepo.update(updated);
     return updated;
+  }
+
+  Future<Product> withdrawPublicationWithApi({
+    required Product product,
+    required String statusesCode,
+  }) {
+    return changeRemoteStatus(product: product, statusesCode: statusesCode);
   }
 
   Map<String, dynamic> _buildProductMap(Product p) {
@@ -105,9 +154,9 @@ class ProductMarketplaceRepo {
       'syncAt': DateTime.now().toUtc().toIso8601String(),
       'category': p.categoryId,
       'account': p.account,
-      'defaultPrice': (p.defaultPrice / 100.0),
+      'defaultPrice': p.defaultPrice / 100.0,
       'statuses': p.statuses,
-      'purchasePrice': (p.purchasePrice / 100.0),
+      'purchasePrice': p.purchasePrice / 100.0,
     };
     map.removeWhere((_, v) => v == null);
     return map;

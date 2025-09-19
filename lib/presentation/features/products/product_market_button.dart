@@ -1,4 +1,4 @@
-// Publish button to send a product with images to marketplace.
+// Publish button that uploads and optionally sets remote status; notifies parent on success.
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -9,12 +9,16 @@ class ProductMarketButton extends ConsumerStatefulWidget {
   final Product product;
   final List<File> images;
   final String baseUri;
+  final String? statusesCodeAfterPublish;
+  final VoidCallback? onDone;
 
   const ProductMarketButton({
     super.key,
     required this.product,
     required this.images,
     required this.baseUri,
+    this.statusesCodeAfterPublish,
+    this.onDone,
   });
 
   @override
@@ -30,16 +34,21 @@ class _ProductMarketButtonState extends ConsumerState<ProductMarketButton> {
     setState(() => _loading = true);
     try {
       final repo = ref.read(productMarketplaceRepoProvider(widget.baseUri));
-      final updated = await repo.pushToMarketplace(
-        widget.product,
-        widget.images,
-      );
+      var updated = await repo.pushToMarketplace(widget.product, widget.images);
+
+      if (widget.statusesCodeAfterPublish != null &&
+          (updated.remoteId ?? '').isNotEmpty) {
+        updated = await repo.changeRemoteStatus(
+          product: updated,
+          statusesCode: widget.statusesCodeAfterPublish!,
+        );
+      }
+
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Publié: ${updated.name ?? updated.code ?? 'Produit'}'),
-        ),
+        SnackBar(content: Text('Publié: ${updated.name ?? 'Produit'}')),
       );
+      widget.onDone?.call();
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(

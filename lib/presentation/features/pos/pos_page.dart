@@ -221,7 +221,11 @@ class _PosPageState extends ConsumerState<PosPage> {
     if (!mounted) return;
     await showRightDrawer<void>(
       context,
-      child: ProductViewPanel(product: p, categoryLabel: catLabel),
+      child: ProductViewPanel(
+        product: p,
+        categoryLabel: catLabel,
+        marketplaceBaseUri: '',
+      ),
       widthFraction: 0.92,
       heightFraction: 0.96,
     );

@@ -1,61 +1,44 @@
-// Reusable product context menu model and items, including Duplicate action.
+// Context menu entries for product list item (FR labels, action keys used by list page).
 import 'package:flutter/material.dart';
 
-abstract class ProductContextMenu {
-  static const String view = 'view';
-  static const String edit = 'edit';
-  static const String adjust = 'adjust';
-  static const String delete = 'delete';
-  static const String share = 'share';
-  static const String duplicate = 'duplicate';
-}
-
-List<PopupMenuEntry<String>> buildProductContextMenuItems({
-  bool includeView = true,
-  bool includeShare = true,
-}) {
+List<PopupMenuEntry<String>> buildProductContextMenuItems() {
   return [
-    if (includeView)
-      const PopupMenuItem(
-        value: ProductContextMenu.view,
-        child: ListTile(
-          leading: Icon(Icons.visibility_outlined),
-          title: Text('Voir'),
-        ),
-      ),
     const PopupMenuItem(
-      value: ProductContextMenu.edit,
-      child: ListTile(
-        leading: Icon(Icons.edit_outlined),
-        title: Text('Modifier'),
-      ),
+      value: 'view',
+      child: ListTile(leading: Icon(Icons.visibility), title: Text('Afficher')),
     ),
     const PopupMenuItem(
-      value: ProductContextMenu.duplicate,
+      value: 'edit',
+      child: ListTile(leading: Icon(Icons.edit), title: Text('Modifier')),
+    ),
+    const PopupMenuItem(
+      value: 'duplicate',
       child: ListTile(
-        leading: Icon(Icons.copy_all_outlined),
+        leading: Icon(Icons.control_point_duplicate),
         title: Text('Dupliquer'),
       ),
     ),
     const PopupMenuItem(
-      value: ProductContextMenu.adjust,
-      child: ListTile(leading: Icon(Icons.tune), title: Text('Ajuster stock')),
+      value: 'adjust',
+      child: ListTile(
+        leading: Icon(Icons.inventory_2_outlined),
+        title: Text('Ajuster le stock'),
+      ),
+    ),
+    const PopupMenuDivider(),
+    const PopupMenuItem(
+      value: 'share',
+      child: ListTile(
+        leading: Icon(Icons.share_outlined),
+        title: Text('Partager'),
+      ),
     ),
     const PopupMenuItem(
-      value: ProductContextMenu.delete,
+      value: 'delete',
       child: ListTile(
         leading: Icon(Icons.delete_outline),
         title: Text('Supprimer'),
       ),
     ),
-    if (includeShare) const PopupMenuDivider(),
-    if (includeShare)
-      const PopupMenuItem(
-        value: ProductContextMenu.share,
-        child: ListTile(
-          leading: Icon(Icons.ios_share),
-          title: Text('Partager'),
-        ),
-      ),
   ];
 }

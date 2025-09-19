@@ -1,4 +1,4 @@
-// Product list tile with context menu including Duplicate; shows stock badge and formatted price.
+// Responsive product list tile with stock badge, formatted price and context menu trigger.
 import 'package:flutter/material.dart';
 import 'package:money_pulse/presentation/shared/formatters.dart';
 import 'product_context_menu.dart';
@@ -62,6 +62,8 @@ class ProductTile extends StatelessWidget {
       ),
     );
 
+    final price = Formatters.amountFromCents(priceCents);
+
     return GestureDetector(
       behavior: HitTestBehavior.opaque,
       onLongPressStart: (details) =>
@@ -77,6 +79,15 @@ class ProductTile extends StatelessWidget {
         subtitle: (subtitle == null || subtitle!.isEmpty)
             ? null
             : Text(subtitle!),
+        trailing: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          crossAxisAlignment: CrossAxisAlignment.end,
+          children: [
+            Text('$price', style: const TextStyle(fontWeight: FontWeight.w700)),
+            const SizedBox(height: 6),
+            stockChip,
+          ],
+        ),
       ),
     );
   }

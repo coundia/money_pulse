@@ -35,6 +35,9 @@ class ProductListPage extends ConsumerStatefulWidget {
 }
 
 class _ProductListPageState extends ConsumerState<ProductListPage> {
+  // ====== FIX: base URI marketplace centralisée ici ======
+  static const String _marketplaceBaseUri = 'http://127.0.0.1:8095';
+
   late final ProductRepository _repo = ref.read(productRepoProvider);
   final _searchCtrl = TextEditingController();
   String _query = '';
@@ -300,6 +303,9 @@ class _ProductListPageState extends ConsumerState<ProductListPage> {
       child: ProductViewPanel(
         product: p,
         categoryLabel: catLabel,
+        marketplaceBaseUri:
+            _marketplaceBaseUri, // FIX: on transmet bien l’URL de l’API marketplace
+        // publishStatusesCode / unpublishStatusesCode optionnels si tu veux pousser des codes précis
         onEdit: () async {
           if (!mounted) return;
           nav.pop();

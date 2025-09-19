@@ -1,4 +1,4 @@
-// UI button to send product with images to marketplace
+// Publish button that uploads product + images to marketplace and optionally sets a status; French UI labels; notifies parent on success.
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -9,12 +9,16 @@ class ProductMarketButton extends ConsumerStatefulWidget {
   final Product product;
   final List<File> images;
   final String baseUri;
+  final String? statusesCodeAfterPublish;
+  final VoidCallback? onDone;
 
   const ProductMarketButton({
     super.key,
     required this.product,
     required this.images,
     required this.baseUri,
+    this.statusesCodeAfterPublish,
+    this.onDone,
   });
 
   @override
@@ -26,21 +30,32 @@ class _ProductMarketButtonState extends ConsumerState<ProductMarketButton> {
   bool _loading = false;
 
   Future<void> _send() async {
-    if (_loading || widget.images.isEmpty) return;
+    if (_loading) return;
     setState(() => _loading = true);
     try {
       final repo = ref.read(productMarketplaceRepoProvider(widget.baseUri));
-      await repo.pushToMarketplace(widget.product, widget.images);
+      var updated = await repo.pushToMarketplace(widget.product, widget.images);
+
+      if (widget.statusesCodeAfterPublish != null &&
+          (updated.remoteId ?? '').isNotEmpty) {
+        updated = await repo.changeRemoteStatus(
+          product: updated,
+          statusesCode: widget.statusesCodeAfterPublish!,
+        );
+      }
 
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Produit envoyé au marché !')),
+        SnackBar(
+          content: Text('Publié: ${updated.name ?? updated.code ?? 'Produit'}'),
+        ),
       );
+      widget.onDone?.call();
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(
         context,
-      ).showSnackBar(SnackBar(content: Text('Erreur lors de l’envoi : $e')));
+      ).showSnackBar(SnackBar(content: Text('Erreur: $e')));
     } finally {
       if (mounted) setState(() => _loading = false);
     }
@@ -48,12 +63,24 @@ class _ProductMarketButtonState extends ConsumerState<ProductMarketButton> {
 
   @override
   Widget build(BuildContext context) {
-    final disabled = _loading || widget.images.isEmpty;
+    final isPublished =
+        ((widget.product.remoteId ?? '').trim().isNotEmpty) ||
+        widget.product.statuses == 'PUBLISHED';
+    final disabled = _loading || isPublished || widget.images.isEmpty;
+    final label = _loading
+        ? 'Envoi…'
+        : isPublished
+        ? 'Déjà publié'
+        : widget.images.isEmpty
+        ? 'Ajouter une image'
+        : 'Publier';
 
     return Tooltip(
       message: widget.images.isEmpty
-          ? 'Ajoutez au moins une image pour envoyer'
-          : 'Envoyer au marché',
+          ? 'Ajoutez au moins une image'
+          : (isPublished
+                ? 'Le produit est déjà publié'
+                : 'Publier sur le marché'),
       child: FilledButton.icon(
         onPressed: disabled ? null : _send,
         icon: _loading
@@ -63,7 +90,7 @@ class _ProductMarketButtonState extends ConsumerState<ProductMarketButton> {
                 child: CircularProgressIndicator(strokeWidth: 2),
               )
             : const Icon(Icons.cloud_upload),
-        label: const Text('Envoyer au marché'),
+        label: Text(label),
       ),
     );
   }
