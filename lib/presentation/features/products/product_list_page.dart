@@ -544,7 +544,6 @@ class _ProductListPageState extends ConsumerState<ProductListPage> {
                             title: title,
                             subtitle: sub.isEmpty ? null : sub,
                             priceCents: p.defaultPrice,
-                            stockQty: qty,
                             onTap: () => _view(p),
                             onMenuAction: (action) async {
                               await Future.delayed(Duration.zero);

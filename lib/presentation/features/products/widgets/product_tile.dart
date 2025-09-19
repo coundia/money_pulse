@@ -1,4 +1,4 @@
-// Responsive product list tile with stock badge, formatted price and context menu trigger.
+// Responsive product list tile with formatted price and a colored status chip replacing stock badge.
 import 'package:flutter/material.dart';
 import 'package:money_pulse/presentation/shared/formatters.dart';
 import 'product_context_menu.dart';
@@ -7,7 +7,7 @@ class ProductTile extends StatelessWidget {
   final String title;
   final String? subtitle;
   final int priceCents;
-  final int? stockQty;
+  final String? statuses;
   final VoidCallback? onTap;
   final Future<void> Function(String action)? onMenuAction;
 
@@ -16,7 +16,7 @@ class ProductTile extends StatelessWidget {
     required this.title,
     this.subtitle,
     required this.priceCents,
-    this.stockQty,
+    this.statuses,
     this.onTap,
     this.onMenuAction,
   });
@@ -41,27 +41,6 @@ class ProductTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final qty = stockQty ?? 0;
-    final positive = qty > 0;
-
-    final stockChip = Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-      decoration: BoxDecoration(
-        color: (positive
-            ? Colors.green.withOpacity(.12)
-            : Colors.red.withOpacity(.12)),
-        borderRadius: BorderRadius.circular(10),
-      ),
-      child: Text(
-        positive ? 'Stock: $qty' : 'Rupture',
-        style: TextStyle(
-          color: positive ? Colors.green.shade800 : Colors.red.shade700,
-          fontWeight: FontWeight.w600,
-          fontSize: 12,
-        ),
-      ),
-    );
-
     final price = Formatters.amountFromCents(priceCents);
 
     return GestureDetector(
@@ -85,7 +64,6 @@ class ProductTile extends StatelessWidget {
           children: [
             Text('$price', style: const TextStyle(fontWeight: FontWeight.w700)),
             const SizedBox(height: 6),
-            stockChip,
           ],
         ),
       ),
