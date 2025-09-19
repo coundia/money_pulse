@@ -1,4 +1,7 @@
-// Products list orchestration page: load/search/filter, open right-drawers, persist files, and refresh after publish/unpublish.
+// Products list orchestration page: load/search/filter, open right-drawers,
+// persist files, and refresh after publish/unpublish. All repos are cached
+// in initState so we never call ref.read in async flows after disposal.
+
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -9,13 +12,16 @@ import 'package:uuid/uuid.dart';
 import 'package:money_pulse/domain/products/entities/product.dart';
 import 'package:money_pulse/domain/products/entities/product_file.dart';
 import 'package:money_pulse/domain/products/repositories/product_repository.dart';
+
 import 'package:money_pulse/presentation/features/products/product_repo_provider.dart';
 import 'package:money_pulse/presentation/features/products/product_file_repo_provider.dart';
 import 'package:money_pulse/presentation/widgets/attachments_picker.dart';
 import 'package:money_pulse/presentation/app/providers.dart';
 import 'package:money_pulse/presentation/widgets/right_drawer.dart';
 
+import '../../../domain/products/repositories/product_file_repository.dart';
 import '../../../infrastructure/products/product_marketplace_repo_provider.dart';
+
 import 'widgets/product_tile.dart';
 import 'widgets/product_form_panel.dart';
 import 'widgets/product_delete_panel.dart';
@@ -37,18 +43,30 @@ class ProductListPage extends ConsumerStatefulWidget {
 class _ProductListPageState extends ConsumerState<ProductListPage> {
   static const String _marketplaceBaseUri = 'http://127.0.0.1:8095';
 
+  // Cache ALL repos up front; never call ref.read inside async after pop/dispose.
   late final ProductRepository _repo = ref.read(productRepoProvider);
+  late final dynamic _fileRepo; // productFileRepoProvider
+  late final dynamic _categoryRepo; // categoryRepoProvider
+  late final dynamic _stockRepo; // stockLevelRepoProvider
+  late final dynamic
+  _marketRepo; // productMarketplaceRepoProvider(_marketplaceBaseUri)
+
   final _searchCtrl = TextEditingController();
   String _query = '';
   ProductFilters _filters = const ProductFilters();
 
-  void _unfocus() {
-    FocusManager.instance.primaryFocus?.unfocus();
-  }
+  void _unfocus() => FocusManager.instance.primaryFocus?.unfocus();
 
   @override
   void initState() {
     super.initState();
+
+    // Resolve providers once while mounted
+    _fileRepo = ref.read(productFileRepoProvider);
+    _categoryRepo = ref.read(categoryRepoProvider);
+    _stockRepo = ref.read(stockLevelRepoProvider);
+    _marketRepo = ref.read(productMarketplaceRepoProvider(_marketplaceBaseUri));
+
     _searchCtrl.addListener(() {
       if (!mounted) return;
       setState(() => _query = _searchCtrl.text);
@@ -143,17 +161,20 @@ class _ProductListPageState extends ConsumerState<ProductListPage> {
   Future<void> _saveFormFiles(
     String productId,
     List<PickedAttachment> files,
+    ProductFileRepository repo,
   ) async {
     if (files.isEmpty) return;
-    final repo = ref.read(productFileRepoProvider);
-    final now = DateTime.now();
 
+    final now = DateTime.now();
     final rows = <ProductFile>[];
+
     for (int i = 0; i < files.length; i++) {
       final a = files[i];
       String? path = a.path;
       if ((path == null || path.isEmpty) && a.bytes != null) {
         path = await _persistBytesToDisk(a.name, a.bytes!);
+      } else if ((path == null || path.isEmpty) && a.readStream != null) {
+        path = await _persistStreamToDisk(a.name, a.readStream!);
       }
 
       rows.add(
@@ -172,12 +193,14 @@ class _ProductListPageState extends ConsumerState<ProductListPage> {
         ),
       );
     }
+
     await repo.createMany(rows);
   }
 
   Future<void> _addOrEdit({Product? existing}) async {
     _unfocus();
-    final categories = await ref.read(categoryRepoProvider).findAllActive();
+
+    final categories = await _categoryRepo.findAllActive();
     if (!mounted) return;
 
     final res = await showRightDrawer<ProductFormResult?>(
@@ -210,7 +233,7 @@ class _ProductListPageState extends ConsumerState<ProductListPage> {
         isDirty: 1,
       );
       await _repo.create(p);
-      await _saveFormFiles(p.id, res.files);
+      await _saveFormFiles(p.id, res.files, _fileRepo);
     } else {
       final updated = existing.copyWith(
         code: res.code,
@@ -225,7 +248,7 @@ class _ProductListPageState extends ConsumerState<ProductListPage> {
         isDirty: 1,
       );
       await _repo.update(updated);
-      await _saveFormFiles(updated.id, res.files);
+      await _saveFormFiles(updated.id, res.files, _fileRepo);
     }
     if (!mounted) return;
     setState(() {});
@@ -233,7 +256,7 @@ class _ProductListPageState extends ConsumerState<ProductListPage> {
 
   Future<void> _duplicate(Product p) async {
     _unfocus();
-    final categories = await ref.read(categoryRepoProvider).findAllActive();
+    final categories = await _categoryRepo.findAllActive();
     if (!mounted) return;
 
     final res = await showRightDrawer<ProductFormResult?>(
@@ -265,7 +288,7 @@ class _ProductListPageState extends ConsumerState<ProductListPage> {
       isDirty: 1,
     );
     await _repo.create(copy);
-    await _saveFormFiles(copy.id, res.files);
+    await _saveFormFiles(copy.id, res.files, _fileRepo);
     if (!mounted) return;
     setState(() {});
   }
@@ -282,19 +305,14 @@ class _ProductListPageState extends ConsumerState<ProductListPage> {
     );
 
     if (ok == true) {
-      // 1) Si un remoteId existe, on tente de notifier le marketplace (statuses=DELETE)
       final remoteId = (p.remoteId ?? '').trim();
       if (remoteId.isNotEmpty) {
         try {
-          final marketRepo = ref.read(
-            productMarketplaceRepoProvider(_marketplaceBaseUri),
-          );
-          await marketRepo.changeRemoteStatus(
+          await _marketRepo.changeRemoteStatus(
             product: p,
             statusesCode: 'DELETE',
           );
         } catch (e) {
-          // On continue la suppression locale quoi qu’il arrive, mais on informe l’utilisateur
           if (mounted) {
             ScaffoldMessenger.of(context).showSnackBar(
               SnackBar(
@@ -307,7 +325,6 @@ class _ProductListPageState extends ConsumerState<ProductListPage> {
         }
       }
 
-      // 2) Suppression logique locale
       await _repo.softDelete(p.id);
 
       if (!mounted) return;
@@ -322,7 +339,7 @@ class _ProductListPageState extends ConsumerState<ProductListPage> {
     _unfocus();
     String? catLabel;
     if (p.categoryId != null) {
-      final cat = await ref.read(categoryRepoProvider).findById(p.categoryId!);
+      final cat = await _categoryRepo.findById(p.categoryId!);
       catLabel = cat?.code;
     }
     if (!mounted) return;
@@ -368,7 +385,6 @@ class _ProductListPageState extends ConsumerState<ProductListPage> {
   }
 
   Future<Map<String, int>> _computeStockMap(List<Product> items) async {
-    final stockRepo = ref.read(stockLevelRepoProvider);
     final map = <String, int>{};
     for (final p in items) {
       final q = (p.code?.trim().isNotEmpty ?? false)
@@ -378,7 +394,7 @@ class _ProductListPageState extends ConsumerState<ProductListPage> {
         map[p.id] = 0;
         continue;
       }
-      final rows = await stockRepo.search(query: q);
+      final rows = await _stockRepo.search(query: q);
       final relevant = rows.where((r) {
         if ((p.code ?? '').isNotEmpty) {
           return r.productLabel.toLowerCase().contains(p.code!.toLowerCase());
@@ -566,12 +582,13 @@ class _ProductListPageState extends ConsumerState<ProductListPage> {
                               ? p.name!
                               : (p.code ?? 'Produit');
                           final subParts = <String>[];
-                          if ((p.description ?? '').isNotEmpty)
+                          if ((p.description ?? '').isNotEmpty) {
                             subParts.add(p.description!);
-                          if (p.statuses != null && p.statuses!.isNotEmpty)
+                          }
+                          if (p.statuses != null && p.statuses!.isNotEmpty) {
                             subParts.add(p.statuses!);
+                          }
                           final sub = subParts.join('  •  ');
-                          final qty = stockMap[p.id] ?? 0;
 
                           return ProductTile(
                             title: title,

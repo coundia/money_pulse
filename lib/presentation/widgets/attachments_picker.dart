@@ -1,9 +1,13 @@
-// Small widget to pick image files with preview; supports iOS large files via readStream.
+// Small widget to pick image files with preview; robust mime detection,
+// duplicate guard, iOS large-file streams, and reactive to initial reset.
+
 import 'dart:typed_data';
 import 'dart:io';
 import 'package:file_picker/file_picker.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:mime/mime.dart';
 
 class PickedAttachment {
   final String name;
@@ -21,6 +25,9 @@ class PickedAttachment {
     this.size,
     this.readStream,
   });
+
+  String get _dupeKey =>
+      '${name.toLowerCase()}::${size ?? bytes?.length ?? 0}::${mimeType ?? ''}';
 }
 
 class AttachmentsPicker extends StatefulWidget {
@@ -41,39 +48,61 @@ class _AttachmentsPickerState extends State<AttachmentsPicker> {
   late List<PickedAttachment> _items = [...widget.initial];
   bool _temporarilyDisabled = false;
 
+  @override
+  void didUpdateWidget(covariant AttachmentsPicker oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (!listEquals(oldWidget.initial, widget.initial)) {
+      _items = [...widget.initial];
+    }
+  }
+
   Future<void> _pick() async {
     if (_temporarilyDisabled) return;
     try {
       final res = await FilePicker.platform.pickFiles(
         allowMultiple: true,
         type: FileType.image,
-        withData: true, // small/medium files
-        withReadStream: true, // large files (iOS iCloud / HEIC)
+        withData: true,
+        withReadStream: true,
       );
       if (res == null) return;
 
       final added = res.files.map((f) {
-        final mime = (f.extension == null || f.extension!.isEmpty)
-            ? null
-            : 'image/${f.extension}';
+        final inferred =
+            lookupMimeType(
+              f.path ?? f.name,
+              headerBytes: f.bytes != null && f.bytes!.isNotEmpty
+                  ? f.bytes!.sublist(0, f.bytes!.length.clamp(0, 32))
+                  : null,
+            ) ??
+            (f.extension == null ? null : 'image/${f.extension}');
         return PickedAttachment(
           name: f.name,
           path: f.path,
           bytes: f.bytes,
           size: f.size,
-          mimeType: mime,
+          mimeType: inferred,
           readStream: f.readStream,
         );
       }).toList();
 
-      setState(() => _items = [..._items, ...added]);
+      final existingKeys = _items.map((e) => e._dupeKey).toSet();
+      final merged = <PickedAttachment>[];
+      for (final a in added) {
+        if (!existingKeys.contains(a._dupeKey)) {
+          merged.add(a);
+          existingKeys.add(a._dupeKey);
+        }
+      }
+
+      setState(() => _items = [..._items, ...merged]);
       widget.onChanged(_items);
     } on MissingPluginException catch (_) {
       setState(() => _temporarilyDisabled = true);
       ScaffoldMessenger.maybeOf(context)?.showSnackBar(
         const SnackBar(
           content: Text(
-            'Sélecteur indisponible. Faites un build iOS complet (pod install) puis relancez.',
+            'Sélecteur indisponible. Relancez l’application après un build complet.',
           ),
         ),
       );
@@ -93,14 +122,25 @@ class _AttachmentsPickerState extends State<AttachmentsPicker> {
     widget.onChanged(_items);
   }
 
+  Widget _thumb(PickedAttachment p) {
+    if (p.bytes != null && p.bytes!.isNotEmpty) {
+      return Image.memory(p.bytes!, fit: BoxFit.cover);
+    }
+    final path = p.path;
+    if (path != null && path.isNotEmpty) {
+      final f = File(path);
+      if (f.existsSync()) {
+        return Image.file(f, fit: BoxFit.cover);
+      }
+    }
+    return const Icon(Icons.image_outlined, size: 32);
+  }
+
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
 
-    Widget tile(PickedAttachment p) {
-      final preview = p.bytes != null
-          ? Image.memory(p.bytes!, fit: BoxFit.cover)
-          : const Icon(Icons.image_outlined, size: 32);
+    Widget tile(PickedAttachment p, int index) {
       return Stack(
         children: [
           Container(
@@ -109,7 +149,7 @@ class _AttachmentsPickerState extends State<AttachmentsPicker> {
               borderRadius: BorderRadius.circular(12),
             ),
             clipBehavior: Clip.antiAlias,
-            child: Center(child: preview),
+            child: Center(child: _thumb(p)),
           ),
           Positioned(
             right: 4,
@@ -118,7 +158,7 @@ class _AttachmentsPickerState extends State<AttachmentsPicker> {
               color: cs.errorContainer,
               borderRadius: BorderRadius.circular(20),
               child: InkWell(
-                onTap: () => _removeAt(_items.indexOf(p)),
+                onTap: () => _removeAt(index),
                 borderRadius: BorderRadius.circular(20),
                 child: const Padding(
                   padding: EdgeInsets.all(4),
@@ -152,6 +192,15 @@ class _AttachmentsPickerState extends State<AttachmentsPicker> {
                 avatar: const Icon(Icons.photo_library_outlined, size: 18),
                 label: Text('${_items.length} sélectionnée(s)'),
               ),
+            if (_items.isNotEmpty)
+              OutlinedButton.icon(
+                onPressed: () {
+                  setState(() => _items = []);
+                  widget.onChanged(_items);
+                },
+                icon: const Icon(Icons.delete_sweep_outlined),
+                label: const Text('Tout effacer'),
+              ),
           ],
         ),
         const SizedBox(height: 12),
@@ -178,7 +227,7 @@ class _AttachmentsPickerState extends State<AttachmentsPicker> {
                   mainAxisSpacing: 8,
                 ),
                 itemCount: _items.length,
-                itemBuilder: (_, i) => tile(_items[i]),
+                itemBuilder: (_, i) => tile(_items[i], i),
               );
             },
           ),

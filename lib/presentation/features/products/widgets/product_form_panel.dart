@@ -1,13 +1,15 @@
-// Right-drawer form to create or edit product with amount pad and file attachments.
+// Right-drawer form to create or edit a product with quick amount pad and image attachments.
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:intl/intl.dart';
+
 import 'package:money_pulse/domain/products/entities/product.dart';
 import 'package:money_pulse/domain/categories/entities/category.dart';
 import 'package:money_pulse/presentation/widgets/attachments_picker.dart';
 
 import '../../transactions/widgets/amount_field_quickpad.dart';
 
+/// What the form returns to the caller (ProductListPage).
 class ProductFormResult {
   final String? code;
   final String name;
@@ -39,6 +41,7 @@ class SubmitFormIntent extends Intent {
 class ProductFormPanel extends StatefulWidget {
   final Product? existing;
   final List<Category> categories;
+
   const ProductFormPanel({super.key, this.existing, required this.categories});
 
   @override
@@ -71,22 +74,23 @@ class _ProductFormPanelState extends State<ProductFormPanel> {
         : _moneyFromCents(widget.existing!.purchasePrice),
   );
 
-  final _fPriceBuy = FocusNode();
   final _fName = FocusNode();
   final _fCode = FocusNode();
   final _fBarcode = FocusNode();
   final _fDesc = FocusNode();
+  final _fPriceBuy = FocusNode();
 
   String? _categoryId;
   String _status = 'ACTIVE';
   List<PickedAttachment> _files = const [];
 
-  static const List<(String, String)> _statusOptions = [
+  static const List<(String, String)> _statusOptions = <(String, String)>[
     ('ACTIVE', 'Actif'),
     ('PROMO', 'Promotion'),
     ('ARCHIVED', 'Archivé'),
   ];
 
+  // Accept digits, spaces, thin spaces, comma, dot.
   static final _numFilter = FilteringTextInputFormatter.allow(
     RegExp(r'[0-9\.\, \u00A0\u202F]'),
   );
@@ -108,13 +112,16 @@ class _ProductFormPanelState extends State<ProductFormPanel> {
     _barcode.dispose();
     _priceSell.dispose();
     _priceBuy.dispose();
-    _fPriceBuy.dispose();
+
     _fName.dispose();
     _fCode.dispose();
     _fBarcode.dispose();
     _fDesc.dispose();
+    _fPriceBuy.dispose();
     super.dispose();
   }
+
+  // ---------- Helpers ----------
 
   String _moneyFromCents(int cents) {
     final v = cents / 100.0;
@@ -123,19 +130,29 @@ class _ProductFormPanelState extends State<ProductFormPanel> {
 
   String _sanitizeNumber(String v) {
     var s = v.trim();
-    s = s.replaceAll(RegExp(r'[\u00A0\u202F\s]'), '');
-    s = s.replaceAll(',', '.');
+    s = s.replaceAll(
+      RegExp(r'[\u00A0\u202F\s]'),
+      '',
+    ); // remove spaces/thin spaces
+    s = s.replaceAll(',', '.'); // normalize comma to dot
+    // If there are multiple dots, keep the last as decimal separator.
     final firstDot = s.indexOf('.');
     final lastDot = s.lastIndexOf('.');
     if (firstDot != -1 && firstDot != lastDot) {
       s = s.replaceAll('.', '');
+      if (lastDot != -1 && lastDot < s.length) {
+        // put back one decimal dot before last 2 digits (best effort)
+        if (s.length > 2) {
+          s = s.substring(0, s.length - 2) + '.' + s.substring(s.length - 2);
+        }
+      }
     }
     return s;
   }
 
   int _toCents(String v) {
     final s = _sanitizeNumber(v);
-    final d = double.tryParse(s) ?? 0;
+    final d = double.tryParse(s) ?? 0.0;
     final cents = (d * 100).round();
     return cents < 0 ? 0 : cents;
   }
@@ -169,6 +186,8 @@ class _ProductFormPanelState extends State<ProductFormPanel> {
 
     Navigator.pop(context, result);
   }
+
+  // ---------- UI ----------
 
   @override
   Widget build(BuildContext context) {
@@ -227,6 +246,7 @@ class _ProductFormPanelState extends State<ProductFormPanel> {
               child: ListView(
                 padding: const EdgeInsets.all(16),
                 children: [
+                  // Quick amount pad for selling price
                   AmountFieldQuickPad(
                     controller: _priceSell,
                     quickUnits: const [
@@ -246,6 +266,7 @@ class _ProductFormPanelState extends State<ProductFormPanel> {
                     onChanged: () => setState(() {}),
                   ),
                   const SizedBox(height: 16),
+
                   TextFormField(
                     focusNode: _fName,
                     controller: _name,
@@ -257,6 +278,7 @@ class _ProductFormPanelState extends State<ProductFormPanel> {
                     validator: _required,
                   ),
                   const SizedBox(height: 12),
+
                   TextFormField(
                     focusNode: _fPriceBuy,
                     controller: _priceBuy,
@@ -272,6 +294,7 @@ class _ProductFormPanelState extends State<ProductFormPanel> {
                     ),
                   ),
                   const SizedBox(height: 12),
+
                   TextFormField(
                     focusNode: _fCode,
                     controller: _code,
@@ -281,6 +304,7 @@ class _ProductFormPanelState extends State<ProductFormPanel> {
                     validator: _validateSku,
                   ),
                   const SizedBox(height: 12),
+
                   TextFormField(
                     focusNode: _fBarcode,
                     controller: _barcode,
@@ -291,6 +315,7 @@ class _ProductFormPanelState extends State<ProductFormPanel> {
                     ),
                   ),
                   const SizedBox(height: 12),
+
                   DropdownButtonFormField<String>(
                     value: _categoryId,
                     items: widget.categories
@@ -305,6 +330,7 @@ class _ProductFormPanelState extends State<ProductFormPanel> {
                     decoration: const InputDecoration(labelText: 'Catégorie'),
                   ),
                   const SizedBox(height: 12),
+
                   DropdownButtonFormField<String>(
                     value: _status,
                     items: _statusOptions
@@ -317,6 +343,7 @@ class _ProductFormPanelState extends State<ProductFormPanel> {
                     decoration: const InputDecoration(labelText: 'Statut'),
                   ),
                   const SizedBox(height: 16),
+
                   TextFormField(
                     focusNode: _fDesc,
                     controller: _desc,
@@ -326,12 +353,17 @@ class _ProductFormPanelState extends State<ProductFormPanel> {
                     decoration: const InputDecoration(labelText: 'Description'),
                   ),
                   const SizedBox(height: 20),
+
                   Text(
                     'Photos du produit',
                     style: Theme.of(context).textTheme.titleMedium,
                   ),
                   const SizedBox(height: 8),
+
+                  // The picker will call onChanged with the current list;
+                  // ProductListPage will persist them after the form returns.
                   AttachmentsPicker(onChanged: (items) => _files = items),
+
                   const SizedBox(height: 10),
                   Text(
                     'Astuce : appuyez sur Entrée pour enregistrer rapidement.',
