@@ -384,6 +384,34 @@ class _ProductListPageState extends ConsumerState<ProductListPage> {
     }
   }
 
+  // Build productId -> first local image path (if any)
+  Future<Map<String, String?>> _firstLocalImagePathMap(
+    List<Product> items,
+  ) async {
+    final result = <String, String?>{};
+    for (final p in items) {
+      try {
+        final rows = await _fileRepo.findByProduct(p.id);
+        String? found;
+        for (final r in rows) {
+          final mt = (r.mimeType ?? '').toLowerCase();
+          final path = (r.filePath ?? '').trim();
+          if (mt.startsWith('image/') && path.isNotEmpty) {
+            final f = File(path);
+            if (await f.exists()) {
+              found = path;
+              break;
+            }
+          }
+        }
+        result[p.id] = found; // null if none found
+      } catch (_) {
+        result[p.id] = null;
+      }
+    }
+    return result;
+  }
+
   Future<Map<String, int>> _computeStockMap(List<Product> items) async {
     final map = <String, int>{};
     for (final p in items) {
@@ -536,93 +564,108 @@ class _ProductListPageState extends ConsumerState<ProductListPage> {
                 future: stockFuture,
                 builder: (context, stockSnap) {
                   final stockMap = stockSnap.data ?? const <String, int>{};
-                  final filtered = _applyLocalFilters(
-                    items,
-                    stockByProduct: stockMap,
-                  );
 
-                  if (items.isEmpty) {
-                    return RefreshIndicator(
-                      onRefresh: _refresh,
-                      child: ListView(
-                        physics: const AlwaysScrollableScrollPhysics(),
-                        children: const [SizedBox(height: 60)],
-                      ),
-                    );
-                  }
+                  // NEW: also load first local image paths for these products
+                  return FutureBuilder<Map<String, String?>>(
+                    future: _firstLocalImagePathMap(items),
+                    builder: (context, imgSnap) {
+                      final imgMap = imgSnap.data ?? const <String, String?>{};
+                      final filtered = _applyLocalFilters(
+                        items,
+                        stockByProduct: stockMap,
+                      );
 
-                  return RefreshIndicator(
-                    onRefresh: _refresh,
-                    child: Padding(
-                      padding: EdgeInsets.symmetric(horizontal: sidePadding),
-                      child: ListView.separated(
-                        padding: const EdgeInsets.fromLTRB(12, 12, 12, 96),
-                        physics: const AlwaysScrollableScrollPhysics(),
-                        itemCount: filtered.length + 1,
-                        separatorBuilder: (_, i) => i == 0
-                            ? const SizedBox.shrink()
-                            : const Divider(height: 1),
-                        itemBuilder: (_, i) {
-                          if (i == 0) {
-                            return _TopBar(
-                              total: items.length,
-                              searchCtrl: _searchCtrl,
-                              filters: _filters,
-                              onOpenFilters: _openFiltersSheet,
-                              onClearFilters: () => setState(
-                                () => _filters = const ProductFilters(),
-                              ),
-                              onRefresh: _refresh,
-                              onUnfocus: _unfocus,
-                            );
-                          }
+                      if (items.isEmpty) {
+                        return RefreshIndicator(
+                          onRefresh: _refresh,
+                          child: ListView(
+                            physics: const AlwaysScrollableScrollPhysics(),
+                            children: const [SizedBox(height: 60)],
+                          ),
+                        );
+                      }
 
-                          final p = filtered[i - 1];
-                          final title = p.name?.isNotEmpty == true
-                              ? p.name!
-                              : (p.code ?? 'Produit');
-                          final subParts = <String>[];
-                          if ((p.description ?? '').isNotEmpty) {
-                            subParts.add(p.description!);
-                          }
-                          if (p.statuses != null && p.statuses!.isNotEmpty) {
-                            subParts.add(p.statuses!);
-                          }
-                          final sub = subParts.join('  •  ');
-
-                          return ProductTile(
-                            title: title,
-                            subtitle: sub.isEmpty ? null : sub,
-                            priceCents: p.defaultPrice,
-                            onTap: () => _view(p),
-                            onMenuAction: (action) async {
-                              await Future.delayed(Duration.zero);
-                              if (!mounted) return;
-                              switch (action) {
-                                case 'view':
-                                  await _view(p);
-                                  break;
-                                case 'edit':
-                                  await _addOrEdit(existing: p);
-                                  break;
-                                case 'duplicate':
-                                  await _duplicate(p);
-                                  break;
-                                case 'adjust':
-                                  await _openAdjust(p);
-                                  break;
-                                case 'delete':
-                                  await _confirmDelete(p);
-                                  break;
-                                case 'share':
-                                  await _share(p);
-                                  break;
+                      return RefreshIndicator(
+                        onRefresh: _refresh,
+                        child: Padding(
+                          padding: EdgeInsets.symmetric(
+                            horizontal: sidePadding,
+                          ),
+                          child: ListView.separated(
+                            padding: const EdgeInsets.fromLTRB(12, 12, 12, 96),
+                            physics: const AlwaysScrollableScrollPhysics(),
+                            itemCount: filtered.length + 1,
+                            separatorBuilder: (_, i) => i == 0
+                                ? const SizedBox.shrink()
+                                : const Divider(height: 1),
+                            itemBuilder: (_, i) {
+                              if (i == 0) {
+                                return _TopBar(
+                                  total: items.length,
+                                  searchCtrl: _searchCtrl,
+                                  filters: _filters,
+                                  onOpenFilters: _openFiltersSheet,
+                                  onClearFilters: () => setState(
+                                    () => _filters = const ProductFilters(),
+                                  ),
+                                  onRefresh: _refresh,
+                                  onUnfocus: _unfocus,
+                                );
                               }
+
+                              final p = filtered[i - 1];
+                              final title = p.name?.isNotEmpty == true
+                                  ? p.name!
+                                  : (p.code ?? 'Produit');
+                              final subParts = <String>[];
+                              if ((p.description ?? '').isNotEmpty) {
+                                subParts.add(p.description!);
+                              }
+                              if ((p.statuses ?? '').isNotEmpty) {
+                                subParts.add(p.statuses!);
+                              }
+                              final sub = subParts.join('  •  ');
+
+                              final imagePath = imgMap[p.id]; // may be null
+
+                              return ProductTile(
+                                title: title,
+                                subtitle: sub.isEmpty ? null : sub,
+                                priceCents: p.defaultPrice,
+                                statuses: p.statuses,
+                                imagePath: imagePath,
+                                // imageUrl: <optional if you fetch remote>,
+                                onTap: () => _view(p),
+                                onMenuAction: (action) async {
+                                  await Future.delayed(Duration.zero);
+                                  if (!mounted) return;
+                                  switch (action) {
+                                    case 'view':
+                                      await _view(p);
+                                      break;
+                                    case 'edit':
+                                      await _addOrEdit(existing: p);
+                                      break;
+                                    case 'duplicate':
+                                      await _duplicate(p);
+                                      break;
+                                    case 'adjust':
+                                      await _openAdjust(p);
+                                      break;
+                                    case 'delete':
+                                      await _confirmDelete(p);
+                                      break;
+                                    case 'share':
+                                      await _share(p);
+                                      break;
+                                  }
+                                },
+                              );
                             },
-                          );
-                        },
-                      ),
-                    ),
+                          ),
+                        ),
+                      );
+                    },
                   );
                 },
               ),

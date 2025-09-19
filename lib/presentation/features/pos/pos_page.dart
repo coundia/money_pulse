@@ -1,5 +1,8 @@
-// POS page orchestrating grid, search, filters, actions, and product drawers with added mark and quantity on tiles.
+// POS page orchestrating grid, search, filters, actions, and product drawers
+// with added mark and quantity on tiles. Now includes product images on tiles.
+
 import 'dart:async';
+import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:uuid/uuid.dart';
@@ -27,6 +30,10 @@ import 'package:money_pulse/presentation/features/products/product_list_page.dar
 import 'package:money_pulse/presentation/features/products/widgets/product_view_panel.dart';
 import 'package:money_pulse/domain/categories/entities/category.dart';
 
+// NEW: to fetch product images
+import 'package:money_pulse/presentation/features/products/product_file_repo_provider.dart';
+import 'package:money_pulse/domain/products/repositories/product_file_repository.dart';
+
 class PosPage extends ConsumerStatefulWidget {
   const PosPage({super.key});
   @override
@@ -41,6 +48,9 @@ class _PosPageState extends ConsumerState<PosPage> {
   PosFilters _filters = const PosFilters();
   int _reloadTick = 0;
 
+  // Cache repo to avoid reading after disposal in async callbacks
+  late final ProductFileRepository _fileRepo;
+
   bool get _hasFilters =>
       _filters.inStockOnly ||
       _filters.categoryId != null ||
@@ -50,6 +60,8 @@ class _PosPageState extends ConsumerState<PosPage> {
   @override
   void initState() {
     super.initState();
+    _fileRepo = ref.read(productFileRepoProvider);
+
     _searchCtrl.addListener(() {
       _debounce?.cancel();
       _debounce = Timer(const Duration(milliseconds: 220), () {
@@ -94,6 +106,34 @@ class _PosPageState extends ConsumerState<PosPage> {
   Future<Map<String, int>> _computeStockMap(List<Product> items) async {
     final stockRepo = ref.read(stockLevelRepoProvider);
     return computeStockMap(stockRepo, items);
+  }
+
+  // NEW: find first local image path for each product (if any)
+  Future<Map<String, String?>> _firstLocalImagePathMap(
+    List<Product> items,
+  ) async {
+    final result = <String, String?>{};
+    for (final p in items) {
+      try {
+        final rows = await _fileRepo.findByProduct(p.id);
+        String? found;
+        for (final r in rows) {
+          final mt = (r.mimeType ?? '').toLowerCase();
+          final path = (r.filePath ?? '').trim();
+          if (mt.startsWith('image/') && path.isNotEmpty) {
+            final f = File(path);
+            if (await f.exists()) {
+              found = path;
+              break;
+            }
+          }
+        }
+        result[p.id] = found;
+      } catch (_) {
+        result[p.id] = null;
+      }
+    }
+    return result;
   }
 
   Future<void> _openCart() async {
@@ -407,249 +447,293 @@ class _PosPageState extends ConsumerState<PosPage> {
                         inStockOnly: _filters.inStockOnly,
                       );
 
-                      final infoBar = Padding(
-                        padding: const EdgeInsets.fromLTRB(12, 4, 12, 4),
-                        child: Row(
-                          children: [
-                            Chip(
-                              avatar: const Icon(
-                                Icons.inventory_2_outlined,
-                                size: 18,
-                              ),
-                              label: Text('Total: ${items.length}'),
-                            ),
-                            const SizedBox(width: 8),
-                            Chip(
-                              avatar: const Icon(
-                                Icons.filter_alt_outlined,
-                                size: 18,
-                              ),
-                              label: Text('Affichés: ${list.length}'),
-                            ),
-                          ],
-                        ),
-                      );
+                      // NEW: image paths
+                      return FutureBuilder<Map<String, String?>>(
+                        future: _firstLocalImagePathMap(list),
+                        builder: (context, imgSnap) {
+                          final imgMap =
+                              imgSnap.data ?? const <String, String?>{};
 
-                      final cartSnap = _cart.snapshot();
-
-                      return Column(
-                        children: [
-                          infoBar,
-                          Expanded(
-                            child: GridView.builder(
-                              padding: const EdgeInsets.fromLTRB(
-                                12,
-                                8,
-                                12,
-                                100,
-                              ),
-                              gridDelegate:
-                                  SliverGridDelegateWithFixedCrossAxisCount(
-                                    crossAxisCount: cols,
-                                    mainAxisSpacing: 10,
-                                    crossAxisSpacing: 10,
-                                    childAspectRatio: .95,
+                          final infoBar = Padding(
+                            padding: const EdgeInsets.fromLTRB(12, 4, 12, 4),
+                            child: Row(
+                              children: [
+                                Chip(
+                                  avatar: const Icon(
+                                    Icons.inventory_2_outlined,
+                                    size: 18,
                                   ),
-                              itemCount: list.length,
-                              itemBuilder: (_, i) {
-                                final p = list[i];
-                                final title = (p.name?.isNotEmpty ?? false)
-                                    ? p.name!
-                                    : (p.code ?? 'Produit');
-                                final subtitle =
-                                    (p.description ?? '').trim().isEmpty
-                                    ? null
-                                    : p.description!.trim();
-                                final stockQty = stockMap[p.id] ?? 0;
-                                final addedQty = cartSnap[p.id]?.quantity ?? 0;
+                                  label: Text('Total: ${items.length}'),
+                                ),
+                                const SizedBox(width: 8),
+                                Chip(
+                                  avatar: const Icon(
+                                    Icons.filter_alt_outlined,
+                                    size: 18,
+                                  ),
+                                  label: Text('Affichés: ${list.length}'),
+                                ),
+                              ],
+                            ),
+                          );
 
-                                return PosProductTile(
-                                  title: title,
-                                  subtitle: subtitle,
-                                  priceCents: p.defaultPrice,
-                                  stockQty: stockQty,
-                                  isAdded: addedQty > 0,
-                                  addedQty: addedQty,
-                                  onTap: () {
-                                    _cart.addProduct(p, qty: 1);
-                                    setState(() {});
-                                  },
-                                  onLongPress: () async {
-                                    int qty = 1;
-                                    await showRightDrawer<void>(
-                                      context,
-                                      child: StatefulBuilder(
-                                        builder: (context, setLocal) {
-                                          return Scaffold(
-                                            appBar: AppBar(
-                                              title: Text(title),
-                                              leading: IconButton(
-                                                icon: const Icon(Icons.close),
-                                                onPressed: () =>
-                                                    Navigator.pop(context),
-                                              ),
-                                            ),
-                                            body: Center(
-                                              child: Column(
-                                                mainAxisSize: MainAxisSize.min,
-                                                children: [
-                                                  const Text('Quantité'),
-                                                  const SizedBox(height: 12),
-                                                  Row(
+                          final cartSnap = _cart.snapshot();
+
+                          return Column(
+                            children: [
+                              infoBar,
+                              Expanded(
+                                child: GridView.builder(
+                                  padding: const EdgeInsets.fromLTRB(
+                                    12,
+                                    8,
+                                    12,
+                                    100,
+                                  ),
+                                  gridDelegate:
+                                      SliverGridDelegateWithFixedCrossAxisCount(
+                                        crossAxisCount: cols,
+                                        mainAxisSpacing: 10,
+                                        crossAxisSpacing: 10,
+                                        childAspectRatio: .95,
+                                      ),
+                                  itemCount: list.length,
+                                  itemBuilder: (_, i) {
+                                    final p = list[i];
+                                    final title = (p.name?.isNotEmpty ?? false)
+                                        ? p.name!
+                                        : (p.code ?? 'Produit');
+                                    final subtitle =
+                                        (p.description ?? '').trim().isEmpty
+                                        ? null
+                                        : p.description!.trim();
+                                    final stockQty = stockMap[p.id] ?? 0;
+                                    final addedQty =
+                                        cartSnap[p.id]?.quantity ?? 0;
+
+                                    final imagePath = imgMap[p.id];
+
+                                    return PosProductTile(
+                                      title: title,
+                                      subtitle: subtitle,
+                                      priceCents: p.defaultPrice,
+                                      stockQty: stockQty,
+                                      isAdded: addedQty > 0,
+                                      addedQty: addedQty,
+                                      imagePath: imagePath,
+                                      // imageUrl: <optional remote>,
+                                      onTap: () {
+                                        _cart.addProduct(p, qty: 1);
+                                        setState(() {});
+                                      },
+                                      onLongPress: () async {
+                                        int qty = 1;
+                                        await showRightDrawer<void>(
+                                          context,
+                                          child: StatefulBuilder(
+                                            builder: (context, setLocal) {
+                                              return Scaffold(
+                                                appBar: AppBar(
+                                                  title: Text(title),
+                                                  leading: IconButton(
+                                                    icon: const Icon(
+                                                      Icons.close,
+                                                    ),
+                                                    onPressed: () =>
+                                                        Navigator.pop(context),
+                                                  ),
+                                                ),
+                                                body: Center(
+                                                  child: Column(
                                                     mainAxisSize:
                                                         MainAxisSize.min,
                                                     children: [
-                                                      IconButton(
+                                                      const Text('Quantité'),
+                                                      const SizedBox(
+                                                        height: 12,
+                                                      ),
+                                                      Row(
+                                                        mainAxisSize:
+                                                            MainAxisSize.min,
+                                                        children: [
+                                                          IconButton(
+                                                            onPressed: () {
+                                                              if (qty > 1) {
+                                                                qty--;
+                                                                setLocal(() {});
+                                                              }
+                                                            },
+                                                            icon: const Icon(
+                                                              Icons.remove,
+                                                            ),
+                                                          ),
+                                                          Text(
+                                                            '$qty',
+                                                            style:
+                                                                Theme.of(
+                                                                      context,
+                                                                    )
+                                                                    .textTheme
+                                                                    .headlineSmall,
+                                                          ),
+                                                          IconButton(
+                                                            onPressed: () {
+                                                              qty++;
+                                                              setLocal(() {});
+                                                            },
+                                                            icon: const Icon(
+                                                              Icons.add,
+                                                            ),
+                                                          ),
+                                                        ],
+                                                      ),
+                                                      const SizedBox(
+                                                        height: 16,
+                                                      ),
+                                                      FilledButton.icon(
                                                         onPressed: () {
-                                                          if (qty > 1) {
-                                                            qty--;
-                                                            setLocal(() {});
+                                                          _cart.addProduct(
+                                                            p,
+                                                            qty: qty,
+                                                          );
+                                                          Navigator.pop(
+                                                            context,
+                                                          );
+                                                          if (mounted) {
+                                                            setState(() {});
                                                           }
                                                         },
                                                         icon: const Icon(
-                                                          Icons.remove,
+                                                          Icons
+                                                              .add_shopping_cart,
                                                         ),
-                                                      ),
-                                                      Text(
-                                                        '$qty',
-                                                        style: Theme.of(context)
-                                                            .textTheme
-                                                            .headlineSmall,
-                                                      ),
-                                                      IconButton(
-                                                        onPressed: () {
-                                                          qty++;
-                                                          setLocal(() {});
-                                                        },
-                                                        icon: const Icon(
-                                                          Icons.add,
+                                                        label: const Text(
+                                                          'Ajouter',
                                                         ),
                                                       ),
                                                     ],
                                                   ),
-                                                  const SizedBox(height: 16),
-                                                  FilledButton.icon(
-                                                    onPressed: () {
-                                                      _cart.addProduct(
-                                                        p,
-                                                        qty: qty,
-                                                      );
-                                                      Navigator.pop(context);
-                                                      if (mounted)
-                                                        setState(() {});
-                                                    },
-                                                    icon: const Icon(
-                                                      Icons.add_shopping_cart,
-                                                    ),
-                                                    label: const Text(
-                                                      'Ajouter',
+                                                ),
+                                              );
+                                            },
+                                          ),
+                                          widthFraction: 0.86,
+                                          heightFraction: 0.6,
+                                        );
+                                      },
+                                      onMenuAction: (action) async {
+                                        if (action == 'add1') {
+                                          _cart.addProduct(p, qty: 1);
+                                          if (mounted) setState(() {});
+                                        } else if (action == 'qty') {
+                                          int qty = 1;
+                                          await showRightDrawer<void>(
+                                            context,
+                                            child: StatefulBuilder(
+                                              builder: (context, setLocal) {
+                                                return Scaffold(
+                                                  appBar: AppBar(
+                                                    title: Text(title),
+                                                    leading: IconButton(
+                                                      icon: const Icon(
+                                                        Icons.close,
+                                                      ),
+                                                      onPressed: () =>
+                                                          Navigator.pop(
+                                                            context,
+                                                          ),
                                                     ),
                                                   ),
-                                                ],
-                                              ),
-                                            ),
-                                          );
-                                        },
-                                      ),
-                                      widthFraction: 0.86,
-                                      heightFraction: 0.6,
-                                    );
-                                  },
-                                  onMenuAction: (action) async {
-                                    if (action == 'add1') {
-                                      _cart.addProduct(p, qty: 1);
-                                      if (mounted) setState(() {});
-                                    } else if (action == 'qty') {
-                                      int qty = 1;
-                                      await showRightDrawer<void>(
-                                        context,
-                                        child: StatefulBuilder(
-                                          builder: (context, setLocal) {
-                                            return Scaffold(
-                                              appBar: AppBar(
-                                                title: Text(title),
-                                                leading: IconButton(
-                                                  icon: const Icon(Icons.close),
-                                                  onPressed: () =>
-                                                      Navigator.pop(context),
-                                                ),
-                                              ),
-                                              body: Center(
-                                                child: Column(
-                                                  mainAxisSize:
-                                                      MainAxisSize.min,
-                                                  children: [
-                                                    const Text('Quantité'),
-                                                    const SizedBox(height: 12),
-                                                    Row(
+                                                  body: Center(
+                                                    child: Column(
                                                       mainAxisSize:
                                                           MainAxisSize.min,
                                                       children: [
-                                                        IconButton(
+                                                        const Text('Quantité'),
+                                                        const SizedBox(
+                                                          height: 12,
+                                                        ),
+                                                        Row(
+                                                          mainAxisSize:
+                                                              MainAxisSize.min,
+                                                          children: [
+                                                            IconButton(
+                                                              onPressed: () {
+                                                                if (qty > 1) {
+                                                                  qty--;
+                                                                  setLocal(
+                                                                    () {},
+                                                                  );
+                                                                }
+                                                              },
+                                                              icon: const Icon(
+                                                                Icons.remove,
+                                                              ),
+                                                            ),
+                                                            Text(
+                                                              '$qty',
+                                                              style:
+                                                                  Theme.of(
+                                                                        context,
+                                                                      )
+                                                                      .textTheme
+                                                                      .headlineSmall,
+                                                            ),
+                                                            IconButton(
+                                                              onPressed: () {
+                                                                qty++;
+                                                                setLocal(() {});
+                                                              },
+                                                              icon: const Icon(
+                                                                Icons.add,
+                                                              ),
+                                                            ),
+                                                          ],
+                                                        ),
+                                                        const SizedBox(
+                                                          height: 16,
+                                                        ),
+                                                        FilledButton.icon(
                                                           onPressed: () {
-                                                            if (qty > 1) {
-                                                              qty--;
-                                                              setLocal(() {});
+                                                            _cart.addProduct(
+                                                              p,
+                                                              qty: qty,
+                                                            );
+                                                            Navigator.pop(
+                                                              context,
+                                                            );
+                                                            if (mounted) {
+                                                              setState(() {});
                                                             }
                                                           },
                                                           icon: const Icon(
-                                                            Icons.remove,
+                                                            Icons
+                                                                .add_shopping_cart,
                                                           ),
-                                                        ),
-                                                        Text(
-                                                          '$qty',
-                                                          style:
-                                                              Theme.of(context)
-                                                                  .textTheme
-                                                                  .headlineSmall,
-                                                        ),
-                                                        IconButton(
-                                                          onPressed: () {
-                                                            qty++;
-                                                            setLocal(() {});
-                                                          },
-                                                          icon: const Icon(
-                                                            Icons.add,
+                                                          label: const Text(
+                                                            'Ajouter',
                                                           ),
                                                         ),
                                                       ],
                                                     ),
-                                                    const SizedBox(height: 16),
-                                                    FilledButton.icon(
-                                                      onPressed: () {
-                                                        _cart.addProduct(
-                                                          p,
-                                                          qty: qty,
-                                                        );
-                                                        Navigator.pop(context);
-                                                        if (mounted)
-                                                          setState(() {});
-                                                      },
-                                                      icon: const Icon(
-                                                        Icons.add_shopping_cart,
-                                                      ),
-                                                      label: const Text(
-                                                        'Ajouter',
-                                                      ),
-                                                    ),
-                                                  ],
-                                                ),
-                                              ),
-                                            );
-                                          },
-                                        ),
-                                        widthFraction: 0.86,
-                                        heightFraction: 0.6,
-                                      );
-                                    } else if (action == 'details') {
-                                      await _viewProduct(p);
-                                    }
+                                                  ),
+                                                );
+                                              },
+                                            ),
+                                            widthFraction: 0.86,
+                                            heightFraction: 0.6,
+                                          );
+                                        } else if (action == 'details') {
+                                          await _viewProduct(p);
+                                        }
+                                      },
+                                    );
                                   },
-                                );
-                              },
-                            ),
-                          ),
-                        ],
+                                ),
+                              ),
+                            ],
+                          );
+                        },
                       );
                     },
                   );

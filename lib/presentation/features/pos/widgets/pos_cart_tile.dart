@@ -1,4 +1,8 @@
-// Minimal POS product tile with tap flash, top-left added check, bottom-left quantity badge, bottom-right decrement button, and safe menu placement.
+// Minimal POS product tile with tap flash, optional top image,
+// top-left added check, bottom-left quantity badge, bottom-right decrement button,
+// and safe menu placement.
+
+import 'dart:io';
 import 'package:characters/characters.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -11,6 +15,8 @@ class PosProductTile extends StatefulWidget {
   final int? stockQty;
   final bool isAdded;
   final int addedQty;
+  final String? imagePath; // local path if available
+  final String? imageUrl; // remote url fallback
   final VoidCallback? onTap;
   final VoidCallback? onLongPress;
   final VoidCallback? onDecrement;
@@ -24,6 +30,8 @@ class PosProductTile extends StatefulWidget {
     this.stockQty,
     this.isAdded = false,
     this.addedQty = 0,
+    this.imagePath,
+    this.imageUrl,
     this.onTap,
     this.onLongPress,
     this.onDecrement,
@@ -99,6 +107,41 @@ class _PosProductTileState extends State<PosProductTile> {
     widget.onTap?.call();
   }
 
+  Widget? _buildTopImage() {
+    // Prefer local file, fallback to remote
+    if (widget.imagePath != null &&
+        widget.imagePath!.isNotEmpty &&
+        File(widget.imagePath!).existsSync()) {
+      return ClipRRect(
+        borderRadius: BorderRadius.circular(10),
+        child: AspectRatio(
+          aspectRatio: 1.6, // wide banner-ish
+          child: Image.file(
+            File(widget.imagePath!),
+            fit: BoxFit.cover,
+            errorBuilder: (_, __, ___) =>
+                const Center(child: Icon(Icons.image_not_supported_outlined)),
+          ),
+        ),
+      );
+    }
+    if (widget.imageUrl != null && widget.imageUrl!.isNotEmpty) {
+      return ClipRRect(
+        borderRadius: BorderRadius.circular(10),
+        child: AspectRatio(
+          aspectRatio: 1.6,
+          child: Image.network(
+            widget.imageUrl!,
+            fit: BoxFit.cover,
+            errorBuilder: (_, __, ___) =>
+                const Center(child: Icon(Icons.image_not_supported_outlined)),
+          ),
+        ),
+      );
+    }
+    return null;
+  }
+
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
@@ -145,6 +188,8 @@ class _PosProductTileState extends State<PosProductTile> {
 
     final needsBottomControls =
         (widget.addedQty > 0) || (widget.onDecrement != null);
+
+    final topImage = _buildTopImage();
 
     return FocusableActionDetector(
       mouseCursor: SystemMouseCursors.click,
@@ -194,10 +239,16 @@ class _PosProductTileState extends State<PosProductTile> {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
+                        if (topImage != null) ...[
+                          topImage,
+                          const SizedBox(height: 8),
+                        ],
                         Row(
                           children: [
-                            CircleAvatar(radius: 18, child: Text(initial)),
-                            const SizedBox(width: 8),
+                            if (topImage == null) ...[
+                              CircleAvatar(radius: 18, child: Text(initial)),
+                              const SizedBox(width: 8),
+                            ],
                             Expanded(
                               child: Text(
                                 _price,
@@ -250,6 +301,7 @@ class _PosProductTileState extends State<PosProductTile> {
               ),
             ),
 
+            // Added check
             Positioned(
               left: 8,
               top: 8,
@@ -278,6 +330,7 @@ class _PosProductTileState extends State<PosProductTile> {
               ),
             ),
 
+            // Quantity badge
             if (widget.addedQty > 0)
               Positioned(
                 left: 10,
@@ -310,6 +363,7 @@ class _PosProductTileState extends State<PosProductTile> {
                 ),
               ),
 
+            // Decrement button
             if (widget.onDecrement != null)
               Positioned(
                 right: 8,
