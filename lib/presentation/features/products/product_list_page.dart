@@ -15,6 +15,7 @@ import 'package:money_pulse/presentation/widgets/attachments_picker.dart';
 import 'package:money_pulse/presentation/app/providers.dart';
 import 'package:money_pulse/presentation/widgets/right_drawer.dart';
 
+import '../../../infrastructure/products/product_marketplace_repo_provider.dart';
 import 'widgets/product_tile.dart';
 import 'widgets/product_form_panel.dart';
 import 'widgets/product_delete_panel.dart';
@@ -272,16 +273,48 @@ class _ProductListPageState extends ConsumerState<ProductListPage> {
   Future<void> _confirmDelete(Product p) async {
     _unfocus();
     if (!mounted) return;
+
     final ok = await showRightDrawer<bool>(
       context,
       child: ProductDeletePanel(product: p),
       widthFraction: 0.86,
       heightFraction: 0.6,
     );
+
     if (ok == true) {
+      // 1) Si un remoteId existe, on tente de notifier le marketplace (statuses=DELETE)
+      final remoteId = (p.remoteId ?? '').trim();
+      if (remoteId.isNotEmpty) {
+        try {
+          final marketRepo = ref.read(
+            productMarketplaceRepoProvider(_marketplaceBaseUri),
+          );
+          await marketRepo.changeRemoteStatus(
+            product: p,
+            statusesCode: 'DELETE',
+          );
+        } catch (e) {
+          // On continue la suppression locale quoi qu’il arrive, mais on informe l’utilisateur
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: Text(
+                  'Avertissement : échec de la désinscription distante ($e)',
+                ),
+              ),
+            );
+          }
+        }
+      }
+
+      // 2) Suppression logique locale
       await _repo.softDelete(p.id);
+
       if (!mounted) return;
-      setState(() {});
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('Produit supprimé.')));
+      setState(() {}); // refresh local list
     }
   }
 
