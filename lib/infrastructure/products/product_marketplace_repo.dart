@@ -1,4 +1,4 @@
-// Repository to publish/unpublish products to marketplace and sync local state.
+// Marketplace repo: publish/unpublish product, persist remoteId/status using response body (product.id) or headers/URLs.
 import 'dart:convert';
 import 'dart:io';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -8,11 +8,6 @@ import 'package:money_pulse/domain/products/entities/product.dart';
 import 'package:money_pulse/domain/products/repositories/product_repository.dart';
 import 'package:money_pulse/presentation/features/products/product_repo_provider.dart';
 import '../../sync/infrastructure/sync_headers_provider.dart';
-
-final productMarketplaceRepoProvider =
-    Provider.family<ProductMarketplaceRepo, String>((ref, baseUri) {
-      return ProductMarketplaceRepo(ref, baseUri);
-    });
 
 class ProductMarketplaceRepo {
   final Ref ref;
@@ -67,11 +62,12 @@ class ProductMarketplaceRepo {
       );
     }
 
-    String? remoteId =
+    final remoteId =
         _parseRemoteIdFromBody(resp.body) ??
         _parseRemoteIdFromHeaders(streamed.headers);
+
     final updated = product.copyWith(
-      remoteId: remoteId,
+      remoteId: (remoteId ?? '').isEmpty ? product.remoteId : remoteId,
       statuses: 'PUBLISHED',
       updatedAt: DateTime.now(),
       isDirty: 1,
@@ -124,9 +120,8 @@ class ProductMarketplaceRepo {
       );
     }
 
-    final newLocalStatus = statusesCode;
     final updated = product.copyWith(
-      statuses: newLocalStatus,
+      statuses: statusesCode,
       updatedAt: DateTime.now(),
       isDirty: 1,
     );
@@ -155,7 +150,7 @@ class ProductMarketplaceRepo {
       'category': p.categoryId,
       'account': p.account,
       'defaultPrice': p.defaultPrice / 100.0,
-      'statuses': p.statuses,
+      'statuses': "PUBLISH",
       'purchasePrice': p.purchasePrice / 100.0,
     };
     map.removeWhere((_, v) => v == null);
@@ -179,10 +174,35 @@ class ProductMarketplaceRepo {
 
   String? _parseRemoteIdFromBody(String body) {
     try {
-      final decoded = json.decode(body);
-      if (decoded is Map<String, dynamic>) {
-        final v = (decoded['remoteId'] ?? decoded['id'] ?? '').toString();
-        return v.isEmpty ? null : v;
+      final d = json.decode(body);
+      if (d is Map<String, dynamic>) {
+        if (d['product'] is Map<String, dynamic>) {
+          final p = d['product'] as Map<String, dynamic>;
+          final v1 = (p['remoteId'] ?? '').toString().trim();
+          if (v1.isNotEmpty) return v1;
+          final v2 = (p['id'] ?? '').toString().trim();
+          if (v2.isNotEmpty) return v2;
+        }
+        final v0 = (d['remoteId'] ?? d['id'] ?? '').toString().trim();
+        if (v0.isNotEmpty) return v0;
+        if (d['data'] is Map<String, dynamic>) {
+          final m = d['data'] as Map<String, dynamic>;
+          final v = (m['id'] ?? m['remoteId'] ?? '').toString().trim();
+          if (v.isNotEmpty) return v;
+        }
+        if (d['result'] is Map<String, dynamic>) {
+          final m = d['result'] as Map<String, dynamic>;
+          final v = (m['id'] ?? m['remoteId'] ?? '').toString().trim();
+          if (v.isNotEmpty) return v;
+        }
+        if (d['images'] is List && (d['images'] as List).isNotEmpty) {
+          final first = (d['images'] as List).first;
+          if (first is Map<String, dynamic>) {
+            final url = (first['url'] ?? '').toString();
+            final fromUrl = _extractIdFromPublicUrl(url);
+            if (fromUrl != null && fromUrl.isNotEmpty) return fromUrl;
+          }
+        }
       }
     } catch (_) {}
     return null;
@@ -192,6 +212,15 @@ class ProductMarketplaceRepo {
     final loc = headers['location'] ?? headers['Location'];
     if (loc == null || loc.isEmpty) return null;
     final parts = loc.split('/');
-    return parts.isNotEmpty ? parts.last : null;
+    return parts.isNotEmpty ? parts.last.trim() : null;
+  }
+
+  String? _extractIdFromPublicUrl(String url) {
+    final idx = url.indexOf('/products/');
+    if (idx == -1) return null;
+    final after = url.substring(idx + '/products/'.length);
+    final segs = after.split('/');
+    if (segs.isEmpty) return null;
+    return segs.first.trim();
   }
 }

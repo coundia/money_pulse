@@ -1,4 +1,4 @@
-// Publish button that uploads product + images to marketplace and optionally sets a status; French UI labels; notifies parent on success.
+// Publish button that uploads product + images, persists remoteId/status locally, and notifies parent.
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -46,9 +46,7 @@ class _ProductMarketButtonState extends ConsumerState<ProductMarketButton> {
 
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Publié: ${updated.name ?? updated.code ?? 'Produit'}'),
-        ),
+        SnackBar(content: Text('Publié: ${updated.name ?? 'Produit'}')),
       );
       widget.onDone?.call();
     } catch (e) {
