@@ -15,8 +15,8 @@ class PosProductTile extends StatefulWidget {
   final int? stockQty;
   final bool isAdded;
   final int addedQty;
-  final String? imagePath; // local path if available
-  final String? imageUrl; // remote url fallback
+  final String? imagePath;
+  final String? imageUrl;
   final VoidCallback? onTap;
   final VoidCallback? onLongPress;
   final VoidCallback? onDecrement;
