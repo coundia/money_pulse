@@ -1,11 +1,10 @@
-// Right-drawer product view with details, gallery and publish/unpublish actions; published state handles PUBLISH and PUBLISHED.
+// Right-drawer product view; closes with `true` on publish/unpublish to trigger parent refresh.
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:money_pulse/domain/products/entities/product.dart';
 import 'package:money_pulse/presentation/shared/formatters.dart';
-import '../../../products/product_market_button.dart';
-import 'product_unpublish_button.dart';
+import 'product_publish_actions.dart';
 import 'product_files_gallery.dart';
 import 'package:money_pulse/presentation/features/products/product_file_repo_provider.dart';
 
@@ -54,11 +53,6 @@ class ProductViewPanel extends ConsumerWidget {
         : null;
     final created = Formatters.dateFull(p.createdAt);
     final updated = Formatters.dateFull(p.updatedAt);
-    final statusesUpper = (p.statuses ?? '').toUpperCase().trim();
-    final published =
-        ((p.remoteId ?? '').trim().isNotEmpty) ||
-        statusesUpper == 'PUBLISH' ||
-        statusesUpper == 'PUBLISHED';
 
     final imagesAsync = ref.watch(_imagesForPublishProvider(p.id));
 
@@ -67,7 +61,7 @@ class ProductViewPanel extends ConsumerWidget {
         title: const Text('Détails du produit'),
         leading: IconButton(
           icon: const Icon(Icons.close),
-          onPressed: () => Navigator.of(context).maybePop(),
+          onPressed: () => Navigator.of(context).maybePop(false),
           tooltip: 'Fermer',
         ),
         actions: [
@@ -118,72 +112,56 @@ class ProductViewPanel extends ConsumerWidget {
                               .toUpperCase(),
                         ),
                       ),
-                      Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            p.name ?? 'Produit',
-                            style: Theme.of(context).textTheme.titleLarge,
-                          ),
-                          if ((p.description ?? '').isNotEmpty)
-                            Padding(
-                              padding: const EdgeInsets.only(top: 6),
-                              child: Text(
-                                p.description!,
-                                maxLines: 3,
-                                overflow: TextOverflow.ellipsis,
-                              ),
+                      Flexible(
+                        fit: FlexFit.loose,
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              p.name ?? 'Produit',
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: Theme.of(context).textTheme.titleLarge,
                             ),
-                          const SizedBox(height: 8),
-                          Wrap(
-                            spacing: 8,
-                            runSpacing: 8,
-                            children: [
-                              Chip(label: Text('PU: $price')),
-                              if (priceBuy != null)
-                                Chip(label: Text("Achat: $priceBuy")),
-                              if ((categoryLabel ?? '').isNotEmpty)
-                                Chip(label: Text("Catégorie: $categoryLabel")),
-                              Chip(
-                                label: Text(
-                                  published ? 'Publié' : 'Non publié',
+                            if ((p.description ?? '').isNotEmpty)
+                              Padding(
+                                padding: const EdgeInsets.only(top: 6),
+                                child: Text(
+                                  p.description!,
+                                  maxLines: 3,
+                                  overflow: TextOverflow.ellipsis,
                                 ),
-                                backgroundColor: published
-                                    ? Colors.green.withOpacity(.12)
-                                    : Colors.grey.withOpacity(.16),
                               ),
-                            ],
-                          ),
-                          const SizedBox(height: 6),
-                          Text(
-                            'Créé: $created • Modifié: $updated',
-                            style: Theme.of(context).textTheme.bodySmall,
-                          ),
-                        ],
+                            const SizedBox(height: 8),
+                            Wrap(
+                              spacing: 8,
+                              runSpacing: 8,
+                              children: [
+                                Chip(label: Text('PU: $price')),
+                                if (priceBuy != null)
+                                  Chip(label: Text('Achat: $priceBuy')),
+                                if ((categoryLabel ?? '').isNotEmpty)
+                                  Chip(
+                                    label: Text('Catégorie: $categoryLabel'),
+                                  ),
+                              ],
+                            ),
+                            const SizedBox(height: 6),
+                            Text(
+                              'Créé: $created • Modifié: $updated',
+                              style: Theme.of(context).textTheme.bodySmall,
+                            ),
+                          ],
+                        ),
                       ),
                       const SizedBox(width: 12),
                       imagesAsync.when(
-                        data: (imgs) {
-                          return Wrap(
-                            spacing: 8,
-                            runSpacing: 8,
-                            children: [
-                              ProductMarketButton(
-                                product: p,
-                                images: imgs,
-                                baseUri: marketplaceBaseUri,
-                                statusesCodeAfterPublish: 'PUBLISH',
-                                onDone: () => Navigator.of(context).maybePop(),
-                              ),
-                              ProductUnpublishButton(
-                                product: p,
-                                baseUri: marketplaceBaseUri,
-                                statusesCode: 'UNPUBLISH',
-                                onDone: () => Navigator.of(context).maybePop(),
-                              ),
-                            ],
-                          );
-                        },
+                        data: (imgs) => ProductPublishActions(
+                          product: p,
+                          baseUri: marketplaceBaseUri,
+                          images: imgs,
+                          onChanged: () => Navigator.of(context).maybePop(true),
+                        ),
                         loading: () => const Padding(
                           padding: EdgeInsets.symmetric(horizontal: 8),
                           child: SizedBox(

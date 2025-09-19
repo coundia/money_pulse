@@ -1,4 +1,4 @@
-// Orchestration page for products list: loads/searches, opens right-drawers, saves product files (path/bytes/stream), and refreshes stock after mutations.
+// Products list orchestration page: load/search/filter, open right-drawers, persist files, and refresh after publish/unpublish.
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -12,7 +12,6 @@ import 'package:money_pulse/domain/products/repositories/product_repository.dart
 import 'package:money_pulse/presentation/features/products/product_repo_provider.dart';
 import 'package:money_pulse/presentation/features/products/product_file_repo_provider.dart';
 import 'package:money_pulse/presentation/widgets/attachments_picker.dart';
-
 import 'package:money_pulse/presentation/app/providers.dart';
 import 'package:money_pulse/presentation/widgets/right_drawer.dart';
 
@@ -35,7 +34,6 @@ class ProductListPage extends ConsumerStatefulWidget {
 }
 
 class _ProductListPageState extends ConsumerState<ProductListPage> {
-  // ====== FIX: base URI marketplace centralisée ici ======
   static const String _marketplaceBaseUri = 'http://127.0.0.1:8095';
 
   late final ProductRepository _repo = ref.read(productRepoProvider);
@@ -298,24 +296,22 @@ class _ProductListPageState extends ConsumerState<ProductListPage> {
 
     final nav = Navigator.of(context);
 
-    await showRightDrawer<void>(
+    final shouldRefresh = await showRightDrawer<bool>(
       context,
       child: ProductViewPanel(
         product: p,
         categoryLabel: catLabel,
-        marketplaceBaseUri:
-            _marketplaceBaseUri, // FIX: on transmet bien l’URL de l’API marketplace
-        // publishStatusesCode / unpublishStatusesCode optionnels si tu veux pousser des codes précis
+        marketplaceBaseUri: _marketplaceBaseUri,
         onEdit: () async {
           if (!mounted) return;
-          nav.pop();
+          nav.pop(false);
           await Future.delayed(const Duration(milliseconds: 60));
           if (!mounted) return;
           await _addOrEdit(existing: p);
         },
         onDelete: () async {
           if (!mounted) return;
-          nav.pop();
+          nav.pop(false);
           await Future.delayed(const Duration(milliseconds: 60));
           if (!mounted) return;
           await _confirmDelete(p);
@@ -323,7 +319,7 @@ class _ProductListPageState extends ConsumerState<ProductListPage> {
         onShare: () => _share(p),
         onAdjust: () async {
           if (!mounted) return;
-          nav.pop();
+          nav.pop(false);
           await Future.delayed(const Duration(milliseconds: 60));
           if (!mounted) return;
           await _openAdjust(p);
@@ -332,6 +328,10 @@ class _ProductListPageState extends ConsumerState<ProductListPage> {
       widthFraction: 0.92,
       heightFraction: 0.96,
     );
+
+    if (shouldRefresh == true && mounted) {
+      await _refresh();
+    }
   }
 
   Future<Map<String, int>> _computeStockMap(List<Product> items) async {
@@ -533,12 +533,10 @@ class _ProductListPageState extends ConsumerState<ProductListPage> {
                               ? p.name!
                               : (p.code ?? 'Produit');
                           final subParts = <String>[];
-                          if ((p.description ?? '').isNotEmpty) {
+                          if ((p.description ?? '').isNotEmpty)
                             subParts.add(p.description!);
-                          }
-                          if (p.statuses != null && p.statuses!.isNotEmpty) {
+                          if (p.statuses != null && p.statuses!.isNotEmpty)
                             subParts.add(p.statuses!);
-                          }
                           final sub = subParts.join('  •  ');
                           final qty = stockMap[p.id] ?? 0;
 
@@ -614,7 +612,6 @@ class _EmptySection extends StatelessWidget {
           ),
       ],
     );
-
     return Center(
       child: Padding(padding: const EdgeInsets.all(24), child: content),
     );
