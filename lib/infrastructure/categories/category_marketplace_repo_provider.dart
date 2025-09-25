@@ -211,7 +211,7 @@ class CategoryMarketplaceRepo {
   }
 
   Future<void> deleteBoth(Category c) async {
-    await deleteRemote(c);
     await localRepo.softDelete(c.id);
+    await deleteRemote(c);
   }
 }
