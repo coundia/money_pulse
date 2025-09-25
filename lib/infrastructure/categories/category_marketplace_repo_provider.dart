@@ -1,5 +1,5 @@
 // Marketplace HTTP repository for Category using header builder.
-// Creates (POST) or updates (PUT by code) on remote, and always updates local copy in sync.
+// Create/Update/Unpublish/Publish and now Delete (remote) + helper to delete both remote and local.
 import 'dart:convert';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:http/http.dart' as http;
@@ -9,8 +9,7 @@ import 'package:money_pulse/domain/categories/repositories/category_repository.d
 import 'package:money_pulse/presentation/app/providers.dart';
 
 import '../../sync/infrastructure/sync_headers_provider.dart';
-
-// NOTE: change this import if your path differs
+// Adapte l'import si ton chemin diffère
 
 final categoryMarketplaceRepoProvider =
     Provider.family<CategoryMarketplaceRepo, String>((ref, baseUri) {
@@ -43,13 +42,13 @@ class CategoryMarketplaceRepo {
 
   Uri _u(String p) => Uri.parse('$baseUri$p');
 
-  Future<Map<String, dynamic>?> _decode(String body) {
-    if (body.trim().isEmpty) return Future.value(null);
+  Future<Map<String, dynamic>?> _decode(String body) async {
+    if (body.trim().isEmpty) return null;
     try {
       final v = jsonDecode(body);
-      return Future.value(v is Map<String, dynamic> ? v : null);
+      return v is Map<String, dynamic> ? v : null;
     } catch (_) {
-      return Future.value(null);
+      return null;
     }
   }
 
@@ -59,7 +58,8 @@ class CategoryMarketplaceRepo {
     String? status,
     bool? isPublic,
     DateTime? syncAt,
-    bool isDirty = false,
+    bool? isDirty,
+    DateTime? deletedAt,
   }) async {
     final updated = base.copyWith(
       remoteId: remoteId ?? base.remoteId,
@@ -67,7 +67,8 @@ class CategoryMarketplaceRepo {
       isPublic: isPublic ?? base.isPublic,
       syncAt: syncAt ?? DateTime.now().toUtc(),
       updatedAt: DateTime.now(),
-      isDirty: isDirty,
+      isDirty: isDirty ?? base.isDirty,
+      deletedAt: deletedAt ?? base.deletedAt,
     );
     await localRepo.update(updated);
     return updated;
@@ -129,7 +130,6 @@ class CategoryMarketplaceRepo {
     final desiredStatus = (forceStatus ?? c.status ?? 'PUBLISH').toUpperCase();
     final desiredIsPublic = forceIsPublic ?? c.isPublic;
 
-    // Per your cURL, backend expects PUT with the code in path
     final codePath = c.remoteId;
 
     final body = {
@@ -185,13 +185,33 @@ class CategoryMarketplaceRepo {
   }
 
   Future<Category> unpublish(Category c) async {
-    // Remote: set status UNPUBLISH and isPublic false; Local: reflect the same.
     final want = c.copyWith(status: 'UNPUBLISH', isPublic: false);
-    // Si remoteId absent, on met quand même à jour par code (backend attend le code en path).
     return updateRemoteByCode(
       want,
       forceStatus: 'UNPUBLISH',
       forceIsPublic: false,
     );
+  }
+
+  Future<void> deleteRemote(Category c) async {
+    // Utilise remoteId si présent, sinon code (ton cURL montre un path avec l'id/code)
+    final idOrCode = (c.remoteId?.trim().isNotEmpty == true)
+        ? c.remoteId!.trim()
+        : c.code.trim();
+    if (idOrCode.isEmpty) {
+      throw Exception('Delete requires a valid remoteId or code');
+    }
+    final res = await httpClient.delete(
+      _u('/api/v1/commands/category/$idOrCode'),
+      headers: headerBuilder(),
+    );
+    if (res.statusCode < 200 || res.statusCode >= 300) {
+      throw Exception('Delete category failed: ${res.statusCode} ${res.body}');
+    }
+  }
+
+  Future<void> deleteBoth(Category c) async {
+    await deleteRemote(c);
+    await localRepo.softDelete(c.id);
   }
 }

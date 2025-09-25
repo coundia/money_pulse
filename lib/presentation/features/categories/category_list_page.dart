@@ -9,6 +9,7 @@ import 'package:money_pulse/presentation/widgets/right_drawer.dart';
 
 import 'package:money_pulse/domain/categories/entities/category.dart';
 import 'package:money_pulse/domain/categories/repositories/category_repository.dart';
+import '../../../infrastructure/categories/category_marketplace_repo_provider.dart';
 import 'widgets/category_form_panel.dart';
 import 'widgets/category_tile.dart';
 import 'widgets/category_context_menu.dart';
@@ -106,7 +107,7 @@ class _CategoryListPageState extends ConsumerState<CategoryListPage> {
       context: context,
       builder: (dialogContext) => AlertDialog(
         title: const Text('Supprimer la catégorie ?'),
-        content: Text('« ${c.code} » sera déplacée dans la corbeille.'),
+        content: Text('« ${c.code} » sera supprimée à distance et en local.'),
         actions: [
           TextButton(
             onPressed: () => Navigator.of(dialogContext).pop(false),
@@ -120,8 +121,24 @@ class _CategoryListPageState extends ConsumerState<CategoryListPage> {
       ),
     );
     if (!mounted || ok != true) return;
-    await _repo.softDelete(c.id);
-    if (mounted) setState(() {});
+
+    try {
+      final repo = ref.read(
+        categoryMarketplaceRepoProvider(widget.marketplaceBaseUri),
+      );
+      await repo.deleteBoth(c);
+      if (!mounted) return;
+      ScaffoldMessenger.maybeOf(
+        context,
+      )?.showSnackBar(const SnackBar(content: Text('Catégorie supprimée')));
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.maybeOf(
+        context,
+      )?.showSnackBar(SnackBar(content: Text('Échec de la suppression : $e')));
+    } finally {
+      if (mounted) setState(() {});
+    }
   }
 
   Future<void> _view(Category c) async {
@@ -247,6 +264,12 @@ class _CategoryListPageState extends ConsumerState<CategoryListPage> {
                           final subtitle = (c.description?.isNotEmpty == true)
                               ? c.description!
                               : 'Mis à jour ${_fmtDate(c.updatedAt)}';
+                          final isPublished =
+                              ((c.status ?? '').toUpperCase().startsWith(
+                                'PUBLISH',
+                              )) &&
+                              c.isPublic == true;
+
                           return GestureDetector(
                             onLongPressStart: (d) =>
                                 _showContextMenu(d.globalPosition, c),
@@ -264,6 +287,10 @@ class _CategoryListPageState extends ConsumerState<CategoryListPage> {
                                     Offset.zero;
                                 _showContextMenu(offset, c);
                               },
+                              isPublished: isPublished,
+                              statusLabel: isPublished
+                                  ? 'Publié'
+                                  : 'Non publié',
                             ),
                           );
                         },

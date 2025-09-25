@@ -1,4 +1,4 @@
-// Right-drawer details for Category with publish/unpublish actions and improved UX.
+// Right-drawer details for Category with publish/unpublish actions and remote delete + local sync.
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -7,6 +7,7 @@ import 'package:money_pulse/presentation/shared/formatters.dart';
 import 'package:money_pulse/presentation/widgets/key_value_row.dart';
 
 import 'category_publish_actions.dart';
+import 'package:money_pulse/infrastructure/categories/category_marketplace_repo_provider.dart';
 
 class CategoryDetailsPanel extends ConsumerWidget {
   final Category category;
@@ -35,12 +36,37 @@ class CategoryDetailsPanel extends ConsumerWidget {
         '\nMis à jour le: ${_fmtDate(c.updatedAt)}'
         '\nSupprimée le: ${_fmtDate(c.deletedAt)}'
         '\nSynchronisée le: ${_fmtDate(c.syncAt)}'
-        '\nVersion: ${c.version}';
+        '\nVersion: ${c.version}'
+        '\nStatut: ${c.status ?? '—'}'
+        '\nPublic: ${c.isPublic ? 'oui' : 'non'}';
     await Clipboard.setData(ClipboardData(text: text));
     if (!context.mounted) return;
     ScaffoldMessenger.maybeOf(context)?.showSnackBar(
       const SnackBar(content: Text('Détails copiés dans le presse-papiers')),
     );
+  }
+
+  Future<bool> _confirmDelete(BuildContext context) async {
+    final result = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Supprimer la catégorie ?'),
+        content: const Text(
+          'Cette action est irréversible. Confirmer la suppression distante et locale ?',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(false),
+            child: const Text('Annuler'),
+          ),
+          FilledButton.tonal(
+            onPressed: () => Navigator.of(ctx).pop(true),
+            child: const Text('Supprimer'),
+          ),
+        ],
+      ),
+    );
+    return result ?? false;
   }
 
   @override
@@ -90,6 +116,8 @@ class CategoryDetailsPanel extends ConsumerWidget {
           KeyValueRow(label: 'Type', value: c.typeEntry ?? '—'),
           const Divider(height: 24),
           KeyValueRow(label: 'ID distant', value: c.remoteId ?? '—'),
+          KeyValueRow(label: 'Statut', value: c.status ?? '—'),
+          KeyValueRow(label: 'Public', value: c.isPublic ? 'Oui' : 'Non'),
           KeyValueRow(label: 'Créée le', value: _fmtDate(c.createdAt)),
           KeyValueRow(label: 'Mis à jour le', value: _fmtDate(c.updatedAt)),
           KeyValueRow(label: 'Supprimée le', value: _fmtDate(c.deletedAt)),
@@ -103,10 +131,34 @@ class CategoryDetailsPanel extends ConsumerWidget {
         child: Row(
           children: [
             Expanded(
-              child: OutlinedButton.icon(
-                onPressed: onDelete,
-                icon: const Icon(Icons.delete_outline),
+              child: FilledButton.icon(
+                onPressed: () async {
+                  final ok = await _confirmDelete(context);
+                  if (!ok) return;
+                  try {
+                    final repo = ref.read(
+                      categoryMarketplaceRepoProvider(marketplaceBaseUri),
+                    );
+                    await repo.deleteBoth(c);
+                    if (!context.mounted) return;
+                    ScaffoldMessenger.maybeOf(context)?.showSnackBar(
+                      const SnackBar(content: Text('Catégorie supprimée')),
+                    );
+                    Navigator.of(context).maybePop();
+                    onDelete?.call();
+                  } catch (e) {
+                    if (!context.mounted) return;
+                    ScaffoldMessenger.maybeOf(context)?.showSnackBar(
+                      SnackBar(content: Text('Échec de la suppression : $e')),
+                    );
+                  }
+                },
+                icon: const Icon(Icons.delete_forever_outlined),
                 label: const Text('Supprimer'),
+                style: FilledButton.styleFrom(
+                  backgroundColor: Theme.of(context).colorScheme.error,
+                  foregroundColor: Theme.of(context).colorScheme.onError,
+                ),
               ),
             ),
           ],
