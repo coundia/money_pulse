@@ -1,28 +1,19 @@
 class Category {
-  /// Row id (UUID v4 recommandé)
   final String id;
-
-  /// Client-side identifier sent to the server (optional).
-  /// Falls back to [id] when missing in older rows.
   final String? localId;
-
-  /// Remote identifier if synced with a server
   final String? remoteId;
-
   final String code;
-
   final String? description;
-
   final DateTime createdAt;
   final DateTime updatedAt;
   final DateTime? deletedAt;
   final DateTime? syncAt;
-
   final int version;
   final bool isDirty;
-
   final String typeEntry;
   final String? account;
+  final String? status;
+  final bool isPublic;
 
   static const String debit = 'DEBIT';
   static const String credit = 'CREDIT';
@@ -41,25 +32,17 @@ class Category {
     this.version = 0,
     this.isDirty = true,
     this.typeEntry = debit,
+    this.status,
+    this.isPublic = true,
   }) : assert(
          typeEntry == debit || typeEntry == credit,
          "typeEntry must be either 'DEBIT' or 'CREDIT'",
        );
 
-  // --------------------------
-  // Helpers
-  // --------------------------
-
   bool get isDeleted => deletedAt != null;
   bool get isDebit => typeEntry == debit;
   bool get isCredit => typeEntry == credit;
-
-  /// -1 pour DEBIT, +1 pour CREDIT (utile pour les calculs de soldes)
   int get sign => isDebit ? -1 : 1;
-
-  // --------------------------
-  // Mapping <-> DB / JSON
-  // --------------------------
 
   static DateTime? _parseDate(dynamic v) {
     if (v == null) return null;
@@ -80,17 +63,25 @@ class Category {
     return s == '1' || s == 'true' || s == 't' || s == 'yes' || s == 'y';
   }
 
+  static bool _parseBool(dynamic v, {required bool defaultValue}) {
+    if (v == null) return defaultValue;
+    if (v is bool) return v;
+    if (v is num) return v != 0;
+    final s = v.toString().toLowerCase();
+    return s == '1' || s == 'true' || s == 't' || s == 'yes' || s == 'y';
+  }
+
   static String _normType(dynamic v) {
     final s = (v ?? debit).toString().toUpperCase().trim();
     if (s == credit) return credit;
-    return debit; // fallback sécurisé
+    return debit;
   }
 
   factory Category.fromMap(Map<String, Object?> m) {
     final id = m['id'] as String;
     return Category(
       id: id,
-      localId: (m['localId'] as String?) ?? id, // fallback for old rows
+      localId: (m['localId'] as String?) ?? id,
       remoteId: m['remoteId'] as String?,
       code: m['code'] as String,
       account: m['account'] as String?,
@@ -102,6 +93,8 @@ class Category {
       version: (m['version'] as int?) ?? 0,
       isDirty: _parseDirty(m['isDirty']),
       typeEntry: _normType(m['typeEntry']),
+      status: m['status'] as String?,
+      isPublic: _parseBool(m['isPublic'], defaultValue: true),
     );
   }
 
@@ -121,18 +114,14 @@ class Category {
       'version': version,
       'isDirty': isDirty ? 1 : 0,
       'typeEntry': typeEntry.toUpperCase(),
+      'status': status,
+      'isPublic': isPublic ? 1 : 0,
     };
   }
 
-  // Optionnel si tu utilises des APIs JSON
   factory Category.fromJson(Map<String, Object?> json) =>
       Category.fromMap(json);
-
   Map<String, Object?> toJson() => toMap();
-
-  // --------------------------
-  // Copy
-  // --------------------------
 
   Category copyWith({
     String? id,
@@ -148,6 +137,8 @@ class Category {
     int? version,
     bool? isDirty,
     String? typeEntry,
+    String? status,
+    bool? isPublic,
   }) {
     final te = typeEntry ?? this.typeEntry;
     assert(
@@ -168,12 +159,10 @@ class Category {
       version: version ?? this.version,
       isDirty: isDirty ?? this.isDirty,
       typeEntry: te,
+      status: status ?? this.status,
+      isPublic: isPublic ?? this.isPublic,
     );
   }
-
-  // --------------------------
-  // Equality & Debug
-  // --------------------------
 
   @override
   bool operator ==(Object other) {
@@ -191,7 +180,9 @@ class Category {
         other.syncAt == syncAt &&
         other.version == version &&
         other.isDirty == isDirty &&
-        other.typeEntry == typeEntry;
+        other.typeEntry == typeEntry &&
+        other.status == status &&
+        other.isPublic == isPublic;
   }
 
   @override
@@ -207,9 +198,11 @@ class Category {
       (syncAt?.hashCode ?? 0) ^
       version.hashCode ^
       isDirty.hashCode ^
-      typeEntry.hashCode;
+      typeEntry.hashCode ^
+      (status?.hashCode ?? 0) ^
+      isPublic.hashCode;
 
   @override
   String toString() =>
-      'Category(id: $id, localId: $localId, code: $code, typeEntry: $typeEntry, version: $version, isDirty: $isDirty)';
+      'Category(id: $id, localId: $localId, code: $code, typeEntry: $typeEntry, status: $status, isPublic: $isPublic, version: $version, isDirty: $isDirty)';
 }

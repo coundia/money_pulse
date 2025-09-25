@@ -37,10 +37,10 @@ CREATE INDEX idx_account_code ON account(code);
 CREATE INDEX idx_account_dirty ON account(isDirty);
 CREATE INDEX idx_account_deleted ON account(deletedAt);
 
-CREATE TABLE IF NOT EXISTS  category (
+CREATE TABLE IF NOT EXISTS category (
   id TEXT PRIMARY KEY,
   remoteId TEXT,
-    localId TEXT,
+  localId TEXT,
   code TEXT,
   description TEXT,
   typeEntry TEXT DEFAULT 'DEBIT' CHECK(typeEntry IN ('DEBIT','CREDIT')),
@@ -48,12 +48,11 @@ CREATE TABLE IF NOT EXISTS  category (
   updatedAt TEXT DEFAULT (datetime('now')),
   deletedAt TEXT,
   syncAt TEXT,
-  
   isShared INTEGER DEFAULT 0,
   createdBy TEXT,
-
   account TEXT,
-
+  status TEXT,
+  isPublic INTEGER DEFAULT 0,
   version INTEGER DEFAULT 0,
   isDirty INTEGER DEFAULT 1
 );

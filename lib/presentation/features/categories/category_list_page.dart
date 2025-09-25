@@ -1,3 +1,4 @@
+// Orchestration page for Category: load/search/sort by updatedAt desc, sync from remote, open details with publish actions in a right drawer.
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -5,19 +6,23 @@ import 'package:uuid/uuid.dart';
 
 import 'package:money_pulse/presentation/shared/formatters.dart';
 import 'package:money_pulse/presentation/widgets/right_drawer.dart';
-import 'package:money_pulse/presentation/app/providers.dart';
 
 import 'package:money_pulse/domain/categories/entities/category.dart';
 import 'package:money_pulse/domain/categories/repositories/category_repository.dart';
-
-// Widgets internes
 import 'widgets/category_form_panel.dart';
 import 'widgets/category_tile.dart';
 import 'widgets/category_context_menu.dart';
 import 'widgets/category_details_panel.dart';
+import 'package:money_pulse/presentation/app/providers.dart';
+import 'package:money_pulse/infrastructure/categories/category_pull_service.dart';
 
 class CategoryListPage extends ConsumerStatefulWidget {
-  const CategoryListPage({super.key});
+  final String marketplaceBaseUri;
+  const CategoryListPage({
+    super.key,
+    this.marketplaceBaseUri = 'http://127.0.0.1:8095',
+  });
+
   @override
   ConsumerState<CategoryListPage> createState() => _CategoryListPageState();
 }
@@ -66,27 +71,30 @@ class _CategoryListPageState extends ConsumerState<CategoryListPage> {
       final now = DateTime.now();
       final cat = Category(
         id: const Uuid().v4(),
+        localId: null,
         remoteId: null,
         code: result.code,
         description: _t(result.description),
-        typeEntry: result.typeEntry, // ✅ prend la valeur du formulaire
+        typeEntry: result.typeEntry,
         createdAt: now,
         updatedAt: now,
         deletedAt: null,
         syncAt: null,
+        account: null,
         version: 0,
         isDirty: true,
+        status: null,
+        isPublic: true,
       );
-
       await _repo.create(cat);
     } else {
       final updated = existing.copyWith(
         code: result.code,
         description: _t(result.description),
-        typeEntry: result.typeEntry, // ✅ prend la valeur du formulaire
+        typeEntry: result.typeEntry,
         updatedAt: DateTime.now(),
+        isDirty: true,
       );
-
       await _repo.update(updated);
     }
     if (mounted) setState(() {});
@@ -116,6 +124,25 @@ class _CategoryListPageState extends ConsumerState<CategoryListPage> {
     if (mounted) setState(() {});
   }
 
+  Future<void> _view(Category c) async {
+    if (!mounted) return;
+    await showRightDrawer<void>(
+      context,
+      child: CategoryDetailsPanel(
+        category: c,
+        marketplaceBaseUri: widget.marketplaceBaseUri,
+        onEdit: () => _addOrEdit(existing: c),
+        onDelete: () async {
+          await _repo.softDelete(c.id);
+          if (mounted) setState(() {});
+        },
+      ),
+      widthFraction: 0.86,
+      heightFraction: 0.96,
+    );
+    if (mounted) setState(() {});
+  }
+
   Future<void> _share(Category c) async {
     if (!mounted) return;
     final messenger = ScaffoldMessenger.maybeOf(context);
@@ -124,10 +151,8 @@ class _CategoryListPageState extends ConsumerState<CategoryListPage> {
         'Description: ${c.description ?? '—'}\n'
         'Type: ${c.typeEntry}\n'
         'Mis à jour: ${_fmtDate(c.updatedAt)}\n'
-        'Créée le: ${_fmtDate(c.createdAt)}\n'
-        'ID: ${c.id}';
+        'Créée le: ${_fmtDate(c.createdAt)}';
     await Clipboard.setData(ClipboardData(text: text));
-    if (!mounted) return;
     messenger?.showSnackBar(
       const SnackBar(content: Text('Détails copiés dans le presse-papiers')),
     );
@@ -143,92 +168,18 @@ class _CategoryListPageState extends ConsumerState<CategoryListPage> {
               c.code,
               c.description ?? '',
               c.remoteId ?? '',
-              c.typeEntry, // ✅ recherche aussi par type
+              c.typeEntry,
+              c.status ?? '',
             ].join(' ').toLowerCase();
             return s.contains(q);
           }).toList();
-    filtered.sort(
-      (a, b) => a.code.toLowerCase().compareTo(b.code.toLowerCase()),
-    );
+
+    filtered.sort((a, b) {
+      final ad = a.updatedAt ?? a.createdAt;
+      final bd = b.updatedAt ?? b.createdAt;
+      return (bd).compareTo(ad);
+    });
     return filtered;
-  }
-
-  Widget _header(List<Category> items) {
-    final debitCount = items.where((e) => e.typeEntry == Category.debit).length;
-    final creditCount = items
-        .where((e) => e.typeEntry == Category.credit)
-        .length;
-
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        const SizedBox(height: 8),
-        Text('Catégories', style: Theme.of(context).textTheme.headlineSmall),
-        const SizedBox(height: 8),
-        Wrap(
-          spacing: 8,
-          runSpacing: 8,
-          children: [
-            Chip(
-              avatar: const Icon(Icons.category_outlined, size: 18),
-              label: Text('Total: ${items.length}'),
-            ),
-            Chip(
-              avatar: const Icon(Icons.remove_circle_outline, size: 18),
-              label: Text('Débit: $debitCount'),
-            ),
-            Chip(
-              avatar: const Icon(Icons.add_circle_outline, size: 18),
-              label: Text('Crédit: $creditCount'),
-            ),
-          ],
-        ),
-        const SizedBox(height: 12),
-        TextField(
-          controller: _searchCtrl,
-          decoration: InputDecoration(
-            hintText: 'Rechercher par code, description ou type',
-            prefixIcon: const Icon(Icons.search),
-            border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
-            isDense: true,
-          ),
-        ),
-        const SizedBox(height: 12),
-      ],
-    );
-  }
-
-  Widget _kv(String k, String v) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 6),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          SizedBox(
-            width: 140,
-            child: Text(k, style: const TextStyle(fontWeight: FontWeight.w600)),
-          ),
-          const SizedBox(width: 6),
-          Expanded(child: Text(v)),
-        ],
-      ),
-    );
-  }
-
-  Future<void> _view(Category c) async {
-    if (!mounted) return;
-    await showRightDrawer<void>(
-      context,
-      child: CategoryDetailsPanel(
-        category: c,
-        onEdit: () {
-          if (!mounted) return;
-          _addOrEdit(existing: c);
-        },
-      ),
-      widthFraction: 0.86,
-      heightFraction: 0.96,
-    );
   }
 
   Future<void> _showContextMenu(Offset position, Category c) async {
@@ -262,6 +213,18 @@ class _CategoryListPageState extends ConsumerState<CategoryListPage> {
     }
   }
 
+  Future<void> _syncNow() async {
+    final svc = ref.read(
+      categoryPullServiceProvider(widget.marketplaceBaseUri),
+    );
+    final n = await svc.syncAll(pageSize: 200);
+    if (!mounted) return;
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(SnackBar(content: Text('$n éléments synchronisés')));
+    setState(() {});
+  }
+
   @override
   Widget build(BuildContext context) {
     return FutureBuilder<List<Category>>(
@@ -273,10 +236,7 @@ class _CategoryListPageState extends ConsumerState<CategoryListPage> {
         final body = snap.connectionState == ConnectionState.waiting
             ? const Center(child: CircularProgressIndicator())
             : RefreshIndicator(
-                onRefresh: () async {
-                  if (!mounted) return;
-                  setState(() {});
-                },
+                onRefresh: () async => setState(() {}),
                 child: items.isEmpty
                     ? _empty()
                     : ListView.separated(
@@ -284,12 +244,9 @@ class _CategoryListPageState extends ConsumerState<CategoryListPage> {
                         itemBuilder: (_, i) {
                           if (i == 0) return _header(items);
                           final c = filtered[i - 1];
-                          final updatedText =
-                              'Mis à jour ${_fmtDate(c.updatedAt)}';
                           final subtitle = (c.description?.isNotEmpty == true)
                               ? c.description!
-                              : updatedText;
-
+                              : 'Mis à jour ${_fmtDate(c.updatedAt)}';
                           return GestureDetector(
                             onLongPressStart: (d) =>
                                 _showContextMenu(d.globalPosition, c),
@@ -326,19 +283,15 @@ class _CategoryListPageState extends ConsumerState<CategoryListPage> {
                 icon: const Icon(Icons.add),
                 tooltip: 'Ajouter une catégorie',
               ),
-              PopupMenuButton<String>(
-                onSelected: (v) {
-                  if (v == 'refresh' && mounted) setState(() {});
-                },
-                itemBuilder: (_) => const [
-                  PopupMenuItem(
-                    value: 'refresh',
-                    child: ListTile(
-                      leading: Icon(Icons.refresh),
-                      title: Text('Rafraîchir'),
-                    ),
-                  ),
-                ],
+              IconButton(
+                onPressed: _syncNow,
+                icon: const Icon(Icons.sync),
+                tooltip: 'Synchroniser',
+              ),
+              IconButton(
+                onPressed: () => setState(() {}),
+                icon: const Icon(Icons.refresh),
+                tooltip: 'Rafraîchir',
               ),
             ],
           ),
@@ -350,6 +303,58 @@ class _CategoryListPageState extends ConsumerState<CategoryListPage> {
           body: body,
         );
       },
+    );
+  }
+
+  Widget _header(List<Category> items) {
+    final debitCount = items.where((e) => e.typeEntry == Category.debit).length;
+    final creditCount = items
+        .where((e) => e.typeEntry == Category.credit)
+        .length;
+    final publishedCount = items
+        .where((e) => (e.remoteId ?? '').isNotEmpty)
+        .length;
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const SizedBox(height: 8),
+        Text('Catégories', style: Theme.of(context).textTheme.headlineSmall),
+        const SizedBox(height: 8),
+        Wrap(
+          spacing: 8,
+          runSpacing: 8,
+          children: [
+            Chip(
+              avatar: const Icon(Icons.list_alt, size: 18),
+              label: Text('Total: ${items.length}'),
+            ),
+            Chip(
+              avatar: const Icon(Icons.remove_circle_outline, size: 18),
+              label: Text('Débit: $debitCount'),
+            ),
+            Chip(
+              avatar: const Icon(Icons.add_circle_outline, size: 18),
+              label: Text('Crédit: $creditCount'),
+            ),
+            Chip(
+              avatar: const Icon(Icons.cloud_done_outlined, size: 18),
+              label: Text('Publiés: $publishedCount'),
+            ),
+          ],
+        ),
+        const SizedBox(height: 12),
+        TextField(
+          controller: _searchCtrl,
+          decoration: InputDecoration(
+            hintText: 'Rechercher par code, description, type ou statut',
+            prefixIcon: const Icon(Icons.search),
+            border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+            isDense: true,
+          ),
+        ),
+        const SizedBox(height: 12),
+      ],
     );
   }
 

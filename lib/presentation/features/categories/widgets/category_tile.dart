@@ -1,3 +1,4 @@
+// Reusable list tile for Category with optional trailing menu button.
 import 'package:flutter/material.dart';
 
 class CategoryTile extends StatelessWidget {
@@ -19,8 +20,17 @@ class CategoryTile extends StatelessWidget {
     final initial = (code.isNotEmpty ? code[0] : '?').toUpperCase();
     return ListTile(
       leading: CircleAvatar(child: Text(initial)),
-      title: Text(code),
-      subtitle: Text(descriptionOrUpdatedText),
+      title: Text(code, maxLines: 1, overflow: TextOverflow.ellipsis),
+      subtitle: Text(
+        descriptionOrUpdatedText,
+        maxLines: 2,
+        overflow: TextOverflow.ellipsis,
+      ),
+      trailing: IconButton(
+        icon: const Icon(Icons.more_vert),
+        onPressed: onMore,
+        tooltip: 'Actions',
+      ),
       onTap: onTap,
     );
   }
