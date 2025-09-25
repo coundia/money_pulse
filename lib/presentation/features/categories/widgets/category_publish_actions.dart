@@ -1,4 +1,4 @@
-// Category publish/unpublish actions that call remote create/put or local unpublish.
+// Category publish/unpublish actions that call remote and ensure local is in-sync.
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -27,7 +27,11 @@ class _CategoryPublishActionsState
   bool _loadingPublish = false;
   bool _loadingUnpublish = false;
 
-  bool get _hasRemoteId => ((widget.category.remoteId ?? '').trim().isNotEmpty);
+  bool get _isPublished {
+    final s = (widget.category.status ?? '').toUpperCase();
+    final pub = widget.category.isPublic;
+    return (s == 'PUBLISH' || s == 'PUBLISHED') && pub == true;
+  }
 
   Future<void> _doPublish() async {
     if (_loadingPublish) return;
@@ -55,11 +59,11 @@ class _CategoryPublishActionsState
     setState(() => _loadingUnpublish = true);
     try {
       final repo = ref.read(categoryMarketplaceRepoProvider(widget.baseUri));
-      await repo.unpublishLocal(widget.category);
+      await repo.unpublish(widget.category);
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Publication retirée localement')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('Publication retirée')));
       widget.onChanged?.call();
     } catch (e) {
       if (!mounted) return;
@@ -73,11 +77,8 @@ class _CategoryPublishActionsState
 
   @override
   Widget build(BuildContext context) {
-    final canPublish = true;
-    final canUnpublish = _hasRemoteId;
-
     final publishBtn = FilledButton.icon(
-      onPressed: (!canPublish || _loadingPublish) ? null : _doPublish,
+      onPressed: _isPublished || _loadingPublish ? null : _doPublish,
       icon: _loadingPublish
           ? const SizedBox(
               width: 16,
@@ -89,7 +90,7 @@ class _CategoryPublishActionsState
     );
 
     final unpublishBtn = FilledButton.tonalIcon(
-      onPressed: (!canUnpublish || _loadingUnpublish) ? null : _doUnpublish,
+      onPressed: (!_isPublished || _loadingUnpublish) ? null : _doUnpublish,
       icon: _loadingUnpublish
           ? const SizedBox(
               width: 16,
