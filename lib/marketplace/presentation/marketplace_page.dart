@@ -1,5 +1,8 @@
-// TikTok-like vertical marketplace page with REST API, infinite scroll,
-// and per-item horizontal image slider (left↔right) while keeping existing UX.
+// TikTok-like vertical marketplace with LIGHT top search pill (loupe to validate),
+// infinite scroll, per-item horizontal image slider, and ONLY: Détails / Partager / Commander.
+// Le badge du nombre d’images est affiché EN BAS.
+
+import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../presentation/widgets/right_drawer.dart';
@@ -21,10 +24,33 @@ class _MarketplacePageState extends ConsumerState<MarketplacePage> {
   final TextEditingController _searchCtrl = TextEditingController();
 
   @override
+  void initState() {
+    super.initState();
+    _searchCtrl.addListener(() => setState(() {})); // pour l’icône clear
+  }
+
+  @override
   void dispose() {
     _pageCtrl.dispose();
     _searchCtrl.dispose();
     super.dispose();
+  }
+
+  void _applySearch() {
+    final q = _searchCtrl.text.trim();
+    ref
+        .read(marketplacePagerProvider(widget.baseUri).notifier)
+        .applyFilters(q: q);
+    FocusManager.instance.primaryFocus?.unfocus();
+  }
+
+  void _clearSearch() {
+    if (_searchCtrl.text.isEmpty) return;
+    _searchCtrl.clear();
+    ref
+        .read(marketplacePagerProvider(widget.baseUri).notifier)
+        .applyFilters(q: '');
+    FocusManager.instance.primaryFocus?.unfocus();
   }
 
   @override
@@ -64,7 +90,20 @@ class _MarketplacePageState extends ConsumerState<MarketplacePage> {
                 return _buildProductPage(context, item, state, notifier);
               },
             ),
-          _buildTopBar(context),
+
+          // TOP SEARCH PILL — très léger
+          Positioned(
+            top: 8 + MediaQuery.of(context).padding.top,
+            left: 8,
+            right: 8,
+            child: _TopSearchPill(
+              controller: _searchCtrl,
+              onSubmit: _applySearch,
+              onClear: _clearSearch,
+              onBack: () => Navigator.of(context).maybePop(),
+            ),
+          ),
+
           if (state.isLoading)
             const Positioned(
               right: 16,
@@ -80,46 +119,6 @@ class _MarketplacePageState extends ConsumerState<MarketplacePage> {
     );
   }
 
-  Widget _buildTopBar(BuildContext context) {
-    return Positioned(
-      top: 40,
-      left: 8,
-      right: 8,
-      child: Row(
-        children: [
-          IconButton(
-            onPressed: () => Navigator.of(context).maybePop(),
-            icon: const Icon(Icons.arrow_back, color: Colors.white),
-            tooltip: 'Retour',
-          ),
-          Expanded(
-            child: TextField(
-              controller: _searchCtrl,
-              style: const TextStyle(color: Colors.white),
-              decoration: InputDecoration(
-                filled: true,
-                fillColor: Colors.black54,
-                hintText: 'Rechercher un produit…',
-                hintStyle: const TextStyle(color: Colors.white70),
-                prefixIcon: const Icon(Icons.search, color: Colors.white70),
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(30),
-                  borderSide: BorderSide.none,
-                ),
-                contentPadding: const EdgeInsets.symmetric(
-                  vertical: 0,
-                  horizontal: 16,
-                ),
-              ),
-              onSubmitted: (_) {},
-              textInputAction: TextInputAction.search,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
   Widget _buildProductPage(
     BuildContext context,
     MarketplaceItem item,
@@ -127,16 +126,18 @@ class _MarketplacePageState extends ConsumerState<MarketplacePage> {
     MarketplacePager notifier,
   ) {
     final theme = Theme.of(context);
-    final isSaved = state.saved.contains(item.id);
     final urls = item.imageUrls.where((e) => e.trim().isNotEmpty).toList();
     final multiple = urls.length > 1;
     final imagesCtrl = PageController();
 
+    final safeBottom = MediaQuery.of(context).padding.bottom;
+    const ctaHeight = 44.0; // approx CTA height
+    const ctaSpacing = 16.0;
+
     return Stack(
       fit: StackFit.expand,
       children: [
-        // Horizontal images slider (left↔right). Parent PageView is vertical,
-        // axes are orthogonal so gestures ne se gênent pas.
+        // Horizontal images slider
         if (urls.isNotEmpty)
           PageView.builder(
             controller: imagesCtrl,
@@ -144,13 +145,12 @@ class _MarketplacePageState extends ConsumerState<MarketplacePage> {
             itemCount: urls.length,
             itemBuilder: (_, i) {
               final u = urls[i];
-              return Image.network(
-                u,
+              return FadeInImage.assetNetwork(
+                placeholder: 'assets/transparent_1px.png',
+                image: u,
                 fit: BoxFit.cover,
-                loadingBuilder: (ctx, child, progress) => progress == null
-                    ? child
-                    : const Center(child: CircularProgressIndicator()),
-                errorBuilder: (_, __, ___) =>
+                fadeInDuration: const Duration(milliseconds: 150),
+                imageErrorBuilder: (_, __, ___) =>
                     const ColoredBox(color: Colors.black),
               );
             },
@@ -158,7 +158,7 @@ class _MarketplacePageState extends ConsumerState<MarketplacePage> {
         else
           const ColoredBox(color: Colors.black),
 
-        // Gradient overlay for legibility
+        // Gradient overlay
         Container(
           decoration: BoxDecoration(
             gradient: LinearGradient(
@@ -173,18 +173,20 @@ class _MarketplacePageState extends ConsumerState<MarketplacePage> {
           ),
         ),
 
-        // Count badge when multiple images
+        // Count badge (EN BAS, juste au-dessus du CTA Commander)
         if (multiple)
           Positioned(
-            top: 56,
-            right: 56,
+            right: 16,
+            bottom: ctaSpacing + safeBottom + ctaHeight + 8, // au-dessus du CTA
             child: Container(
               padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
               decoration: BoxDecoration(
                 color: Colors.black54,
                 borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: Colors.white24, width: 0.6),
               ),
               child: Row(
+                mainAxisSize: MainAxisSize.min,
                 children: [
                   const Icon(
                     Icons.photo_library_outlined,
@@ -201,11 +203,13 @@ class _MarketplacePageState extends ConsumerState<MarketplacePage> {
             ),
           ),
 
-        // Product info
+        // Info produit
         Positioned(
           left: 16,
-          bottom: 100,
-          right: 100,
+          bottom:
+              (ctaSpacing * 4) +
+              safeBottom, // laisse l’espace pour actions + CTA
+          right: 110,
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
@@ -241,39 +245,20 @@ class _MarketplacePageState extends ConsumerState<MarketplacePage> {
           ),
         ),
 
-        // Side actions
+        // Actions (seulement 2 au-dessus du CTA : Détails + Partager)
         Positioned(
           right: 20,
-          bottom: 100,
+          bottom: (ctaSpacing * 4) + safeBottom,
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
               _actionBtn(
-                icon: Icons.favorite,
-                label: 'Aimer',
-                active: false,
-                onTap: () => _snack(context, 'Aimé ${item.name}'),
-              ),
-              const SizedBox(height: 16),
-              _actionBtn(
-                icon: isSaved ? Icons.bookmark : Icons.bookmark_border_outlined,
-                label: isSaved ? 'Sauvé' : 'Sauver',
-                active: isSaved,
-                onTap: () => notifier.toggleSaved(item.id),
-              ),
-              const SizedBox(height: 16),
-              _actionBtn(
                 icon: Icons.visibility,
                 label: 'Détails',
-                onTap: () {
-                  showRightDrawer(context, child: ProductViewPanel(item: item));
-                },
-              ),
-              const SizedBox(height: 16),
-              _actionBtn(
-                icon: Icons.shopping_bag,
-                label: 'Commander',
-                onTap: () => _snack(context, 'Commande ${item.name}'),
+                onTap: () => showRightDrawer(
+                  context,
+                  child: ProductViewPanel(item: item),
+                ),
               ),
               const SizedBox(height: 16),
               _actionBtn(
@@ -285,35 +270,28 @@ class _MarketplacePageState extends ConsumerState<MarketplacePage> {
           ),
         ),
 
-        // Context menu
+        // Commander (CTA)
         Positioned(
-          top: 48,
-          right: 12,
-          child: PopupMenuButton<String>(
-            icon: const Icon(Icons.more_vert, color: Colors.white),
-            itemBuilder: (_) => [
-              const PopupMenuItem(
-                value: 'view',
-                child: Text('Voir les détails'),
+          right: 16,
+          bottom: 16 + safeBottom,
+          child: SizedBox(
+            height: ctaHeight,
+            child: FilledButton.icon(
+              onPressed: () => _snack(context, 'Commander ${item.name}'),
+              icon: const Icon(Icons.shopping_bag),
+              label: const Text('Commander'),
+              style: FilledButton.styleFrom(
+                backgroundColor: Colors.green.shade600,
+                foregroundColor: Colors.white,
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 14,
+                  vertical: 10,
+                ),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(14),
+                ),
               ),
-              PopupMenuItem(
-                value: isSaved ? 'unsave' : 'save',
-                child: Text(isSaved ? 'Retirer des favoris' : 'Sauver'),
-              ),
-              const PopupMenuItem(value: 'report', child: Text('Signaler')),
-              const PopupMenuItem(value: 'share', child: Text('Partager')),
-            ],
-            onSelected: (v) {
-              if (v == 'view') {
-                showRightDrawer(context, child: ProductViewPanel(item: item));
-              } else if (v == 'save' || v == 'unsave') {
-                notifier.toggleSaved(item.id);
-              } else if (v == 'share') {
-                _snack(context, 'Partager ${item.name}');
-              } else if (v == 'report') {
-                _snack(context, 'Signalé ${item.name}');
-              }
-            },
+            ),
           ),
         ),
       ],
@@ -324,7 +302,6 @@ class _MarketplacePageState extends ConsumerState<MarketplacePage> {
     required IconData icon,
     required String label,
     required VoidCallback onTap,
-    bool active = false,
   }) {
     return Column(
       children: [
@@ -333,9 +310,9 @@ class _MarketplacePageState extends ConsumerState<MarketplacePage> {
           borderRadius: BorderRadius.circular(30),
           child: Container(
             padding: const EdgeInsets.all(8),
-            decoration: BoxDecoration(
+            decoration: const BoxDecoration(
               shape: BoxShape.circle,
-              color: active ? Colors.green : Colors.black54,
+              color: Colors.black54,
             ),
             child: Icon(icon, color: Colors.white, size: 32),
           ),
@@ -348,5 +325,97 @@ class _MarketplacePageState extends ConsumerState<MarketplacePage> {
 
   void _snack(BuildContext ctx, String msg) {
     ScaffoldMessenger.of(ctx).showSnackBar(SnackBar(content: Text(msg)));
+  }
+}
+
+/* ---------- UI: Top Search Pill (verre dépoli) ---------- */
+
+class _TopSearchPill extends StatelessWidget {
+  final TextEditingController controller;
+  final VoidCallback onSubmit;
+  final VoidCallback onClear;
+  final VoidCallback onBack;
+
+  const _TopSearchPill({
+    required this.controller,
+    required this.onSubmit,
+    required this.onClear,
+    required this.onBack,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final showClear = controller.text.isNotEmpty;
+
+    return Row(
+      children: [
+        // Back (format ghost)
+        ClipOval(
+          child: BackdropFilter(
+            filter: ImageFilter.blur(sigmaX: 8, sigmaY: 8),
+            child: Material(
+              color: Colors.white.withOpacity(0.08),
+              child: IconButton(
+                tooltip: 'Retour',
+                onPressed: onBack,
+                icon: const Icon(Icons.arrow_back, color: Colors.white),
+              ),
+            ),
+          ),
+        ),
+        const SizedBox(width: 8),
+        // Search pill
+        Expanded(
+          child: ClipRRect(
+            borderRadius: BorderRadius.circular(30),
+            child: BackdropFilter(
+              filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 6),
+                decoration: BoxDecoration(
+                  color: Colors.white.withOpacity(0.08),
+                  borderRadius: BorderRadius.circular(30),
+                  border: Border.all(color: Colors.white.withOpacity(0.12)),
+                ),
+                child: TextField(
+                  controller: controller,
+                  style: const TextStyle(color: Colors.white),
+                  cursorColor: Colors.white70,
+                  decoration: InputDecoration(
+                    hintText: 'Rechercher un produit…',
+                    hintStyle: const TextStyle(color: Colors.white70),
+                    // Suffix = loupe (valider) + croix (clear) dans un Row compact
+                    suffixIcon: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        IconButton(
+                          tooltip: 'Rechercher',
+                          onPressed: onSubmit,
+                          icon: const Icon(Icons.search, color: Colors.white),
+                        ),
+                        if (showClear)
+                          IconButton(
+                            tooltip: 'Effacer',
+                            onPressed: onClear,
+                            icon: const Icon(
+                              Icons.close,
+                              color: Colors.white70,
+                            ),
+                          ),
+                      ],
+                    ),
+                    border: InputBorder.none,
+                    isDense: true,
+                    contentPadding: const EdgeInsets.symmetric(vertical: 12),
+                  ),
+                  textInputAction: TextInputAction.search,
+                  onSubmitted: (_) => onSubmit(),
+                ),
+              ),
+            ),
+          ),
+        ),
+      ],
+    );
   }
 }
