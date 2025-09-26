@@ -1,4 +1,6 @@
-/* Marketplace HTTP repository for Company: POST/PUT/DELETE + publish/unpublish/republish with strict local reconciliation. */
+/* Marketplace HTTP repository for Company:
+ * POST/PUT/DELETE + publish/unpublish/republish with strict local reconciliation.
+ */
 import 'dart:convert';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:http/http.dart' as http;
@@ -69,9 +71,14 @@ class CompanyMarketplaceRepo {
   }
 
   Future<Company> _persistLocal(Company base) async {
+    // Méthode spécialisée du repo local pour les MAJ "provenant du serveur".
     await localRepo.updateFromSync(base);
     return base;
   }
+
+  // ------------------------
+  // CREATE / UPDATE
+  // ------------------------
 
   Future<Company> createRemote(Company c) async {
     final body = {
@@ -115,7 +122,7 @@ class CompanyMarketplaceRepo {
 
   Future<Company> updateRemoteByRemoteId(Company c) async {
     final id = (c.remoteId ?? '').trim();
-    final pathId = id.isNotEmpty ? id : c.code;
+    final pathId = id.isNotEmpty ? id : c.code; // fallback si remoteId manquant
 
     final body = {
       'remoteId': c.remoteId,
@@ -165,6 +172,10 @@ class CompanyMarketplaceRepo {
     }
   }
 
+  // ------------------------
+  // PUBLISH / UNPUBLISH
+  // ------------------------
+
   Future<Company> publish(Company c) async {
     final want = c.copyWith(status: 'PUBLISH', isPublic: true, isActive: true);
     final updated = await save(want);
@@ -185,7 +196,13 @@ class CompanyMarketplaceRepo {
     return publish(c);
   }
 
-  Future<void> deleteRemote(Company c) async {
+  // ------------------------
+  // DELETE (API) + stratégies locales
+  // ------------------------
+
+  /// Appelle l’API DELETE `/commands/company/{id|code}`.
+  /// Retourne simplement si OK, sinon lance une Exception.
+  Future<void> _deleteRemoteCall(Company c) async {
     final idOrCode = (c.remoteId?.trim().isNotEmpty == true)
         ? c.remoteId!.trim()
         : c.code.trim();
@@ -201,8 +218,42 @@ class CompanyMarketplaceRepo {
     }
   }
 
+  /// Supprime côté API **mais conserve la ligne locale**.
+  /// - Nettoie `remoteId`
+  /// - Force le statut local à UNPUBLISH / isPublic=false / isActive=false
+  /// - Marque `isDirty=true` pour un éventuel re-publish ultérieur
+  Future<Company> deleteRemoteAndKeepLocal(Company c) async {
+    await _deleteRemoteCall(c);
+
+    final now = DateTime.now().toUtc();
+    final local = c.copyWith(
+      remoteId: null,
+      status: 'UNPUBLISH',
+      isPublic: false,
+      isActive: false,
+      updatedAt: now,
+      syncAt: now,
+      isDirty: true,
+    );
+
+    await localRepo.updateFromSync(local);
+    return local;
+  }
+
+  /// Supprime côté API **et** soft delete la ligne locale.
+  Future<void> deleteRemoteAndSoftDeleteLocal(Company c) async {
+    await _deleteRemoteCall(c);
+    await localRepo.softDelete(c.id);
+  }
+
+  // ------------------------
+  // RECONCILIATION (GET /queries)
+  // ------------------------
+
   Future<Map<String, dynamic>?> _fetchRemoteByRemoteIdOrCode(Company c) async {
     final headers = headerBuilder();
+
+    // Essai avec filtre code (si backend le supporte)
     final withCode = Uri.parse(
       '$baseUri/api/v1/queries/companies?page=0&limit=10&code=${Uri.encodeQueryComponent(c.code)}',
     );
@@ -218,6 +269,7 @@ class CompanyMarketplaceRepo {
       if (found != null) return found;
     }
 
+    // Fallback : liste large, filtrage côté client
     final listUri = Uri.parse(
       '$baseUri/api/v1/queries/companies?page=0&limit=500',
     );
@@ -240,6 +292,7 @@ class CompanyMarketplaceRepo {
   Future<Company> reconcileFromRemote(Company c) async {
     final j = await _fetchRemoteByRemoteIdOrCode(c);
     if (j == null) {
+      // Non trouvé côté serveur → garder l’info locale mais forcer isDirty
       final fallback = c.copyWith(updatedAt: DateTime.now(), isDirty: true);
       return _persistLocal(fallback);
     }
