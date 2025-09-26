@@ -1,14 +1,12 @@
-// Marketplace HTTP repository for Company using header builder: POST, PUT, DELETE, publish/unpublish with local sync.
+// Marketplace HTTP repository for Company: POST/PUT/DELETE + publish/unpublish/republish with strict local reconciliation.
 import 'dart:convert';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:http/http.dart' as http;
 
 import 'package:money_pulse/domain/company/entities/company.dart';
 import 'package:money_pulse/presentation/app/providers/company_repo_provider.dart';
-
-import '../../../domain/company/repositories/company_repository.dart';
-import '../../../sync/infrastructure/sync_headers_provider.dart';
-// Adapt the import path if needed
+import 'package:money_pulse/domain/company/repositories/company_repository.dart';
+import 'package:money_pulse/sync/infrastructure/sync_headers_provider.dart';
 
 final companyMarketplaceRepoProvider =
     Provider.family<CompanyMarketplaceRepo, String>((ref, baseUri) {
@@ -38,7 +36,7 @@ class CompanyMarketplaceRepo {
 
   Uri _u(String p) => Uri.parse('$baseUri$p');
 
-  Future<Map<String, dynamic>?> _decode(String body) async {
+  Map<String, dynamic>? _decodeMap(String body) {
     if (body.trim().isEmpty) return null;
     try {
       final v = jsonDecode(body);
@@ -48,26 +46,31 @@ class CompanyMarketplaceRepo {
     }
   }
 
-  Future<Company> _persistLocal(
-    Company base, {
-    String? remoteId,
-    String? status,
-    bool? isPublic,
-    bool? isActive,
-    DateTime? syncAt,
-    bool? isDirty,
-  }) async {
-    final updated = base.copyWith(
-      remoteId: remoteId ?? base.remoteId,
-      status: status ?? base.status,
-      isPublic: isPublic ?? base.isPublic,
-      isActive: isActive ?? base.isActive,
-      syncAt: syncAt ?? DateTime.now().toUtc(),
+  Company _mergeLocalFromRemoteJson(Company base, Map<String, dynamic> j) {
+    final remoteId = (j['remoteId'] ?? j['id'] ?? base.remoteId ?? '')
+        .toString();
+    final status = (j['status'] ?? base.status)?.toString();
+    final isPublic = j['isPublic'] is bool
+        ? j['isPublic'] as bool
+        : base.isPublic;
+    final isActive = j['isActive'] is bool
+        ? j['isActive'] as bool
+        : base.isActive;
+
+    return base.copyWith(
+      remoteId: remoteId.isNotEmpty ? remoteId : base.remoteId,
+      status: status,
+      isPublic: isPublic,
+      isActive: isActive,
+      syncAt: DateTime.now().toUtc(),
       updatedAt: DateTime.now(),
-      isDirty: isDirty ?? false,
+      isDirty: false,
     );
-    await localRepo.update(updated);
-    return updated;
+  }
+
+  Future<Company> _persistLocal(Company c) async {
+    await localRepo.update(c);
+    return c;
   }
 
   Future<Company> createRemote(Company c) async {
@@ -105,25 +108,9 @@ class CompanyMarketplaceRepo {
       throw Exception('Create company failed: ${res.statusCode} ${res.body}');
     }
 
-    final json = await _decode(res.body) ?? const {};
-    final remoteId = (json['remoteId'] ?? json['id'] ?? c.remoteId ?? '')
-        .toString();
-    final status = (json['status'] ?? c.status ?? 'PUBLISH').toString();
-    final isPublic = json['isPublic'] is bool
-        ? json['isPublic'] as bool
-        : c.isPublic;
-    final isActive = json['isActive'] is bool
-        ? json['isActive'] as bool
-        : c.isActive;
-
-    return _persistLocal(
-      c,
-      remoteId: remoteId.isNotEmpty ? remoteId : c.remoteId,
-      status: status,
-      isPublic: isPublic,
-      isActive: isActive,
-      isDirty: false,
-    );
+    final json = _decodeMap(res.body) ?? const {};
+    final merged = _mergeLocalFromRemoteJson(c, json);
+    return _persistLocal(merged);
   }
 
   Future<Company> updateRemoteByRemoteId(Company c) async {
@@ -164,38 +151,39 @@ class CompanyMarketplaceRepo {
       throw Exception('Update company failed: ${res.statusCode} ${res.body}');
     }
 
-    final json = await _decode(res.body) ?? const {};
-    final remoteId = (json['remoteId'] ?? json['id'] ?? c.remoteId ?? '')
-        .toString();
-    final status = (json['status'] ?? c.status ?? 'PUBLISH').toString();
-    final isPublic = json['isPublic'] is bool
-        ? json['isPublic'] as bool
-        : c.isPublic;
-    final isActive = json['isActive'] is bool
-        ? json['isActive'] as bool
-        : c.isActive;
+    final json = _decodeMap(res.body) ?? const {};
+    final merged = _mergeLocalFromRemoteJson(c, json);
+    return _persistLocal(merged);
+  }
 
-    return _persistLocal(
-      c,
-      remoteId: remoteId.isNotEmpty ? remoteId : c.remoteId,
-      status: status,
-      isPublic: isPublic,
-      isActive: isActive,
-      isDirty: false,
-    );
+  Future<Company> save(Company c) async {
+    final hasRemoteId = (c.remoteId ?? '').trim().isNotEmpty;
+    if (hasRemoteId) {
+      return updateRemoteByRemoteId(c);
+    } else {
+      return createRemote(c);
+    }
   }
 
   Future<Company> publish(Company c) async {
-    final want = c.copyWith(status: 'PUBLISH', isPublic: true);
-    if ((c.remoteId ?? '').trim().isEmpty) {
-      return createRemote(want);
-    }
-    return updateRemoteByRemoteId(want);
+    final want = c.copyWith(status: 'PUBLISH', isPublic: true, isActive: true);
+    final updated = await save(want);
+    return reconcileFromRemote(updated);
   }
 
   Future<Company> unpublish(Company c) async {
-    final want = c.copyWith(status: 'UNPUBLISH', isPublic: false);
-    return updateRemoteByRemoteId(want);
+    final want = c.copyWith(
+      status: 'UNPUBLISH',
+      isPublic: false,
+      isActive: false,
+    );
+    final updated = await save(want);
+    return reconcileFromRemote(updated);
+  }
+
+  Future<Company> republish(Company c) async {
+    // Explicit republish = same as publish, but method dédiée pour l'UI
+    return publish(c);
   }
 
   Future<void> deleteRemote(Company c) async {
@@ -212,5 +200,62 @@ class CompanyMarketplaceRepo {
     if (res.statusCode < 200 || res.statusCode >= 300) {
       throw Exception('Delete company failed: ${res.statusCode} ${res.body}');
     }
+  }
+
+  Future<Map<String, dynamic>?> _fetchRemoteByRemoteIdOrCode(Company c) async {
+    // 1) Try by remoteId or code via PUT endpoint key
+    final idOrCode = (c.remoteId?.trim().isNotEmpty == true)
+        ? c.remoteId!.trim()
+        : c.code.trim();
+
+    // Prefer a filtered query if backend supports query by code.
+    // Try with code filter first:
+    final headers = headerBuilder();
+
+    // Attempt: /queries/companies?page=0&limit=10&code=...
+    final withCode = Uri.parse(
+      '$baseUri/api/v1/queries/companies?page=0&limit=10&code=${Uri.encodeQueryComponent(c.code)}',
+    );
+    final resCode = await httpClient.get(withCode, headers: headers);
+    if (resCode.statusCode == 200) {
+      final map = _decodeMap(resCode.body);
+      final list =
+          (map?['items'] ?? map?['content'] ?? []) as List? ?? const [];
+      final found = list.cast<Map>().cast<Map<String, dynamic>?>().firstWhere(
+        (e) => (e?['code']?.toString() ?? '') == c.code,
+        orElse: () => null,
+      );
+      if (found != null) return found;
+    }
+
+    // Fallback: list and filter client-side
+    final listUri = Uri.parse(
+      '$baseUri/api/v1/queries/companies?page=0&limit=500',
+    );
+    final res = await httpClient.get(listUri, headers: headers);
+    if (res.statusCode != 200) return null;
+    final map = _decodeMap(res.body);
+    final rows = (map?['items'] ?? map?['content'] ?? []) as List? ?? const [];
+    for (final r in rows) {
+      final m = (r as Map).cast<String, dynamic>();
+      final code = m['code']?.toString();
+      final rid = m['id']?.toString();
+      if (code == c.code ||
+          (c.remoteId?.isNotEmpty == true && rid == c.remoteId)) {
+        return m;
+      }
+    }
+    return null;
+  }
+
+  Future<Company> reconcileFromRemote(Company c) async {
+    final j = await _fetchRemoteByRemoteIdOrCode(c);
+    if (j == null) {
+      // If not found remotely, keep local flags but ensure isDirty to re-sync later.
+      final fallback = c.copyWith(updatedAt: DateTime.now(), isDirty: true);
+      return _persistLocal(fallback);
+    }
+    final merged = _mergeLocalFromRemoteJson(c, j);
+    return _persistLocal(merged);
   }
 }
