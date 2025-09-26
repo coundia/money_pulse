@@ -64,14 +64,7 @@ class CompanyTile extends StatelessWidget {
           ),
         ],
       ),
-      subtitle: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Wrap(spacing: 6, runSpacing: 4, children: [badge]),
-          const SizedBox(height: 4),
-          Text(company.code, maxLines: 2, overflow: TextOverflow.ellipsis),
-        ],
-      ),
+
       trailing: CompanyContextMenu(
         onSelected: (a) async {
           switch (a) {

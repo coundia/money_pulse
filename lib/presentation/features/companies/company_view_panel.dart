@@ -1,7 +1,13 @@
-// Right-drawer company details with publish/unpublish actions and improved info layout.
+// lib/presentation/features/companies/company_view_panel.dart
+//
+// Right-drawer company details with publish/unpublish actions,
+// "Définir par défaut" button (only one default enforced by repo),
+// and improved info layout.
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+
 import 'package:money_pulse/presentation/shared/formatters.dart';
 import 'providers/company_detail_providers.dart';
 
@@ -9,6 +15,9 @@ import 'package:money_pulse/presentation/widgets/right_drawer.dart';
 import 'company_form_panel.dart';
 import 'company_delete_panel.dart';
 import 'widgets/company_publish_actions.dart';
+
+// 🆕 repo to update the "default" flag
+import 'package:money_pulse/presentation/app/providers/company_repo_provider.dart';
 
 class CompanyViewPanel extends ConsumerWidget {
   final String companyId;
@@ -77,6 +86,21 @@ class CompanyViewPanel extends ConsumerWidget {
       ScaffoldMessenger.maybeOf(
         context,
       )?.showSnackBar(const SnackBar(content: Text('Détails copiés')));
+    }
+
+    // 🆕 Set this company as the single default (repo will unset others)
+    Future<void> onSetDefault() async {
+      final c = await ref.read(companyByIdProvider(companyId).future);
+      if (c == null) return;
+      final repo = ref.read(companyRepoProvider);
+      await repo.update(c.copyWith(isDefault: true));
+      // The repository normalizes default and unsets other defaults.
+      ref.invalidate(companyByIdProvider(companyId));
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Définie comme société par défaut')),
+        );
+      }
     }
 
     return Scaffold(
@@ -193,11 +217,26 @@ class CompanyViewPanel extends ConsumerWidget {
                                 ),
                                 if ((c.currency ?? '').isNotEmpty)
                                   Chip(label: Text('Devise: ${c.currency}')),
+                                // 🆕 visual for default
+                                Chip(
+                                  avatar: Icon(
+                                    c.isDefault
+                                        ? Icons.star
+                                        : Icons.star_border,
+                                    size: 18,
+                                  ),
+                                  label: Text(
+                                    c.isDefault
+                                        ? 'Par défaut'
+                                        : 'Non par défaut',
+                                  ),
+                                ),
                               ],
                             ),
                             const SizedBox(height: 6),
                             Text(
-                              'Créé: ${Formatters.dateFull(c.createdAt)} • Modifié: ${Formatters.dateFull(c.updatedAt)}',
+                              'Créé: ${Formatters.dateFull(c.createdAt)} • '
+                              'Modifié: ${Formatters.dateFull(c.updatedAt)}',
                               style: Theme.of(context).textTheme.bodySmall,
                             ),
                           ],
@@ -249,6 +288,18 @@ class CompanyViewPanel extends ConsumerWidget {
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
+                  // 🆕 Button only if not already default
+                  if (!c.isDefault) ...[
+                    SizedBox(
+                      width: double.infinity,
+                      child: FilledButton.icon(
+                        onPressed: onSetDefault,
+                        icon: const Icon(Icons.star),
+                        label: const Text('Définir comme société par défaut'),
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                  ],
                   SizedBox(
                     width: double.infinity,
                     child: FilledButton.icon(
