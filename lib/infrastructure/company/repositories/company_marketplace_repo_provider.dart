@@ -1,4 +1,4 @@
-// Marketplace HTTP repository for Company: POST/PUT/DELETE + publish/unpublish/republish with strict local reconciliation.
+/* Marketplace HTTP repository for Company: POST/PUT/DELETE + publish/unpublish/republish with strict local reconciliation. */
 import 'dart:convert';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:http/http.dart' as http;
@@ -68,9 +68,9 @@ class CompanyMarketplaceRepo {
     );
   }
 
-  Future<Company> _persistLocal(Company c) async {
-    await localRepo.update(c);
-    return c;
+  Future<Company> _persistLocal(Company base) async {
+    await localRepo.updateFromSync(base);
+    return base;
   }
 
   Future<Company> createRemote(Company c) async {
@@ -115,7 +115,7 @@ class CompanyMarketplaceRepo {
 
   Future<Company> updateRemoteByRemoteId(Company c) async {
     final id = (c.remoteId ?? '').trim();
-    final pathId = id.isNotEmpty ? id : c.code; // fallback if remoteId missing
+    final pathId = id.isNotEmpty ? id : c.code;
 
     final body = {
       'remoteId': c.remoteId,
@@ -182,7 +182,6 @@ class CompanyMarketplaceRepo {
   }
 
   Future<Company> republish(Company c) async {
-    // Explicit republish = same as publish, but method dédiée pour l'UI
     return publish(c);
   }
 
@@ -203,16 +202,7 @@ class CompanyMarketplaceRepo {
   }
 
   Future<Map<String, dynamic>?> _fetchRemoteByRemoteIdOrCode(Company c) async {
-    // 1) Try by remoteId or code via PUT endpoint key
-    final idOrCode = (c.remoteId?.trim().isNotEmpty == true)
-        ? c.remoteId!.trim()
-        : c.code.trim();
-
-    // Prefer a filtered query if backend supports query by code.
-    // Try with code filter first:
     final headers = headerBuilder();
-
-    // Attempt: /queries/companies?page=0&limit=10&code=...
     final withCode = Uri.parse(
       '$baseUri/api/v1/queries/companies?page=0&limit=10&code=${Uri.encodeQueryComponent(c.code)}',
     );
@@ -228,7 +218,6 @@ class CompanyMarketplaceRepo {
       if (found != null) return found;
     }
 
-    // Fallback: list and filter client-side
     final listUri = Uri.parse(
       '$baseUri/api/v1/queries/companies?page=0&limit=500',
     );
@@ -251,7 +240,6 @@ class CompanyMarketplaceRepo {
   Future<Company> reconcileFromRemote(Company c) async {
     final j = await _fetchRemoteByRemoteIdOrCode(c);
     if (j == null) {
-      // If not found remotely, keep local flags but ensure isDirty to re-sync later.
       final fallback = c.copyWith(updatedAt: DateTime.now(), isDirty: true);
       return _persistLocal(fallback);
     }

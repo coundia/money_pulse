@@ -71,24 +71,24 @@ class _CompanyListPageState extends ConsumerState<CompanyListPage> {
         final code = raw['code']?.toString();
         if (remoteId == null || code == null) continue;
 
-        // Trouver la société locale via code
         final existing = await repo.findByCode(code);
         if (existing != null) {
-          final updated = existing.copyWith(
+          final synced = existing.copyWith(
             remoteId: remoteId,
             status: raw['status']?.toString(),
             isPublic: raw['isPublic'] == true,
             isActive: raw['isActive'] == true,
-            syncAt: DateTime.tryParse(raw['syncAt'] ?? ''),
+            syncAt: DateTime.tryParse((raw['syncAt'] ?? '').toString()),
             updatedAt: DateTime.now(),
             isDirty: false,
           );
-          await repo.update(updated);
+          await repo.updateFromSync(synced);
         }
       }
 
       if (mounted) {
-        _refresh();
+        ref.invalidate(companyListProvider);
+        ref.invalidate(companyCountProvider);
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text('Synchronisation terminée')),
         );

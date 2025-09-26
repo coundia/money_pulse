@@ -1,4 +1,4 @@
-// Sqflite repository for Company with default normalization, UTC stamping, safe updates (no PK change), and change_log strict insert with try/catch.
+/* Sqflite implementation: adds updateFromSync to persist server state without bumping version. */
 import 'package:uuid/uuid.dart';
 import 'package:sqflite/sqflite.dart';
 import 'package:money_pulse/infrastructure/db/app_database.dart';
@@ -114,6 +114,20 @@ class CompanyRepositorySqflite implements CompanyRepository {
         'company',
         where: 'id=?',
         whereArgs: [id],
+        limit: 1,
+      );
+      if (rows.isEmpty) return null;
+      return Company.fromMap(rows.first);
+    });
+  }
+
+  @override
+  Future<Company?> findByCode(String code) async {
+    return db.tx((txn) async {
+      final rows = await txn.query(
+        'company',
+        where: 'code=?',
+        whereArgs: [code],
         limit: 1,
       );
       if (rows.isEmpty) return null;
@@ -251,6 +265,32 @@ class CompanyRepositorySqflite implements CompanyRepository {
   }
 
   @override
+  Future<void> updateFromSync(Company c) async {
+    // Persist server-confirmed fields WITHOUT bumping version, and clear isDirty.
+    await db.tx((txn) async {
+      final map = <String, Object?>{
+        'remoteId': c.remoteId,
+        'status': c.status,
+        'isPublic': c.isPublic ? 1 : 0,
+        'isActive': c.isActive ? 1 : 0,
+        'syncAt': c.syncAt?.toIso8601String(),
+        'updatedAt': c.updatedAt.toIso8601String(),
+        'isDirty': 0,
+      };
+
+      await txn.update(
+        'company',
+        map,
+        where: 'id=?',
+        whereArgs: [c.id],
+        conflictAlgorithm: ConflictAlgorithm.abort,
+      );
+
+      // No change_log pending: this is a reconciliation from server.
+    });
+  }
+
+  @override
   Future<void> softDelete(String id, {DateTime? at}) async {
     final now = (at ?? DateTime.now()).toUtc();
     await db.tx((txn) async {
@@ -287,20 +327,6 @@ class CompanyRepositorySqflite implements CompanyRepository {
       await _tryLogPending(txn, entityId: id, operation: 'UPDATE');
 
       await _normalizeDefault(txn);
-    });
-  }
-
-  @override
-  Future<Company?> findByCode(String code) async {
-    return db.tx((txn) async {
-      final rows = await txn.query(
-        'company',
-        where: 'code = ? AND (deletedAt IS NULL OR deletedAt = "")',
-        whereArgs: [code],
-        limit: 1,
-      );
-      if (rows.isEmpty) return null;
-      return Company.fromMap(rows.first);
     });
   }
 }
