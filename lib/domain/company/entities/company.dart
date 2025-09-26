@@ -27,6 +27,10 @@ class Company extends Equatable {
   final bool isDirty;
   final String? account;
 
+  final String? status;
+  final bool isPublic;
+  final bool isActive;
+
   const Company({
     required this.id,
     this.remoteId,
@@ -53,11 +57,15 @@ class Company extends Equatable {
     this.version = 0,
     this.account,
     this.isDirty = true,
+    this.status,
+    this.isPublic = false,
+    this.isActive = true,
   });
 
   Company copyWith({
     String? id,
     String? remoteId,
+    String? localId,
     String? code,
     String? name,
     String? description,
@@ -79,10 +87,14 @@ class Company extends Equatable {
     DateTime? syncAt,
     int? version,
     bool? isDirty,
+    String? status,
+    bool? isPublic,
+    bool? isActive,
   }) {
     return Company(
       id: id ?? this.id,
       remoteId: remoteId ?? this.remoteId,
+      localId: localId ?? this.localId,
       code: code ?? this.code,
       name: name ?? this.name,
       description: description ?? this.description,
@@ -104,6 +116,10 @@ class Company extends Equatable {
       syncAt: syncAt ?? this.syncAt,
       version: version ?? this.version,
       isDirty: isDirty ?? this.isDirty,
+      status: status ?? this.status,
+      isPublic: isPublic ?? this.isPublic,
+      isActive: isActive ?? this.isActive,
+      account: account ?? this.account,
     );
   }
 
@@ -114,6 +130,7 @@ class Company extends Equatable {
   factory Company.fromMap(Map<String, Object?> m) => Company(
     id: m['id'] as String,
     remoteId: m['remoteId'] as String?,
+    localId: m['localId'] as String?,
     code: (m['code'] ?? '') as String,
     name: (m['name'] ?? '') as String,
     description: m['description'] as String?,
@@ -135,11 +152,16 @@ class Company extends Equatable {
     syncAt: _dt(m['syncAt']),
     version: _i(m['version']),
     isDirty: _i(m['isDirty']) == 1,
+    status: m['status'] as String?,
+    isPublic: _i(m['isPublic']) == 1,
+    isActive: _i(m['isActive']) == 1,
+    account: m['account'] as String?,
   );
 
   Map<String, Object?> toMap() => {
     'id': id,
     'remoteId': remoteId,
+    'localId': localId,
     'code': code,
     'name': name,
     'description': description,
@@ -161,6 +183,10 @@ class Company extends Equatable {
     'syncAt': syncAt?.toIso8601String(),
     'version': version,
     'isDirty': isDirty ? 1 : 0,
+    'status': status,
+    'isPublic': isPublic ? 1 : 0,
+    'isActive': isActive ? 1 : 0,
+    'account': account,
   };
 
   @override
@@ -176,5 +202,8 @@ class Company extends Equatable {
     deletedAt,
     version,
     isDirty,
+    status,
+    isPublic,
+    isActive,
   ];
 }

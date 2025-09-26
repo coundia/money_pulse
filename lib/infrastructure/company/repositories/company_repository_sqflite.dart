@@ -289,4 +289,18 @@ class CompanyRepositorySqflite implements CompanyRepository {
       await _normalizeDefault(txn);
     });
   }
+
+  @override
+  Future<Company?> findByCode(String code) async {
+    return db.tx((txn) async {
+      final rows = await txn.query(
+        'company',
+        where: 'code = ? AND (deletedAt IS NULL OR deletedAt = "")',
+        whereArgs: [code],
+        limit: 1,
+      );
+      if (rows.isEmpty) return null;
+      return Company.fromMap(rows.first);
+    });
+  }
 }

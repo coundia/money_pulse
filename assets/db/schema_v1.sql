@@ -222,17 +222,12 @@ CREATE TABLE IF NOT EXISTS company (
   syncAt TEXT,
    createdBy TEXT,
   version INTEGER DEFAULT 0,
-  isDirty INTEGER DEFAULT 1
-);
-
-CREATE   INDEX IF NOT EXISTS uq_company_code_active
-  ON company(code) WHERE deletedAt IS NULL;
-
-CREATE INDEX IF NOT EXISTS idx_company_name ON company(name);
-CREATE INDEX IF NOT EXISTS idx_company_phone ON company(phone);
-CREATE INDEX IF NOT EXISTS idx_company_email ON company(email);
-CREATE INDEX IF NOT EXISTS idx_company_deleted ON company(deletedAt);
-CREATE INDEX IF NOT EXISTS idx_company_dirty ON company(isDirty);
+  isDirty INTEGER DEFAULT 1,
+   account TEXT,
+   status TEXT,
+  isPublic INTEGER DEFAULT 0,
+  isActive INTEGER DEFAULT 1
+); 
 
 -- =========================
 -- CUSTOMER

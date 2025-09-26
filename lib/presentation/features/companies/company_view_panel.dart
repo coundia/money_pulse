@@ -1,16 +1,23 @@
+// Right-drawer company details with publish/unpublish actions and improved info layout.
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:money_pulse/presentation/shared/formatters.dart';
 import 'providers/company_detail_providers.dart';
 
-// NEW
 import 'package:money_pulse/presentation/widgets/right_drawer.dart';
 import 'company_form_panel.dart';
 import 'company_delete_panel.dart';
+import 'widgets/company_publish_actions.dart';
 
 class CompanyViewPanel extends ConsumerWidget {
   final String companyId;
-  const CompanyViewPanel({super.key, required this.companyId});
+  final String marketplaceBaseUri;
+  const CompanyViewPanel({
+    super.key,
+    required this.companyId,
+    this.marketplaceBaseUri = 'http://127.0.0.1:8095',
+  });
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -43,9 +50,33 @@ class CompanyViewPanel extends ConsumerWidget {
         heightFraction: 0.6,
       );
       if (ok == true && context.mounted) {
-        // Important: renvoyer true au parent (liste) pour qu’il rafraîchisse.
         Navigator.of(context).pop(true);
       }
+    }
+
+    Future<void> onCopy() async {
+      final c = await ref.read(companyByIdProvider(companyId).future);
+      if (c == null || !context.mounted) return;
+      final text = [
+        'Nom: ${c.name}',
+        'Code: ${c.code}',
+        'Statut: ${c.status ?? '—'}',
+        'Public: ${c.isPublic ? 'Oui' : 'Non'}',
+        'Téléphone: ${c.phone ?? '—'}',
+        'Email: ${c.email ?? '—'}',
+        'Site: ${c.website ?? '—'}',
+        'N° fiscal: ${c.taxId ?? '—'}',
+        'Devise: ${c.currency ?? '—'}',
+        'Adresse: ${_addr(c.addressLine1, c.addressLine2, c.city, c.region, c.country, c.postalCode)}',
+        'Créé: ${Formatters.dateFull(c.createdAt)}',
+        'MAJ: ${Formatters.dateFull(c.updatedAt)}',
+        'ID: ${c.id}',
+        'RemoteId: ${c.remoteId ?? '—'}',
+      ].join('\n');
+      await Clipboard.setData(ClipboardData(text: text));
+      ScaffoldMessenger.maybeOf(
+        context,
+      )?.showSnackBar(const SnackBar(content: Text('Détails copiés')));
     }
 
     return Scaffold(
@@ -56,8 +87,12 @@ class CompanyViewPanel extends ConsumerWidget {
           icon: const Icon(Icons.close),
           onPressed: () => Navigator.of(context).maybePop(),
         ),
-        // NEW: menu contextuel dans la vue
         actions: [
+          IconButton(
+            tooltip: 'Copier',
+            onPressed: onCopy,
+            icon: const Icon(Icons.copy_all_outlined),
+          ),
           PopupMenuButton<String>(
             onSelected: (v) {
               switch (v) {
@@ -99,25 +134,90 @@ class CompanyViewPanel extends ConsumerWidget {
           if (c == null) {
             return const Center(child: Text('Société introuvable'));
           }
+          final isPublished =
+              ((c.status ?? '').toUpperCase().startsWith('PUBLISH')) &&
+              c.isPublic == true;
+
           return ListView(
             padding: const EdgeInsets.all(16),
             children: [
-              ListTile(
-                title: Text(
-                  c.name,
-                  style: Theme.of(context).textTheme.titleLarge,
+              Card(
+                child: Padding(
+                  padding: const EdgeInsets.all(16),
+                  child: Wrap(
+                    runSpacing: 10,
+                    spacing: 16,
+                    crossAxisAlignment: WrapCrossAlignment.center,
+                    children: [
+                      const CircleAvatar(child: Icon(Icons.business)),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Row(
+                              children: [
+                                Expanded(
+                                  child: Text(
+                                    c.name,
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                    style: Theme.of(
+                                      context,
+                                    ).textTheme.titleLarge,
+                                  ),
+                                ),
+                                const SizedBox(width: 8),
+                                Tooltip(
+                                  message: isPublished
+                                      ? 'Publié'
+                                      : 'Non publié',
+                                  child: Icon(
+                                    isPublished
+                                        ? Icons.cloud_done_outlined
+                                        : Icons.cloud_off_outlined,
+                                  ),
+                                ),
+                              ],
+                            ),
+                            const SizedBox(height: 6),
+                            Wrap(
+                              spacing: 8,
+                              runSpacing: 8,
+                              children: [
+                                Chip(label: Text('Code: ${c.code}')),
+                                Chip(label: Text('Statut: ${c.status ?? '—'}')),
+                                Chip(
+                                  label: Text(
+                                    'Public: ${c.isPublic ? 'Oui' : 'Non'}',
+                                  ),
+                                ),
+                                if ((c.currency ?? '').isNotEmpty)
+                                  Chip(label: Text('Devise: ${c.currency}')),
+                              ],
+                            ),
+                            const SizedBox(height: 6),
+                            Text(
+                              'Créé: ${Formatters.dateFull(c.createdAt)} • Modifié: ${Formatters.dateFull(c.updatedAt)}',
+                              style: Theme.of(context).textTheme.bodySmall,
+                            ),
+                          ],
+                        ),
+                      ),
+                      CompanyPublishActions(
+                        company: c,
+                        baseUri: marketplaceBaseUri,
+                        onChanged: () => Navigator.of(context).maybePop(true),
+                      ),
+                    ],
+                  ),
                 ),
-                subtitle: Text(c.code),
-                leading: const CircleAvatar(child: Icon(Icons.business)),
               ),
-              const Divider(),
-              _Info('Téléphone', c.phone ?? '—'),
-              _Info('Email', c.email ?? '—'),
-              _Info('Site web', c.website ?? '—'),
-              _Info('N° fiscal', c.taxId ?? '—'),
-              _Info('Devise', c.currency ?? '—'),
-              const Divider(),
-              _Info(
+              const SizedBox(height: 12),
+              _KV('Téléphone', c.phone ?? '—'),
+              _KV('Email', c.email ?? '—'),
+              _KV('Site web', c.website ?? '—'),
+              _KV('N° fiscal', c.taxId ?? '—'),
+              _KV(
                 'Adresse',
                 _addr(
                   c.addressLine1,
@@ -129,19 +229,16 @@ class CompanyViewPanel extends ConsumerWidget {
                 ),
               ),
               const Divider(),
-              _Info('Par défaut', c.isDefault ? 'Oui' : 'Non'),
-              _Info('Créé le', Formatters.dateFull(c.createdAt)),
-              _Info('Mis à jour', Formatters.dateFull(c.updatedAt)),
-              const Divider(),
-              _Info('Identifiant', c.id),
+              _KV('Devise', c.currency ?? '—'),
+              _KV('Par défaut', c.isDefault ? 'Oui' : 'Non'),
+              _KV('ID', c.id),
+              _KV('RemoteId', c.remoteId ?? '—'),
             ],
           );
         },
         loading: () => const Center(child: CircularProgressIndicator()),
         error: (e, _) => Center(child: Text('Erreur: $e')),
       ),
-
-      // Boutons d’action en bas (un par ligne)
       bottomNavigationBar: async.maybeWhen(
         data: (c) {
           if (c == null) return null;
@@ -197,17 +294,17 @@ class CompanyViewPanel extends ConsumerWidget {
   }
 }
 
-class _Info extends StatelessWidget {
-  final String title;
-  final String value;
-  const _Info(this.title, this.value);
+class _KV extends StatelessWidget {
+  final String k;
+  final String v;
+  const _KV(this.k, this.v);
 
   @override
   Widget build(BuildContext context) {
     return ListTile(
       dense: true,
-      title: Text(title),
-      subtitle: Text(value),
+      title: Text(k, style: const TextStyle(fontWeight: FontWeight.w600)),
+      subtitle: Text(v),
       contentPadding: EdgeInsets.zero,
     );
   }

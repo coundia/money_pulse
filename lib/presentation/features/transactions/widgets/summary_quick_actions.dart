@@ -3,6 +3,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:money_pulse/marketplace/presentation/marketplace_page.dart';
+import 'package:money_pulse/presentation/features/companies/company_list_page.dart';
 
 import 'package:money_pulse/presentation/features/transactions/pages/transaction_list_page.dart';
 import 'package:money_pulse/presentation/features/pos/pos_page.dart';
@@ -386,7 +387,7 @@ class SummaryQuickActions extends StatelessWidget {
               context,
               label: 'Chatbot',
               icon: Icons.chat_bubble_rounded,
-              tone: Theme.of(context).colorScheme.secondary,
+              tone: Theme.of(context).colorScheme.primary,
               onTap:
                   onOpenChatbot ??
                   () {
@@ -397,6 +398,22 @@ class SummaryQuickActions extends StatelessWidget {
             ),
           );
         }
+
+        buttons.add(
+          _btn(
+            context,
+            label: 'Entreprise',
+            icon: Icons.home_rounded,
+            tone: Theme.of(context).colorScheme.primary,
+            onTap:
+                onOpenChatbot ??
+                () {
+                  Navigator.of(context).push(
+                    MaterialPageRoute(builder: (_) => const CompanyListPage()),
+                  );
+                },
+          ),
+        );
 
         if (buttons.isEmpty) return const SizedBox.shrink();
 

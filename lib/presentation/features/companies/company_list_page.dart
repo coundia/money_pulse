@@ -1,10 +1,17 @@
+// Page de liste des sociétés : recherche, rafraîchissement local, synchronisation avec le serveur distant.
+import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:http/http.dart' as http;
 
+import 'package:money_pulse/domain/company/entities/company.dart';
 import 'package:money_pulse/presentation/features/companies/company_form_panel.dart';
 import 'package:money_pulse/presentation/features/companies/providers/company_list_providers.dart';
 import 'package:money_pulse/presentation/features/companies/widgets/company_tile.dart';
 import 'package:money_pulse/presentation/widgets/right_drawer.dart';
+
+import '../../../sync/infrastructure/sync_headers_provider.dart';
+import '../../app/providers/company_repo_provider.dart';
 
 class CompanyListPage extends ConsumerStatefulWidget {
   const CompanyListPage({super.key});
@@ -41,6 +48,58 @@ class _CompanyListPageState extends ConsumerState<CompanyListPage> {
       heightFraction: 0.96,
     );
     if (ok == true && mounted) _refresh();
+  }
+
+  Future<void> _syncWithServer() async {
+    final repo = ref.read(companyRepoProvider);
+    final headerBuilder = ref.read(syncHeaderBuilderProvider);
+    final uri = Uri.parse(
+      'http://127.0.0.1:8095/api/v1/queries/companies?page=0&limit=500',
+    );
+
+    try {
+      final res = await http.get(uri, headers: headerBuilder());
+      if (res.statusCode != 200) {
+        throw Exception('Erreur ${res.statusCode}: ${res.body}');
+      }
+
+      final decoded = jsonDecode(res.body) as Map<String, dynamic>;
+      final rows = (decoded['items'] ?? decoded['content'] ?? []) as List;
+
+      for (final raw in rows) {
+        final remoteId = raw['id']?.toString();
+        final code = raw['code']?.toString();
+        if (remoteId == null || code == null) continue;
+
+        // Trouver la société locale via code
+        final existing = await repo.findByCode(code);
+        if (existing != null) {
+          final updated = existing.copyWith(
+            remoteId: remoteId,
+            status: raw['status']?.toString(),
+            isPublic: raw['isPublic'] == true,
+            isActive: raw['isActive'] == true,
+            syncAt: DateTime.tryParse(raw['syncAt'] ?? ''),
+            updatedAt: DateTime.now(),
+            isDirty: false,
+          );
+          await repo.update(updated);
+        }
+      }
+
+      if (mounted) {
+        _refresh();
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Synchronisation terminée')),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('Erreur de sync: $e')));
+      }
+    }
   }
 
   @override
@@ -116,6 +175,11 @@ class _CompanyListPageState extends ConsumerState<CompanyListPage> {
             tooltip: 'Rafraîchir',
             onPressed: _refresh,
             icon: const Icon(Icons.refresh),
+          ),
+          IconButton(
+            tooltip: 'Synchroniser',
+            onPressed: _syncWithServer,
+            icon: const Icon(Icons.cloud_sync_outlined),
           ),
         ],
       ),

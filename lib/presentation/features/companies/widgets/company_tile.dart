@@ -1,3 +1,4 @@
+// Reusable company tile with publish state (badge + icon) and context menu entry point.
 import 'package:flutter/material.dart';
 import 'package:money_pulse/domain/company/entities/company.dart';
 import 'package:money_pulse/presentation/widgets/right_drawer.dart';
@@ -8,12 +9,27 @@ import 'company_context_menu.dart';
 
 class CompanyTile extends StatelessWidget {
   final Company company;
-  final VoidCallback? onActionDone; // NEW
+  final VoidCallback? onActionDone;
 
   const CompanyTile({super.key, required this.company, this.onActionDone});
 
+  bool get _isPublished {
+    final s = (company.status ?? '').toUpperCase();
+    return (s == 'PUBLISH' || s == 'PUBLISHED') && company.isPublic == true;
+  }
+
   @override
   Widget build(BuildContext context) {
+    final badge = Chip(
+      label: Text(_isPublished ? 'Publié' : 'Non publié'),
+      avatar: Icon(
+        _isPublished ? Icons.cloud_done_outlined : Icons.cloud_off_outlined,
+        size: 18,
+      ),
+      visualDensity: VisualDensity.compact,
+      materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+    );
+
     return ListTile(
       onTap: () async {
         final res = await showRightDrawer<bool>(
@@ -23,12 +39,39 @@ class CompanyTile extends StatelessWidget {
           heightFraction: 0.96,
         );
         if (res == true) {
-          onActionDone?.call(); // ex: suppression depuis la vue
+          onActionDone?.call();
         }
       },
       leading: const CircleAvatar(child: Icon(Icons.business)),
-      title: Text(company.name, maxLines: 1, overflow: TextOverflow.ellipsis),
-      subtitle: Text(company.code),
+      title: Row(
+        children: [
+          Expanded(
+            child: Text(
+              company.name,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+            ),
+          ),
+          const SizedBox(width: 8),
+          Tooltip(
+            message: _isPublished ? 'Publié' : 'Non publié',
+            child: Icon(
+              _isPublished
+                  ? Icons.cloud_done_outlined
+                  : Icons.cloud_off_outlined,
+              size: 18,
+            ),
+          ),
+        ],
+      ),
+      subtitle: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Wrap(spacing: 6, runSpacing: 4, children: [badge]),
+          const SizedBox(height: 4),
+          Text(company.code, maxLines: 2, overflow: TextOverflow.ellipsis),
+        ],
+      ),
       trailing: CompanyContextMenu(
         onSelected: (a) async {
           switch (a) {

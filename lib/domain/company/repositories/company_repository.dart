@@ -24,4 +24,5 @@ abstract class CompanyRepository {
   Future<void> update(Company c);
   Future<void> softDelete(String id, {DateTime? at});
   Future<void> restore(String id);
+  Future<Company?> findByCode(String code);
 }
