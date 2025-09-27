@@ -1,3 +1,4 @@
+// lib/presentation/features/accounts/account_list_page.dart
 // Orchestrates accounts list; marks rows as "Partagé" when the connected user isn't the creator (heuristic via account_users membership).
 // FR labels, EN code. Long-press opens the context menu; highlights default account; clearable search & filter chips.
 import 'package:flutter/material.dart';
@@ -27,6 +28,9 @@ import 'widgets/account_adjust_balance_panel.dart';
 
 import 'package:money_pulse/presentation/app/connected_username_provider.dart';
 import 'providers/account_user_repo_provider.dart';
+
+// >>> NEW: marketplace repo import
+import 'account_marketplace_repo.dart';
 
 class AccountListPage extends ConsumerStatefulWidget {
   const AccountListPage({super.key});
@@ -83,11 +87,11 @@ class _AccountListPageState extends ConsumerState<AccountListPage> {
         balanceGoal: res.balanceGoal ?? 0,
         balanceLimit: res.balanceLimit ?? 0,
         code: res.code,
-        description: res.description?.trim().isEmpty == true
-            ? null
-            : res.description,
+        description: res.description?.trim().isNotEmpty == true
+            ? res.description
+            : null,
         status: null,
-        currency: res.currency?.trim().isEmpty == true ? null : res.currency,
+        currency: res.currency?.trim().isNotEmpty == true ? res.currency : null,
         typeAccount: res.typeAccount,
         dateStartAccount: res.dateStart,
         dateEndAccount: res.dateEnd,
@@ -103,10 +107,10 @@ class _AccountListPageState extends ConsumerState<AccountListPage> {
     } else {
       final updated = existing.copyWith(
         code: res.code,
-        description: res.description?.trim().isEmpty == true
-            ? null
-            : res.description,
-        currency: res.currency?.trim().isEmpty == true ? null : res.currency,
+        description: res.description?.trim().isNotEmpty == true
+            ? res.description
+            : null,
+        currency: res.currency?.trim().isNotEmpty == true ? res.currency : null,
         typeAccount: res.typeAccount,
         dateStartAccount: res.dateStart,
         dateEndAccount: res.dateEnd,
@@ -139,14 +143,33 @@ class _AccountListPageState extends ConsumerState<AccountListPage> {
     );
   }
 
+  // >>> NEW: remote pull + local reconcile
+  Future<void> _syncWithServer() async {
+    try {
+      final market = ref.read(
+        accountMarketplaceRepoProvider('http://127.0.0.1:8095'),
+      );
+      final n = await market.pullAndReconcileList();
+      ref.invalidate(accountListProvider);
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Synchronisation terminée ($n mis à jour)')),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('Erreur de synchro: $e')));
+    }
+  }
+
+  // >>> UPDATED: delete remote (if possible) then soft delete local
   Future<void> _delete(Account acc) async {
     final ok = await showDialog<bool>(
       context: context,
       builder: (c) => AlertDialog(
         title: const Text('Supprimer le compte ?'),
-        content: Text(
-          '« ${acc.code ?? 'Compte'} » sera déplacé dans la corbeille.',
-        ),
+        content: Text('« ${acc.code ?? 'Compte'} » sera supprimé.'),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(c, false),
@@ -160,9 +183,31 @@ class _AccountListPageState extends ConsumerState<AccountListPage> {
       ),
     );
     if (ok == true) {
-      await _repo.softDelete(acc.id);
-      ref.invalidate(accountListProvider);
-      if (mounted) setState(() {});
+      try {
+        final hasRemote =
+            (acc.remoteId?.trim().isNotEmpty == true) ||
+            ((acc.code ?? '').trim().isNotEmpty);
+        if (hasRemote) {
+          final market = ref.read(
+            accountMarketplaceRepoProvider('http://127.0.0.1:8095'),
+          );
+          await market.deleteRemoteThenLocal(acc);
+        } else {
+          await _repo.softDelete(acc.id);
+        }
+        ref.invalidate(accountListProvider);
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('« ${acc.code ?? 'Compte'} » supprimé.')),
+          );
+          setState(() {});
+        }
+      } catch (e) {
+        if (!mounted) return;
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('Erreur suppression: $e')));
+      }
     }
   }
 
@@ -210,6 +255,21 @@ class _AccountListPageState extends ConsumerState<AccountListPage> {
         onMakeDefault: () => _setDefault(a),
         onDelete: () => _delete(a),
         onShare: () => _share(a),
+        onSaveRemote: () async {
+          final market = ref.read(
+            accountMarketplaceRepoProvider('http://127.0.0.1:8095'),
+          );
+          await market.saveAndReconcile(a);
+          if (context.mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(
+                content: Text('Compte synchronisé avec le serveur'),
+              ),
+            );
+          }
+          // Rafraîchir la liste ou l’item
+          ref.invalidate(accountListProvider);
+        },
       ),
       widthFraction: 0.86,
       heightFraction: 0.96,
@@ -279,9 +339,7 @@ class _AccountListPageState extends ConsumerState<AccountListPage> {
                         ? null
                         : IconButton(
                             tooltip: 'Effacer',
-                            onPressed: () {
-                              _searchCtrl.clear();
-                            },
+                            onPressed: () => _searchCtrl.clear(),
                             icon: const Icon(Icons.clear),
                           ),
                     border: OutlineInputBorder(
@@ -349,6 +407,11 @@ class _AccountListPageState extends ConsumerState<AccountListPage> {
             tooltip: 'Ajouter un compte',
           ),
           IconButton(
+            onPressed: _syncWithServer, // <<< NEW
+            icon: const Icon(Icons.cloud_sync_outlined),
+            tooltip: 'Synchroniser',
+          ),
+          IconButton(
             onPressed: () => ref.invalidate(accountListProvider),
             icon: const Icon(Icons.refresh),
             tooltip: 'Rafraîchir',
@@ -390,7 +453,7 @@ class _AccountListPageState extends ConsumerState<AccountListPage> {
     final theme = Theme.of(context);
     final isDefault = a.isDefault;
 
-    // FIX: ensure a non-nullable Future<bool> for FutureBuilder<bool>
+    // ensure a non-nullable Future<bool> for FutureBuilder<bool>
     final Future<bool> fut = _isCreatorCache.containsKey(a.id)
         ? Future<bool>.value(_isCreatorCache[a.id]!)
         : _inferIsCreator(a.id);

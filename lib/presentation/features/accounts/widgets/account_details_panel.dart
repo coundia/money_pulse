@@ -1,4 +1,5 @@
-// Right-drawer details panel for an account with full balances, remaining amounts, and progress tracking (FR labels, EN code).
+// Right-drawer details panel for an account with full balances, remaining amounts,
+// and progress tracking (FR labels, EN code). Adds "save to server" button/entry.
 import 'package:flutter/material.dart';
 import 'package:money_pulse/domain/accounts/entities/account.dart';
 import 'package:money_pulse/presentation/shared/formatters.dart';
@@ -13,6 +14,10 @@ class AccountDetailsPanel extends StatelessWidget {
   final VoidCallback? onShare;
   final VoidCallback? onAdjust;
 
+  /// NEW: async callback to save (POST/PUT) to remote server
+  /// If null, the UI for "save to server" is hidden.
+  final Future<void> Function()? onSaveRemote;
+
   const AccountDetailsPanel({
     super.key,
     required this.account,
@@ -21,6 +26,7 @@ class AccountDetailsPanel extends StatelessWidget {
     this.onDelete,
     this.onShare,
     this.onAdjust,
+    this.onSaveRemote,
   });
 
   String _money(int cents, {String? currency}) {
@@ -36,10 +42,8 @@ class AccountDetailsPanel extends StatelessWidget {
   }
 
   String _deltaText(BuildContext context, int delta, {String? currency}) {
-    final cs = Theme.of(context).colorScheme;
     final pref = delta > 0 ? '+' : '';
-    final txt = '$pref${_money(delta, currency: currency)}';
-    return txt;
+    return '$pref${_money(delta, currency: currency)}';
   }
 
   static const Map<String, String> _typeLabelsFr = {
@@ -107,13 +111,34 @@ class AccountDetailsPanel extends StatelessWidget {
       appBar: AppBar(
         title: const Text('Détails du compte'),
         actions: [
-          if (onShare != null || true) // keep icon even without callback
+          if (onSaveRemote != null)
             IconButton(
-              tooltip: 'Partager',
-              onPressed: onShare ?? () => _openShare(context),
-              icon: const Icon(Icons.ios_share),
+              tooltip: 'Enregistrer sur le serveur',
+              onPressed: () async {
+                try {
+                  await onSaveRemote!.call();
+                  if (context.mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(
+                        content: Text('Synchronisé avec le serveur'),
+                      ),
+                    );
+                  }
+                } catch (e) {
+                  if (context.mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(content: Text('Erreur de synchronisation: $e')),
+                    );
+                  }
+                }
+              },
+              icon: const Icon(Icons.cloud_upload_outlined),
             ),
-
+          IconButton(
+            tooltip: 'Partager',
+            onPressed: onShare ?? () => _openShare(context),
+            icon: const Icon(Icons.ios_share),
+          ),
           PopupMenuButton<String>(
             tooltip: 'Actions',
             onSelected: (v) {
@@ -178,10 +203,40 @@ class AccountDetailsPanel extends StatelessWidget {
             ),
             title: Text(title, style: Theme.of(context).textTheme.titleLarge),
             subtitle: subtitle.isEmpty ? null : Text(subtitle),
-            trailing: FilledButton.icon(
-              onPressed: onAdjust,
-              icon: const Icon(Icons.tune),
-              label: const Text('Ajuster'),
+            trailing: Wrap(
+              spacing: 8,
+              children: [
+                if (onSaveRemote != null)
+                  OutlinedButton.icon(
+                    onPressed: () async {
+                      try {
+                        await onSaveRemote!.call();
+                        if (context.mounted) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(
+                              content: Text('Synchronisé avec le serveur'),
+                            ),
+                          );
+                        }
+                      } catch (e) {
+                        if (context.mounted) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(
+                              content: Text('Erreur de synchronisation: $e'),
+                            ),
+                          );
+                        }
+                      }
+                    },
+                    icon: const Icon(Icons.cloud_upload_outlined),
+                    label: const Text('Enregistrer'),
+                  ),
+                FilledButton.icon(
+                  onPressed: onAdjust,
+                  icon: const Icon(Icons.tune),
+                  label: const Text('Ajuster'),
+                ),
+              ],
             ),
           ),
 
