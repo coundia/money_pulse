@@ -268,8 +268,8 @@ class AccountMarketplaceRepo {
 
   /// Supprime côté serveur puis softDelete côté local.
   Future<void> deleteRemoteThenLocal(Account a) async {
-    await deleteRemote(a);
     await localRepo.softDelete(a.id);
+    await deleteRemote(a);
   }
 
   // ===========================
