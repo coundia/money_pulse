@@ -32,6 +32,8 @@ class AccountRepositorySqflite implements AccountRepository {
     final a = account.copyWith(updatedAt: now, version: 0, isDirty: true);
     final uid = getUserId?.call();
 
+    print("## create ###");
+
     Future<void> _do(DatabaseExecutor e) async {
       await e.insertTracked(
         'account',
@@ -53,6 +55,8 @@ class AccountRepositorySqflite implements AccountRepository {
 
   @override
   Future<void> update(Account account, {DatabaseExecutor? exec}) async {
+    print("## create ###");
+
     final now = DateTime.now();
     final a = account.copyWith(
       updatedAt: now,

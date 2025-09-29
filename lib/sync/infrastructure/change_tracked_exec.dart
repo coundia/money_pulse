@@ -1,10 +1,34 @@
-// Change-tracked insert/update/soft-delete helpers that stamp audit fields and append change_log entries; never updates primary key.
+// Change-tracked insert/update/soft-delete helpers that stamp audit fields and append change_log entries;
+// never updates primary key. Now column-safe: only writes columns that actually exist on the table.
 import 'package:sqflite/sqflite.dart';
 
 import '../../infrastructure/db/account_stamp.dart';
 import '../../sync/infrastructure/change_log_helper.dart';
 
 String _nowIso() => DateTime.now().toUtc().toIso8601String();
+
+/// Simple in-memory cache of table columns for this process.
+final Map<String, Set<String>> _tableColumnsCache = {};
+
+Future<Set<String>> _columnsOf(DatabaseExecutor db, String table) async {
+  final hit = _tableColumnsCache[table];
+  if (hit != null) return hit;
+
+  // DatabaseExecutor has rawQuery in both Database and Transaction.
+  final rows = await db.rawQuery('PRAGMA table_info($table)');
+  final cols = rows.map((r) => (r['name'] as String)).toSet();
+  _tableColumnsCache[table] = cols;
+  return cols;
+}
+
+Map<String, Object?> _onlyTableColumns(
+  Map<String, Object?> source,
+  Set<String> allowedCols,
+) {
+  return Map.fromEntries(
+    source.entries.where((e) => allowedCols.contains(e.key)),
+  );
+}
 
 extension ChangeTrackedExec on DatabaseExecutor {
   Future<int> insertTracked(
@@ -16,35 +40,48 @@ extension ChangeTrackedExec on DatabaseExecutor {
     String? createdBy,
     String operation = 'INSERT',
   }) async {
-    final stamped = await stampAccountIfMissing(
-      this,
-      values: {
-        ...values,
-        'createdAt': values['createdAt'] ?? _nowIso(),
-        'updatedAt': _nowIso(),
-        'isDirty': 1,
-      },
-      column: accountColumn,
-      preferredAccountId: preferredAccountId,
-    );
+    final cols = await _columnsOf(this, table);
+    final hasAccountCol = cols.contains(accountColumn);
+
+    // Base stamping (created/updated/isDirty)
+    final base = {
+      ...values,
+      'createdAt': values['createdAt'] ?? _nowIso(),
+      'updatedAt': _nowIso(),
+      'isDirty': 1,
+    };
+
+    // Stamp account only if the table actually has that column
+    final stamped = hasAccountCol
+        ? await stampAccountIfMissing(
+            this,
+            values: base,
+            column: accountColumn,
+            preferredAccountId: preferredAccountId,
+          )
+        : base;
+
+    // Keep only real columns for this table
+    final data = _onlyTableColumns(stamped, cols);
 
     final n = await insert(
       table,
-      stamped,
+      data,
       conflictAlgorithm: ConflictAlgorithm.abort,
     );
 
     final entityId =
-        (stamped[idKey] ?? stamped['localId'] ?? stamped['remoteId'])
-            ?.toString() ??
-        '';
+        (data[idKey] ?? data['localId'] ?? data['remoteId'])?.toString() ?? '';
+
     if (entityId.isNotEmpty) {
       await upsertChangeLogPending(
         this,
         entityTable: table,
         entityId: entityId,
         operation: operation,
-        accountId: stamped[accountColumn]?.toString(),
+        accountId: hasAccountCol
+            ? data[accountColumn]?.toString()
+            : preferredAccountId,
         createdBy: createdBy,
       );
     }
@@ -63,14 +100,24 @@ extension ChangeTrackedExec on DatabaseExecutor {
     String? createdBy,
     String operation = 'UPDATE',
   }) async {
-    final stamped = await stampAccountIfMissing(
-      this,
-      values: {...values, 'updatedAt': _nowIso(), 'isDirty': 1},
-      column: accountColumn,
-      preferredAccountId: preferredAccountId,
-    );
+    final cols = await _columnsOf(this, table);
+    final hasAccountCol = cols.contains(accountColumn);
 
-    final data = Map<String, Object?>.from(stamped)..remove(idKey);
+    // Update timestamps/dirty
+    final base = {...values, 'updatedAt': _nowIso(), 'isDirty': 1};
+
+    final stamped = hasAccountCol
+        ? await stampAccountIfMissing(
+            this,
+            values: base,
+            column: accountColumn,
+            preferredAccountId: preferredAccountId,
+          )
+        : base;
+
+    // Never update the primary key and never write non-existent columns
+    final withNoId = Map<String, Object?>.from(stamped)..remove(idKey);
+    final data = _onlyTableColumns(withNoId, cols);
 
     final n = await update(
       table,
@@ -80,6 +127,7 @@ extension ChangeTrackedExec on DatabaseExecutor {
       conflictAlgorithm: ConflictAlgorithm.abort,
     );
 
+    // Bump version atomically
     await rawUpdate(
       'UPDATE $table SET version=COALESCE(version,0)+1 WHERE $idKey=?',
       [entityId],
@@ -90,7 +138,9 @@ extension ChangeTrackedExec on DatabaseExecutor {
       entityTable: table,
       entityId: entityId,
       operation: operation,
-      accountId: stamped[accountColumn]?.toString(),
+      accountId: hasAccountCol
+          ? (stamped[accountColumn]?.toString())
+          : preferredAccountId,
       createdBy: createdBy,
     );
 
@@ -107,10 +157,13 @@ extension ChangeTrackedExec on DatabaseExecutor {
   }) async {
     final now = _nowIso();
     final n = await rawUpdate(
-      'UPDATE $table SET deletedAt=?, isDirty=1, updatedAt=?, version=COALESCE(version,0)+1 WHERE $idColumn=?',
+      'UPDATE $table '
+      'SET deletedAt=?, isDirty=1, updatedAt=?, version=COALESCE(version,0)+1 '
+      'WHERE $idColumn=?',
       [now, now, entityId],
     );
 
+    // We can’t know the row values here; use preferredAccountId (caller can pass it)
     await upsertChangeLogPending(
       this,
       entityTable: table,
