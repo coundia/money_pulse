@@ -3,6 +3,7 @@
 // Adds “Transactions” entry in AppBar menu to open CustomerTransactionsPopup.
 // Uses CustomerEditPanel and expects a `Customer?` result so the drawer can
 // close cleanly when saving.
+// NEW: cloud button to save/update the customer on the remote server.
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -19,6 +20,9 @@ import 'customer_debt_add_panel.dart';
 import 'customer_debt_payment_panel.dart';
 import 'widgets/customer_transactions_popup.dart';
 
+// NEW: marketplace repo import
+import 'customer_marketplace_repo.dart';
+
 class CustomerViewPanel extends ConsumerWidget {
   final String customerId;
   const CustomerViewPanel({super.key, required this.customerId});
@@ -27,6 +31,36 @@ class CustomerViewPanel extends ConsumerWidget {
     ref.invalidate(customerByIdProvider(customerId));
     ref.invalidate(customerListProvider);
     ref.invalidate(customerCountProvider);
+  }
+
+  // NEW: save to server (POST or PUT), then refresh
+  Future<void> _onSaveRemote(
+    BuildContext context,
+    WidgetRef ref,
+    Customer c,
+  ) async {
+    try {
+      final market = ref.read(
+        customerMarketplaceRepoProvider('http://127.0.0.1:8095'),
+      );
+      await market.saveAndReconcile(c);
+      await _refreshAll(ref);
+      if (!context.mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            (c.remoteId ?? '').isEmpty
+                ? 'Client enregistré sur le serveur'
+                : 'Client mis à jour sur le serveur',
+          ),
+        ),
+      );
+    } catch (e) {
+      if (!context.mounted) return;
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('Erreur de synchronisation: $e')));
+    }
   }
 
   @override
@@ -49,7 +83,7 @@ class CustomerViewPanel extends ConsumerWidget {
           ScaffoldMessenger.of(
             context,
           ).showSnackBar(const SnackBar(content: Text('Client mis à jour')));
-          // Facultatif : fermer cette vue après édition réussie
+          // Facultatif : fermer cette vue après édition validée
           Navigator.of(context).pop(true);
         }
       }
@@ -262,19 +296,32 @@ class CustomerViewPanel extends ConsumerWidget {
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
             ),
-            trailing: IconButton(
-              tooltip: 'Actions',
-              icon: const Icon(Icons.more_vert),
-              onPressed: () async {
-                final box = context.findRenderObject() as RenderBox?;
-                final pos = box?.localToGlobal(Offset.zero) ?? Offset.zero;
-                await _showCardMenu(
-                  context,
-                  pos.translate(0, 56),
-                  items: _menuItems(),
-                  onSelected: (v) => _handleMenuSelection(v),
-                );
-              },
+            trailing: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                // NEW: cloud save button
+                IconButton(
+                  tooltip: (c.remoteId ?? '').isEmpty
+                      ? 'Enregistrer sur le serveur'
+                      : 'Mettre à jour sur le serveur',
+                  icon: const Icon(Icons.cloud_upload_outlined),
+                  onPressed: () => _onSaveRemote(context, ref, c),
+                ),
+                IconButton(
+                  tooltip: 'Actions',
+                  icon: const Icon(Icons.more_vert),
+                  onPressed: () async {
+                    final box = context.findRenderObject() as RenderBox?;
+                    final pos = box?.localToGlobal(Offset.zero) ?? Offset.zero;
+                    await _showCardMenu(
+                      context,
+                      pos.translate(0, 56),
+                      items: _menuItems(),
+                      onSelected: (v) => _handleMenuSelection(v),
+                    );
+                  },
+                ),
+              ],
             ),
           );
 
