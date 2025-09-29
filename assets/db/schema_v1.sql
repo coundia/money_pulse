@@ -72,7 +72,7 @@ CREATE TABLE IF NOT EXISTS  transaction_entry (
   dateTransaction TEXT,
   status TEXT,
   entityName TEXT,
-  entityId TEXT,
+  entityId TEXT, 
   accountId TEXT,
   categoryId TEXT,
   companyId TEXT,    

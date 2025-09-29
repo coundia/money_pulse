@@ -1,8 +1,13 @@
-// TransactionDetailView: shows a transaction details with items, category, company and customer when present, plus share/receipt actions.
+// TransactionDetailView: shows a transaction details with items, category, company and
+// customer when present, plus share/receipt actions.
+// Uses dynamic sync headers (syncHeaderBuilderProvider) for POST/PUT/DELETE.
+
+import 'dart:convert';
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:http/http.dart' as http;
 import 'package:path_provider/path_provider.dart';
 import 'package:share_plus/share_plus.dart';
 
@@ -15,15 +20,175 @@ import 'package:money_pulse/presentation/shared/formatters.dart';
 import 'package:money_pulse/presentation/widgets/right_drawer.dart';
 
 import '../../companies/providers/company_detail_providers.dart';
+import '../../customers/customer_marketplace_repo.dart';
 import '../../customers/providers/customer_detail_providers.dart';
 import '../receipt/receipt_preview_page.dart';
 import '../receipt/receipt_controller.dart';
 import 'package:money_pulse/infrastructure/receipts/receipt_pdf_renderer.dart';
 
+// ⬇️ Import your sync headers provider (update the path if needed)
+
 class TransactionDetailView extends ConsumerWidget {
   final TransactionEntry entry;
 
+  // Change this if you target a different base URL
+  static const String _baseUrl = 'http://127.0.0.1:8095';
+
   const TransactionDetailView({super.key, required this.entry});
+
+  // ----------------------- Remote helpers -----------------------
+
+  Uri _u(String path, [Map<String, String>? qp]) =>
+      Uri.parse('$_baseUrl$path').replace(queryParameters: qp);
+
+  double _toRemoteAmount(int cents) => cents / 100.0;
+
+  Map<String, dynamic> _toRemoteBody(TransactionEntry e) {
+    // Map local fields to your remote API contract
+    return {
+      'remoteId': e.remoteId,
+      'localId': e.id,
+      'code': e.code,
+      'description': e.description,
+      'amount': _toRemoteAmount(e.amount),
+      'typeEntry': e.typeEntry,
+      'dateTransaction': e.dateTransaction.toUtc().toIso8601String(),
+      'status': e.status,
+      'entityName': e.entityName,
+      'entityId': e.entityId,
+      'accountId': e.accountId,
+      'syncAt': DateTime.now().toUtc().toIso8601String(),
+      'category': e.categoryId,
+      'company': e.companyId,
+      'customer': e.customerId,
+      'debt': "",
+    };
+  }
+
+  Future<void> _saveOrUpdateRemote(
+    BuildContext context,
+    WidgetRef ref,
+    TransactionEntry e,
+  ) async {
+    try {
+      final body = jsonEncode(_toRemoteBody(e));
+      // 🔐 Build dynamic headers (Authorization, API Key, Tenant, etc.)
+
+      final headers = ref.read(syncHeaderBuilderProvider)()
+        ..putIfAbsent('Content-Type', () => 'application/json')
+        ..putIfAbsent('accept', () => 'application/json');
+
+      late http.Response res;
+      final remoteId = (e.remoteId ?? '').trim();
+
+      if (remoteId.isEmpty) {
+        // POST create
+        res = await http.post(
+          _u('/api/v1/commands/transaction'),
+          headers: headers,
+          body: body,
+        );
+      } else {
+        // PUT update
+        res = await http.put(
+          _u('/api/v1/commands/transaction/$remoteId'),
+          headers: headers,
+          body: body,
+        );
+      }
+
+      if (res.statusCode < 200 || res.statusCode >= 300) {
+        throw Exception('HTTP ${res.statusCode}: ${res.body}');
+      }
+
+      // Try read remoteId from response to persist locally (optional)
+      String? newRemoteId;
+      try {
+        final m = jsonDecode(res.body);
+        if (m is Map && (m['remoteId'] ?? m['id']) != null) {
+          newRemoteId = '${m['remoteId'] ?? m['id']}';
+        }
+      } catch (_) {}
+
+      // Mark local as clean if your repo supports it
+      final repo = ref.read(transactionRepoProvider);
+      await repo.update(
+        e.copyWith(
+          remoteId: newRemoteId ?? e.remoteId,
+          isDirty: false,
+          updatedAt: DateTime.now(),
+        ),
+      );
+
+      // Refresh lists/balances
+      await ref.read(transactionsProvider.notifier).load();
+      await ref.read(balanceProvider.notifier).load();
+      ref.invalidate(transactionListItemsProvider);
+
+      if (!context.mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            remoteId.isEmpty
+                ? 'Transaction enregistrée sur le serveur'
+                : 'Transaction mise à jour sur le serveur',
+          ),
+        ),
+      );
+    } catch (e) {
+      if (!context.mounted) return;
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('Erreur de synchronisation: $e')));
+    }
+  }
+
+  Future<void> _deleteRemoteThenLocal(
+    BuildContext context,
+    WidgetRef ref,
+    TransactionEntry e,
+  ) async {
+    try {
+      final remoteId = (e.remoteId ?? '').trim();
+      if (remoteId.isNotEmpty) {
+        // 🔐 Dynamic headers again
+        final headers = ref.read(syncHeaderBuilderProvider)()
+          ..putIfAbsent('Content-Type', () => 'application/json')
+          ..putIfAbsent('accept', () => 'application/json');
+
+        final res = await http.delete(
+          _u('/api/v1/commands/transaction/$remoteId'),
+          headers: headers,
+        );
+        // Accept 2xx and 404 as "ok" (idempotent)
+        if (!((res.statusCode >= 200 && res.statusCode < 300) ||
+            res.statusCode == 404)) {
+          throw Exception('HTTP ${res.statusCode}: ${res.body}');
+        }
+      }
+
+      // Local soft delete
+      await ref.read(transactionRepoProvider).softDelete(e.id);
+
+      // Refresh lists/balances
+      await ref.read(transactionsProvider.notifier).load();
+      await ref.read(balanceProvider.notifier).load();
+      ref.invalidate(transactionListItemsProvider);
+
+      if (!context.mounted) return;
+      Navigator.of(context).pop();
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('Transaction supprimée')));
+    } catch (e) {
+      if (!context.mounted) return;
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('Suppression échouée: $e')));
+    }
+  }
+
+  // ----------------------- UI -----------------------
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -47,6 +212,14 @@ class TransactionDetailView extends ConsumerWidget {
       appBar: AppBar(
         title: const Text('Détails de la transaction'),
         actions: [
+          // Save/Update to server
+          IconButton(
+            tooltip: (entry.remoteId ?? '').isEmpty
+                ? 'Enregistrer sur le serveur'
+                : 'Mettre à jour sur le serveur',
+            icon: const Icon(Icons.cloud_upload_outlined),
+            onPressed: () => _saveOrUpdateRemote(context, ref, entry),
+          ),
           IconButton(
             tooltip: 'Partager le reçu',
             icon: const Icon(Icons.ios_share),
@@ -80,26 +253,26 @@ class TransactionDetailView extends ConsumerWidget {
           ),
           const SizedBox(height: 12),
 
-          // Description / Code / ID
+          // Informations principales
           _SectionCard(
             title: 'Informations',
             children: [
               _InfoTile(
                 icon: Icons.notes_outlined,
                 title: 'Description',
-                value: (entry.description ?? '').trim().isEmpty
-                    ? '—'
-                    : entry.description!,
+                value: (entry.description ?? '').trim().isNotEmpty
+                    ? entry.description!
+                    : '—',
               ),
               _InfoTile(
                 icon: Icons.tag_outlined,
                 title: 'Code',
-                value: (entry.code ?? '').trim().isEmpty ? '—' : entry.code!,
+                value: (entry.code ?? '').trim().isNotEmpty ? entry.code! : '—',
               ),
               _InfoTile(
-                icon: Icons.tag_outlined,
+                icon: Icons.account_balance_wallet_outlined,
                 title: 'Compte',
-                value: entry.accountId ?? 'NA',
+                value: entry.accountId ?? '—',
               ),
               _InfoTile(
                 icon: Icons.fingerprint,
@@ -175,6 +348,7 @@ class TransactionDetailView extends ConsumerWidget {
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
+              // Edit
               SizedBox(
                 width: double.infinity,
                 child: OutlinedButton.icon(
@@ -203,6 +377,8 @@ class TransactionDetailView extends ConsumerWidget {
                 ),
               ),
               const SizedBox(height: 8),
+
+              // Receipt preview
               SizedBox(
                 width: double.infinity,
                 child: FilledButton.icon(
@@ -219,6 +395,8 @@ class TransactionDetailView extends ConsumerWidget {
                 ),
               ),
               const SizedBox(height: 8),
+
+              // Delete (remote then local)
               SizedBox(
                 width: double.infinity,
                 child: FilledButton.tonalIcon(
@@ -241,20 +419,7 @@ class TransactionDetailView extends ConsumerWidget {
                       ),
                     );
                     if (confirm == true) {
-                      await ref
-                          .read(transactionRepoProvider)
-                          .softDelete(entry.id);
-                      await ref.read(transactionsProvider.notifier).load();
-                      await ref.read(balanceProvider.notifier).load();
-                      ref.invalidate(transactionListItemsProvider);
-                      if (context.mounted) {
-                        Navigator.of(context).pop();
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(
-                            content: Text('Transaction supprimée'),
-                          ),
-                        );
-                      }
+                      await _deleteRemoteThenLocal(context, ref, entry);
                     }
                   },
                   icon: const Icon(Icons.delete_outline),
