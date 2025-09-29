@@ -1,38 +1,33 @@
-// lib/presentation/features/customers/widgets/customer_tile.dart
-//
 // Customer tile with long-press contextual menu to run all actions,
 // includes link to CustomerTransactionsPopup, debt/pay actions,
 // quick "reset debt to 0" and "reset balance to 0" WITH confirmations.
-// + Remote sync actions: "Synchroniser au serveur" and "Supprimer distant + local"
+// Uses CustomerEditPanel and expects a `Customer?` result so the drawer
+// closes cleanly when saving.
+
 import 'package:flutter/material.dart';
 import 'package:flutter/gestures.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-
 import 'package:money_pulse/domain/customer/entities/customer.dart';
-import 'package:money_pulse/presentation/shared/formatters.dart';
+import 'package:money_pulse/presentation/features/customers/customer_edit_panel.dart';
 import 'package:money_pulse/presentation/widgets/right_drawer.dart';
+import 'package:money_pulse/presentation/shared/formatters.dart';
 
 import '../../../app/account_selection.dart';
 import '../customer_view_panel.dart';
-import '../customer_edit_panel.dart';
-import '../customer_form_panel.dart';
 import '../customer_delete_panel.dart';
-import 'customer_balance_adjust_panel.dart';
-import 'customer_transactions_popup.dart';
+import '../widgets/customer_balance_adjust_panel.dart';
+import '../widgets/customer_transactions_popup.dart';
 import '../customer_debt_add_panel.dart';
 import '../customer_debt_payment_panel.dart';
 
 import '../providers/customer_list_providers.dart';
 import '../providers/customer_detail_providers.dart';
 
-// Quick "reset" actions (needs a selected account + use case)
+// For quick "reset" actions (needs a selected account + use case)
 import 'package:money_pulse/presentation/app/providers.dart'
     show selectedAccountIdProvider;
 import 'package:money_pulse/presentation/app/providers/checkout_cart_usecase_provider.dart'
     show checkoutCartUseCaseProvider;
-
-// NEW: Marketplace repo for remote sync
-import '../customer_marketplace_repo.dart';
 
 class CustomerTile extends ConsumerWidget {
   final Customer customer;
@@ -89,13 +84,13 @@ class CustomerTile extends ConsumerWidget {
   }
 
   Future<void> _openEdit(BuildContext context, WidgetRef ref) async {
-    final ok = await showRightDrawer<bool>(
+    final result = await showRightDrawer<Customer?>(
       context,
       child: CustomerEditPanel(initial: customer),
       widthFraction: 0.86,
       heightFraction: 0.96,
     );
-    if (ok == true) {
+    if (result != null) {
       ref.invalidate(customerByIdProvider(customer.id));
       ref.invalidate(customerListProvider);
       ref.invalidate(customerCountProvider);
@@ -210,7 +205,6 @@ class CustomerTile extends ConsumerWidget {
       return;
     }
 
-    // Confirm
     final ok = await _confirmAction(
       context,
       title: 'Réinitialiser le solde à 0',
@@ -231,7 +225,6 @@ class CustomerTile extends ConsumerWidget {
     }
 
     final usecase = ref.read(checkoutCartUseCaseProvider);
-    // Set to 0: delta = 0 - current
     final delta = -current;
     final typeEntry = delta > 0 ? 'CREDIT' : 'DEBIT';
     final amount = delta.abs();
@@ -281,7 +274,6 @@ class CustomerTile extends ConsumerWidget {
       return;
     }
 
-    // Confirm
     final ok = await _confirmAction(
       context,
       title: 'Rembourser toute la dette',
@@ -334,69 +326,6 @@ class CustomerTile extends ConsumerWidget {
     }
   }
 
-  // ---------- Remote sync quick actions ----------
-  Future<void> _syncRemote(BuildContext context, WidgetRef ref) async {
-    try {
-      final market = ref.read(
-        customerMarketplaceRepoProvider('http://127.0.0.1:8095'),
-      );
-      await market.saveAndReconcile(customer);
-      ref.invalidate(customerByIdProvider(customer.id));
-      ref.invalidate(customerListProvider);
-      ref.invalidate(customerCountProvider);
-      if (!context.mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Client synchronisé au serveur')),
-      );
-    } catch (e) {
-      if (!context.mounted) return;
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text('Échec de synchro: $e')));
-    }
-  }
-
-  Future<void> _deleteRemoteLocal(BuildContext context, WidgetRef ref) async {
-    final ok = await showDialog<bool>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('Supprimer distant + local ?'),
-        content: Text(
-          'Supprimer « ${customer.fullName} » à distance (si possible) puis localement ?',
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx, false),
-            child: const Text('Annuler'),
-          ),
-          FilledButton(
-            onPressed: () => Navigator.pop(ctx, true),
-            child: const Text('Supprimer'),
-          ),
-        ],
-      ),
-    );
-    if (ok != true) return;
-
-    try {
-      final market = ref.read(
-        customerMarketplaceRepoProvider('http://127.0.0.1:8095'),
-      );
-      await market.deleteRemoteThenLocal(customer);
-      ref.invalidate(customerListProvider);
-      ref.invalidate(customerCountProvider);
-      if (!context.mounted) return;
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(const SnackBar(content: Text('Client supprimé')));
-    } catch (e) {
-      if (!context.mounted) return;
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text('Échec de suppression: $e')));
-    }
-  }
-
   // ---------- Context menu ----------
   Future<void> _showContextMenu(
     BuildContext context,
@@ -430,18 +359,8 @@ class CustomerTile extends ConsumerWidget {
           value: 'reset_balance',
           child: Text('Réinitialiser le solde à 0'),
         ),
-        PopupMenuDivider(),
-        PopupMenuItem(
-          value: 'sync_remote',
-          child: Text('Synchroniser au serveur'),
-        ),
-        PopupMenuItem(
-          value: 'delete_remote_local',
-          child: Text('Supprimer distant + local'),
-        ),
-        PopupMenuDivider(),
         PopupMenuItem(value: 'edit', child: Text('Modifier')),
-        PopupMenuItem(value: 'delete', child: Text('Supprimer (local)')),
+        PopupMenuItem(value: 'delete', child: Text('Supprimer')),
       ],
     );
 
@@ -469,12 +388,6 @@ class CustomerTile extends ConsumerWidget {
         break;
       case 'reset_balance':
         await _resetBalanceToZeroQuick(context, ref);
-        break;
-      case 'sync_remote':
-        await _syncRemote(context, ref);
-        break;
-      case 'delete_remote_local':
-        await _deleteRemoteLocal(context, ref);
         break;
       case 'edit':
         await _openEdit(context, ref);

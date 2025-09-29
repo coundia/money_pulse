@@ -1,5 +1,7 @@
 // Customer edit panel (SRP). Pops Customer? after save using popAfterFrame.
 // Includes balance cards; optional adjust actions keep types consistent.
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -123,7 +125,7 @@ class _CustomerEditPanelState extends ConsumerState<CustomerEditPanel> {
     try {
       await repo.update(entity);
       if (!mounted) return;
-      await popAfterFrame<Customer?>(context, entity);
+      unawaited(safePop<Customer?>(context, entity));
     } finally {
       if (mounted) setState(() => _isSaving = false);
     }
@@ -399,10 +401,8 @@ class _CustomerEditPanelState extends ConsumerState<CustomerEditPanel> {
                                 heightFraction: 0.96,
                               );
                               if (ok == true && context.mounted) {
-                                // Close edit panel and signal parent to refresh
-                                await popAfterFrame<Customer?>(
-                                  context,
-                                  widget.initial,
+                                unawaited(
+                                  safePop<Customer?>(context, widget.initial),
                                 );
                               }
                             },
@@ -425,10 +425,7 @@ class _CustomerEditPanelState extends ConsumerState<CustomerEditPanel> {
                                 heightFraction: 0.96,
                               );
                               if (ok == true && context.mounted) {
-                                await popAfterFrame<Customer?>(
-                                  context,
-                                  widget.initial,
-                                );
+                                safePop<Customer?>(context, widget.initial);
                               }
                             },
                             icon: const Icon(Icons.edit_outlined),

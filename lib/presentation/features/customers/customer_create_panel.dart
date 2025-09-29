@@ -127,7 +127,8 @@ class _CustomerCreatePanelState extends ConsumerState<CustomerCreatePanel> {
     try {
       await repo.create(entity);
       if (!mounted) return;
-      await popAfterFrame<Customer?>(context, entity);
+
+      safePop<Customer?>(context, entity);
     } finally {
       if (mounted) setState(() => _isSaving = false);
     }

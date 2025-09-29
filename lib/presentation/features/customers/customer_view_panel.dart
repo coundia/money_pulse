@@ -1,26 +1,23 @@
-// lib/presentation/features/customers/customer_view_panel.dart
-//
 // Customer details panel: minimalist list UI, responsive,
 // balances are clickable (tap => action menu), full refresh after actions.
 // Adds “Transactions” entry in AppBar menu to open CustomerTransactionsPopup.
-// + Remote sync actions: "Synchroniser au serveur" and "Supprimer distant + local".
+// Uses CustomerEditPanel and expects a `Customer?` result so the drawer can
+// close cleanly when saving.
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-
+import 'package:money_pulse/presentation/features/customers/customer_edit_panel.dart';
+import '../../../domain/customer/entities/customer.dart';
 import 'providers/customer_detail_providers.dart';
 import 'providers/customer_list_providers.dart';
 import 'widgets/customer_linked_section.dart';
-import 'widgets/customer_transactions_popup.dart';
-import 'widgets/customer_balance_adjust_panel.dart';
-
-import 'customer_edit_panel.dart';
-import 'customer_delete_panel.dart';
-import 'customer_debt_add_panel.dart';
-import 'customer_debt_payment_panel.dart';
-
-import 'customer_marketplace_repo.dart'; // NEW: remote sync provider
 import 'package:money_pulse/presentation/widgets/right_drawer.dart';
 import 'package:money_pulse/presentation/shared/formatters.dart';
+import 'customer_delete_panel.dart';
+import 'widgets/customer_balance_adjust_panel.dart';
+import 'customer_debt_add_panel.dart';
+import 'customer_debt_payment_panel.dart';
+import 'widgets/customer_transactions_popup.dart';
 
 class CustomerViewPanel extends ConsumerWidget {
   final String customerId;
@@ -40,19 +37,20 @@ class CustomerViewPanel extends ConsumerWidget {
     Future<void> _onEdit() async {
       final c = await ref.read(customerByIdProvider(customerId).future);
       if (c == null) return;
-      final ok = await showRightDrawer<bool>(
+      final result = await showRightDrawer<Customer?>(
         context,
         child: CustomerEditPanel(initial: c),
         widthFraction: 0.86,
         heightFraction: 0.96,
       );
-      if (ok == true) {
+      if (result != null) {
         await _refreshAll(ref);
         if (context.mounted) {
           ScaffoldMessenger.of(
             context,
           ).showSnackBar(const SnackBar(content: Text('Client mis à jour')));
-          Navigator.of(context).pop(true); // ferme la vue si édition validée
+          // Facultatif : fermer cette vue après édition réussie
+          Navigator.of(context).pop(true);
         }
       }
     }
@@ -164,72 +162,6 @@ class CustomerViewPanel extends ConsumerWidget {
       }
     }
 
-    // ===== Remote sync actions =====
-    Future<void> _onSyncRemote() async {
-      final c = await ref.read(customerByIdProvider(customerId).future);
-      if (c == null) return;
-      try {
-        final market = ref.read(
-          customerMarketplaceRepoProvider('http://127.0.0.1:8095'),
-        );
-        await market.saveAndReconcile(c);
-        await _refreshAll(ref);
-        if (!context.mounted) return;
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Client synchronisé au serveur')),
-        );
-      } catch (e) {
-        if (!context.mounted) return;
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text('Échec de synchro: $e')));
-      }
-    }
-
-    Future<void> _onDeleteRemoteLocal() async {
-      final c = await ref.read(customerByIdProvider(customerId).future);
-      if (c == null) return;
-      final ok = await showDialog<bool>(
-        context: context,
-        builder: (ctx) => AlertDialog(
-          title: const Text('Supprimer distant + local ?'),
-          content: Text(
-            'Supprimer « ${c.fullName} » à distance (si possible) puis localement ?',
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(ctx, false),
-              child: const Text('Annuler'),
-            ),
-            FilledButton(
-              onPressed: () => Navigator.pop(ctx, true),
-              child: const Text('Supprimer'),
-            ),
-          ],
-        ),
-      );
-      if (ok != true) return;
-
-      try {
-        final market = ref.read(
-          customerMarketplaceRepoProvider('http://127.0.0.1:8095'),
-        );
-        await market.deleteRemoteThenLocal(c);
-        await _refreshAll(ref);
-        if (!context.mounted) return;
-        Navigator.of(context).pop(true); // close the panel after delete
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(const SnackBar(content: Text('Client supprimé')));
-      } catch (e) {
-        if (!context.mounted) return;
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text('Échec de suppression: $e')));
-      }
-    }
-
-    // ===== Menus =====
     List<PopupMenuEntry<String>> _menuItems() => const [
       PopupMenuItem(
         value: 'txs',
@@ -257,28 +189,7 @@ class CustomerViewPanel extends ConsumerWidget {
           children: [
             Icon(Icons.delete_outline, size: 18),
             SizedBox(width: 8),
-            Text('Supprimer (local)'),
-          ],
-        ),
-      ),
-      PopupMenuDivider(),
-      PopupMenuItem(
-        value: 'sync_remote',
-        child: Row(
-          children: [
-            Icon(Icons.cloud_upload_outlined, size: 18),
-            SizedBox(width: 8),
-            Text('Synchroniser au serveur'),
-          ],
-        ),
-      ),
-      PopupMenuItem(
-        value: 'delete_remote_local',
-        child: Row(
-          children: [
-            Icon(Icons.cloud_off_outlined, size: 18),
-            SizedBox(width: 8),
-            Text('Supprimer distant + local'),
+            Text('Supprimer'),
           ],
         ),
       ),
@@ -294,12 +205,6 @@ class CustomerViewPanel extends ConsumerWidget {
           break;
         case 'delete':
           await _onDelete();
-          break;
-        case 'sync_remote':
-          await _onSyncRemote();
-          break;
-        case 'delete_remote_local':
-          await _onDeleteRemoteLocal();
           break;
       }
     }
@@ -321,75 +226,6 @@ class CustomerViewPanel extends ConsumerWidget {
       }
     }
 
-    // Menus des cartes
-    List<PopupMenuEntry<String>> _soldeMenu() => const [
-      PopupMenuItem(
-        value: 'add',
-        child: Row(
-          children: [
-            Icon(Icons.add_circle_outline, size: 18),
-            SizedBox(width: 8),
-            Text('Ajouter au solde'),
-          ],
-        ),
-      ),
-      PopupMenuItem(
-        value: 'set',
-        child: Row(
-          children: [
-            Icon(Icons.edit_note_outlined, size: 18),
-            SizedBox(width: 8),
-            Text('Définir le solde'),
-          ],
-        ),
-      ),
-    ];
-
-    Future<void> _onSoldeMenuSelected(String v) async {
-      switch (v) {
-        case 'add':
-          await _onAddBalance();
-          break;
-        case 'set':
-          await _onSetBalance();
-          break;
-      }
-    }
-
-    List<PopupMenuEntry<String>> _detteMenu() => const [
-      PopupMenuItem(
-        value: 'addDebt',
-        child: Row(
-          children: [
-            Icon(Icons.shopping_cart_checkout_outlined, size: 18),
-            SizedBox(width: 8),
-            Text('Ajouter à la dette'),
-          ],
-        ),
-      ),
-      PopupMenuItem(
-        value: 'payDebt',
-        child: Row(
-          children: [
-            Icon(Icons.payments_outlined, size: 18),
-            SizedBox(width: 8),
-            Text('Encaisser un paiement'),
-          ],
-        ),
-      ),
-    ];
-
-    Future<void> _onDetteMenuSelected(String v) async {
-      switch (v) {
-        case 'addDebt':
-          await _onDebtAdd();
-          break;
-        case 'payDebt':
-          await _onDebtPayment();
-          break;
-      }
-    }
-
     return Scaffold(
       appBar: AppBar(
         title: const Text('Détails client'),
@@ -399,11 +235,6 @@ class CustomerViewPanel extends ConsumerWidget {
           onPressed: () => Navigator.of(context).maybePop(),
         ),
         actions: [
-          IconButton(
-            tooltip: 'Synchroniser au serveur',
-            onPressed: _onSyncRemote,
-            icon: const Icon(Icons.cloud_upload_outlined),
-          ),
           PopupMenuButton<String>(
             onSelected: _handleMenuSelection,
             itemBuilder: (_) => _menuItems(),
@@ -501,9 +332,80 @@ class CustomerViewPanel extends ConsumerWidget {
             );
           }
 
-          final soldeValue = '${Formatters.amountFromCents(c.balance)}  ';
-          final detteValue = '${Formatters.amountFromCents(c.balanceDebt)}  ';
+          // Menu Solde (ajout / définir)
+          List<PopupMenuEntry<String>> _soldeMenu() => const [
+            PopupMenuItem(
+              value: 'add',
+              child: Row(
+                children: [
+                  Icon(Icons.add_circle_outline, size: 18),
+                  SizedBox(width: 8),
+                  Text('Ajouter au solde'),
+                ],
+              ),
+            ),
+            PopupMenuItem(
+              value: 'set',
+              child: Row(
+                children: [
+                  Icon(Icons.edit_note_outlined, size: 18),
+                  SizedBox(width: 8),
+                  Text('Définir le solde'),
+                ],
+              ),
+            ),
+          ];
 
+          Future<void> _onSoldeMenuSelected(String v) async {
+            switch (v) {
+              case 'add':
+                await _onAddBalance();
+                break;
+              case 'set':
+                await _onSetBalance();
+                break;
+            }
+          }
+
+          // Menu Dette (ajouter / encaisser)
+          List<PopupMenuEntry<String>> _detteMenu() => const [
+            PopupMenuItem(
+              value: 'addDebt',
+              child: Row(
+                children: [
+                  Icon(Icons.shopping_cart_checkout_outlined, size: 18),
+                  SizedBox(width: 8),
+                  Text('Ajouter à la dette'),
+                ],
+              ),
+            ),
+            PopupMenuItem(
+              value: 'payDebt',
+              child: Row(
+                children: [
+                  Icon(Icons.payments_outlined, size: 18),
+                  SizedBox(width: 8),
+                  Text('Encaisser un paiement'),
+                ],
+              ),
+            ),
+          ];
+
+          Future<void> _onDetteMenuSelected(String v) async {
+            switch (v) {
+              case 'addDebt':
+                await _onDebtAdd();
+                break;
+              case 'payDebt':
+                await _onDebtPayment();
+                break;
+            }
+          }
+
+          final soldeValue = '${Formatters.amountFromCents(c.balance)} CFA';
+          final detteValue = '${Formatters.amountFromCents(c.balanceDebt)} CFA';
+
+          // ===== Layout minimal / liste =====
           return RefreshIndicator(
             onRefresh: () => _refreshAll(ref),
             child: ListView(
@@ -512,8 +414,8 @@ class CustomerViewPanel extends ConsumerWidget {
                 header,
                 const SizedBox(height: 8),
                 LayoutBuilder(
-                  builder: (context, csx) {
-                    final isWide = csx.maxWidth >= 640;
+                  builder: (context, cs) {
+                    final isWide = cs.maxWidth >= 640;
                     final soldeCard = _clickableStatCard(
                       title: 'Solde',
                       value: soldeValue,

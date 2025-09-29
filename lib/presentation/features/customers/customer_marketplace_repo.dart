@@ -1,3 +1,10 @@
+// lib/presentation/features/customers/customer_marketplace_repo.dart
+//
+// Simplified marketplace repo for syncing customers with a remote server,
+// now WITH dynamic headers (Authorization / API Key / Tenant) pulled from
+// Riverpod providers (see bottom of file). Works for GET/POST/PUT/DELETE.
+//
+// Base URL example: http://127.0.0.1:8095
 import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -7,9 +14,8 @@ import 'package:money_pulse/domain/customer/entities/customer.dart';
 import 'package:money_pulse/domain/customer/repositories/customer_repository.dart';
 
 import '../../app/providers/customer_repo_provider.dart';
+import 'package:money_pulse/onboarding/presentation/providers/access_session_provider.dart';
 
-/// Simplified marketplace repo for syncing customers with a remote server.
-/// Assumes baseUrl like: http://127.0.0.1:8095
 class CustomerMarketplaceRepo {
   final Ref ref;
   final String baseUrl;
@@ -19,6 +25,24 @@ class CustomerMarketplaceRepo {
 
   Uri _u(String path, [Map<String, String>? qp]) =>
       Uri.parse('$baseUrl$path').replace(queryParameters: qp);
+
+  // -------- Headers (dynamic from providers) --------
+  Map<String, String> _headers({
+    bool json = false,
+    Map<String, String>? extra,
+  }) {
+    final base = ref.read(syncHeaderBuilderProvider)(); // dynamic read
+    if (json) {
+      base['Content-Type'] = 'application/json';
+      base['accept'] = 'application/json';
+    } else {
+      base.putIfAbsent('accept', () => 'application/json');
+    }
+    if (extra != null && extra.isNotEmpty) {
+      base.addAll(extra);
+    }
+    return base;
+  }
 
   double _toRemoteAmount(int cents) => cents / 100.0;
   int _fromRemoteAmount(num v) => (v * 100).round();
@@ -116,7 +140,7 @@ class CustomerMarketplaceRepo {
   Future<int> pullAndReconcileList({int page = 0, int limit = 200}) async {
     final res = await http.get(
       _u('/api/v1/queries/customers', {'page': '$page', 'limit': '$limit'}),
-      headers: const {'accept': 'application/json'},
+      headers: _headers(), // <<< headers
     );
     if (res.statusCode < 200 || res.statusCode >= 300) {
       throw Exception('GET customers failed: ${res.statusCode} ${res.body}');
@@ -181,19 +205,13 @@ class CustomerMarketplaceRepo {
     if ((c.remoteId ?? '').isEmpty) {
       res = await http.post(
         _u('/api/v1/commands/customer'),
-        headers: const {
-          'accept': 'application/json',
-          'Content-Type': 'application/json',
-        },
+        headers: _headers(json: true), // <<< JSON headers
         body: body,
       );
     } else {
       res = await http.put(
         _u('/api/v1/commands/customer/${c.remoteId}'),
-        headers: const {
-          'accept': 'application/json',
-          'Content-Type': 'application/json',
-        },
+        headers: _headers(json: true), // <<< JSON headers
         body: body,
       );
     }
@@ -227,7 +245,7 @@ class CustomerMarketplaceRepo {
     if (remoteId.isNotEmpty) {
       final res = await http.delete(
         _u('/api/v1/commands/customer/$remoteId'),
-        headers: const {'accept': '*/*'},
+        headers: _headers(), // <<< headers
       );
       // Accept 2xx and 404 as "ok" for idempotency
       if (!(res.statusCode >= 200 && res.statusCode < 300) &&
@@ -244,3 +262,62 @@ final customerMarketplaceRepoProvider =
     Provider.family<CustomerMarketplaceRepo, String>(
       (ref, baseUrl) => CustomerMarketplaceRepo(ref, baseUrl),
     );
+
+/// ============================================================================
+/// Dynamic headers providers
+/// ============================================================================
+
+/* Providers for building HTTP headers (Authorization, API key, tenant) used by sync.
+ * Token is read from accessSessionProvider; falls back to --dart-define if absent.
+ */
+final syncAuthTokenProvider = Provider<String?>((ref) {
+  final grant = ref.watch(accessSessionProvider);
+  final tokenFromSession = grant?.token;
+  if (tokenFromSession != null && tokenFromSession.isNotEmpty) {
+    return tokenFromSession;
+  }
+  const fromEnv = String.fromEnvironment('SYNC_BEARER', defaultValue: '');
+  return fromEnv.isEmpty ? null : fromEnv;
+});
+
+final syncApiKeyProvider = Provider<String?>((_) {
+  const v = String.fromEnvironment('SYNC_API_KEY', defaultValue: 'system');
+  return v.isEmpty ? null : v;
+});
+
+final syncTenantNameProvider = Provider<String?>((_) {
+  const v = String.fromEnvironment('SYNC_TENANT_NAME', defaultValue: 'system');
+  return v.isEmpty ? null : v;
+});
+
+typedef HeaderBuilder = Map<String, String> Function();
+
+final syncHeaderBuilderProvider = Provider<HeaderBuilder>((ref) {
+  // We return a closure so every HTTP call reads the *current* providers.
+  return () {
+    final headers = <String, String>{
+      // Defaults; _headers() will enforce JSON when needed
+      'accept': 'application/json',
+    };
+
+    final token = ref.read(syncAuthTokenProvider);
+    if (token != null && token.isNotEmpty) {
+      headers['Authorization'] = 'Bearer $token';
+    }
+
+    final apiKey = ref.read(syncApiKeyProvider);
+    if (apiKey != null && apiKey.isNotEmpty) {
+      headers['X-API-KEY'] = apiKey;
+    }
+
+    final tenant = ref.read(syncTenantNameProvider);
+    if (tenant != null && tenant.isNotEmpty) {
+      headers['X-TENANT-NAME'] = tenant;
+    }
+
+    // You can add platform hinting if your backend wants it:
+    headers['X-Client'] = kIsWeb ? 'web' : 'flutter';
+
+    return headers;
+  };
+});

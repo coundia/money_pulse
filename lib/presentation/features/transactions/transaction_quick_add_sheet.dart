@@ -20,7 +20,6 @@ import 'widgets/bottom_bar.dart';
 import 'widgets/category_autocomplete.dart';
 import 'widgets/date_row.dart';
 import 'widgets/items_section.dart';
-import 'package:money_pulse/presentation/features/customers/customer_form_panel.dart';
 import 'widgets/customer_autocomplete.dart';
 import 'widgets/type_selector.dart';
 
