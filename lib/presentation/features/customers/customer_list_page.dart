@@ -7,9 +7,12 @@ import '../../../domain/customer/entities/customer.dart';
 import 'providers/customer_list_providers.dart';
 import 'widgets/active_filters_bar.dart';
 import 'widgets/customer_tile.dart';
-import 'customer_create_panel.dart'; // <-- changed import
+import 'customer_create_panel.dart';
 import 'widgets/customer_filters_panel.dart';
 import 'package:money_pulse/presentation/widgets/right_drawer.dart';
+
+// NEW: marketplace repo
+import 'customer_marketplace_repo.dart';
 
 class CustomerListPage extends ConsumerStatefulWidget {
   const CustomerListPage({super.key});
@@ -38,6 +41,25 @@ class _CustomerListPageState extends ConsumerState<CustomerListPage> {
     ref.invalidate(customerCountProvider);
   }
 
+  Future<void> _syncWithServer() async {
+    try {
+      final market = ref.read(
+        customerMarketplaceRepoProvider('http://127.0.0.1:8095'),
+      );
+      final n = await market.pullAndReconcileList();
+      _refresh();
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Synchronisation terminée ($n élément(s))')),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('Erreur de synchro: $e')));
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final listAsync = ref.watch(customerListProvider);
@@ -47,6 +69,11 @@ class _CustomerListPageState extends ConsumerState<CustomerListPage> {
       appBar: AppBar(
         title: const Text('Clients'),
         actions: [
+          IconButton(
+            tooltip: 'Synchroniser',
+            onPressed: _syncWithServer,
+            icon: const Icon(Icons.cloud_sync_outlined),
+          ),
           IconButton(
             tooltip: 'Actualiser',
             onPressed: _refresh,
