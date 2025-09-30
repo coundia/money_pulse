@@ -633,6 +633,7 @@ class _ProductListPageState extends ConsumerState<ProductListPage> {
                                 subtitle: sub.isEmpty ? null : sub,
                                 priceCents: p.defaultPrice,
                                 statuses: p.statuses,
+                                remoteId: p.remoteId,
                                 imagePath: imagePath,
                                 // imageUrl: <optional if you fetch remote>,
                                 onTap: () => _view(p),

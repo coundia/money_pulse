@@ -1,4 +1,6 @@
-// Account list row with shared marker when not creator; FR labels, EN code; no inline context menu (handled by parent).
+// Account list row with shared marker when not creator; FR labels, EN code;
+// shows cloud sync status (remoteId) before the title; no inline context menu (handled by parent).
+
 import 'package:flutter/material.dart';
 import 'package:money_pulse/domain/accounts/entities/account.dart';
 import 'package:money_pulse/presentation/shared/formatters.dart';
@@ -7,7 +9,7 @@ class AccountTile extends StatelessWidget {
   final Account account;
   final String balanceText;
   final String updatedAtText;
-  final bool isCreator; // NEW: mark owner vs shared
+  final bool isCreator; // mark owner vs shared
   final VoidCallback? onView;
   final VoidCallback? onAdjust; // kept for API compatibility (unused here)
   final VoidCallback? onMakeDefault; // kept for API compatibility (unused here)
@@ -20,7 +22,7 @@ class AccountTile extends StatelessWidget {
     required this.account,
     required this.balanceText,
     required this.updatedAtText,
-    this.isCreator = true, // default: owner
+    this.isCreator = true,
     this.onView,
     this.onAdjust,
     this.onMakeDefault,
@@ -113,6 +115,9 @@ class AccountTile extends StatelessWidget {
         ? (balanceCents.toDouble() / goal!.toDouble()).clamp(0.0, 1.0)
         : 0.0;
 
+    // NEW: remote sync indicator (cloud)
+    final hasRemote = (account.remoteId ?? '').trim().isNotEmpty;
+
     return Card(
       margin: EdgeInsets.zero,
       elevation: 0,
@@ -190,7 +195,8 @@ class AccountTile extends StatelessWidget {
                   ],
                 ),
                 const SizedBox(width: 12),
-                // Title + optional shared tag and progress
+
+                // Title row with cloud icon + title + shared chip
                 Expanded(
                   child: Column(
                     mainAxisSize: MainAxisSize.min,
@@ -198,6 +204,21 @@ class AccountTile extends StatelessWidget {
                     children: [
                       Row(
                         children: [
+                          Tooltip(
+                            message: hasRemote
+                                ? 'Synchronisé (remoteId présent)'
+                                : 'Non synchronisé (pas de remoteId)',
+                            child: Icon(
+                              hasRemote
+                                  ? Icons.cloud_done_outlined
+                                  : Icons.cloud_off_outlined,
+                              size: 18,
+                              color: hasRemote
+                                  ? Theme.of(context).colorScheme.tertiary
+                                  : Theme.of(context).colorScheme.outline,
+                            ),
+                          ),
+                          const SizedBox(width: 6),
                           Expanded(
                             child: Text(
                               title,
@@ -227,7 +248,7 @@ class AccountTile extends StatelessWidget {
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                       ),
-                      if (hasSavingsGoal) ...[
+                      if (showGoalChip) ...[
                         const SizedBox(height: 6),
                         ClipRRect(
                           borderRadius: BorderRadius.circular(999),
@@ -243,6 +264,7 @@ class AccountTile extends StatelessWidget {
                   ),
                 ),
                 const SizedBox(width: 12),
+
                 // Right block with amounts (no ellipsis/menu)
                 Flexible(
                   fit: FlexFit.loose,
@@ -264,7 +286,7 @@ class AccountTile extends StatelessWidget {
                           Text(
                             isOver
                                 ? 'Dépassé de ${_fmt(absRemain)}'
-                                : 'Restant: ${_fmt(absRemain)}',
+                                : '$remainingLabel: ${_fmt(absRemain)}',
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
                             style: Theme.of(context).textTheme.labelMedium

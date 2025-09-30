@@ -3,6 +3,7 @@
 // quick "reset debt to 0" and "reset balance to 0" WITH confirmations.
 // Uses CustomerEditPanel and expects a `Customer?` result so the drawer
 // closes cleanly when saving.
+// NEW: remote sync indicator (cloud) shown before the title (uses customer.remoteId).
 
 import 'package:flutter/material.dart';
 import 'package:flutter/gestures.dart';
@@ -403,6 +404,8 @@ class CustomerTile extends ConsumerWidget {
   // ---------- UI ----------
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    final hasRemote = (customer.remoteId ?? '').trim().isNotEmpty;
+
     return GestureDetector(
       behavior: HitTestBehavior.opaque,
       onLongPressStart: (details) =>
@@ -412,10 +415,32 @@ class CustomerTile extends ConsumerWidget {
       child: ListTile(
         onTap: () => _openView(context, ref),
         leading: const CircleAvatar(child: Icon(Icons.person)),
-        title: Text(
-          customer.fullName,
-          maxLines: 1,
-          overflow: TextOverflow.ellipsis,
+        // Title with cloud indicator BEFORE the customer's name
+        title: Row(
+          children: [
+            Tooltip(
+              message: hasRemote
+                  ? 'Synchronisé (remoteId présent)'
+                  : 'Non synchronisé (pas de remoteId)',
+              child: Icon(
+                hasRemote
+                    ? Icons.cloud_done_outlined
+                    : Icons.cloud_off_outlined,
+                size: 18,
+                color: hasRemote
+                    ? Theme.of(context).colorScheme.tertiary
+                    : Theme.of(context).colorScheme.outline,
+              ),
+            ),
+            const SizedBox(width: 6),
+            Expanded(
+              child: Text(
+                customer.fullName,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+              ),
+            ),
+          ],
         ),
         subtitle: Text(
           (customer.phone ?? '').isNotEmpty

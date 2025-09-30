@@ -1,5 +1,7 @@
 // Responsive product list tile with formatted price and an optional thumbnail.
 // Shows a colored status chip below the price. Supports local file or remote URL.
+// NEW: remote sync indicator (cloud) shown before the title when `remoteId` is present.
+
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:money_pulse/presentation/shared/formatters.dart';
@@ -12,6 +14,7 @@ class ProductTile extends StatelessWidget {
   final String? statuses;
   final String? imagePath; // local file path (preferred if present)
   final String? imageUrl; // remote url fallback
+  final String? remoteId; // NEW: shows cloud status when present
   final VoidCallback? onTap;
   final Future<void> Function(String action)? onMenuAction;
 
@@ -23,6 +26,7 @@ class ProductTile extends StatelessWidget {
     this.statuses,
     this.imagePath,
     this.imageUrl,
+    this.remoteId, // NEW
     this.onTap,
     this.onMenuAction,
   });
@@ -143,6 +147,7 @@ class ProductTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final price = Formatters.amountFromCents(priceCents);
+    final hasRemote = (remoteId ?? '').trim().isNotEmpty;
 
     return GestureDetector(
       behavior: HitTestBehavior.opaque,
@@ -151,7 +156,35 @@ class ProductTile extends StatelessWidget {
       child: ListTile(
         onTap: onTap,
         leading: _leadingThumb(context),
-        title: Text(title, maxLines: 1, overflow: TextOverflow.ellipsis),
+
+        // Title row with cloud indicator BEFORE the product title
+        title: Row(
+          children: [
+            Tooltip(
+              message: hasRemote
+                  ? 'Synchronisé (remoteId présent)'
+                  : 'Non synchronisé (pas de remoteId)',
+              child: Icon(
+                hasRemote
+                    ? Icons.cloud_done_outlined
+                    : Icons.cloud_off_outlined,
+                size: 18,
+                color: hasRemote
+                    ? Theme.of(context).colorScheme.tertiary
+                    : Theme.of(context).colorScheme.outline,
+              ),
+            ),
+            const SizedBox(width: 6),
+            Expanded(
+              child: Text(title, maxLines: 1, overflow: TextOverflow.ellipsis),
+            ),
+          ],
+        ),
+
+        // Optional subtitle (one-liner)
+        subtitle: (subtitle == null || subtitle!.trim().isEmpty)
+            ? null
+            : Text(subtitle!, maxLines: 1, overflow: TextOverflow.ellipsis),
 
         trailing: Column(
           mainAxisAlignment: MainAxisAlignment.center,
