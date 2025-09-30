@@ -13,5 +13,8 @@ abstract class AccessRepository {
   Future<void> forgotPassword(String username);
   Future<void> resetPassword(String token, String newPassword);
 
-  Future<void> register({required String username, required String password});
+  Future<AccessGrant> register({
+    required String username,
+    required String password,
+  });
 }

@@ -1,9 +1,10 @@
-// Right-drawer to create an account with username and password.
+// Right-drawer to create an account, save session, and navigate to home.
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-
 import '../../../../onboarding/presentation/providers/access_repo_provider.dart';
+import '../../../../onboarding/presentation/providers/access_session_provider.dart';
+import '../providers/access_repo_provider.dart';
 
 class AccessRegisterPanel extends ConsumerStatefulWidget {
   final String? initialUsername;
@@ -50,17 +51,16 @@ class _AccessRegisterPanelState extends ConsumerState<AccessRegisterPanel> {
     setState(() => _busy = true);
     try {
       final uc = ref.read(registerWithPasswordUseCaseProvider);
-      await uc.execute(_userCtrl.text.trim(), _passCtrl.text);
+      final grant = await uc.execute(_userCtrl.text.trim(), _passCtrl.text);
+      await ref.read(accessSessionProvider.notifier).save(grant);
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Compte créé. Un code peut être requis.')),
-      );
-      Navigator.of(context).pop<String>(_userCtrl.text.trim());
+      Navigator.of(context).pop();
+      Navigator.of(context).pushNamedAndRemoveUntil('/home', (route) => false);
     } catch (_) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Échec de la création du compte.')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text(' .')));
     } finally {
       if (mounted) setState(() => _busy = false);
     }

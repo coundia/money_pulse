@@ -26,7 +26,7 @@ class HttpAccessRepository implements AccessRepository {
   }
 
   @override
-  Future<void> register({
+  Future<AccessGrant> register({
     required String username,
     required String password,
   }) async {
@@ -39,6 +39,23 @@ class HttpAccessRepository implements AccessRepository {
     if (res.statusCode < 200 || res.statusCode >= 300) {
       throw Exception('register_failed');
     }
+    final map = jsonDecode(res.body) as Map<String, Object?>;
+    final token = (map['token'] ?? '') as String;
+    final u = (map['username'] ?? username) as String;
+    final expIso = (map['expirationAt'] ?? '') as String;
+    final grantedAt = DateTime.now();
+    final email = u.contains('@') ? u : '';
+    final at = expIso.isNotEmpty
+        ? DateTime.tryParse(expIso) ?? grantedAt
+        : grantedAt;
+    return AccessGrant(
+      email: email,
+      username: u,
+      token: token,
+      grantedAt: grantedAt,
+      phone: null,
+      expiresAt: at.toString(),
+    );
   }
 
   @override

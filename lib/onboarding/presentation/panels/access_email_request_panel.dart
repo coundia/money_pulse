@@ -1,4 +1,4 @@
-// Right-drawer form to choose identity, request a code, then open verify panel; includes register and password login flows.
+// Right-drawer form to choose identity, request a code, then open verify panel; includes register, password login, and direct login shortcut.
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -76,27 +76,27 @@ class _AccessEmailRequestPanelState
       ? _emailCtrl.text.trim()
       : _phoneCtrl.text.trim();
 
+  Future<AccessIdentity> _buildIdentity() async {
+    final email = _mode == IdentityMode.email ? _emailCtrl.text.trim() : '';
+    final phone = _mode == IdentityMode.phone ? _phoneCtrl.text.trim() : '';
+    final source = await ref.read(installationIdProvider.future);
+    return AccessIdentity(
+      username: _username,
+      email: email.isEmpty ? null : email,
+      phone: phone.isEmpty ? null : phone,
+      name: _nameCtrl.text.trim().isEmpty ? null : _nameCtrl.text.trim(),
+      notes: _messageCtrl.text.trim().isEmpty ? null : _messageCtrl.text.trim(),
+      source: source,
+    );
+  }
+
   Future<void> _submit() async {
     final ok = _formKey.currentState?.validate() ?? true;
     if (!ok || !_identityValid || _sending) return;
 
     setState(() => _sending = true);
     try {
-      final email = _mode == IdentityMode.email ? _emailCtrl.text.trim() : '';
-      final phone = _mode == IdentityMode.phone ? _phoneCtrl.text.trim() : '';
-      final source = await ref.read(installationIdProvider.future);
-
-      final identity = AccessIdentity(
-        username: _username,
-        email: email.isEmpty ? null : email,
-        phone: phone.isEmpty ? null : phone,
-        name: _nameCtrl.text.trim().isEmpty ? null : _nameCtrl.text.trim(),
-        notes: _messageCtrl.text.trim().isEmpty
-            ? null
-            : _messageCtrl.text.trim(),
-        source: source,
-      );
-
+      final identity = await _buildIdentity();
       final uc = ref.read(requestAccessUseCaseProvider);
       await uc.execute(identity);
       if (!mounted) return;
@@ -225,6 +225,8 @@ class _AccessEmailRequestPanelState
                                         child: _primaryBtn(),
                                       ),
                                       const SizedBox(width: 12),
+                                      Expanded(child: _alreadyHaveCodeBtn()),
+                                      const SizedBox(width: 12),
                                       Expanded(child: _passwordBtn()),
                                       const SizedBox(width: 12),
                                       Expanded(child: _registerBtn()),
@@ -245,6 +247,12 @@ class _AccessEmailRequestPanelState
                                     width: double.infinity,
                                     height: 48,
                                     child: _primaryBtn(),
+                                  ),
+                                  const SizedBox(height: 8),
+                                  SizedBox(
+                                    width: double.infinity,
+                                    height: 48,
+                                    child: _alreadyHaveCodeBtn(),
                                   ),
                                   const SizedBox(height: 8),
                                   SizedBox(
@@ -406,6 +414,17 @@ class _AccessEmailRequestPanelState
       onPressed: _openRegister,
       icon: const Icon(Icons.person_add_alt_1),
       label: const Text('Créer un compte'),
+      style: OutlinedButton.styleFrom(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      ),
+    );
+  }
+
+  Widget _alreadyHaveCodeBtn() {
+    return OutlinedButton.icon(
+      onPressed: _openPasswordLogin,
+      icon: const Icon(Icons.login),
+      label: const Text('J’ai déjà reçu le code'),
       style: OutlinedButton.styleFrom(
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
       ),
