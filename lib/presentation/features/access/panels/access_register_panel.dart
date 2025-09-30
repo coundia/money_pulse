@@ -1,12 +1,13 @@
-// Right-drawer to create an account, persist session, then open TransactionListPage by replacing the whole stack.
+// Right-drawer to register, persist session, then open HomePage by replacing the whole stack.
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter/scheduler.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import '../../../../onboarding/presentation/providers/access_repo_provider.dart';
+import 'package:money_pulse/onboarding/presentation/providers/access_repo_provider.dart'
+    show registerWithPasswordUseCaseProvider;
 import '../../../../onboarding/presentation/providers/access_session_provider.dart';
+import '../../home/home_page.dart';
 import '../providers/access_repo_provider.dart';
-import 'package:money_pulse/presentation/features/transactions/pages/transaction_list_page.dart';
 
 class AccessRegisterPanel extends ConsumerStatefulWidget {
   final String? initialUsername;
@@ -47,11 +48,11 @@ class _AccessRegisterPanelState extends ConsumerState<AccessRegisterPanel> {
   bool get _validPass =>
       _passCtrl.text.length >= 4 && _passCtrl.text == _pass2Ctrl.text;
 
-  void _openTransactionsAfterFrame() {
+  void _openHomeAfterFrame() {
     SchedulerBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
       Navigator.of(context, rootNavigator: true).pushAndRemoveUntil(
-        MaterialPageRoute(builder: (_) => const TransactionListPage()),
+        MaterialPageRoute(builder: (_) => const HomePage()),
         (route) => false,
       );
     });
@@ -66,10 +67,9 @@ class _AccessRegisterPanelState extends ConsumerState<AccessRegisterPanel> {
       final grant = await uc.execute(_userCtrl.text.trim(), _passCtrl.text);
       await ref.read(accessSessionProvider.notifier).save(grant);
       if (!mounted) return;
-      _openTransactionsAfterFrame(); // -> ferme tous les popups et ouvre TransactionListPage
+      _openHomeAfterFrame();
     } catch (_) {
       if (!mounted) return;
-      // En cas d’erreur, on ferme simplement le drawer courant pour laisser la main au parent.
       SchedulerBinding.instance.addPostFrameCallback((_) {
         if (!mounted) return;
         Navigator.of(context).maybePop(true);
