@@ -73,32 +73,32 @@ class _BootstrapState extends ConsumerState<Bootstrap> {
       }
     } catch (_) {}
 
-    try {
+    /* try {
       await ref.read(seedDefaultCategoriesUseCaseProvider).execute();
     } on DatabaseException catch (e) {
       final msg = e.toString();
       if (!msg.contains('UNIQUE constraint failed')) {
         rethrow;
       }
-    } catch (_) {}
+    } catch (_) {} 
 
-    try {
+     try {
       await ref.read(seedDefaultCompanyUseCaseProvider).execute();
     } on DatabaseException catch (e) {
       final msg = e.toString();
       if (!msg.contains('UNIQUE constraint failed')) {
         rethrow;
       }
-    } catch (_) {}
+    } catch (_) {} 
 
-    try {
+      try {
       await ref.read(seedDefaultCustomerUseCaseProvider).execute();
     } on DatabaseException catch (e) {
       final msg = e.toString();
       if (!msg.contains('UNIQUE constraint failed')) {
         rethrow;
       }
-    } catch (_) {}
+    } catch (_) {} */
   }
 
   Future<void> _retry() async {

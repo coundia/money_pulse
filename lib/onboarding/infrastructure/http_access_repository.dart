@@ -26,6 +26,22 @@ class HttpAccessRepository implements AccessRepository {
   }
 
   @override
+  Future<void> register({
+    required String username,
+    required String password,
+  }) async {
+    final uri = baseUri.resolve('/api/auth/register');
+    final res = await client.post(
+      uri,
+      headers: {'Content-Type': 'application/json', 'accept': '*/*'},
+      body: jsonEncode({'username': username, 'password': password}),
+    );
+    if (res.statusCode < 200 || res.statusCode >= 300) {
+      throw Exception('register_failed');
+    }
+  }
+
+  @override
   Future<AccessGrant> verifyCode({
     required AccessIdentity identity,
     required String code,

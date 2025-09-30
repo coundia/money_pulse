@@ -1,13 +1,15 @@
-// Right-drawer form to choose identity and request a code, with shortcut to password login via right-drawer.
+// Right-drawer form to choose identity, request a code, then open verify panel; includes register and password login flows.
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../../../presentation/features/access/panels/access_register_panel.dart';
 import '../providers/access_repo_provider.dart';
 import '../../domain/models/access_identity.dart';
 import 'package:money_pulse/presentation/app/installation_id_provider.dart';
 import 'access_password_login_panel.dart';
 import '../../domain/entities/access_grant.dart';
 import 'package:money_pulse/presentation/widgets/right_drawer.dart';
+import 'access_code_verify_panel.dart';
 
 class AccessEmailRequestResult {
   final AccessIdentity identity;
@@ -98,6 +100,18 @@ class _AccessEmailRequestPanelState
       final uc = ref.read(requestAccessUseCaseProvider);
       await uc.execute(identity);
       if (!mounted) return;
+
+      final grant = await showRightDrawer<AccessGrant?>(
+        context,
+        child: AccessCodeVerifyPanel(identity: identity),
+        widthFraction: 0.86,
+        heightFraction: 1.0,
+      );
+      if (grant != null) {
+        Navigator.of(context).pop<AccessGrant>(grant);
+        return;
+      }
+
       Navigator.of(context).pop(AccessEmailRequestResult(identity));
     } catch (_) {
       if (!mounted) return;
@@ -118,6 +132,26 @@ class _AccessEmailRequestPanelState
     );
     if (grant != null && mounted) {
       Navigator.of(context).pop(grant);
+    }
+  }
+
+  Future<void> _openRegister() async {
+    final username = await showRightDrawer<String?>(
+      context,
+      child: AccessRegisterPanel(
+        initialUsername: _username.isNotEmpty ? _username : null,
+      ),
+      widthFraction: 0.86,
+      heightFraction: 1.0,
+    );
+    if (!mounted) return;
+    if (username != null && username.isNotEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Compte créé. Demandez un code pour valider.'),
+        ),
+      );
+      FocusScope.of(context).unfocus();
     }
   }
 
@@ -192,6 +226,8 @@ class _AccessEmailRequestPanelState
                                       ),
                                       const SizedBox(width: 12),
                                       Expanded(child: _passwordBtn()),
+                                      const SizedBox(width: 12),
+                                      Expanded(child: _registerBtn()),
                                     ],
                                   ),
                                 ],
@@ -215,6 +251,12 @@ class _AccessEmailRequestPanelState
                                     width: double.infinity,
                                     height: 48,
                                     child: _passwordBtn(),
+                                  ),
+                                  const SizedBox(height: 8),
+                                  SizedBox(
+                                    width: double.infinity,
+                                    height: 48,
+                                    child: _registerBtn(),
                                   ),
                                 ],
                               ),
@@ -353,6 +395,17 @@ class _AccessEmailRequestPanelState
       onPressed: _openPasswordLogin,
       icon: const Icon(Icons.login),
       label: const Text('Se connecter avec mot de passe'),
+      style: OutlinedButton.styleFrom(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      ),
+    );
+  }
+
+  Widget _registerBtn() {
+    return OutlinedButton.icon(
+      onPressed: _openRegister,
+      icon: const Icon(Icons.person_add_alt_1),
+      label: const Text('Créer un compte'),
       style: OutlinedButton.styleFrom(
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
       ),
