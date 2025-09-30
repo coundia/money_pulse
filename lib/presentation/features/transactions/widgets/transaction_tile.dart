@@ -25,6 +25,8 @@ class TransactionTile extends StatelessWidget {
     final amount = Formatters.amountFromCents(entry.amount);
     final time = Formatters.timeHm(entry.dateTransaction);
 
+    final hasRemote = (entry.remoteId ?? '').trim().isNotEmpty;
+
     return Dismissible(
       key: ValueKey('txn-${entry.id}'),
       direction: DismissDirection.endToStart,
@@ -48,11 +50,33 @@ class TransactionTile extends StatelessWidget {
             vertical: 4,
           ),
           leading: _LeadingToneAvatar(icon: tone.icon, base: tone.color),
-          title: Text(
-            entry.description ?? entry.code ?? 'Transaction',
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
+          title: Row(
+            children: [
+              Tooltip(
+                message: hasRemote
+                    ? 'Synchronisé (remoteId présent)'
+                    : 'Non synchronisé (pas de remoteId)',
+                child: Icon(
+                  hasRemote
+                      ? Icons.cloud_done_outlined
+                      : Icons.cloud_off_outlined,
+                  size: 18,
+                  color: hasRemote
+                      ? Theme.of(context).colorScheme.tertiary
+                      : Theme.of(context).colorScheme.outline,
+                ),
+              ),
+              const SizedBox(width: 6),
+              Expanded(
+                child: Text(
+                  entry.description ?? entry.code ?? 'Transaction',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
+            ],
           ),
+
           subtitle: Row(
             children: [
               const Icon(Icons.schedule, size: 14),

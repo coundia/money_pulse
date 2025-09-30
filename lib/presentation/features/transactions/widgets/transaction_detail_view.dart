@@ -208,6 +208,8 @@ class TransactionDetailView extends ConsumerWidget {
         ? const AsyncValue.data(null)
         : ref.watch(customerByIdProvider(entry.customerId!));
 
+    final hasRemote = (entry.remoteId ?? '').trim().isNotEmpty;
+
     return Scaffold(
       appBar: AppBar(
         title: const Text('Détails de la transaction'),
@@ -254,6 +256,7 @@ class TransactionDetailView extends ConsumerWidget {
           const SizedBox(height: 12),
 
           // Informations principales
+          // ——— Remplace ta Section "Informations" par ceci:
           _SectionCard(
             title: 'Informations',
             children: [
@@ -278,17 +281,36 @@ class TransactionDetailView extends ConsumerWidget {
                 icon: Icons.fingerprint,
                 title: 'Identifiant',
                 value: entry.id,
-                trailing: IconButton(
-                  tooltip: 'Copier',
-                  icon: const Icon(Icons.copy),
-                  onPressed: () async {
-                    await Clipboard.setData(ClipboardData(text: entry.id));
-                    if (context.mounted) {
-                      ScaffoldMessenger.of(
-                        context,
-                      ).showSnackBar(const SnackBar(content: Text('ID copié')));
-                    }
-                  },
+                trailing: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Tooltip(
+                      message: hasRemote
+                          ? 'Synchronisé (remoteId présent)'
+                          : 'Non synchronisé (pas de remoteId)',
+                      child: Icon(
+                        hasRemote
+                            ? Icons.cloud_done_outlined
+                            : Icons.cloud_off_outlined,
+                        color: hasRemote
+                            ? Theme.of(context).colorScheme.tertiary
+                            : Theme.of(context).colorScheme.outline,
+                      ),
+                    ),
+                    const SizedBox(width: 6),
+                    IconButton(
+                      tooltip: 'Copier',
+                      icon: const Icon(Icons.copy),
+                      onPressed: () async {
+                        await Clipboard.setData(ClipboardData(text: entry.id));
+                        if (context.mounted) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(content: Text('ID copié')),
+                          );
+                        }
+                      },
+                    ),
+                  ],
                 ),
               ),
             ],

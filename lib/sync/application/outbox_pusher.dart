@@ -1,4 +1,6 @@
-// Drain-only outbox pusher: validates payloads, posts in batch, and marks each change_log row ACK/PENDING/FAILED with robust HTTP + partial-failure handling.
+// Drain-only outbox pusher: validates payloads, posts in batch, and marks each
+// change_log row ACK/PENDING/FAILED with robust HTTP + partial-failure handling.
+// + Logs détaillés sur toutes les erreurs.
 
 import 'dart:convert';
 import 'package:http/http.dart' as http;
@@ -52,6 +54,11 @@ class OutboxPusher {
     return out;
   }
 
+  String _clip(String s, {int max = 512}) {
+    if (s.length <= max) return s;
+    return s.substring(0, max) + '…';
+  }
+
   Future<int> push({
     required Future<http.Response> Function(List<Json> deltas) postFn,
     required Future<void> Function(Iterable<String> ids, DateTime at)
@@ -69,59 +76,115 @@ class OutboxPusher {
     final validEntries = <ChangeLogEntry>[];
     final validDeltas = <Json>[];
 
+    // Compteur des raisons d’échec (diagnostic)
+    final failReasons = <String, int>{};
+    void _count(String reason) =>
+        failReasons.update(reason, (v) => v + 1, ifAbsent: () => 1);
+
     for (final p in pending) {
-      final payload = await buildPayload(p);
+      Json? payload;
+      try {
+        payload = await buildPayload(p);
+      } catch (e, st) {
+        logger.error(
+          '[OutboxPusher.error] buildPayload exception for entity=${p.entityId} '
+          'op=${p.operation}: $e\n$st',
+        );
+      }
+
       if (payload == null) {
+        _count('payload_null');
         await changeLog.markFailed(p.id, error: 'Payload manquant/invalide');
+        logger.warn(
+          'Outbox $entityTable: payload invalide (entity=${p.entityId}, op=${p.operation})',
+        );
         continue;
       }
 
-      final op = (p.operation ?? '').toUpperCase();
-      payload['type'] ??= op;
+      final opRaw = (p.operation ?? '').toUpperCase();
+
+      payload['type'] ??= opRaw;
 
       final id = payload['id'];
       final remoteId = payload['remoteId'];
 
-      if (op == 'CREATE') {
+      // Logs de debug du payload
+      logger.info(
+        'Outbox $entityTable: validating entity=${p.entityId} '
+        'op=$opRaw id=$id remoteId=$remoteId payload=${_clip(jsonEncode(payload))}',
+      );
+
+      if (opRaw == 'CREATE') {
         if (_isBlank(id)) {
+          _count('create_sans_id');
           await changeLog.markFailed(p.id, error: 'CREATE sans id local');
+          logger.warn(
+            'Outbox $entityTable: reject CREATE (entity=${p.entityId}) car id local manquant',
+          );
           continue;
         }
-      } else if (op == 'UPDATE') {
-        if (_isBlank(id)) {
+      } else if (opRaw == 'UPDATE') {
+        if (_isBlank(remoteId)) {
+          _count('update_sans_id');
           await changeLog.markFailed(p.id, error: 'UPDATE sans id local');
+          logger.warn(
+            'Outbox $entityTable: reject UPDATE (entity=${p.entityId}) car id local manquant',
+          );
           continue;
         }
         if (_isBlank(remoteId)) {
+          _count('update_sans_remoteId');
           await changeLog.markFailed(p.id, error: 'UPDATE sans remoteId');
+          logger.warn(
+            'Outbox $entityTable: reject UPDATE (entity=${p.entityId}) car remoteId manquant',
+          );
           continue;
         }
-      } else if (op == 'DELETE') {
+      } else if (opRaw == 'DELETE') {
         if (_isBlank(remoteId)) {
+          _count('delete_sans_remoteId');
           await changeLog.markFailed(p.id, error: 'DELETE sans remoteId');
+          logger.warn(
+            'Outbox $entityTable: reject DELETE (entity=${p.entityId}) car remoteId manquant',
+          );
           continue;
         }
-      } else {
-        await changeLog.markFailed(p.id, error: 'Opération inconnue: $op');
-        continue;
+      }
+
+      if (_isBlank(remoteId)) {
+        payload['type'] = "CREATE";
       }
 
       validEntries.add(p);
       validDeltas.add(payload);
+      await changeLog.markSent(p.id);
     }
 
     if (validDeltas.isEmpty) {
-      logger.info('Outbox $entityTable: aucun delta valide à pousser');
+      if (failReasons.isEmpty) {
+        logger.info('Outbox $entityTable: aucun delta valide à pousser');
+      } else {
+        final reasons = failReasons.entries
+            .map((e) => '${e.key}=${e.value}')
+            .join(', ');
+        logger.info(
+          'Outbox $entityTable: aucun delta valide à pousser (reasons: $reasons)',
+        );
+      }
       return 0;
     }
 
     http.Response resp;
     try {
-      logger.info('Outbox $entityTable: POST count=${validDeltas.length}');
+      logger.info("******** POST DATA ****************************");
+      logger.info(
+        'Outbox $entityTable: POST count=${validDeltas.length} '
+        'PAYLOAD=${_clip(jsonEncode(validDeltas))}',
+      );
       resp = await postFn(validDeltas);
-    } catch (e) {
+    } catch (e, st) {
       final msg = 'HTTP exception: $e';
-      logger.error('[OutboxPusher.error] $msg');
+      logger.error('[OutboxPusher.error] $msg\n$st');
       for (final p in validEntries) {
         await changeLog.markPending(p.id, error: msg);
       }
@@ -129,11 +192,8 @@ class OutboxPusher {
     }
 
     if (resp.statusCode < 200 || resp.statusCode >= 300) {
-      final body = resp.body;
-      final clipped = body.isEmpty
-          ? ''
-          : body.substring(0, body.length > 512 ? 512 : body.length);
-      final msg = 'HTTP ${resp.statusCode} $clipped';
+      final body = _clip(resp.body);
+      final msg = 'HTTP ${resp.statusCode} $body';
       logger.error('[OutboxPusher.error] $msg');
       for (final p in validEntries) {
         await changeLog.markPending(p.id, error: msg);
@@ -141,13 +201,23 @@ class OutboxPusher {
       return 0;
     }
 
+    // Réponse OK => analyser
     final now = DateTime.now().toUtc();
+    final parsed = _tryDecode(resp.body);
+
+    if (parsed != null) {
+      logger.info(
+        'Outbox $entityTable: server response=${_clip(jsonEncode(parsed))}',
+      );
+    } else {
+      logger.info(
+        'Outbox $entityTable: server response (raw)=${_clip(resp.body)}',
+      );
+    }
 
     final entityIdToEntry = <String, ChangeLogEntry>{
       for (final e in validEntries) e.entityId: e,
     };
-
-    final parsed = _tryDecode(resp.body);
 
     final failedIds = <String>{
       if (parsed != null)
@@ -163,6 +233,9 @@ class OutboxPusher {
     };
 
     if (failedIds.isEmpty && ackEntityIds.isEmpty) {
+      logger.info(
+        'Outbox $entityTable: no explicit ack/fail list ⇒ ACK all (${validEntries.length})',
+      );
       for (final p in validEntries) {
         await changeLog.markAck(p.id);
       }
@@ -176,13 +249,27 @@ class OutboxPusher {
       return validEntries.length;
     }
 
+    if (ackEntityIds.isNotEmpty) {
+      logger.info(
+        'Outbox $entityTable: ack=${ackEntityIds.length} '
+        'failed=${failedIds.length}',
+      );
+    } else {
+      logger.warn('Outbox $entityTable: ack=0 failed=${failedIds.length}');
+    }
+
     for (final id in ackEntityIds) {
       final p = entityIdToEntry[id];
       if (p != null) await changeLog.markAck(p.id);
     }
     for (final id in failedIds) {
       final p = entityIdToEntry[id];
-      if (p != null) await changeLog.markFailed(p.id, error: 'Échec serveur');
+      if (p != null) {
+        await changeLog.markFailed(p.id, error: 'Échec serveur');
+        logger.warn(
+          'Outbox $entityTable: serveur a échoué pour entityId=$id (markFailed)',
+        );
+      }
     }
 
     if (ackEntityIds.isNotEmpty) {
