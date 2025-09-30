@@ -1,10 +1,12 @@
-// Right-drawer to create an account, save session, and navigate to home.
+// Right-drawer to create an account, persist session, then open TransactionListPage by replacing the whole stack.
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter/scheduler.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../../onboarding/presentation/providers/access_repo_provider.dart';
 import '../../../../onboarding/presentation/providers/access_session_provider.dart';
 import '../providers/access_repo_provider.dart';
+import 'package:money_pulse/presentation/features/transactions/pages/transaction_list_page.dart';
 
 class AccessRegisterPanel extends ConsumerStatefulWidget {
   final String? initialUsername;
@@ -45,6 +47,16 @@ class _AccessRegisterPanelState extends ConsumerState<AccessRegisterPanel> {
   bool get _validPass =>
       _passCtrl.text.length >= 4 && _passCtrl.text == _pass2Ctrl.text;
 
+  void _openTransactionsAfterFrame() {
+    SchedulerBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      Navigator.of(context, rootNavigator: true).pushAndRemoveUntil(
+        MaterialPageRoute(builder: (_) => const TransactionListPage()),
+        (route) => false,
+      );
+    });
+  }
+
   Future<void> _submit() async {
     final ok = _formKey.currentState?.validate() ?? false;
     if (!ok || !_validUser || !_validPass || _busy) return;
@@ -54,13 +66,14 @@ class _AccessRegisterPanelState extends ConsumerState<AccessRegisterPanel> {
       final grant = await uc.execute(_userCtrl.text.trim(), _passCtrl.text);
       await ref.read(accessSessionProvider.notifier).save(grant);
       if (!mounted) return;
-      Navigator.of(context).pop();
-      Navigator.of(context).pushNamedAndRemoveUntil('/home', (route) => false);
+      _openTransactionsAfterFrame(); // -> ferme tous les popups et ouvre TransactionListPage
     } catch (_) {
       if (!mounted) return;
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(const SnackBar(content: Text(' .')));
+      // En cas d’erreur, on ferme simplement le drawer courant pour laisser la main au parent.
+      SchedulerBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) return;
+        Navigator.of(context).maybePop(true);
+      });
     } finally {
       if (mounted) setState(() => _busy = false);
     }
