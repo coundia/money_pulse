@@ -27,7 +27,8 @@ class PushProductsUseCase implements PushPort {
 
   @override
   Future<int> execute({int batchSize = 200}) async {
-    final outbox = OutboxPusher(
+    return 0;
+    /* final outbox = OutboxPusher(
       entityTable: 'product',
       changeLog: changeLog,
       syncState: syncState,
@@ -56,6 +57,6 @@ class PushProductsUseCase implements PushPort {
       postFn: (ds) => api.postProductDeltas(ds),
       markSyncedFn: port.markSynced,
       limit: batchSize,
-    );
+    );*/
   }
 }
