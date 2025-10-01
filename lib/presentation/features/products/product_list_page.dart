@@ -308,16 +308,13 @@ class _ProductListPageState extends ConsumerState<ProductListPage> {
       final remoteId = (p.remoteId ?? '').trim();
       if (remoteId.isNotEmpty) {
         try {
-          await _marketRepo.changeRemoteStatus(
-            product: p,
-            statusesCode: 'DELETE',
-          );
+          await _marketRepo.deleteRemote(p); // 🔥 call DELETE API
         } catch (e) {
           if (mounted) {
             ScaffoldMessenger.of(context).showSnackBar(
               SnackBar(
                 content: Text(
-                  'Avertissement : échec de la désinscription distante ($e)',
+                  'Avertissement : échec de la suppression distante ($e)',
                 ),
               ),
             );

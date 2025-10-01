@@ -223,4 +223,29 @@ class ProductMarketplaceRepo {
     if (segs.isEmpty) return null;
     return segs.first.trim();
   }
+
+  Future<void> deleteRemote(Product product) async {
+    print("deleteRemote");
+    final remoteId = (product.remoteId ?? '').trim();
+    if (remoteId.isEmpty) {
+      throw StateError('remoteId manquant pour ce produit');
+    }
+
+    final uri = Uri.parse(_join(baseUri, '/api/v1/commands/product/$remoteId'));
+
+    final headers = <String, String>{
+      ...ref.read(syncHeaderBuilderProvider)(), // doit contenir Authorization
+      'Accept': 'application/json',
+      'Content-Type': 'application/json',
+    };
+
+    final resp = await http.delete(uri, headers: headers);
+
+    if (resp.statusCode < 200 || resp.statusCode >= 300) {
+      throw HttpException(
+        'HTTP ${resp.statusCode} ${resp.reasonPhrase ?? ''} • ${resp.body}',
+        uri: uri,
+      );
+    }
+  }
 }
