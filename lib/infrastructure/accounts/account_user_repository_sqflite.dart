@@ -92,7 +92,7 @@ class AccountUserRepositorySqflite implements AccountUserRepository {
       accountColumn: 'account',
       preferredAccountId: patched.account,
       createdBy: patched.createdBy,
-      operation: 'UPSERT',
+      operation: 'CREATE',
     );
   }
 

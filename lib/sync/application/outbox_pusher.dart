@@ -114,16 +114,11 @@ class OutboxPusher {
         'op=$opRaw id=$id remoteId=$remoteId payload=${_clip(jsonEncode(payload))}',
       );
 
-      if (opRaw == 'CREATE') {
-        if (_isBlank(id)) {
-          _count('create_sans_id');
-          await changeLog.markFailed(p.id, error: 'CREATE sans id local');
-          logger.warn(
-            'Outbox $entityTable: reject CREATE (entity=${p.entityId}) car id local manquant',
-          );
-          continue;
-        }
-      } else if (opRaw == 'UPDATE') {
+      if (opRaw == 'INSERT' || opRaw == 'UPSERT') {
+        payload['type'] = "CREATE";
+      }
+
+      if (opRaw == 'UPDATE') {
         if (_isBlank(remoteId)) {
           _count('update_sans_id');
           await changeLog.markFailed(p.id, error: 'UPDATE sans id local');
@@ -151,8 +146,11 @@ class OutboxPusher {
         }
       }
 
-      if (_isBlank(remoteId)) {
-        payload['type'] = "CREATE";
+      if (_isBlank(remoteId) && opRaw == 'UPDATE') {
+        // payload['type'] = "CREATE";
+        await changeLog.markFailed(p.id, error: 'UPDATE  sans remoteId');
+        logger.warn('Outbox $entityTable:UPDATE  sans remoteId');
+        continue;
       }
 
       validEntries.add(p);

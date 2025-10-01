@@ -1,6 +1,9 @@
+// App-wide providers and bootstrapping helpers (ensure default account, seed categories, refresh states).
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:uuid/uuid.dart';
 import 'package:money_pulse/infrastructure/db/app_database.dart';
 
+import 'package:money_pulse/domain/accounts/entities/account.dart';
 import 'package:money_pulse/domain/accounts/repositories/account_repository.dart';
 import 'package:money_pulse/infrastructure/repositories/account_repository_sqflite.dart';
 
@@ -34,7 +37,14 @@ final dbProvider = Provider<AppDatabase>((ref) => AppDatabase.I);
 final accountRepoProvider = Provider<AccountRepository>((ref) {
   final appDb = ref.read(dbProvider);
 
-  String? getUserId() => ref.read(accessSessionProvider)?.email;
+  String? getUserId() {
+    final s = ref.read(accessSessionProvider);
+    final u = (s?.username ?? '').trim();
+    if (u.isNotEmpty) return u; // privilégie le username connecté
+    final e = (s?.email ?? '').trim();
+    return e.isNotEmpty ? e : null;
+  }
+
   return AccountRepositorySqflite(appDb, getUserId: getUserId);
 });
 
@@ -127,4 +137,21 @@ final checkoutCartUseCaseProvider = Provider<CheckoutCartUseCase>((ref) {
 final transactionItemRepoProvider = Provider<TransactionItemRepository>((ref) {
   final db = ref.read(dbProvider);
   return TransactionItemRepositoryImpl(db);
+});
+
+/// Bootstrapping post-login: ensure default account, seed categories, then reload ui states.
+Future<void> bootstrapAfterLogin(WidgetRef ref) async {
+  /*await ref.read(ensureDefaultAccountUseCaseProvider).execute();
+  await ref.read(seedDefaultCategoriesUseCaseProvider).execute();
+
+  await Future.wait([
+    ref.read(balanceProvider.notifier).load(),
+    ref.read(transactionsProvider.notifier).load(),
+    ref.read(categoriesProvider.notifier).load(),
+  ]);*/
+}
+
+/// Optional: a FutureProvider wrapper if you préfèr use in UI.
+final postLoginBootstrapProvider = FutureProvider<void>((ref) async {
+  await bootstrapAfterLogin(ref as WidgetRef);
 });

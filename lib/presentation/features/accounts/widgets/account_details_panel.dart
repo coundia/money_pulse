@@ -467,6 +467,14 @@ class AccountDetailsPanel extends StatelessWidget {
                   label: 'Par défaut',
                   value: account.isDefault ? 'Oui' : 'Non',
                 ),
+
+                _KvRow(
+                  label: 'Crée par',
+                  value: account.createdBy?.trim().isEmpty ?? true
+                      ? '—'
+                      : account.createdBy!.trim(),
+                ),
+
                 _KvRow(
                   label: 'Créé le',
                   value: Formatters.dateFull(account.createdAt),

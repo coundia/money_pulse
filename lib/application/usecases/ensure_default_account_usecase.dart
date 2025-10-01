@@ -17,6 +17,9 @@ class EnsureDefaultAccountUseCase {
 
   Future<Account> execute() async {
     final items = await repo.findAllActive();
+
+    print("######## item ");
+    print(items.length);
     if (items.isEmpty) {
       final now = DateTime.now();
       final a = Account(

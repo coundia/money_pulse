@@ -1,5 +1,8 @@
 // Change-tracked insert/update/soft-delete helpers that stamp audit fields and append change_log entries;
 // never updates primary key. Now column-safe: only writes columns that actually exist on the table.
+import 'dart:developer';
+
+import 'package:flutter/widgets.dart';
 import 'package:sqflite/sqflite.dart';
 
 import '../../infrastructure/db/account_stamp.dart';
