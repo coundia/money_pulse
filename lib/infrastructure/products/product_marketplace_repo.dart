@@ -225,7 +225,6 @@ class ProductMarketplaceRepo {
   }
 
   Future<void> deleteRemote(Product product) async {
-    print("deleteRemote");
     final remoteId = (product.remoteId ?? '').trim();
     if (remoteId.isEmpty) {
       throw StateError('remoteId manquant pour ce produit');
