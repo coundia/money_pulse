@@ -143,12 +143,9 @@ class AccountRepositorySqflite implements AccountRepository {
   @override
   Future<List<Account>> findAllActive() async {
     await _ensureSingleDefault();
-    final uid = getUserId?.call();
-    final s = _scopeWhere('deletedAt IS NULL', uid);
     final rows = await _database.db.query(
       'account',
-      where: s.where,
-      whereArgs: s.args.isEmpty ? null : s.args,
+      where: 'deletedAt IS NULL',
       orderBy: 'updatedAt DESC',
     );
     return rows.map(Account.fromMap).toList();
