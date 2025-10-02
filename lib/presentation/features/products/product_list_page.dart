@@ -1,7 +1,4 @@
-// Products list orchestration page: load/search/filter, open right-drawers,
-// persist files, and refresh after publish/unpublish. All repos are cached
-// in initState so we never call ref.read in async flows after disposal.
-
+// Products list orchestration page; updated to persist company, levelId, quantity, hasSold, hasPrice from form result.
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -43,13 +40,11 @@ class ProductListPage extends ConsumerStatefulWidget {
 class _ProductListPageState extends ConsumerState<ProductListPage> {
   static const String _marketplaceBaseUri = 'http://127.0.0.1:8095';
 
-  // Cache ALL repos up front; never call ref.read inside async after pop/dispose.
   late final ProductRepository _repo = ref.read(productRepoProvider);
-  late final dynamic _fileRepo; // productFileRepoProvider
-  late final dynamic _categoryRepo; // categoryRepoProvider
-  late final dynamic _stockRepo; // stockLevelRepoProvider
-  late final dynamic
-  _marketRepo; // productMarketplaceRepoProvider(_marketplaceBaseUri)
+  late final dynamic _fileRepo;
+  late final dynamic _categoryRepo;
+  late final dynamic _stockRepo;
+  late final dynamic _marketRepo;
 
   final _searchCtrl = TextEditingController();
   String _query = '';
@@ -60,8 +55,6 @@ class _ProductListPageState extends ConsumerState<ProductListPage> {
   @override
   void initState() {
     super.initState();
-
-    // Resolve providers once while mounted
     _fileRepo = ref.read(productFileRepoProvider);
     _categoryRepo = ref.read(categoryRepoProvider);
     _stockRepo = ref.read(stockLevelRepoProvider);
@@ -161,13 +154,11 @@ class _ProductListPageState extends ConsumerState<ProductListPage> {
   Future<void> _saveFormFiles(
     String productId,
     List<PickedAttachment> files,
-    ProductFileRepository repo,
+    dynamic repo,
   ) async {
     if (files.isEmpty) return;
-
     final now = DateTime.now();
     final rows = <ProductFile>[];
-
     for (int i = 0; i < files.length; i++) {
       final a = files[i];
       String? path = a.path;
@@ -176,7 +167,6 @@ class _ProductListPageState extends ConsumerState<ProductListPage> {
       } else if ((path == null || path.isEmpty) && a.readStream != null) {
         path = await _persistStreamToDisk(a.name, a.readStream!);
       }
-
       rows.add(
         ProductFile(
           id: const Uuid().v4(),
@@ -193,13 +183,11 @@ class _ProductListPageState extends ConsumerState<ProductListPage> {
         ),
       );
     }
-
     await repo.createMany(rows);
   }
 
   Future<void> _addOrEdit({Product? existing}) async {
     _unfocus();
-
     final categories = await _categoryRepo.findAllActive();
     if (!mounted) return;
 
@@ -216,12 +204,19 @@ class _ProductListPageState extends ConsumerState<ProductListPage> {
       final p = Product(
         id: const Uuid().v4(),
         remoteId: null,
+        localId: null,
         code: res.code,
         name: res.name,
         description: res.description,
         barcode: res.barcode,
         unitId: null,
         categoryId: res.categoryId,
+        account: null,
+        company: res.companyId,
+        levelId: res.levelId,
+        quantity: res.quantity,
+        hasSold: res.hasSold ? 1 : 0,
+        hasPrice: res.hasPrice ? 1 : 0,
         defaultPrice: res.priceCents,
         purchasePrice: res.purchasePriceCents,
         statuses: res.status,
@@ -229,26 +224,68 @@ class _ProductListPageState extends ConsumerState<ProductListPage> {
         updatedAt: now,
         deletedAt: null,
         syncAt: null,
+        createdBy: null,
         version: 0,
         isDirty: 1,
       );
       await _repo.create(p);
       await _saveFormFiles(p.id, res.files, _fileRepo);
     } else {
-      final updated = existing.copyWith(
-        code: res.code,
-        name: res.name,
-        description: res.description,
-        barcode: res.barcode,
-        categoryId: res.categoryId,
-        defaultPrice: res.priceCents,
-        purchasePrice: res.purchasePriceCents,
-        statuses: res.status,
-        updatedAt: now,
+      final updated = existing
+          .copyWith(
+            code: res.code,
+            name: res.name,
+            description: res.description,
+            barcode: res.barcode,
+            categoryId: res.categoryId,
+            defaultPrice: res.priceCents,
+            purchasePrice: res.purchasePriceCents,
+            statuses: res.status,
+            updatedAt: now,
+            company: res.companyId,
+            account: existing.account,
+            isDirty: 1,
+          )
+          .copyWith(levelId: res.levelId, version: existing.version);
+
+      final updated2 = updated.copyWith(
+        // quantity/flags on separate copy to avoid nullable ints confusion
+        // (kept explicit for clarity)
+        // Note: ints already non-null on entity
+        // keep same createdAt
         isDirty: 1,
       );
-      await _repo.update(updated);
-      await _saveFormFiles(updated.id, res.files, _fileRepo);
+
+      final finalUpdated = Product(
+        id: updated2.id,
+        remoteId: updated2.remoteId,
+        localId: updated2.localId,
+        code: updated2.code,
+        name: updated2.name,
+        description: updated2.description,
+        barcode: updated2.barcode,
+        unitId: updated2.unitId,
+        categoryId: updated2.categoryId,
+        account: updated2.account,
+        company: updated2.company,
+        levelId: res.levelId ?? updated2.levelId,
+        quantity: res.quantity,
+        hasSold: res.hasSold ? 1 : 0,
+        hasPrice: res.hasPrice ? 1 : 0,
+        defaultPrice: updated2.defaultPrice,
+        purchasePrice: updated2.purchasePrice,
+        statuses: updated2.statuses,
+        createdAt: updated2.createdAt,
+        updatedAt: now,
+        deletedAt: updated2.deletedAt,
+        syncAt: updated2.syncAt,
+        createdBy: updated2.createdBy,
+        version: updated2.version,
+        isDirty: 1,
+      );
+
+      await _repo.update(finalUpdated);
+      await _saveFormFiles(finalUpdated.id, res.files, _fileRepo);
     }
     if (!mounted) return;
     setState(() {});
@@ -271,12 +308,19 @@ class _ProductListPageState extends ConsumerState<ProductListPage> {
     final copy = Product(
       id: const Uuid().v4(),
       remoteId: null,
+      localId: null,
       code: res.code,
       name: res.name,
       description: res.description,
       barcode: res.barcode,
       unitId: p.unitId,
       categoryId: res.categoryId,
+      account: p.account,
+      company: res.companyId,
+      levelId: res.levelId,
+      quantity: res.quantity,
+      hasSold: res.hasSold ? 1 : 0,
+      hasPrice: res.hasPrice ? 1 : 0,
       defaultPrice: res.priceCents,
       purchasePrice: res.purchasePriceCents,
       statuses: res.status,
@@ -284,6 +328,7 @@ class _ProductListPageState extends ConsumerState<ProductListPage> {
       updatedAt: now,
       deletedAt: null,
       syncAt: null,
+      createdBy: p.createdBy,
       version: 0,
       isDirty: 1,
     );
@@ -308,7 +353,7 @@ class _ProductListPageState extends ConsumerState<ProductListPage> {
       final remoteId = (p.remoteId ?? '').trim();
       if (remoteId.isNotEmpty) {
         try {
-          await _marketRepo.deleteRemote(p); // 🔥 call DELETE API
+          await _marketRepo.deleteRemote(p);
         } catch (e) {
           if (mounted) {
             ScaffoldMessenger.of(context).showSnackBar(
@@ -323,12 +368,11 @@ class _ProductListPageState extends ConsumerState<ProductListPage> {
       }
 
       await _repo.softDelete(p.id);
-
       if (!mounted) return;
       ScaffoldMessenger.of(
         context,
       ).showSnackBar(const SnackBar(content: Text('Produit supprimé.')));
-      setState(() {}); // refresh local list
+      setState(() {});
     }
   }
 
@@ -342,7 +386,6 @@ class _ProductListPageState extends ConsumerState<ProductListPage> {
     if (!mounted) return;
 
     final nav = Navigator.of(context);
-
     final shouldRefresh = await showRightDrawer<bool>(
       context,
       child: ProductViewPanel(
@@ -381,7 +424,6 @@ class _ProductListPageState extends ConsumerState<ProductListPage> {
     }
   }
 
-  // Build productId -> first local image path (if any)
   Future<Map<String, String?>> _firstLocalImagePathMap(
     List<Product> items,
   ) async {
@@ -401,7 +443,7 @@ class _ProductListPageState extends ConsumerState<ProductListPage> {
             }
           }
         }
-        result[p.id] = found; // null if none found
+        result[p.id] = found;
       } catch (_) {
         result[p.id] = null;
       }
@@ -412,28 +454,7 @@ class _ProductListPageState extends ConsumerState<ProductListPage> {
   Future<Map<String, int>> _computeStockMap(List<Product> items) async {
     final map = <String, int>{};
     for (final p in items) {
-      final q = (p.code?.trim().isNotEmpty ?? false)
-          ? p.code!.trim()
-          : (p.name?.trim() ?? '');
-      if (q.isEmpty) {
-        map[p.id] = 0;
-        continue;
-      }
-      final rows = await _stockRepo.search(query: q);
-      final relevant = rows.where((r) {
-        if ((p.code ?? '').isNotEmpty) {
-          return r.productLabel.toLowerCase().contains(p.code!.toLowerCase());
-        }
-        if ((p.name ?? '').isNotEmpty) {
-          return r.productLabel.toLowerCase().contains(p.name!.toLowerCase());
-        }
-        return true;
-      });
-      final total = relevant.fold<int>(
-        0,
-        (prev, e) => prev + (e.stockOnHand - e.stockAllocated),
-      );
-      map[p.id] = total;
+      map[p.id] = p.quantity;
     }
     return map;
   }
@@ -562,7 +583,6 @@ class _ProductListPageState extends ConsumerState<ProductListPage> {
                 builder: (context, stockSnap) {
                   final stockMap = stockSnap.data ?? const <String, int>{};
 
-                  // NEW: also load first local image paths for these products
                   return FutureBuilder<Map<String, String?>>(
                     future: _firstLocalImagePathMap(items),
                     builder: (context, imgSnap) {
@@ -615,15 +635,13 @@ class _ProductListPageState extends ConsumerState<ProductListPage> {
                                   ? p.name!
                                   : (p.code ?? 'Produit');
                               final subParts = <String>[];
-                              if ((p.description ?? '').isNotEmpty) {
+                              if ((p.description ?? '').isNotEmpty)
                                 subParts.add(p.description!);
-                              }
-                              if ((p.statuses ?? '').isNotEmpty) {
+                              if ((p.statuses ?? '').isNotEmpty)
                                 subParts.add(p.statuses!);
-                              }
                               final sub = subParts.join('  •  ');
 
-                              final imagePath = imgMap[p.id]; // may be null
+                              final imagePath = imgMap[p.id];
 
                               return ProductTile(
                                 title: title,
@@ -632,7 +650,6 @@ class _ProductListPageState extends ConsumerState<ProductListPage> {
                                 statuses: p.statuses,
                                 remoteId: p.remoteId,
                                 imagePath: imagePath,
-                                // imageUrl: <optional if you fetch remote>,
                                 onTap: () => _view(p),
                                 onMenuAction: (action) async {
                                   await Future.delayed(Duration.zero);
@@ -671,39 +688,6 @@ class _ProductListPageState extends ConsumerState<ProductListPage> {
           },
         );
       },
-    );
-  }
-}
-
-class _EmptySection extends StatelessWidget {
-  final VoidCallback? onAdd;
-  const _EmptySection({required this.onAdd});
-  const _EmptySection.placeholder() : onAdd = null;
-
-  @override
-  Widget build(BuildContext context) {
-    final content = Column(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        const Icon(Icons.inventory_2_outlined, size: 72),
-        const SizedBox(height: 12),
-        const Text(
-          'Aucun produit',
-          style: TextStyle(fontSize: 18, fontWeight: FontWeight.w600),
-        ),
-        const SizedBox(height: 6),
-        const Text('Ajoutez votre premier produit pour détailler vos achats.'),
-        const SizedBox(height: 16),
-        if (onAdd != null)
-          FilledButton.icon(
-            onPressed: onAdd,
-            icon: const Icon(Icons.add),
-            label: const Text('Nouveau produit'),
-          ),
-      ],
-    );
-    return Center(
-      child: Padding(padding: const EdgeInsets.all(24), child: content),
     );
   }
 }

@@ -148,6 +148,12 @@ CREATE TABLE IF NOT EXISTS product (
   purchasePrice  INTEGER DEFAULT 0,   -- prix d'achat (cents)
   createdAt TEXT DEFAULT (datetime('now')),
   updatedAt TEXT DEFAULT (datetime('now')),
+
+  company TEXT,                   
+  levelId TEXT,                      
+  quantity INTEGER DEFAULT 0,       
+  hasSold INTEGER DEFAULT 0,       
+  hasPrice INTEGER DEFAULT 0,      
  
   deletedAt TEXT,
   syncAt TEXT,

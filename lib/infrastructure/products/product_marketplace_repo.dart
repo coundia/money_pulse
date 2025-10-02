@@ -1,4 +1,4 @@
-// Marketplace repo: publish/unpublish product, persist remoteId/status using response body (product.id) or headers/URLs.
+// Marketplace repo to publish/unpublish product and persist remoteId/status.
 import 'dart:convert';
 import 'dart:io';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -8,6 +8,8 @@ import 'package:money_pulse/domain/products/entities/product.dart';
 import 'package:money_pulse/domain/products/repositories/product_repository.dart';
 import 'package:money_pulse/presentation/features/products/product_repo_provider.dart';
 import '../../sync/infrastructure/sync_headers_provider.dart';
+import 'package:money_pulse/domain/company/repositories/company_repository.dart';
+import 'package:money_pulse/presentation/app/providers/company_repo_provider.dart';
 
 class ProductMarketplaceRepo {
   final Ref ref;
@@ -19,7 +21,7 @@ class ProductMarketplaceRepo {
       throw ArgumentError('Aucune image fournie');
     }
     if ((product.remoteId ?? '').trim().isNotEmpty ||
-        product.statuses == 'PUBLISHED') {
+        (product.statuses ?? '').toUpperCase() == 'PUBLISHED') {
       throw StateError('Le produit est déjà publié');
     }
 
@@ -31,7 +33,9 @@ class ProductMarketplaceRepo {
       ..remove('Content-Type');
     req.headers.addAll(headers);
 
-    final map = _buildProductMap(product);
+    final companyRemote = await _resolveCompanyRemoteId(product.company);
+    final map = _buildProductMap(product, companyRemoteId: companyRemote);
+
     req.files.add(
       http.MultipartFile.fromString(
         'product',
@@ -94,6 +98,8 @@ class ProductMarketplaceRepo {
       'accept': 'application/json',
     };
 
+    final companyRemote = await _resolveCompanyRemoteId(product.company);
+
     final body = jsonEncode(
       {
         'remoteId': product.remoteId,
@@ -106,9 +112,14 @@ class ProductMarketplaceRepo {
         'syncAt': DateTime.now().toUtc().toIso8601String(),
         'category': product.categoryId,
         'account': product.account,
+        'company': companyRemote ?? product.company,
         'defaultPrice': product.defaultPrice / 100.0,
         'statuses': statusesCode,
         'purchasePrice': product.purchasePrice / 100.0,
+        'level': product.levelId,
+        'quantity': product.quantity,
+        'hasSold': product.hasSold == 1,
+        'hasPrice': product.hasPrice == 1,
       }..removeWhere((k, v) => v == null),
     );
 
@@ -137,7 +148,7 @@ class ProductMarketplaceRepo {
     return changeRemoteStatus(product: product, statusesCode: statusesCode);
   }
 
-  Map<String, dynamic> _buildProductMap(Product p) {
+  Map<String, dynamic> _buildProductMap(Product p, {String? companyRemoteId}) {
     final map = <String, dynamic>{
       'remoteId': p.remoteId,
       'localId': p.localId ?? p.id,
@@ -149,12 +160,25 @@ class ProductMarketplaceRepo {
       'syncAt': DateTime.now().toUtc().toIso8601String(),
       'category': p.categoryId,
       'account': p.account,
+      'company': companyRemoteId ?? p.company,
+      'level': p.levelId,
+      'quantity': p.quantity,
+      'hasSold': p.hasSold == 1,
+      'hasPrice': p.hasPrice == 1,
       'defaultPrice': p.defaultPrice / 100.0,
-      'statuses': "PUBLISH",
+      'statuses': 'PUBLISH',
       'purchasePrice': p.purchasePrice / 100.0,
     };
     map.removeWhere((_, v) => v == null);
     return map;
+  }
+
+  Future<String?> _resolveCompanyRemoteId(String? localCompanyId) async {
+    if (localCompanyId == null || localCompanyId.trim().isEmpty) return null;
+    final repo = ref.read(companyRepoProvider);
+    final c = await repo.findById(localCompanyId);
+    final r = (c?.remoteId ?? '').trim();
+    return r.isEmpty ? null : r;
   }
 
   String _mimeFromPath(String path) {
@@ -233,13 +257,12 @@ class ProductMarketplaceRepo {
     final uri = Uri.parse(_join(baseUri, '/api/v1/commands/product/$remoteId'));
 
     final headers = <String, String>{
-      ...ref.read(syncHeaderBuilderProvider)(), // doit contenir Authorization
+      ...ref.read(syncHeaderBuilderProvider)(),
       'Accept': 'application/json',
       'Content-Type': 'application/json',
     };
 
     final resp = await http.delete(uri, headers: headers);
-
     if (resp.statusCode < 200 || resp.statusCode >= 300) {
       throw HttpException(
         'HTTP ${resp.statusCode} ${resp.reasonPhrase ?? ''} • ${resp.body}',

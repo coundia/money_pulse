@@ -97,7 +97,7 @@ class SyncApiClient {
   Future<List<Json>> getUnitsSince(DateTime since) =>
       getBySyncAt('unit', since);
   Future<List<Json>> getProductsSince(DateTime since) =>
-      getBySyncAt('product', since);
+      getBySyncAt('products', since);
   Future<List<Json>> getCompaniesSince(DateTime since) =>
       getBySyncAt('companies', since);
   Future<List<Json>> getCustomersSince(DateTime since) =>
