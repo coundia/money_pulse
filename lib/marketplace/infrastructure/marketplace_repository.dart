@@ -14,7 +14,8 @@ class MarketplaceRepository {
     String? category,
     double? minPrice,
     double? maxPrice,
-    String? statusesCsv, // e.g. "PUBLISH,PROMO"
+    String? statusesCsv,
+    String? companyId, // ✅ NEW
   }) async {
     final qp = <String, String>{
       'page': '$page',
@@ -23,14 +24,14 @@ class MarketplaceRepository {
     };
 
     if (q != null && q.trim().isNotEmpty) qp['q'] = q.trim();
-    if (category != null && category.trim().isNotEmpty) {
+    if (category != null && category.trim().isNotEmpty)
       qp['category'] = category.trim();
-    }
     if (minPrice != null) qp['minPrice'] = '$minPrice';
     if (maxPrice != null) qp['maxPrice'] = '$maxPrice';
-    if (statusesCsv != null && statusesCsv.trim().isNotEmpty) {
+    if (statusesCsv != null && statusesCsv.trim().isNotEmpty)
       qp['statuses'] = statusesCsv.trim();
-    }
+    if (companyId != null && companyId.trim().isNotEmpty)
+      qp['company'] = companyId.trim(); // ✅ NEW
 
     final uri = Uri.parse(
       '$baseUri/api/public/marketplace',

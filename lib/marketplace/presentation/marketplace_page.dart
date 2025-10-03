@@ -1,7 +1,6 @@
-// TikTok-like vertical marketplace with LIGHT top search pill (loupe to validate),
-// infinite scroll, per-item horizontal image slider, and ONLY: Détails / Partager / Commander.
-// Le badge du nombre d’images est affiché EN BAS.
-
+// TikTok-like vertical marketplace page with top search, companies row filter,
+// infinite vertical pager and right-drawer product details. Fix: persist selected
+// company in widget state (no reset on rebuild) so tap selects the company.
 import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -10,6 +9,7 @@ import '../../shared/formatters.dart';
 import '../application/marketplace_pager_controller.dart';
 import '../domain/entities/marketplace_item.dart';
 import 'product_view_panel.dart';
+import 'widgets/companies_chips_row.dart';
 
 class MarketplacePage extends ConsumerStatefulWidget {
   final String baseUri;
@@ -23,10 +23,13 @@ class _MarketplacePageState extends ConsumerState<MarketplacePage> {
   final PageController _pageCtrl = PageController();
   final TextEditingController _searchCtrl = TextEditingController();
 
+  // ✅ IMPORTANT: keep the selected company in State, not inside build()
+  String? _selectedCompanyId;
+
   @override
   void initState() {
     super.initState();
-    _searchCtrl.addListener(() => setState(() {})); // pour l’icône clear
+    _searchCtrl.addListener(() => setState(() {}));
   }
 
   @override
@@ -91,7 +94,7 @@ class _MarketplacePageState extends ConsumerState<MarketplacePage> {
               },
             ),
 
-          // TOP SEARCH PILL — très léger
+          // Barre de recherche (verre dépoli)
           Positioned(
             top: 8 + MediaQuery.of(context).padding.top,
             left: 8,
@@ -101,6 +104,25 @@ class _MarketplacePageState extends ConsumerState<MarketplacePage> {
               onSubmit: _applySearch,
               onClear: _clearSearch,
               onBack: () => Navigator.of(context).maybePop(),
+            ),
+          ),
+
+          // Rangée des sociétés (sélection persistante)
+          Positioned(
+            top: 56 + MediaQuery.of(context).padding.top,
+            left: 0,
+            right: 0,
+            child: CompaniesChipsRow(
+              baseUri: widget.baseUri,
+              selectedId: _selectedCompanyId,
+              onSelect: (id) {
+                setState(
+                  () => _selectedCompanyId = id,
+                ); // ✅ met à jour la sélection
+                ref
+                    .read(marketplacePagerProvider(widget.baseUri).notifier)
+                    .applyFilters(companyId: id); // null => toutes
+              },
             ),
           ),
 
@@ -131,13 +153,12 @@ class _MarketplacePageState extends ConsumerState<MarketplacePage> {
     final imagesCtrl = PageController();
 
     final safeBottom = MediaQuery.of(context).padding.bottom;
-    const ctaHeight = 44.0; // approx CTA height
+    const ctaHeight = 44.0;
     const ctaSpacing = 16.0;
 
     return Stack(
       fit: StackFit.expand,
       children: [
-        // Horizontal images slider
         if (urls.isNotEmpty)
           PageView.builder(
             controller: imagesCtrl,
@@ -158,7 +179,6 @@ class _MarketplacePageState extends ConsumerState<MarketplacePage> {
         else
           const ColoredBox(color: Colors.black),
 
-        // Gradient overlay
         Container(
           decoration: BoxDecoration(
             gradient: LinearGradient(
@@ -173,11 +193,10 @@ class _MarketplacePageState extends ConsumerState<MarketplacePage> {
           ),
         ),
 
-        // Count badge (EN BAS, juste au-dessus du CTA Commander)
         if (multiple)
           Positioned(
             right: 16,
-            bottom: ctaSpacing + safeBottom + ctaHeight + 8, // au-dessus du CTA
+            bottom: ctaSpacing + safeBottom + ctaHeight + 8,
             child: Container(
               padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
               decoration: BoxDecoration(
@@ -203,12 +222,9 @@ class _MarketplacePageState extends ConsumerState<MarketplacePage> {
             ),
           ),
 
-        // Info produit
         Positioned(
           left: 16,
-          bottom:
-              (ctaSpacing * 4) +
-              safeBottom, // laisse l’espace pour actions + CTA
+          bottom: (ctaSpacing * 4) + safeBottom,
           right: 110,
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -245,7 +261,6 @@ class _MarketplacePageState extends ConsumerState<MarketplacePage> {
           ),
         ),
 
-        // Actions (seulement 2 au-dessus du CTA : Détails + Partager)
         Positioned(
           right: 20,
           bottom: (ctaSpacing * 4) + safeBottom,
@@ -270,7 +285,6 @@ class _MarketplacePageState extends ConsumerState<MarketplacePage> {
           ),
         ),
 
-        // Commander (CTA)
         Positioned(
           right: 16,
           bottom: 16 + safeBottom,
@@ -328,7 +342,7 @@ class _MarketplacePageState extends ConsumerState<MarketplacePage> {
   }
 }
 
-/* ---------- UI: Top Search Pill (verre dépoli) ---------- */
+/* ---------- UI: Top Search Pill ---------- */
 
 class _TopSearchPill extends StatelessWidget {
   final TextEditingController controller;
@@ -349,7 +363,6 @@ class _TopSearchPill extends StatelessWidget {
 
     return Row(
       children: [
-        // Back (format ghost)
         ClipOval(
           child: BackdropFilter(
             filter: ImageFilter.blur(sigmaX: 8, sigmaY: 8),
@@ -364,7 +377,6 @@ class _TopSearchPill extends StatelessWidget {
           ),
         ),
         const SizedBox(width: 8),
-        // Search pill
         Expanded(
           child: ClipRRect(
             borderRadius: BorderRadius.circular(30),
@@ -384,7 +396,6 @@ class _TopSearchPill extends StatelessWidget {
                   decoration: InputDecoration(
                     hintText: 'Rechercher un produit…',
                     hintStyle: const TextStyle(color: Colors.white70),
-                    // Suffix = loupe (valider) + croix (clear) dans un Row compact
                     suffixIcon: Row(
                       mainAxisSize: MainAxisSize.min,
                       children: [

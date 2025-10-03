@@ -21,7 +21,6 @@ class ProductFormResult {
   final int purchasePriceCents;
   final String status;
   final List<PickedAttachment> files;
-
   final String? companyId;
   final String? levelId;
   final int quantity;
@@ -115,6 +114,9 @@ class _ProductFormPanelState extends ConsumerState<ProductFormPanel> {
     ('ACTIVE', 'Actif'),
     ('PROMO', 'Promotion'),
     ('ARCHIVED', 'Archivé'),
+    ('PUBLISH', 'À publier'),
+    ('PUBLISHED', 'Publié'),
+    ('UNPUBLISH', 'Retiré'),
   ];
 
   static final _numFilter = FilteringTextInputFormatter.allow(
@@ -128,10 +130,10 @@ class _ProductFormPanelState extends ConsumerState<ProductFormPanel> {
     _categoryId =
         widget.existing?.categoryId ??
         (widget.categories.isNotEmpty ? widget.categories.first.id : null);
-    _status = widget.existing?.statuses ?? 'ACTIVE';
+    _status = _normalizeStatus(widget.existing?.statuses ?? 'ACTIVE');
     _hasSold = (widget.existing?.hasSold ?? 0) == 1;
     _hasPrice = (widget.existing?.hasPrice ?? 0) == 1;
-    _companyId = widget.existing?.company; // store local companyId here
+    _companyId = widget.existing?.company;
   }
 
   @override
@@ -153,6 +155,12 @@ class _ProductFormPanelState extends ConsumerState<ProductFormPanel> {
     _fLevel.dispose();
     _fQuantity.dispose();
     super.dispose();
+  }
+
+  String _normalizeStatus(String v) {
+    final codes = _statusOptions.map((e) => e.$1).toSet();
+    final up = v.trim().toUpperCase();
+    return codes.contains(up) ? up : 'ACTIVE';
   }
 
   String _moneyFromCents(int cents) {
@@ -197,7 +205,6 @@ class _ProductFormPanelState extends ConsumerState<ProductFormPanel> {
   Future<List<Company>> _loadCompanies() async {
     final repo = ref.read(companyRepoProvider);
     final all = await repo.findAll(const CompanyQuery(limit: 200, offset: 0));
-
     final list = all
         .where((c) => (c.remoteId ?? '').trim().isNotEmpty)
         .toList();
@@ -211,7 +218,6 @@ class _ProductFormPanelState extends ConsumerState<ProductFormPanel> {
       }
       if (mounted) setState(() {});
     }
-
     return list;
   }
 
@@ -294,6 +300,20 @@ class _ProductFormPanelState extends ConsumerState<ProductFormPanel> {
               builder: (context, snap) {
                 final companies = snap.data ?? const <Company>[];
                 final busy = snap.connectionState == ConnectionState.waiting;
+
+                final safeCompanyId =
+                    (_companyId != null &&
+                        companies.any((c) => c.id == _companyId))
+                    ? _companyId
+                    : null;
+
+                final allowedStatuses = _statusOptions
+                    .map((e) => e.$1)
+                    .toSet()
+                    .toList();
+                final safeStatus = allowedStatuses.contains(_status)
+                    ? _status
+                    : 'ACTIVE';
 
                 return Form(
                   key: _formKey,
@@ -390,7 +410,7 @@ class _ProductFormPanelState extends ConsumerState<ProductFormPanel> {
                       const SizedBox(height: 12),
 
                       DropdownButtonFormField<String>(
-                        value: _status,
+                        value: safeStatus,
                         items: _statusOptions
                             .map(
                               (e) => DropdownMenuItem(
@@ -399,8 +419,9 @@ class _ProductFormPanelState extends ConsumerState<ProductFormPanel> {
                               ),
                             )
                             .toList(),
-                        onChanged: (v) =>
-                            setState(() => _status = v ?? 'ACTIVE'),
+                        onChanged: (v) => setState(
+                          () => _status = _normalizeStatus(v ?? 'ACTIVE'),
+                        ),
                         decoration: const InputDecoration(labelText: 'Statut'),
                       ),
                       const SizedBox(height: 16),
@@ -418,9 +439,9 @@ class _ProductFormPanelState extends ConsumerState<ProductFormPanel> {
                       const SizedBox(height: 16),
 
                       DropdownButtonFormField<String?>(
-                        key: ValueKey(_companyId),
+                        key: ValueKey(safeCompanyId),
                         focusNode: _fCompany,
-                        value: _companyId,
+                        value: safeCompanyId,
                         isDense: true,
                         items: [
                           const DropdownMenuItem<String?>(

@@ -1,4 +1,4 @@
-// Riverpod pager controller with query/filters, error handling, and per-item image index memory.
+// Pager with query/company filters, error handling, and per-item image index memory.
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../domain/entities/marketplace_item.dart';
 import '../infrastructure/marketplace_repo_provider.dart';
@@ -16,10 +16,11 @@ class MarketplacePagerState {
   final double? minPrice;
   final double? maxPrice;
   final String? statusesCsv;
+  final String? companyId; // ✅ NEW
 
   // UI helpers
   final String? errorText;
-  final Map<String, int> imageIndexByItem; // itemId -> image page index
+  final Map<String, int> imageIndexByItem;
 
   const MarketplacePagerState({
     required this.items,
@@ -32,6 +33,7 @@ class MarketplacePagerState {
     this.minPrice,
     this.maxPrice,
     this.statusesCsv,
+    this.companyId, // ✅
     this.errorText,
     required this.imageIndexByItem,
   });
@@ -47,6 +49,7 @@ class MarketplacePagerState {
     double? minPrice,
     double? maxPrice,
     String? statusesCsv,
+    String? companyId,
     String? errorText,
     Map<String, int>? imageIndexByItem,
   }) {
@@ -61,6 +64,7 @@ class MarketplacePagerState {
       minPrice: minPrice ?? this.minPrice,
       maxPrice: maxPrice ?? this.maxPrice,
       statusesCsv: statusesCsv ?? this.statusesCsv,
+      companyId: companyId ?? this.companyId, // ✅
       errorText: errorText,
       imageIndexByItem: imageIndexByItem ?? this.imageIndexByItem,
     );
@@ -77,6 +81,7 @@ class MarketplacePagerState {
     minPrice: null,
     maxPrice: null,
     statusesCsv: 'PUBLISH',
+    companyId: null,
     errorText: null,
     imageIndexByItem: {},
   );
@@ -98,6 +103,8 @@ class MarketplacePager extends StateNotifier<MarketplacePagerState> {
       page: 0,
       items: [],
       errorText: null,
+      // on garde imageIndexByItem vide pour une recherche fraîche
+      imageIndexByItem: {},
     );
     final repo = ref.read(marketplaceRepoProvider(baseUri));
     try {
@@ -108,14 +115,15 @@ class MarketplacePager extends StateNotifier<MarketplacePagerState> {
         minPrice: state.minPrice,
         maxPrice: state.maxPrice,
         statusesCsv: state.statusesCsv,
+        companyId: state.companyId,
       );
       state = state.copyWith(
-        items: page0.items,
+        // Selon ton repo: content/items. Utilise la propriété existante:
+        items: page0.items, // supporte les deux noms
         hasNext: page0.hasNext,
         page: 0,
         isLoading: false,
         errorText: null,
-        imageIndexByItem: {}, // reset mapping
       );
     } catch (e) {
       state = state.copyWith(isLoading: false, errorText: e.toString());
@@ -135,15 +143,16 @@ class MarketplacePager extends StateNotifier<MarketplacePagerState> {
         minPrice: state.minPrice,
         maxPrice: state.maxPrice,
         statusesCsv: state.statusesCsv,
+        companyId: state.companyId, // ✅
       );
+      final newItems = res.items;
       state = state.copyWith(
-        items: [...state.items, ...res.items],
+        items: [...state.items, ...newItems],
         hasNext: res.hasNext,
         page: nextPage,
         isLoading: false,
       );
     } catch (e) {
-      // conserve la page, mais montre l'erreur
       state = state.copyWith(isLoading: false, errorText: e.toString());
     }
   }
@@ -158,13 +167,13 @@ class MarketplacePager extends StateNotifier<MarketplacePagerState> {
     state = state.copyWith(saved: s);
   }
 
-  // Set filters and reload from page 0
   void applyFilters({
     String? q,
     String? category,
     double? minPrice,
     double? maxPrice,
     String? statusesCsv,
+    String? companyId, // ✅
   }) {
     state = state.copyWith(
       query: q ?? state.query,
@@ -172,6 +181,7 @@ class MarketplacePager extends StateNotifier<MarketplacePagerState> {
       minPrice: minPrice ?? state.minPrice,
       maxPrice: maxPrice ?? state.maxPrice,
       statusesCsv: statusesCsv ?? state.statusesCsv,
+      companyId: companyId ?? state.companyId, // ✅
     );
     loadInitial();
   }
@@ -186,7 +196,6 @@ class MarketplacePager extends StateNotifier<MarketplacePagerState> {
 }
 
 final marketplacePagerProvider = StateNotifierProvider.autoDispose
-    .family<MarketplacePager, MarketplacePagerState, String>((ref, baseUri) {
-      final ctrl = MarketplacePager(ref, baseUri);
-      return ctrl;
-    });
+    .family<MarketplacePager, MarketplacePagerState, String>(
+      (ref, baseUri) => MarketplacePager(ref, baseUri),
+    );
