@@ -1,6 +1,6 @@
 // TikTok-like vertical marketplace page with top search, companies row filter,
 // infinite vertical pager and right-drawer product details.
-// Persist selected company; Refresh button clears ALL filters & reloads.
+// Persist selected company; "All" clears company filter and refetches.
 
 import 'dart:ui';
 import 'package:flutter/material.dart';
@@ -59,7 +59,9 @@ class _MarketplacePageState extends ConsumerState<MarketplacePage> {
   @override
   Widget build(BuildContext context) {
     final state = ref.watch(marketplacePagerProvider(widget.baseUri));
-    final pager = ref.read(marketplacePagerProvider(widget.baseUri).notifier);
+    final notifier = ref.read(
+      marketplacePagerProvider(widget.baseUri).notifier,
+    );
 
     return Scaffold(
       backgroundColor: Colors.black,
@@ -83,16 +85,16 @@ class _MarketplacePageState extends ConsumerState<MarketplacePage> {
               itemCount: state.items.length,
               onPageChanged: (index) {
                 if (index >= state.items.length - 2 && state.hasNext) {
-                  pager.loadNext();
+                  notifier.loadNext();
                 }
               },
               itemBuilder: (context, index) {
                 final item = state.items[index];
-                return _buildProductPage(context, item, state, pager);
+                return _buildProductPage(context, item, state, notifier);
               },
             ),
 
-          // Barre de recherche
+          // Search (frosted)
           Positioned(
             top: 8 + MediaQuery.of(context).padding.top,
             left: 8,
@@ -105,7 +107,7 @@ class _MarketplacePageState extends ConsumerState<MarketplacePage> {
             ),
           ),
 
-          // Rangée des sociétés
+          // Companies row
           Positioned(
             top: 56 + MediaQuery.of(context).padding.top,
             left: 0,
@@ -114,17 +116,19 @@ class _MarketplacePageState extends ConsumerState<MarketplacePage> {
               baseUri: widget.baseUri,
               selectedId: _selectedCompanyId,
               onSelect: (id) {
+                // Persist locally for UI highlight
                 setState(() => _selectedCompanyId = id);
-                // 🔹 Utilise la nouvelle API claire
-                if (id == null) {
-                  pager.setCompanyFilter(null); // => liste tous
-                } else {
-                  pager.setCompanyFilter(id);
-                }
+                // 🔑 Always call setCompanyFilter (null == ALL)
+                ref
+                    .read(marketplacePagerProvider(widget.baseUri).notifier)
+                    .setCompanyFilter(id);
               },
               onRefreshAll: () {
+                // Optional helper for a "clear everything" action
                 _searchCtrl.clear();
-                pager.resetAll(); // enlève tous les filtres
+                ref
+                    .read(marketplacePagerProvider(widget.baseUri).notifier)
+                    .resetAll();
                 setState(() => _selectedCompanyId = null);
               },
             ),
@@ -183,6 +187,7 @@ class _MarketplacePageState extends ConsumerState<MarketplacePage> {
         else
           const ColoredBox(color: Colors.black),
 
+        // gradient overlay
         Container(
           decoration: BoxDecoration(
             gradient: LinearGradient(
@@ -197,6 +202,7 @@ class _MarketplacePageState extends ConsumerState<MarketplacePage> {
           ),
         ),
 
+        // images count badge (bottom)
         if (multiple)
           Positioned(
             right: 16,
@@ -226,6 +232,7 @@ class _MarketplacePageState extends ConsumerState<MarketplacePage> {
             ),
           ),
 
+        // info
         Positioned(
           left: 16,
           bottom: (ctaSpacing * 4) + safeBottom,
@@ -265,6 +272,7 @@ class _MarketplacePageState extends ConsumerState<MarketplacePage> {
           ),
         ),
 
+        // actions
         Positioned(
           right: 20,
           bottom: (ctaSpacing * 4) + safeBottom,
@@ -289,6 +297,7 @@ class _MarketplacePageState extends ConsumerState<MarketplacePage> {
           ),
         ),
 
+        // CTA
         Positioned(
           right: 16,
           bottom: 16 + safeBottom,

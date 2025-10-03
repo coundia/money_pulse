@@ -1,7 +1,10 @@
-// Avatar-only horizontal companies row:
-// - "ALL" => just clears company filter (lists all products without touching others)
-// - "Refresh" => clears ALL filters via onRefreshAll / resetAll
-// - transparent avatars with black glyph + active (green) badge
+// Avatar-only horizontal companies row with:
+// - "All" (apps icon) that clears selection and reloads ALL products
+// - Optional "Refresh" that also clears filters via parent callback
+// - Transparent avatars, black glyphs, and active (green) badge
+//
+// Requires: marketplaceCompaniesProvider(baseUri) returning objects with
+// fields: id, name, code, isActive.
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -11,9 +14,7 @@ class CompaniesChipsRow extends ConsumerStatefulWidget {
   final String baseUri;
   final String? selectedId;
   final void Function(String? id) onSelect;
-
-  /// Optional: parent can also clear search, etc.
-  final VoidCallback? onRefreshAll;
+  final VoidCallback? onRefreshAll; // optional: parent-wide reset
 
   const CompaniesChipsRow({
     super.key,
@@ -29,13 +30,13 @@ class CompaniesChipsRow extends ConsumerStatefulWidget {
 
 class _CompaniesChipsRowState extends ConsumerState<CompaniesChipsRow> {
   final _scrollCtrl = ScrollController();
-  String? _overrideSelectedId; // optimistic selection visual override
+  String? _overrideSelectedId; // optimistic override until parent updates
 
   @override
   void didUpdateWidget(covariant CompaniesChipsRow oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (oldWidget.selectedId != widget.selectedId) {
-      _overrideSelectedId = null; // keep in sync with parent
+      _overrideSelectedId = null; // sync to parent change
     }
   }
 
@@ -60,7 +61,7 @@ class _CompaniesChipsRowState extends ConsumerState<CompaniesChipsRow> {
             if (list.isEmpty) return const SizedBox.shrink();
 
             final items = <Widget>[
-              // 🔹 ALL — liste tous les produits (ne touche pas les autres filtres)
+              // "All" — clears selection and asks parent to reload ALL products
               _avatarButton(
                 context: context,
                 tooltip: 'Tous les produits',
@@ -71,27 +72,10 @@ class _CompaniesChipsRowState extends ConsumerState<CompaniesChipsRow> {
                   setState(() => _overrideSelectedId = null);
                   widget.onSelect(
                     null,
-                  ); // la page appellera pager.setCompanyFilter(null)
-                },
-                child: const Icon(
-                  Icons.apps_rounded,
-                  size: 20,
-                  color: Colors.black,
-                ),
-              ),
-
-              // ⟳ REFRESH — vide la sélection ET demande un resetAll (tous filtres)
-              _avatarButton(
-                context: context,
-                tooltip: 'Rafraîchir (tout réinitialiser)',
-                selected: false,
-                showActiveBadge: false,
-                onTap: () async {
-                  Feedback.forTap(context);
-                  setState(() => _overrideSelectedId = null);
-                  widget.onSelect(null); // visuel "ALL" sélectionné ensuite
-                  if (widget.onRefreshAll != null) widget.onRefreshAll!();
-
+                  ); // parent will call pager.setCompanyFilter(null)
+                  // Optional: also allow a full reset from parent (clear search, etc.)
+                  widget.onRefreshAll?.call();
+                  // Scroll back to start
                   if (_scrollCtrl.hasClients) {
                     _scrollCtrl.animateTo(
                       0,
@@ -100,10 +84,14 @@ class _CompaniesChipsRowState extends ConsumerState<CompaniesChipsRow> {
                     );
                   }
                 },
-                child: const Icon(Icons.refresh, size: 22, color: Colors.black),
+                child: const Icon(
+                  Icons.apps_rounded,
+                  size: 20,
+                  color: Colors.black,
+                ),
               ),
 
-              // Sociétés
+              // Companies avatars
               ...list.map((c) {
                 final selected = _effectiveSelectedId == c.id;
                 final label = (c.name ?? '').trim();
@@ -127,7 +115,7 @@ class _CompaniesChipsRowState extends ConsumerState<CompaniesChipsRow> {
                     setState(() => _overrideSelectedId = next);
                     widget.onSelect(
                       next,
-                    ); // la page appellera setCompanyFilter(next)
+                    ); // parent will call pager.setCompanyFilter(next)
                   },
                   child: Text(
                     first,
@@ -171,8 +159,8 @@ class _CompaniesChipsRowState extends ConsumerState<CompaniesChipsRow> {
   }
 }
 
-/// Avatar button with transparent background, selectable ring, and optional
-/// green "active" badge (bottom-right). Logo/Icons are forced to BLACK.
+/// Avatar button with transparent background, selectable ring,
+/// optional green "active" badge (bottom-right), and black glyph.
 Widget _avatarButton({
   required BuildContext context,
   required String tooltip,
@@ -191,7 +179,6 @@ Widget _avatarButton({
   final glow = selected ? cs.primary.withOpacity(0.25) : Colors.transparent;
 
   const glyphColor = Colors.black;
-
   final badgeBorder = isDark
       ? Colors.black
       : Theme.of(context).scaffoldBackgroundColor;

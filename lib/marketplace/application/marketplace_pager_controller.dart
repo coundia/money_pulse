@@ -1,5 +1,5 @@
 // Pager with query/company filters, error handling, request de-racing, and
-// per-item image index memory. resetAll() truly reloads "all" from the API.
+// per-item image index memory. resetAll() & setCompanyFilter() truly reload.
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../domain/entities/marketplace_item.dart';
@@ -82,7 +82,7 @@ class MarketplacePagerState {
     category: null,
     minPrice: null,
     maxPrice: null,
-    statusesCsv: 'PUBLISH', // default public
+    statusesCsv: 'PUBLISH', // default public listing
     companyId: null,
     errorText: null,
     imageIndexByItem: {},
@@ -93,7 +93,7 @@ class MarketplacePager extends StateNotifier<MarketplacePagerState> {
   final Ref ref;
   final String baseUri;
 
-  // Request sequence to ignore stale responses
+  // Prevent stale overwrites when multiple loads race
   int _reqSeq = 0;
 
   MarketplacePager(this.ref, this.baseUri)
@@ -101,7 +101,6 @@ class MarketplacePager extends StateNotifier<MarketplacePagerState> {
     loadInitial();
   }
 
-  // Convert empty string to null
   String? _nz(String? v) => (v == null || v.trim().isEmpty) ? null : v;
 
   Future<void> loadInitial() async {
@@ -112,7 +111,7 @@ class MarketplacePager extends StateNotifier<MarketplacePagerState> {
       page: 0,
       items: [],
       errorText: null,
-      imageIndexByItem: {}, // fresh search
+      imageIndexByItem: {},
       hasNext: true,
     );
 
@@ -178,11 +177,7 @@ class MarketplacePager extends StateNotifier<MarketplacePagerState> {
 
   void toggleSaved(String id) {
     final s = Set<String>.from(state.saved);
-    if (s.contains(id)) {
-      s.remove(id);
-    } else {
-      s.add(id);
-    }
+    s.contains(id) ? s.remove(id) : s.add(id);
     state = state.copyWith(saved: s);
   }
 
@@ -205,7 +200,8 @@ class MarketplacePager extends StateNotifier<MarketplacePagerState> {
     loadInitial();
   }
 
-  /// 🔹 Nouvelle API claire pour changer exclusivement le filtre company
+  /// Called from UI: sets the company filter to `id` (or clears when null)
+  /// and **always** reloads page 0 from the API.
   void setCompanyFilter(String? id) {
     state = state.copyWith(companyId: _nz(id));
     loadInitial();
@@ -213,7 +209,7 @@ class MarketplacePager extends StateNotifier<MarketplacePagerState> {
 
   /// Clear ALL filters back to defaults and reload.
   void resetAll() {
-    _reqSeq++; // cancel in-flight
+    _reqSeq++; // cancel any in-flight results
     state = state.copyWith(
       query: null,
       category: null,
@@ -241,6 +237,6 @@ class MarketplacePager extends StateNotifier<MarketplacePagerState> {
 }
 
 final marketplacePagerProvider = StateNotifierProvider.autoDispose
-    .family<MarketplacePager, MarketplacePagerState, String>((ref, baseUri) {
-      return MarketplacePager(ref, baseUri);
-    });
+    .family<MarketplacePager, MarketplacePagerState, String>(
+      (ref, baseUri) => MarketplacePager(ref, baseUri),
+    );
