@@ -1,6 +1,7 @@
 // TikTok-like vertical marketplace page with top search, companies row filter,
-// infinite vertical pager and right-drawer product details. Fix: persist selected
-// company in widget state (no reset on rebuild) so tap selects the company.
+// infinite vertical pager and right-drawer product details.
+// Persist selected company; Refresh button clears ALL filters & reloads.
+
 import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -23,7 +24,6 @@ class _MarketplacePageState extends ConsumerState<MarketplacePage> {
   final PageController _pageCtrl = PageController();
   final TextEditingController _searchCtrl = TextEditingController();
 
-  // ✅ IMPORTANT: keep the selected company in State, not inside build()
   String? _selectedCompanyId;
 
   @override
@@ -59,9 +59,7 @@ class _MarketplacePageState extends ConsumerState<MarketplacePage> {
   @override
   Widget build(BuildContext context) {
     final state = ref.watch(marketplacePagerProvider(widget.baseUri));
-    final notifier = ref.read(
-      marketplacePagerProvider(widget.baseUri).notifier,
-    );
+    final pager = ref.read(marketplacePagerProvider(widget.baseUri).notifier);
 
     return Scaffold(
       backgroundColor: Colors.black,
@@ -85,16 +83,16 @@ class _MarketplacePageState extends ConsumerState<MarketplacePage> {
               itemCount: state.items.length,
               onPageChanged: (index) {
                 if (index >= state.items.length - 2 && state.hasNext) {
-                  notifier.loadNext();
+                  pager.loadNext();
                 }
               },
               itemBuilder: (context, index) {
                 final item = state.items[index];
-                return _buildProductPage(context, item, state, notifier);
+                return _buildProductPage(context, item, state, pager);
               },
             ),
 
-          // Barre de recherche (verre dépoli)
+          // Barre de recherche
           Positioned(
             top: 8 + MediaQuery.of(context).padding.top,
             left: 8,
@@ -107,7 +105,7 @@ class _MarketplacePageState extends ConsumerState<MarketplacePage> {
             ),
           ),
 
-          // Rangée des sociétés (sélection persistante)
+          // Rangée des sociétés
           Positioned(
             top: 56 + MediaQuery.of(context).padding.top,
             left: 0,
@@ -116,12 +114,18 @@ class _MarketplacePageState extends ConsumerState<MarketplacePage> {
               baseUri: widget.baseUri,
               selectedId: _selectedCompanyId,
               onSelect: (id) {
-                setState(
-                  () => _selectedCompanyId = id,
-                ); // ✅ met à jour la sélection
-                ref
-                    .read(marketplacePagerProvider(widget.baseUri).notifier)
-                    .applyFilters(companyId: id); // null => toutes
+                setState(() => _selectedCompanyId = id);
+                // 🔹 Utilise la nouvelle API claire
+                if (id == null) {
+                  pager.setCompanyFilter(null); // => liste tous
+                } else {
+                  pager.setCompanyFilter(id);
+                }
+              },
+              onRefreshAll: () {
+                _searchCtrl.clear();
+                pager.resetAll(); // enlève tous les filtres
+                setState(() => _selectedCompanyId = null);
               },
             ),
           ),

@@ -1,9 +1,7 @@
-// Avatar-only horizontal companies row: "Refresh" clears selection immediately,
-// transparent icons, centered layout, with active (green) badge like Facebook.
-// Company logo (first letter / icon) is BLACK and remains visible on dark bg
-// thanks to a subtle white glow on text glyphs.
-//
-// Path: marketplace/presentation/widgets/companies_chips_row.dart
+// Avatar-only horizontal companies row:
+// - "ALL" => just clears company filter (lists all products without touching others)
+// - "Refresh" => clears ALL filters via onRefreshAll / resetAll
+// - transparent avatars with black glyph + active (green) badge
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -14,11 +12,15 @@ class CompaniesChipsRow extends ConsumerStatefulWidget {
   final String? selectedId;
   final void Function(String? id) onSelect;
 
+  /// Optional: parent can also clear search, etc.
+  final VoidCallback? onRefreshAll;
+
   const CompaniesChipsRow({
     super.key,
     required this.baseUri,
     required this.selectedId,
     required this.onSelect,
+    this.onRefreshAll,
   });
 
   @override
@@ -58,17 +60,38 @@ class _CompaniesChipsRowState extends ConsumerState<CompaniesChipsRow> {
             if (list.isEmpty) return const SizedBox.shrink();
 
             final items = <Widget>[
-              // ⟳ REFRESH — deselect everything and reload
+              // 🔹 ALL — liste tous les produits (ne touche pas les autres filtres)
               _avatarButton(
                 context: context,
-                tooltip: 'Rafraîchir (tout afficher)',
+                tooltip: 'Tous les produits',
+                selected: _effectiveSelectedId == null,
+                showActiveBadge: false,
+                onTap: () {
+                  Feedback.forTap(context);
+                  setState(() => _overrideSelectedId = null);
+                  widget.onSelect(
+                    null,
+                  ); // la page appellera pager.setCompanyFilter(null)
+                },
+                child: const Icon(
+                  Icons.apps_rounded,
+                  size: 20,
+                  color: Colors.black,
+                ),
+              ),
+
+              // ⟳ REFRESH — vide la sélection ET demande un resetAll (tous filtres)
+              _avatarButton(
+                context: context,
+                tooltip: 'Rafraîchir (tout réinitialiser)',
                 selected: false,
                 showActiveBadge: false,
                 onTap: () async {
                   Feedback.forTap(context);
-                  setState(() => _overrideSelectedId = null); // UI instant
-                  widget.onSelect(null); // notify parent (all companies)
-                  ref.invalidate(marketplaceCompaniesProvider(widget.baseUri));
+                  setState(() => _overrideSelectedId = null);
+                  widget.onSelect(null); // visuel "ALL" sélectionné ensuite
+                  if (widget.onRefreshAll != null) widget.onRefreshAll!();
+
                   if (_scrollCtrl.hasClients) {
                     _scrollCtrl.animateTo(
                       0,
@@ -77,37 +100,37 @@ class _CompaniesChipsRowState extends ConsumerState<CompaniesChipsRow> {
                     );
                   }
                 },
-                child: const Icon(
-                  Icons.refresh,
-                  size: 22,
-                ), // black via IconTheme
+                child: const Icon(Icons.refresh, size: 22, color: Colors.black),
               ),
 
-              // Companies
+              // Sociétés
               ...list.map((c) {
                 final selected = _effectiveSelectedId == c.id;
-                final t =
-                    (c.code?.trim().isNotEmpty == true
-                            ? c.code!.trim()[0]
-                            : (c.name?.trim().isNotEmpty == true
-                                  ? c.name!.trim()[0]
-                                  : '•'))
+                final label = (c.name ?? '').trim();
+                final code = (c.code ?? '').trim();
+                final first =
+                    (code.isNotEmpty
+                            ? code[0]
+                            : (label.isNotEmpty ? label[0] : '•'))
                         .toUpperCase();
 
                 return _avatarButton(
                   context: context,
-                  tooltip: '${c.name} (${c.code})',
+                  tooltip: label.isEmpty && code.isEmpty
+                      ? 'Société'
+                      : '$label${code.isNotEmpty ? " ($code)" : ""}',
                   selected: selected,
-                  showActiveBadge: c.isActive == true, // green badge if active
+                  showActiveBadge: (c.isActive == true),
                   onTap: () {
                     Feedback.forTap(context);
-                    final next = selected ? null : c.id; // toggle selection
+                    final next = selected ? null : c.id; // toggle
                     setState(() => _overrideSelectedId = next);
-                    widget.onSelect(next);
+                    widget.onSelect(
+                      next,
+                    ); // la page appellera setCompanyFilter(next)
                   },
-                  // Letter logo — black + subtle white glow for visibility
                   child: Text(
-                    t,
+                    first,
                     style: const TextStyle(fontSize: 20, height: 1),
                   ),
                 );
@@ -146,118 +169,105 @@ class _CompaniesChipsRowState extends ConsumerState<CompaniesChipsRow> {
       ),
     );
   }
+}
 
-  /// Avatar button with transparent background, selectable ring, and optional
-  /// green "active" badge (bottom-right). Logo/Icons are forced to BLACK.
-  Widget _avatarButton({
-    required BuildContext context,
-    required String tooltip,
-    required bool selected,
-    required bool showActiveBadge,
-    required VoidCallback onTap,
-    required Widget child,
-  }) {
-    final cs = Theme.of(context).colorScheme;
-    final isDark = Theme.of(context).brightness == Brightness.dark;
+/// Avatar button with transparent background, selectable ring, and optional
+/// green "active" badge (bottom-right). Logo/Icons are forced to BLACK.
+Widget _avatarButton({
+  required BuildContext context,
+  required String tooltip,
+  required bool selected,
+  required bool showActiveBadge,
+  required VoidCallback onTap,
+  required Widget child,
+}) {
+  final cs = Theme.of(context).colorScheme;
+  final isDark = Theme.of(context).brightness == Brightness.dark;
 
-    final ring = selected
-        ? cs.primary.withOpacity(0.9)
-        : (isDark ? Colors.white70 : cs.outline);
-    final ringWidth = selected ? 2.4 : 1.2;
-    final glow = selected ? cs.primary.withOpacity(0.25) : Colors.transparent;
+  final ring = selected
+      ? cs.primary.withOpacity(0.9)
+      : (isDark ? Colors.white70 : cs.outline);
+  final ringWidth = selected ? 2.4 : 1.2;
+  final glow = selected ? cs.primary.withOpacity(0.25) : Colors.transparent;
 
-    // BLACK glyph (letter/icon), with subtle white glow for text glyphs only.
-    const glyphColor = Colors.black;
-    final textGlow = [
-      Shadow(
-        color: Colors.white54, // soft halo to remain visible on dark bg
-        blurRadius: 6,
-        offset: Offset(0, 0),
-      ),
-    ];
+  const glyphColor = Colors.black;
 
-    // Border around the green badge to detach from background
-    final badgeBorder = isDark
-        ? Colors.black
-        : Theme.of(context).scaffoldBackgroundColor;
+  final badgeBorder = isDark
+      ? Colors.black
+      : Theme.of(context).scaffoldBackgroundColor;
 
-    return Semantics(
-      button: true,
-      selected: selected,
-      label: tooltip,
-      child: Tooltip(
-        message: tooltip,
-        child: InkWell(
-          borderRadius: BorderRadius.circular(999),
-          onTap: onTap,
-          child: AnimatedContainer(
-            duration: const Duration(milliseconds: 140),
-            width: 54,
-            height: 54,
-            decoration: BoxDecoration(
-              color: Colors.transparent, // keep transparent background
-              shape: BoxShape.circle,
-              border: Border.all(color: ring, width: ringWidth),
-              boxShadow: [
-                if (selected)
-                  BoxShadow(color: glow, blurRadius: 10, spreadRadius: 0.5),
-              ],
-            ),
-            child: Stack(
-              fit: StackFit.expand,
-              children: [
-                // Centered glyph
-                Center(
-                  child: IconTheme.merge(
-                    data: const IconThemeData(color: glyphColor, size: 22),
-                    child: DefaultTextStyle(
-                      style: const TextStyle(
-                        color: glyphColor,
-                        fontWeight: FontWeight.w600,
-                        // Add glow only for text glyphs; Icons will ignore it.
-                        shadows: [
-                          Shadow(
-                            color: Colors.white54,
-                            blurRadius: 6,
-                            offset: Offset(0, 0),
-                          ),
-                        ],
-                      ),
-                      child: child,
+  return Semantics(
+    button: true,
+    selected: selected,
+    label: tooltip,
+    child: Tooltip(
+      message: tooltip,
+      child: InkWell(
+        borderRadius: BorderRadius.circular(999),
+        onTap: onTap,
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 140),
+          width: 54,
+          height: 54,
+          decoration: BoxDecoration(
+            color: Colors.transparent,
+            shape: BoxShape.circle,
+            border: Border.all(color: ring, width: ringWidth),
+            boxShadow: [
+              if (selected)
+                BoxShadow(color: glow, blurRadius: 10, spreadRadius: 0.5),
+            ],
+          ),
+          child: Stack(
+            fit: StackFit.expand,
+            children: [
+              Center(
+                child: IconTheme.merge(
+                  data: const IconThemeData(color: glyphColor, size: 22),
+                  child: DefaultTextStyle(
+                    style: const TextStyle(
+                      color: glyphColor,
+                      fontWeight: FontWeight.w600,
+                      shadows: [
+                        Shadow(
+                          color: Colors.white54,
+                          blurRadius: 6,
+                          offset: Offset(0, 0),
+                        ),
+                      ],
+                    ),
+                    child: child,
+                  ),
+                ),
+              ),
+              if (showActiveBadge)
+                Positioned(
+                  right: 4,
+                  bottom: 4,
+                  child: Container(
+                    width: 12,
+                    height: 12,
+                    decoration: BoxDecoration(
+                      color: Colors.greenAccent,
+                      shape: BoxShape.circle,
+                      border: Border.all(color: badgeBorder, width: 2),
                     ),
                   ),
                 ),
-
-                // Active badge (bottom-right)
-                if (showActiveBadge)
-                  Positioned(
-                    right: 4,
-                    bottom: 4,
-                    child: Container(
-                      width: 12,
-                      height: 12,
-                      decoration: BoxDecoration(
-                        color: Colors.greenAccent,
-                        shape: BoxShape.circle,
-                        border: Border.all(color: badgeBorder, width: 2),
-                      ),
-                    ),
-                  ),
-              ],
-            ),
+            ],
           ),
         ),
       ),
-    );
-  }
+    ),
+  );
+}
 
-  List<Widget> _separate(List<Widget> children, Widget separator) {
-    if (children.isEmpty) return children;
-    return List<Widget>.generate(
-      children.length * 2 - 1,
-      (i) => i.isEven ? children[i ~/ 2] : separator,
-    );
-  }
+List<Widget> _separate(List<Widget> children, Widget separator) {
+  if (children.isEmpty) return children;
+  return List<Widget>.generate(
+    children.length * 2 - 1,
+    (i) => i.isEven ? children[i ~/ 2] : separator,
+  );
 }
 
 class _ChipsSkeleton extends StatelessWidget {
