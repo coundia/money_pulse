@@ -1,8 +1,5 @@
 // marketplace/presentation/pages/marketplace_page.dart
-//
-// TikTok-like vertical marketplace page with top search, companies row filter,
-// infinite vertical pager and right-drawer product details.
-// IMPORTANT: onRefreshAll invalidates pager so ALL truly reloads from API.
+// Orchestrates the vertical marketplace feed, search, companies filter, and right-drawer details. Ensures ALL invalidates the pager to perform a fresh API reload and logs user actions.
 
 import 'dart:ui';
 import 'package:flutter/material.dart';
@@ -43,6 +40,7 @@ class _MarketplacePageState extends ConsumerState<MarketplacePage> {
 
   void _applySearch() {
     final q = _searchCtrl.text.trim();
+    debugPrint('[MarketplacePage] applySearch q="$q"');
     ref
         .read(marketplacePagerProvider(widget.baseUri).notifier)
         .applyFilters(q: q);
@@ -51,6 +49,7 @@ class _MarketplacePageState extends ConsumerState<MarketplacePage> {
 
   void _clearSearch() {
     if (_searchCtrl.text.isEmpty) return;
+    debugPrint('[MarketplacePage] clearSearch');
     _searchCtrl.clear();
     ref
         .read(marketplacePagerProvider(widget.baseUri).notifier)
@@ -58,17 +57,16 @@ class _MarketplacePageState extends ConsumerState<MarketplacePage> {
     FocusManager.instance.primaryFocus?.unfocus();
   }
 
-  /// Called by CompaniesChipsRow when tapping "ALL".
-  /// It must clear local selection & search, and recreate the pager.
   void _refreshAll() {
+    debugPrint(
+      '[MarketplacePage] refreshAll -> invalidate pager & reset UI filters',
+    );
     setState(() => _selectedCompanyId = null);
     _searchCtrl.clear();
-
-    // 🔥 Dispose + recreate the pager -> triggers fresh API fetch with defaults.
     ref.invalidate(marketplacePagerProvider(widget.baseUri));
-
-    // (Optional) also reset scroll page controller if needed:
-    // _pageCtrl.jumpToPage(0);
+    if (_pageCtrl.hasClients) {
+      _pageCtrl.jumpToPage(0);
+    }
   }
 
   @override
@@ -108,8 +106,6 @@ class _MarketplacePageState extends ConsumerState<MarketplacePage> {
                 return _buildProductPage(context, item, state, notifier);
               },
             ),
-
-          // Search pill
           Positioned(
             top: 8 + MediaQuery.of(context).padding.top,
             left: 8,
@@ -121,8 +117,6 @@ class _MarketplacePageState extends ConsumerState<MarketplacePage> {
               onBack: () => Navigator.of(context).maybePop(),
             ),
           ),
-
-          // Companies row
           Positioned(
             top: 56 + MediaQuery.of(context).padding.top,
             left: 0,
@@ -132,19 +126,16 @@ class _MarketplacePageState extends ConsumerState<MarketplacePage> {
               selectedId: _selectedCompanyId,
               onSelect: (id) {
                 setState(() => _selectedCompanyId = id);
-                // If id is null => we don't call applyFilters here because
-                // onRefreshAll will invalidate and refetch. If id is not null,
-                // we filter by that company.
                 if (id != null) {
+                  debugPrint('[MarketplacePage] select company id="$id"');
                   ref
                       .read(marketplacePagerProvider(widget.baseUri).notifier)
                       .applyFilters(companyId: id);
                 }
               },
-              onRefreshAll: _refreshAll, // ← clears & invalidates provider
+              onRefreshAll: _refreshAll,
             ),
           ),
-
           if (state.isLoading)
             const Positioned(
               right: 16,
@@ -197,7 +188,6 @@ class _MarketplacePageState extends ConsumerState<MarketplacePage> {
           )
         else
           const ColoredBox(color: Colors.black),
-
         Container(
           decoration: BoxDecoration(
             gradient: LinearGradient(
@@ -211,7 +201,6 @@ class _MarketplacePageState extends ConsumerState<MarketplacePage> {
             ),
           ),
         ),
-
         if (multiple)
           Positioned(
             right: 16,
@@ -240,7 +229,6 @@ class _MarketplacePageState extends ConsumerState<MarketplacePage> {
               ),
             ),
           ),
-
         Positioned(
           left: 16,
           bottom: (ctaSpacing * 4) + safeBottom,
@@ -279,7 +267,6 @@ class _MarketplacePageState extends ConsumerState<MarketplacePage> {
             ],
           ),
         ),
-
         Positioned(
           right: 20,
           bottom: (ctaSpacing * 4) + safeBottom,
@@ -303,7 +290,6 @@ class _MarketplacePageState extends ConsumerState<MarketplacePage> {
             ],
           ),
         ),
-
         Positioned(
           right: 16,
           bottom: 16 + safeBottom,
@@ -360,8 +346,6 @@ class _MarketplacePageState extends ConsumerState<MarketplacePage> {
     ScaffoldMessenger.of(ctx).showSnackBar(SnackBar(content: Text(msg)));
   }
 }
-
-/* ---------- UI: Top Search Pill ---------- */
 
 class _TopSearchPill extends StatelessWidget {
   final TextEditingController controller;

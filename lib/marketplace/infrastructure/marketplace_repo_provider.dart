@@ -1,4 +1,6 @@
-// Riverpod provider.family to inject baseUri into MarketplaceRepository.
+// marketplace/infrastructure/marketplace_repo_provider.dart
+// Exposes MarketplaceRepository as a Riverpod provider.family injected with baseUri.
+
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'marketplace_repository.dart';
 
