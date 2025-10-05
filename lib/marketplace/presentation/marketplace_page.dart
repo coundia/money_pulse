@@ -4,6 +4,7 @@
 import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:money_pulse/marketplace/presentation/order_quick_panel.dart';
 import '../../presentation/widgets/right_drawer.dart';
 import '../../shared/formatters.dart';
 import '../application/marketplace_pager_controller.dart';
@@ -296,20 +297,17 @@ class _MarketplacePageState extends ConsumerState<MarketplacePage> {
           child: SizedBox(
             height: ctaHeight,
             child: FilledButton.icon(
-              onPressed: () => _snack(context, 'Commander ${item.name}'),
+              onPressed: () => showRightDrawer(
+                context,
+                widthFraction: MediaQuery.of(context).size.width < 520
+                    ? 0.96
+                    : 0.56,
+                heightFraction: 0.92,
+                child: OrderQuickPanel(item: item),
+              ),
               icon: const Icon(Icons.shopping_bag),
               label: const Text('Commander'),
-              style: FilledButton.styleFrom(
-                backgroundColor: Colors.green.shade600,
-                foregroundColor: Colors.white,
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 14,
-                  vertical: 10,
-                ),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(14),
-                ),
-              ),
+              // style inchangé
             ),
           ),
         ),
