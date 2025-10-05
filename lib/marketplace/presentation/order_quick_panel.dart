@@ -1,15 +1,12 @@
-// Right-drawer quick order panel: French UI, ENTER submits, AmountFieldQuickPad.
-// Prefills from OrderPrefs (immediate + listen). Refresh button re-applies last
-// saved order fields (esp. phone). Only phone is required. Amount stays tied to
-// the clicked product price and syncs with quantity when locked.
+// Right-drawer quick order panel: French UI, prefill from session/prefs, only phone required, amount is read-only and not editable, payment and delivery inputs hidden, small info popup explains total, ENTER submits, "Effacer" also clears persisted prefs.
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../shared/formatters.dart';
-import '../../presentation/features/transactions/widgets/amount_field_quickpad.dart';
 import '../application/order_prefs_controller.dart';
 import '../domain/entities/marketplace_item.dart';
+import 'package:money_pulse/onboarding/presentation/providers/access_session_provider.dart';
 
 class OrderQuickPanel extends ConsumerStatefulWidget {
   final MarketplaceItem item;
@@ -36,12 +33,9 @@ class _OrderQuickPanelState extends ConsumerState<OrderQuickPanel> {
   @override
   void initState() {
     super.initState();
-
-    // Always start with clicked product price in XOF
     _amountCtrl.text = widget.item.defaultPrice.toString();
-
-    // Immediate prefill from current provider value, then listen for late load
     WidgetsBinding.instance.addPostFrameCallback((_) {
+      _prefillFromSession();
       final cur = ref.read(orderPrefsProvider);
       if (cur.hasValue && !_didPrefill && cur.value != null) {
         _prefillFrom(cur.value!);
@@ -80,18 +74,26 @@ class _OrderQuickPanelState extends ConsumerState<OrderQuickPanel> {
   }
 
   Future<void> _reloadFromPrefs() async {
-    // Re-apply last saved order (esp. phone) without touching amount
     final cur = ref.read(orderPrefsProvider);
     if (cur.hasValue && cur.value != null) {
       _prefillFrom(cur.value!);
-      if (mounted) setState(() {});
     } else {
-      // Force a reload; listener above will fill when available
       ref.invalidate(orderPrefsProvider);
     }
+    final grant = ref.read(accessSessionProvider);
+    if (grant != null) {
+      final sessionPhone = grant.phone?.trim();
+      final sessionUsername = grant.username?.trim();
+      if (sessionPhone != null && sessionPhone.isNotEmpty) {
+        _phoneCtrl.text = sessionPhone;
+      } else if (sessionUsername != null && sessionUsername.isNotEmpty) {
+        _phoneCtrl.text = sessionUsername;
+      }
+    }
+    if (mounted) setState(() {});
   }
 
-  void _clearFormFields() {
+  Future<void> _clearFormFields() async {
     _nameCtrl.clear();
     _phoneCtrl.clear();
     _addressCtrl.clear();
@@ -101,21 +103,47 @@ class _OrderQuickPanelState extends ConsumerState<OrderQuickPanel> {
     _deliveryMethod = 'Retrait';
     _lockAmountToItems = true;
     _amountCtrl.text = widget.item.defaultPrice.toString();
-    setState(() {});
+    await ref.read(orderPrefsProvider.notifier).clear();
+    _didPrefill = false;
+    if (mounted) {
+      setState(() {});
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Formulaire réinitialisé et mémoire effacée'),
+        ),
+      );
+    }
   }
 
   Future<void> _submit() async {
     if (!_formKey.currentState!.validate()) return;
-
     final qty = _parseInt(_qtyCtrl.text, fallback: 1);
     final amountXof = _parseInt(
       _amountCtrl.text,
       fallback: widget.item.defaultPrice,
     );
 
+    var buyerName = _nameCtrl.text.trim();
+    if (buyerName.isEmpty) {
+      final grant = ref.read(accessSessionProvider);
+      buyerName = (grant?.username?.trim().isNotEmpty == true)
+          ? grant!.username!.trim()
+          : buyerName;
+    }
+
+    var phone = _phoneCtrl.text.trim();
+    if (phone.isEmpty) {
+      final grant = ref.read(accessSessionProvider);
+      phone = (grant?.phone?.trim().isNotEmpty == true)
+          ? grant!.phone!.trim()
+          : ((grant?.username?.trim().isNotEmpty == true)
+                ? grant!.username!.trim()
+                : phone);
+    }
+
     final prefs = OrderPrefs(
-      buyerName: _nameCtrl.text.trim().isEmpty ? null : _nameCtrl.text.trim(),
-      phone: _phoneCtrl.text.trim().isEmpty ? null : _phoneCtrl.text.trim(),
+      buyerName: buyerName.isEmpty ? null : buyerName,
+      phone: phone.isEmpty ? null : phone,
       address: _addressCtrl.text.trim().isEmpty
           ? null
           : _addressCtrl.text.trim(),
@@ -139,6 +167,29 @@ class _OrderQuickPanelState extends ConsumerState<OrderQuickPanel> {
       );
       Navigator.of(context).maybePop();
     }
+  }
+
+  void _showAmountInfoPopup() {
+    final qty = _parseInt(_qtyCtrl.text, fallback: 1);
+    final unit = widget.item.defaultPrice;
+    final total = _parseInt(_amountCtrl.text, fallback: unit);
+    final unitStr = '${Formatters.amountFromCents(unit * 100)} FCFA';
+    final totalStr = '${Formatters.amountFromCents(total * 100)} FCFA';
+    showDialog(
+      context: context,
+      builder: (_) => AlertDialog(
+        title: const Text('Détails du montant'),
+        content: Text(
+          'Quantité: $qty\nPrix unitaire: $unitStr\nTotal: $totalStr',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(),
+            child: const Text('Fermer'),
+          ),
+        ],
+      ),
+    );
   }
 
   @override
@@ -193,6 +244,11 @@ class _OrderQuickPanelState extends ConsumerState<OrderQuickPanel> {
                               ?.copyWith(fontWeight: FontWeight.w700),
                         ),
                       ),
+                      IconButton(
+                        tooltip: 'Détails du montant',
+                        onPressed: _showAmountInfoPopup,
+                        icon: const Icon(Icons.info_outline),
+                      ),
                       FilledButton.icon(
                         onPressed: _submit,
                         icon: const Icon(Icons.check),
@@ -201,36 +257,18 @@ class _OrderQuickPanelState extends ConsumerState<OrderQuickPanel> {
                     ],
                   ),
                   const SizedBox(height: 16),
-
-                  // Nom non obligatoire
-                  TextFormField(
-                    controller: _nameCtrl,
-                    decoration: const InputDecoration(labelText: 'Nom complet'),
-                    textInputAction: TextInputAction.next,
-                  ),
-                  const SizedBox(height: 12),
-
-                  // Téléphone OBLIGATOIRE
                   TextFormField(
                     controller: _phoneCtrl,
-                    decoration: const InputDecoration(labelText: 'Téléphone'),
+                    decoration: const InputDecoration(
+                      labelText: 'Telephone ou Identifiant',
+                    ),
                     keyboardType: TextInputType.phone,
                     textInputAction: TextInputAction.next,
                     validator: (v) => (v == null || v.trim().isEmpty)
-                        ? 'Téléphone requis'
+                        ? 'Identifiant requis'
                         : null,
                   ),
                   const SizedBox(height: 12),
-
-                  TextFormField(
-                    controller: _addressCtrl,
-                    decoration: const InputDecoration(
-                      labelText: 'Adresse de livraison',
-                    ),
-                    textInputAction: TextInputAction.next,
-                  ),
-                  const SizedBox(height: 12),
-
                   Row(
                     children: [
                       Expanded(
@@ -252,81 +290,12 @@ class _OrderQuickPanelState extends ConsumerState<OrderQuickPanel> {
                         ),
                       ),
                       const SizedBox(width: 12),
-                      Expanded(
-                        child: DropdownButtonFormField<String>(
-                          value: _paymentMethod,
-                          items: const [
-                            DropdownMenuItem(
-                              value: 'Espèces',
-                              child: Text('Espèces'),
-                            ),
-                            DropdownMenuItem(
-                              value: 'Mobile Money',
-                              child: Text('Mobile Money'),
-                            ),
-                            DropdownMenuItem(
-                              value: 'Transfert bancaire',
-                              child: Text('Transfert bancaire'),
-                            ),
-                          ],
-                          onChanged: (v) =>
-                              setState(() => _paymentMethod = v ?? 'Espèces'),
-                          decoration: const InputDecoration(
-                            labelText: 'Paiement',
-                          ),
-                        ),
-                      ),
+                      Expanded(child: SizedBox.shrink()),
                     ],
                   ),
                   const SizedBox(height: 12),
-
-                  DropdownButtonFormField<String>(
-                    value: _deliveryMethod,
-                    items: const [
-                      DropdownMenuItem(
-                        value: 'Retrait',
-                        child: Text('Retrait en magasin'),
-                      ),
-                      DropdownMenuItem(
-                        value: 'Livraison',
-                        child: Text('Livraison à domicile'),
-                      ),
-                    ],
-                    onChanged: (v) =>
-                        setState(() => _deliveryMethod = v ?? 'Retrait'),
-                    decoration: const InputDecoration(
-                      labelText: 'Mode de réception',
-                    ),
-                  ),
+                  const SizedBox.shrink(),
                   const SizedBox(height: 12),
-
-                  AmountFieldQuickPad(
-                    controller: _amountCtrl,
-                    quickUnits: const [
-                      0,
-                      2000,
-                      5000,
-                      10000,
-                      20000,
-                      50000,
-                      100000,
-                      200000,
-                      300000,
-                      400000,
-                      500000,
-                      1000000,
-                    ],
-                    lockToItems: _lockAmountToItems,
-                    onToggleLock: (v) {
-                      setState(() {
-                        _lockAmountToItems = v ?? true;
-                        if (_lockAmountToItems) _syncAmountFromItems();
-                      });
-                    },
-                    onChanged: () => setState(() {}),
-                  ),
-                  const SizedBox(height: 12),
-
                   TextFormField(
                     controller: _noteCtrl,
                     decoration: const InputDecoration(labelText: 'Notes'),
@@ -336,7 +305,6 @@ class _OrderQuickPanelState extends ConsumerState<OrderQuickPanel> {
                     onFieldSubmitted: (_) => _submit(),
                   ),
                   const SizedBox(height: 20),
-
                   FilledButton.icon(
                     onPressed: _submit,
                     icon: const Icon(Icons.check_circle),
@@ -373,12 +341,29 @@ class _OrderQuickPanelState extends ConsumerState<OrderQuickPanel> {
 
   void _prefillFrom(OrderPrefs s) {
     _nameCtrl.text = s.buyerName ?? _nameCtrl.text;
-    _phoneCtrl.text = s.phone ?? _phoneCtrl.text; // ← phone restored
+    _phoneCtrl.text = s.phone ?? _phoneCtrl.text;
     _addressCtrl.text = s.address ?? _addressCtrl.text;
     _noteCtrl.text = s.note ?? _noteCtrl.text;
     _qtyCtrl.text = (s.quantity ?? int.tryParse(_qtyCtrl.text) ?? 1).toString();
     _paymentMethod = s.paymentMethod ?? _paymentMethod;
     _deliveryMethod = s.deliveryMethod ?? _deliveryMethod;
-    // amount stays as clicked product price; not overridden
+  }
+
+  void _prefillFromSession() {
+    final grant = ref.read(accessSessionProvider);
+    if (grant == null) return;
+    if (_nameCtrl.text.trim().isEmpty &&
+        (grant.username?.trim().isNotEmpty ?? false)) {
+      _nameCtrl.text = grant.username!.trim();
+    }
+    if (_phoneCtrl.text.trim().isEmpty) {
+      final sessionPhone = grant.phone?.trim();
+      final sessionUsername = grant.username?.trim();
+      if (sessionPhone != null && sessionPhone.isNotEmpty) {
+        _phoneCtrl.text = sessionPhone;
+      } else if (sessionUsername != null && sessionUsername.isNotEmpty) {
+        _phoneCtrl.text = sessionUsername;
+      }
+    }
   }
 }
