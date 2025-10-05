@@ -1,10 +1,14 @@
-// Avatar-only horizontal companies row with:
-// - "All" (apps icon) that clears selection and reloads ALL products
-// - Optional "Refresh" that also clears filters via parent callback
-// - Transparent avatars, black glyphs, and active (green) badge
+// marketplace/presentation/widgets/companies_chips_row.dart
 //
-// Requires: marketplaceCompaniesProvider(baseUri) returning objects with
-// fields: id, name, code, isActive.
+// Avatar-only horizontal companies row:
+// - First "ALL" icon clears selection and RELOADS ALL products.
+// - Company logos = first letter in BLACK (with subtle white glow for dark bg).
+// - Transparent background, selectable ring, centered layout.
+// - Optional green "active" badge (bottom-right) like Facebook.
+//
+// Requires:
+// - marketplaceCompaniesProvider(baseUri) -> list of companies with: id, code, name, isActive
+// - Parent receives `onSelect` and (important) an `onRefreshAll()` to really reload.
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -14,14 +18,16 @@ class CompaniesChipsRow extends ConsumerStatefulWidget {
   final String baseUri;
   final String? selectedId;
   final void Function(String? id) onSelect;
-  final VoidCallback? onRefreshAll; // optional: parent-wide reset
+
+  /// Parent callback that MUST clear local selection and invalidate the pager.
+  final VoidCallback onRefreshAll;
 
   const CompaniesChipsRow({
     super.key,
     required this.baseUri,
     required this.selectedId,
     required this.onSelect,
-    this.onRefreshAll,
+    required this.onRefreshAll,
   });
 
   @override
@@ -30,13 +36,13 @@ class CompaniesChipsRow extends ConsumerStatefulWidget {
 
 class _CompaniesChipsRowState extends ConsumerState<CompaniesChipsRow> {
   final _scrollCtrl = ScrollController();
-  String? _overrideSelectedId; // optimistic override until parent updates
+  String? _overrideSelectedId; // optimistic selection
 
   @override
   void didUpdateWidget(covariant CompaniesChipsRow oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (oldWidget.selectedId != widget.selectedId) {
-      _overrideSelectedId = null; // sync to parent change
+      _overrideSelectedId = null; // sync with parent
     }
   }
 
@@ -60,8 +66,9 @@ class _CompaniesChipsRowState extends ConsumerState<CompaniesChipsRow> {
           data: (list) {
             if (list.isEmpty) return const SizedBox.shrink();
 
+            // ---- AVATARS ----
             final items = <Widget>[
-              // "All" — clears selection and asks parent to reload ALL products
+              // "ALL" icon — clears company filter and RELOADS ALL
               _avatarButton(
                 context: context,
                 tooltip: 'Tous les produits',
@@ -69,13 +76,13 @@ class _CompaniesChipsRowState extends ConsumerState<CompaniesChipsRow> {
                 showActiveBadge: false,
                 onTap: () {
                   Feedback.forTap(context);
+                  // UI: deselect any company immediately (local hint)
                   setState(() => _overrideSelectedId = null);
-                  widget.onSelect(
-                    null,
-                  ); // parent will call pager.setCompanyFilter(null)
-                  // Optional: also allow a full reset from parent (clear search, etc.)
-                  widget.onRefreshAll?.call();
-                  // Scroll back to start
+                  // Notify parent to clear selection + RELOAD (invalidate pager)
+                  widget.onSelect(null);
+                  widget.onRefreshAll();
+
+                  // Return chips row to the start
                   if (_scrollCtrl.hasClients) {
                     _scrollCtrl.animateTo(
                       0,
@@ -84,14 +91,10 @@ class _CompaniesChipsRowState extends ConsumerState<CompaniesChipsRow> {
                     );
                   }
                 },
-                child: const Icon(
-                  Icons.apps_rounded,
-                  size: 20,
-                  color: Colors.black,
-                ),
+                child: const Icon(Icons.apps, size: 22, color: Colors.black),
               ),
 
-              // Companies avatars
+              // Companies
               ...list.map((c) {
                 final selected = _effectiveSelectedId == c.id;
                 final label = (c.name ?? '').trim();
@@ -113,9 +116,7 @@ class _CompaniesChipsRowState extends ConsumerState<CompaniesChipsRow> {
                     Feedback.forTap(context);
                     final next = selected ? null : c.id; // toggle
                     setState(() => _overrideSelectedId = next);
-                    widget.onSelect(
-                      next,
-                    ); // parent will call pager.setCompanyFilter(next)
+                    widget.onSelect(next); // parent applies filter & reloads
                   },
                   child: Text(
                     first,
@@ -159,8 +160,8 @@ class _CompaniesChipsRowState extends ConsumerState<CompaniesChipsRow> {
   }
 }
 
-/// Avatar button with transparent background, selectable ring,
-/// optional green "active" badge (bottom-right), and black glyph.
+/// Avatar button with transparent background, selectable ring, and optional
+/// green "active" badge (bottom-right). Logo/Icons are forced to BLACK.
 Widget _avatarButton({
   required BuildContext context,
   required String tooltip,
@@ -178,7 +179,10 @@ Widget _avatarButton({
   final ringWidth = selected ? 2.4 : 1.2;
   final glow = selected ? cs.primary.withOpacity(0.25) : Colors.transparent;
 
+  // BLACK glyph (letter/icon), with subtle white glow for text glyphs only.
   const glyphColor = Colors.black;
+
+  // Border around the green badge to detach from background
   final badgeBorder = isDark
       ? Colors.black
       : Theme.of(context).scaffoldBackgroundColor;
@@ -197,7 +201,7 @@ Widget _avatarButton({
           width: 54,
           height: 54,
           decoration: BoxDecoration(
-            color: Colors.transparent,
+            color: Colors.transparent, // keep transparent background
             shape: BoxShape.circle,
             border: Border.all(color: ring, width: ringWidth),
             boxShadow: [
@@ -208,6 +212,7 @@ Widget _avatarButton({
           child: Stack(
             fit: StackFit.expand,
             children: [
+              // Centered glyph: force black (icons & text)
               Center(
                 child: IconTheme.merge(
                   data: const IconThemeData(color: glyphColor, size: 22),
@@ -215,6 +220,7 @@ Widget _avatarButton({
                     style: const TextStyle(
                       color: glyphColor,
                       fontWeight: FontWeight.w600,
+                      // glow helps the black letter stay visible on dark bg
                       shadows: [
                         Shadow(
                           color: Colors.white54,
@@ -227,6 +233,8 @@ Widget _avatarButton({
                   ),
                 ),
               ),
+
+              // Active badge (bottom-right)
               if (showActiveBadge)
                 Positioned(
                   right: 4,

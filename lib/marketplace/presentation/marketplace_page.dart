@@ -1,6 +1,8 @@
+// marketplace/presentation/pages/marketplace_page.dart
+//
 // TikTok-like vertical marketplace page with top search, companies row filter,
 // infinite vertical pager and right-drawer product details.
-// Persist selected company; "All" clears company filter and refetches.
+// IMPORTANT: onRefreshAll invalidates pager so ALL truly reloads from API.
 
 import 'dart:ui';
 import 'package:flutter/material.dart';
@@ -52,8 +54,21 @@ class _MarketplacePageState extends ConsumerState<MarketplacePage> {
     _searchCtrl.clear();
     ref
         .read(marketplacePagerProvider(widget.baseUri).notifier)
-        .applyFilters(q: '');
+        .applyFilters(q: null);
     FocusManager.instance.primaryFocus?.unfocus();
+  }
+
+  /// Called by CompaniesChipsRow when tapping "ALL".
+  /// It must clear local selection & search, and recreate the pager.
+  void _refreshAll() {
+    setState(() => _selectedCompanyId = null);
+    _searchCtrl.clear();
+
+    // 🔥 Dispose + recreate the pager -> triggers fresh API fetch with defaults.
+    ref.invalidate(marketplacePagerProvider(widget.baseUri));
+
+    // (Optional) also reset scroll page controller if needed:
+    // _pageCtrl.jumpToPage(0);
   }
 
   @override
@@ -94,7 +109,7 @@ class _MarketplacePageState extends ConsumerState<MarketplacePage> {
               },
             ),
 
-          // Search (frosted)
+          // Search pill
           Positioned(
             top: 8 + MediaQuery.of(context).padding.top,
             left: 8,
@@ -116,21 +131,17 @@ class _MarketplacePageState extends ConsumerState<MarketplacePage> {
               baseUri: widget.baseUri,
               selectedId: _selectedCompanyId,
               onSelect: (id) {
-                // Persist locally for UI highlight
                 setState(() => _selectedCompanyId = id);
-                // 🔑 Always call setCompanyFilter (null == ALL)
-                ref
-                    .read(marketplacePagerProvider(widget.baseUri).notifier)
-                    .setCompanyFilter(id);
+                // If id is null => we don't call applyFilters here because
+                // onRefreshAll will invalidate and refetch. If id is not null,
+                // we filter by that company.
+                if (id != null) {
+                  ref
+                      .read(marketplacePagerProvider(widget.baseUri).notifier)
+                      .applyFilters(companyId: id);
+                }
               },
-              onRefreshAll: () {
-                // Optional helper for a "clear everything" action
-                _searchCtrl.clear();
-                ref
-                    .read(marketplacePagerProvider(widget.baseUri).notifier)
-                    .resetAll();
-                setState(() => _selectedCompanyId = null);
-              },
+              onRefreshAll: _refreshAll, // ← clears & invalidates provider
             ),
           ),
 
@@ -187,7 +198,6 @@ class _MarketplacePageState extends ConsumerState<MarketplacePage> {
         else
           const ColoredBox(color: Colors.black),
 
-        // gradient overlay
         Container(
           decoration: BoxDecoration(
             gradient: LinearGradient(
@@ -202,7 +212,6 @@ class _MarketplacePageState extends ConsumerState<MarketplacePage> {
           ),
         ),
 
-        // images count badge (bottom)
         if (multiple)
           Positioned(
             right: 16,
@@ -232,7 +241,6 @@ class _MarketplacePageState extends ConsumerState<MarketplacePage> {
             ),
           ),
 
-        // info
         Positioned(
           left: 16,
           bottom: (ctaSpacing * 4) + safeBottom,
@@ -272,7 +280,6 @@ class _MarketplacePageState extends ConsumerState<MarketplacePage> {
           ),
         ),
 
-        // actions
         Positioned(
           right: 20,
           bottom: (ctaSpacing * 4) + safeBottom,
@@ -297,7 +304,6 @@ class _MarketplacePageState extends ConsumerState<MarketplacePage> {
           ),
         ),
 
-        // CTA
         Positioned(
           right: 16,
           bottom: 16 + safeBottom,

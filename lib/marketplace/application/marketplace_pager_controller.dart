@@ -1,5 +1,5 @@
 // Pager with query/company filters, error handling, request de-racing, and
-// per-item image index memory. resetAll() & setCompanyFilter() truly reload.
+// per-item image index memory. setCompanyFilter(null) ALWAYS reloads all.
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../domain/entities/marketplace_item.dart';
@@ -82,7 +82,7 @@ class MarketplacePagerState {
     category: null,
     minPrice: null,
     maxPrice: null,
-    statusesCsv: 'PUBLISH', // default public listing
+    statusesCsv: 'PUBLISH', // default listing
     companyId: null,
     errorText: null,
     imageIndexByItem: {},
@@ -93,8 +93,7 @@ class MarketplacePager extends StateNotifier<MarketplacePagerState> {
   final Ref ref;
   final String baseUri;
 
-  // Prevent stale overwrites when multiple loads race
-  int _reqSeq = 0;
+  int _reqSeq = 0; // drop stale responses
 
   MarketplacePager(this.ref, this.baseUri)
     : super(MarketplacePagerState.initial()) {
@@ -124,7 +123,7 @@ class MarketplacePager extends StateNotifier<MarketplacePagerState> {
         minPrice: state.minPrice,
         maxPrice: state.maxPrice,
         statusesCsv: state.statusesCsv,
-        companyId: state.companyId,
+        companyId: state.companyId, // null => ALL
       );
 
       if (mySeq != _reqSeq) return;
@@ -200,16 +199,23 @@ class MarketplacePager extends StateNotifier<MarketplacePagerState> {
     loadInitial();
   }
 
-  /// Called from UI: sets the company filter to `id` (or clears when null)
-  /// and **always** reloads page 0 from the API.
-  void setCompanyFilter(String? id) {
-    state = state.copyWith(companyId: _nz(id));
-    loadInitial();
+  void setCompanyFilter(String? companyId) {
+    // null => ALL. Also clear page & items so UI shows a fresh load.
+    state = state.copyWith(
+      companyId: (companyId == null || companyId.trim().isEmpty)
+          ? null
+          : companyId,
+      items: [],
+      page: 0,
+      hasNext: true,
+      errorText: null,
+      imageIndexByItem: {},
+    );
+    loadInitial(); // 🔁 hits API with current filters (and no "company" when null)
   }
 
-  /// Clear ALL filters back to defaults and reload.
   void resetAll() {
-    _reqSeq++; // cancel any in-flight results
+    _reqSeq++; // cancel in-flight
     state = state.copyWith(
       query: null,
       category: null,
