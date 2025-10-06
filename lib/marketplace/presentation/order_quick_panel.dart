@@ -1,4 +1,4 @@
-// Right-drawer quick order panel: French UI, prefill from session/prefs, only phone required, amount is read-only and not editable, payment and delivery inputs hidden, small info popup explains total, ENTER submits, "Effacer" also clears persisted prefs.
+// Mini right-drawer quick order panel: French UI, compact width/height (background product stays visible), prefill from session/prefs, only "Identifiant" required, amount read-only (no input), payment/delivery/note hidden, ENTER submits, "Effacer" clears persisted prefs. Includes refresh that pulls connected user info.
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -12,6 +12,12 @@ class OrderQuickPanel extends ConsumerStatefulWidget {
   final MarketplaceItem item;
   const OrderQuickPanel({super.key, required this.item});
 
+  /// Utilisez cette méthode pour ouvrir le panel en mode "mini popup".
+  /// Exemple d'appel:
+  /// await showRightDrawer(context, child: OrderQuickPanel(item: item), widthFraction: 0.62, heightFraction: 0.92);
+  static const double suggestedWidthFraction = 0.62;
+  static const double suggestedHeightFraction = 0.50;
+
   @override
   ConsumerState<OrderQuickPanel> createState() => _OrderQuickPanelState();
 }
@@ -21,7 +27,6 @@ class _OrderQuickPanelState extends ConsumerState<OrderQuickPanel> {
   final _nameCtrl = TextEditingController();
   final _phoneCtrl = TextEditingController();
   final _addressCtrl = TextEditingController();
-  final _noteCtrl = TextEditingController();
   final _qtyCtrl = TextEditingController(text: '1');
   final _amountCtrl = TextEditingController();
 
@@ -57,7 +62,6 @@ class _OrderQuickPanelState extends ConsumerState<OrderQuickPanel> {
     _nameCtrl.dispose();
     _phoneCtrl.dispose();
     _addressCtrl.dispose();
-    _noteCtrl.dispose();
     _qtyCtrl.dispose();
     _amountCtrl.dispose();
     super.dispose();
@@ -97,7 +101,6 @@ class _OrderQuickPanelState extends ConsumerState<OrderQuickPanel> {
     _nameCtrl.clear();
     _phoneCtrl.clear();
     _addressCtrl.clear();
-    _noteCtrl.clear();
     _qtyCtrl.text = '1';
     _paymentMethod = 'Espèces';
     _deliveryMethod = 'Retrait';
@@ -117,6 +120,7 @@ class _OrderQuickPanelState extends ConsumerState<OrderQuickPanel> {
 
   Future<void> _submit() async {
     if (!_formKey.currentState!.validate()) return;
+
     final qty = _parseInt(_qtyCtrl.text, fallback: 1);
     final amountXof = _parseInt(
       _amountCtrl.text,
@@ -147,7 +151,7 @@ class _OrderQuickPanelState extends ConsumerState<OrderQuickPanel> {
       address: _addressCtrl.text.trim().isEmpty
           ? null
           : _addressCtrl.text.trim(),
-      note: _noteCtrl.text.trim().isEmpty ? null : _noteCtrl.text.trim(),
+      note: null,
       quantity: qty,
       amountCents: amountXof * 100,
       paymentMethod: _paymentMethod,
@@ -175,19 +179,78 @@ class _OrderQuickPanelState extends ConsumerState<OrderQuickPanel> {
     final total = _parseInt(_amountCtrl.text, fallback: unit);
     final unitStr = '${Formatters.amountFromCents(unit * 100)} FCFA';
     final totalStr = '${Formatters.amountFromCents(total * 100)} FCFA';
+
     showDialog(
       context: context,
-      builder: (_) => AlertDialog(
-        title: const Text('Détails du montant'),
-        content: Text(
-          'Quantité: $qty\nPrix unitaire: $unitStr\nTotal: $totalStr',
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(),
-            child: const Text('Fermer'),
+      barrierDismissible: true,
+      builder: (_) => Align(
+        alignment: Alignment.centerRight,
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 380),
+          child: Material(
+            color: Theme.of(context).colorScheme.surface,
+            elevation: 16,
+            borderRadius: BorderRadius.circular(16),
+            clipBehavior: Clip.antiAlias,
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(20, 16, 20, 12),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Row(
+                    children: [
+                      const Icon(Icons.receipt_long, size: 20),
+                      const SizedBox(width: 8),
+                      Text(
+                        'Détails du montant',
+                        style: Theme.of(context).textTheme.titleMedium,
+                      ),
+                      const Spacer(),
+                      IconButton(
+                        tooltip: 'Fermer',
+                        onPressed: () => Navigator.of(context).pop(),
+                        icon: const Icon(Icons.close),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 8),
+                  Row(
+                    children: [
+                      const Text('Quantité'),
+                      const Spacer(),
+                      Text('$qty'),
+                    ],
+                  ),
+                  const SizedBox(height: 8),
+                  Row(
+                    children: [
+                      const Text('Prix unitaire'),
+                      const Spacer(),
+                      Text(unitStr),
+                    ],
+                  ),
+                  const Divider(height: 18),
+                  Row(
+                    children: [
+                      Text(
+                        'Total',
+                        style: Theme.of(context).textTheme.titleMedium
+                            ?.copyWith(fontWeight: FontWeight.w700),
+                      ),
+                      const Spacer(),
+                      Text(
+                        totalStr,
+                        style: Theme.of(context).textTheme.titleMedium
+                            ?.copyWith(fontWeight: FontWeight.w700),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 8),
+                ],
+              ),
+            ),
           ),
-        ],
+        ),
       ),
     );
   }
@@ -199,6 +262,8 @@ class _OrderQuickPanelState extends ConsumerState<OrderQuickPanel> {
       fallback: widget.item.defaultPrice,
     );
     final totalStr = '${Formatters.amountFromCents(amountXof * 100)} FCFA';
+
+    final isCompact = MediaQuery.of(context).size.width < 520;
 
     return Shortcuts(
       shortcuts: <LogicalKeySet, Intent>{
@@ -215,53 +280,100 @@ class _OrderQuickPanelState extends ConsumerState<OrderQuickPanel> {
         },
         child: FocusTraversalGroup(
           child: Scaffold(
-            appBar: AppBar(
-              title: Text('Commander • ${widget.item.name}'),
-              actions: [
-                IconButton(
-                  tooltip: 'Remplir avec la dernière commande',
-                  onPressed: _reloadFromPrefs,
-                  icon: const Icon(Icons.refresh),
+            backgroundColor: Theme.of(context).colorScheme.surface,
+            appBar: PreferredSize(
+              preferredSize: const Size.fromHeight(58),
+              child: AppBar(
+                elevation: 0,
+                centerTitle: false,
+                titleSpacing: 12,
+                title: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Commander',
+                      style: Theme.of(context).textTheme.titleLarge,
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      widget.item.name,
+                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                        color: Theme.of(context).colorScheme.onSurfaceVariant,
+                      ),
+                      overflow: TextOverflow.ellipsis,
+                      maxLines: 1,
+                    ),
+                  ],
                 ),
-                IconButton(
-                  tooltip: 'Effacer le formulaire',
-                  onPressed: _clearFormFields,
-                  icon: const Icon(Icons.delete_sweep),
-                ),
-              ],
+                actions: [
+                  IconButton(
+                    tooltip: 'Remplir avec la dernière commande',
+                    onPressed: _reloadFromPrefs,
+                    icon: const Icon(Icons.refresh),
+                  ),
+                  IconButton(
+                    tooltip: 'Effacer le formulaire',
+                    onPressed: _clearFormFields,
+                    icon: const Icon(Icons.delete_sweep),
+                  ),
+                ],
+              ),
             ),
             body: Form(
               key: _formKey,
               child: ListView(
-                padding: const EdgeInsets.all(16),
+                padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
                 children: [
-                  Row(
-                    children: [
-                      Expanded(
-                        child: Text(
-                          totalStr,
-                          style: Theme.of(context).textTheme.headlineSmall
-                              ?.copyWith(fontWeight: FontWeight.w700),
+                  Container(
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      borderRadius: BorderRadius.circular(14),
+                      border: Border.all(color: Theme.of(context).dividerColor),
+                    ),
+                    child: Row(
+                      children: [
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                'Total à payer',
+                                style: Theme.of(context).textTheme.labelMedium,
+                              ),
+                              const SizedBox(height: 4),
+                              Text(
+                                totalStr,
+                                style: Theme.of(context).textTheme.headlineSmall
+                                    ?.copyWith(fontWeight: FontWeight.w800),
+                              ),
+                              const SizedBox(height: 2),
+                              Text(
+                                'Prix unitaire: ${Formatters.amountFromCents(widget.item.defaultPrice * 100)} FCFA',
+                                style: Theme.of(context).textTheme.bodySmall,
+                              ),
+                            ],
+                          ),
                         ),
-                      ),
-                      IconButton(
-                        tooltip: 'Détails du montant',
-                        onPressed: _showAmountInfoPopup,
-                        icon: const Icon(Icons.info_outline),
-                      ),
-                      FilledButton.icon(
-                        onPressed: _submit,
-                        icon: const Icon(Icons.check),
-                        label: const Text('Valider'),
-                      ),
-                    ],
+                        IconButton(
+                          tooltip: 'Détails du montant',
+                          onPressed: _showAmountInfoPopup,
+                          icon: const Icon(Icons.info_outline),
+                        ),
+                      ],
+                    ),
                   ),
                   const SizedBox(height: 16),
+
                   TextFormField(
                     controller: _phoneCtrl,
+                    autofocus: false,
                     decoration: const InputDecoration(
-                      labelText: 'Telephone ou Identifiant',
+                      labelText: 'Identifiant',
+                      hintText: 'Téléphone ou identifiant',
                     ),
+                    inputFormatters: [
+                      FilteringTextInputFormatter.allow(RegExp(r'[0-9+\s-]')),
+                    ],
                     keyboardType: TextInputType.phone,
                     textInputAction: TextInputAction.next,
                     validator: (v) => (v == null || v.trim().isEmpty)
@@ -269,16 +381,18 @@ class _OrderQuickPanelState extends ConsumerState<OrderQuickPanel> {
                         : null,
                   ),
                   const SizedBox(height: 12),
+
                   Row(
                     children: [
                       Expanded(
                         child: TextFormField(
                           controller: _qtyCtrl,
+                          autofocus: true,
                           decoration: const InputDecoration(
                             labelText: 'Quantité',
                           ),
                           keyboardType: TextInputType.number,
-                          textInputAction: TextInputAction.next,
+                          textInputAction: TextInputAction.done,
                           onChanged: (_) {
                             if (_lockAmountToItems)
                               setState(() => _syncAmountFromItems());
@@ -289,48 +403,58 @@ class _OrderQuickPanelState extends ConsumerState<OrderQuickPanel> {
                           },
                         ),
                       ),
-                      const SizedBox(width: 12),
-                      Expanded(child: SizedBox.shrink()),
+                      if (!isCompact) const SizedBox(width: 12),
+                      if (!isCompact)
+                        Expanded(
+                          child: Container(
+                            padding: const EdgeInsets.all(12),
+                            decoration: BoxDecoration(
+                              borderRadius: BorderRadius.circular(12),
+                              color: Theme.of(
+                                context,
+                              ).colorScheme.surfaceVariant.withOpacity(0.45),
+                            ),
+                            child: Row(
+                              children: [
+                                const Icon(Icons.lock_outline, size: 16),
+                                const SizedBox(width: 8),
+                                Expanded(
+                                  child: Text(
+                                    'Montant calculé automatiquement',
+                                    style: Theme.of(
+                                      context,
+                                    ).textTheme.bodySmall,
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
                     ],
                   ),
-                  const SizedBox(height: 12),
-                  const SizedBox.shrink(),
-                  const SizedBox(height: 12),
-                  TextFormField(
-                    controller: _noteCtrl,
-                    decoration: const InputDecoration(labelText: 'Notes'),
-                    minLines: 2,
-                    maxLines: 4,
-                    textInputAction: TextInputAction.done,
-                    onFieldSubmitted: (_) => _submit(),
-                  ),
-                  const SizedBox(height: 20),
-                  FilledButton.icon(
-                    onPressed: _submit,
-                    icon: const Icon(Icons.check_circle),
-                    label: const Text('Valider la commande'),
-                  ),
+
+                  const SizedBox(height: 18),
+
+                  // Pas de champ montant: lecture seule affichée en haut
+                  // Paiement et Mode de réception masqués pour simplicité
+                  const SizedBox(height: 6),
                 ],
               ),
             ),
-            bottomNavigationBar: Padding(
-              padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
-              child: Row(
-                children: [
-                  Expanded(
-                    child: Text(
-                      'Total: $totalStr',
-                      style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                        fontWeight: FontWeight.w700,
-                      ),
+            bottomNavigationBar: SafeArea(
+              top: false,
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(16, 10, 16, 16),
+                child: Row(
+                  children: [
+                    FilledButton.icon(
+                      onPressed: _submit,
+                      icon: const Icon(Icons.check_circle),
+                      label: const Text('Valider'),
                     ),
-                  ),
-                  OutlinedButton.icon(
-                    onPressed: () => Navigator.of(context).maybePop(),
-                    icon: const Icon(Icons.close),
-                    label: const Text('Fermer'),
-                  ),
-                ],
+                  ],
+                ),
               ),
             ),
           ),
@@ -343,7 +467,6 @@ class _OrderQuickPanelState extends ConsumerState<OrderQuickPanel> {
     _nameCtrl.text = s.buyerName ?? _nameCtrl.text;
     _phoneCtrl.text = s.phone ?? _phoneCtrl.text;
     _addressCtrl.text = s.address ?? _addressCtrl.text;
-    _noteCtrl.text = s.note ?? _noteCtrl.text;
     _qtyCtrl.text = (s.quantity ?? int.tryParse(_qtyCtrl.text) ?? 1).toString();
     _paymentMethod = s.paymentMethod ?? _paymentMethod;
     _deliveryMethod = s.deliveryMethod ?? _deliveryMethod;

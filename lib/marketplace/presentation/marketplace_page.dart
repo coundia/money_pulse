@@ -1,5 +1,6 @@
-// marketplace/presentation/pages/marketplace_page.dart
-// Orchestrates the vertical marketplace feed, search, companies filter, and right-drawer details. Ensures ALL invalidates the pager to perform a fresh API reload and logs user actions.
+// Orchestrates the vertical marketplace feed, search, companies filter, and right-drawer details.
+// Ensures "ALL" invalidates the pager to perform a fresh API reload and logs user actions.
+// Improves a11y, adds explicit debug logs (scroll/loadNext, actions), and uses OrderQuickPanel suggested mini-popup size.
 
 import 'dart:ui';
 import 'package:flutter/material.dart';
@@ -98,7 +99,11 @@ class _MarketplacePageState extends ConsumerState<MarketplacePage> {
               scrollDirection: Axis.vertical,
               itemCount: state.items.length,
               onPageChanged: (index) {
+                debugPrint(
+                  '[MarketplacePage] onPageChanged index=$index/${state.items.length - 1}',
+                );
                 if (index >= state.items.length - 2 && state.hasNext) {
+                  debugPrint('[MarketplacePage] nearing end -> loadNext()');
                   notifier.loadNext();
                 }
               },
@@ -107,6 +112,8 @@ class _MarketplacePageState extends ConsumerState<MarketplacePage> {
                 return _buildProductPage(context, item, state, notifier);
               },
             ),
+
+          // Search pill
           Positioned(
             top: 8 + MediaQuery.of(context).padding.top,
             left: 8,
@@ -115,9 +122,14 @@ class _MarketplacePageState extends ConsumerState<MarketplacePage> {
               controller: _searchCtrl,
               onSubmit: _applySearch,
               onClear: _clearSearch,
-              onBack: () => Navigator.of(context).maybePop(),
+              onBack: () {
+                debugPrint('[MarketplacePage] back from search pill');
+                Navigator.of(context).maybePop();
+              },
             ),
           ),
+
+          // Companies row
           Positioned(
             top: 56 + MediaQuery.of(context).padding.top,
             left: 0,
@@ -137,6 +149,7 @@ class _MarketplacePageState extends ConsumerState<MarketplacePage> {
               onRefreshAll: _refreshAll,
             ),
           ),
+
           if (state.isLoading)
             const Positioned(
               right: 16,
@@ -189,6 +202,8 @@ class _MarketplacePageState extends ConsumerState<MarketplacePage> {
           )
         else
           const ColoredBox(color: Colors.black),
+
+        // Top/bottom gradient overlays for readability
         Container(
           decoration: BoxDecoration(
             gradient: LinearGradient(
@@ -202,34 +217,41 @@ class _MarketplacePageState extends ConsumerState<MarketplacePage> {
             ),
           ),
         ),
+
+        // Image counter when multiple
         if (multiple)
           Positioned(
             right: 16,
             bottom: ctaSpacing + safeBottom + ctaHeight + 8,
-            child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-              decoration: BoxDecoration(
-                color: Colors.black54,
-                borderRadius: BorderRadius.circular(12),
-                border: Border.all(color: Colors.white24, width: 0.6),
-              ),
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  const Icon(
-                    Icons.photo_library_outlined,
-                    color: Colors.white,
-                    size: 16,
-                  ),
-                  const SizedBox(width: 6),
-                  Text(
-                    '${urls.length}',
-                    style: const TextStyle(color: Colors.white),
-                  ),
-                ],
+            child: Semantics(
+              label: 'Nombre d’images: ${urls.length}',
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                decoration: BoxDecoration(
+                  color: Colors.black54,
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: Colors.white24, width: 0.6),
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    const Icon(
+                      Icons.photo_library_outlined,
+                      color: Colors.white,
+                      size: 16,
+                    ),
+                    const SizedBox(width: 6),
+                    Text(
+                      '${urls.length}',
+                      style: const TextStyle(color: Colors.white),
+                    ),
+                  ],
+                ),
               ),
             ),
           ),
+
+        // Title / price / description
         Positioned(
           left: 16,
           bottom: (ctaSpacing * 4) + safeBottom,
@@ -268,6 +290,8 @@ class _MarketplacePageState extends ConsumerState<MarketplacePage> {
             ],
           ),
         ),
+
+        // Actions column (details/share)
         Positioned(
           right: 20,
           bottom: (ctaSpacing * 4) + safeBottom,
@@ -277,37 +301,56 @@ class _MarketplacePageState extends ConsumerState<MarketplacePage> {
               _actionBtn(
                 icon: Icons.visibility,
                 label: 'Détails',
-                onTap: () => showRightDrawer(
-                  context,
-                  child: ProductViewPanel(item: item),
-                ),
+                onTap: () {
+                  debugPrint(
+                    '[MarketplacePage] open details for item="${item.name}" id=${item.id}',
+                  );
+                  showRightDrawer(context, child: ProductViewPanel(item: item));
+                },
               ),
               const SizedBox(height: 16),
               _actionBtn(
                 icon: Icons.share,
                 label: 'Partager',
-                onTap: () => _snack(context, 'Partager ${item.name}'),
+                onTap: () {
+                  debugPrint(
+                    '[MarketplacePage] share item="${item.name}" id=${item.id}',
+                  );
+                  _snack(context, 'Partager ${item.name}');
+                },
               ),
             ],
           ),
         ),
+
+        // CTA Commander (opens mini right-drawer order)
         Positioned(
           right: 16,
           bottom: 16 + safeBottom,
           child: SizedBox(
             height: ctaHeight,
-            child: FilledButton.icon(
-              onPressed: () => showRightDrawer(
-                context,
-                widthFraction: MediaQuery.of(context).size.width < 520
-                    ? 0.96
-                    : 0.56,
-                heightFraction: 0.92,
-                child: OrderQuickPanel(item: item),
+            child: Semantics(
+              button: true,
+              label: 'Commander ${item.name}',
+              child: FilledButton.icon(
+                onPressed: () {
+                  debugPrint(
+                    '[MarketplacePage] open order panel for item="${item.name}" unit=${item.defaultPrice}XOF',
+                  );
+                  final w = MediaQuery.of(context).size.width;
+                  final widthFraction = w < 520
+                      ? 0.96
+                      : OrderQuickPanel.suggestedWidthFraction;
+                  showRightDrawer(
+                    context,
+                    widthFraction: widthFraction,
+                    heightFraction: OrderQuickPanel.suggestedHeightFraction,
+                    child: OrderQuickPanel(item: item),
+                  );
+                },
+                icon: const Icon(Icons.shopping_bag),
+                label: const Text('Commander'),
               ),
-              icon: const Icon(Icons.shopping_bag),
-              label: const Text('Commander'),
-              // style inchangé
             ),
           ),
         ),
@@ -325,13 +368,17 @@ class _MarketplacePageState extends ConsumerState<MarketplacePage> {
         InkWell(
           onTap: onTap,
           borderRadius: BorderRadius.circular(30),
-          child: Container(
-            padding: const EdgeInsets.all(8),
-            decoration: const BoxDecoration(
-              shape: BoxShape.circle,
-              color: Colors.black54,
+          child: Semantics(
+            button: true,
+            label: label,
+            child: Container(
+              padding: const EdgeInsets.all(8),
+              decoration: const BoxDecoration(
+                shape: BoxShape.circle,
+                color: Colors.black54,
+              ),
+              child: Icon(icon, color: Colors.white, size: 32),
             ),
-            child: Icon(icon, color: Colors.white, size: 32),
           ),
         ),
         const SizedBox(height: 4),
@@ -344,6 +391,8 @@ class _MarketplacePageState extends ConsumerState<MarketplacePage> {
     ScaffoldMessenger.of(ctx).showSnackBar(SnackBar(content: Text(msg)));
   }
 }
+
+/* ---------- UI: Top Search Pill ---------- */
 
 class _TopSearchPill extends StatelessWidget {
   final TextEditingController controller;
