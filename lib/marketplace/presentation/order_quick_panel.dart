@@ -1,4 +1,4 @@
-// Mini right-drawer quick order panel: French UI, compact width/height (background product stays visible), prefill from session/prefs, only "Identifiant" required, amount read-only (no input), payment/delivery/note hidden, ENTER submits, "Effacer" clears persisted prefs. Includes refresh that pulls connected user info.
+// Mini right-drawer quick order panel (French UI): compact size so product stays visible; prefill from session/prefs; only "Identifiant" required; amount read-only via header; quantity +/- controls; ENTER submits; posts to API v1; clears prefs on reset; always logs payload.
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -7,14 +7,19 @@ import '../../../shared/formatters.dart';
 import '../application/order_prefs_controller.dart';
 import '../domain/entities/marketplace_item.dart';
 import 'package:money_pulse/onboarding/presentation/providers/access_session_provider.dart';
+import '../domain/entities/order_command_request.dart';
+import '../infrastructure/order_command_repo_provider.dart';
+import 'package:flutter/foundation.dart';
 
 class OrderQuickPanel extends ConsumerStatefulWidget {
   final MarketplaceItem item;
-  const OrderQuickPanel({super.key, required this.item});
+  final String baseUri;
+  const OrderQuickPanel({
+    super.key,
+    required this.item,
+    this.baseUri = 'http://127.0.0.1:8095',
+  });
 
-  /// Utilisez cette méthode pour ouvrir le panel en mode "mini popup".
-  /// Exemple d'appel:
-  /// await showRightDrawer(context, child: OrderQuickPanel(item: item), widthFraction: 0.62, heightFraction: 0.92);
   static const double suggestedWidthFraction = 0.62;
   static const double suggestedHeightFraction = 0.50;
 
@@ -30,10 +35,11 @@ class _OrderQuickPanelState extends ConsumerState<OrderQuickPanel> {
   final _qtyCtrl = TextEditingController(text: '1');
   final _amountCtrl = TextEditingController();
 
-  String _paymentMethod = 'Espèces';
-  String _deliveryMethod = 'Retrait';
+  String _paymentMethod = 'NA';
+  String _deliveryMethod = 'NA';
   bool _lockAmountToItems = true;
   bool _didPrefill = false;
+  bool _submitting = false;
 
   @override
   void initState() {
@@ -67,14 +73,28 @@ class _OrderQuickPanelState extends ConsumerState<OrderQuickPanel> {
     super.dispose();
   }
 
-  int _parseInt(String v, {int fallback = 0}) {
-    return int.tryParse(v.replaceAll(RegExp(r'[^0-9]'), '')) ?? fallback;
-  }
+  int _parseInt(String v, {int fallback = 0}) =>
+      int.tryParse(v.replaceAll(RegExp(r'[^0-9]'), '')) ?? fallback;
 
   void _syncAmountFromItems() {
     final qty = _parseInt(_qtyCtrl.text, fallback: 1);
     final unitXof = widget.item.defaultPrice;
     _amountCtrl.text = (qty * unitXof).toString();
+  }
+
+  void _setQty(int q) {
+    if (q < 1) q = 1;
+    _qtyCtrl.text = q.toString();
+    if (_lockAmountToItems) {
+      setState(() => _syncAmountFromItems());
+    } else {
+      setState(() {});
+    }
+  }
+
+  void _incQty(int delta) {
+    final cur = _parseInt(_qtyCtrl.text, fallback: 1);
+    _setQty(cur + delta);
   }
 
   Future<void> _reloadFromPrefs() async {
@@ -102,8 +122,8 @@ class _OrderQuickPanelState extends ConsumerState<OrderQuickPanel> {
     _phoneCtrl.clear();
     _addressCtrl.clear();
     _qtyCtrl.text = '1';
-    _paymentMethod = 'Espèces';
-    _deliveryMethod = 'Retrait';
+    _paymentMethod = 'NA';
+    _deliveryMethod = 'NA';
     _lockAmountToItems = true;
     _amountCtrl.text = widget.item.defaultPrice.toString();
     await ref.read(orderPrefsProvider.notifier).clear();
@@ -120,56 +140,95 @@ class _OrderQuickPanelState extends ConsumerState<OrderQuickPanel> {
 
   Future<void> _submit() async {
     if (!_formKey.currentState!.validate()) return;
+    if (_submitting) return;
 
     final qty = _parseInt(_qtyCtrl.text, fallback: 1);
+    // Montant calculé en XOF (entier) → l'API accepte un "number"
     final amountXof = _parseInt(
       _amountCtrl.text,
       fallback: widget.item.defaultPrice,
     );
+    final amountCents = amountXof * 100; // on reste cohérent avec "cents"
 
     var buyerName = _nameCtrl.text.trim();
+    final grant = ref.read(accessSessionProvider);
     if (buyerName.isEmpty) {
-      final grant = ref.read(accessSessionProvider);
-      buyerName = (grant?.username?.trim().isNotEmpty == true)
-          ? grant!.username!.trim()
-          : buyerName;
+      final u = grant?.username?.trim();
+      if (u != null && u.isNotEmpty) buyerName = u;
     }
 
-    var phone = _phoneCtrl.text.trim();
-    if (phone.isEmpty) {
-      final grant = ref.read(accessSessionProvider);
-      phone = (grant?.phone?.trim().isNotEmpty == true)
-          ? grant!.phone!.trim()
-          : ((grant?.username?.trim().isNotEmpty == true)
-                ? grant!.username!.trim()
-                : phone);
+    var identOrPhone = _phoneCtrl.text.trim();
+    if (identOrPhone.isEmpty) {
+      final p = grant?.phone?.trim();
+      final u = grant?.username?.trim();
+      if (p != null && p.isNotEmpty) {
+        identOrPhone = p;
+      } else if (u != null && u.isNotEmpty) {
+        identOrPhone = u;
+      }
     }
 
     final prefs = OrderPrefs(
       buyerName: buyerName.isEmpty ? null : buyerName,
-      phone: phone.isEmpty ? null : phone,
+      phone: identOrPhone.isEmpty ? null : identOrPhone,
       address: _addressCtrl.text.trim().isEmpty
           ? null
           : _addressCtrl.text.trim(),
       note: null,
       quantity: qty,
-      amountCents: amountXof * 100,
+      amountCents: amountCents,
       paymentMethod: _paymentMethod,
       deliveryMethod: _deliveryMethod,
     );
 
-    await ref.read(orderPrefsProvider.notifier).save(prefs);
+    // --- Build API v1 payload
+    final cmd = OrderCommandRequest(
+      productId: widget.item.id,
+      userId: null, // pas disponible pour l’instant (à brancher si tu l’as)
+      identifiant: prefs.phone ?? '',
+      telephone: prefs.phone, // on envoie aussi dans "telephone"
+      mail: grant?.email,
+      ville: null, // peut être complété si tu as l’info
+      remoteId: null,
+      localId: null,
+      status: null,
+      buyerName: prefs.buyerName,
+      address: prefs.address,
+      notes: null, // notes masquées dans l’UI mini
+      paymentMethod: prefs.paymentMethod,
+      deliveryMethod: prefs.deliveryMethod,
+      amountCents: prefs.amountCents ?? amountCents,
+      quantity: prefs.quantity ?? qty,
+      dateCommand: DateTime.now().toUtc(),
+    );
 
-    if (mounted) {
-      final totalStr = '${Formatters.amountFromCents(amountXof * 100)} FCFA';
+    // --- Log exhaustif du payload avant envoi
+    debugPrint(
+      '[OrderQuickPanel] about to send command payload.map=${cmd.toJson()}',
+    );
+
+    setState(() => _submitting = true);
+    try {
+      await ref.read(orderCommandRepoProvider(widget.baseUri)).send(cmd);
+      await ref.read(orderPrefsProvider.notifier).save(prefs);
+      if (!mounted) return;
+      final totalStr =
+          '${Formatters.amountFromCents((prefs.amountCents ?? amountCents))} FCFA';
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(
-            'Commande enregistrée • ${widget.item.name} • $qty x • $totalStr',
+            'Commande envoyée • ${widget.item.name} • ${prefs.quantity ?? qty} x • $totalStr',
           ),
         ),
       );
       Navigator.of(context).maybePop();
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('Échec de l’envoi: $e')));
+    } finally {
+      if (mounted) setState(() => _submitting = false);
     }
   }
 
@@ -263,8 +322,6 @@ class _OrderQuickPanelState extends ConsumerState<OrderQuickPanel> {
     );
     final totalStr = '${Formatters.amountFromCents(amountXof * 100)} FCFA';
 
-    final isCompact = MediaQuery.of(context).size.width < 520;
-
     return Shortcuts(
       shortcuts: <LogicalKeySet, Intent>{
         LogicalKeySet(LogicalKeyboardKey.enter): ActivateIntent(),
@@ -308,12 +365,12 @@ class _OrderQuickPanelState extends ConsumerState<OrderQuickPanel> {
                 actions: [
                   IconButton(
                     tooltip: 'Remplir avec la dernière commande',
-                    onPressed: _reloadFromPrefs,
+                    onPressed: _submitting ? null : _reloadFromPrefs,
                     icon: const Icon(Icons.refresh),
                   ),
                   IconButton(
                     tooltip: 'Effacer le formulaire',
-                    onPressed: _clearFormFields,
+                    onPressed: _submitting ? null : _clearFormFields,
                     icon: const Icon(Icons.delete_sweep),
                   ),
                 ],
@@ -363,10 +420,8 @@ class _OrderQuickPanelState extends ConsumerState<OrderQuickPanel> {
                     ),
                   ),
                   const SizedBox(height: 16),
-
                   TextFormField(
                     controller: _phoneCtrl,
-                    autofocus: false,
                     decoration: const InputDecoration(
                       labelText: 'Identifiant',
                       hintText: 'Téléphone ou identifiant',
@@ -379,66 +434,23 @@ class _OrderQuickPanelState extends ConsumerState<OrderQuickPanel> {
                     validator: (v) => (v == null || v.trim().isEmpty)
                         ? 'Identifiant requis'
                         : null,
+                    enabled: !_submitting,
                   ),
                   const SizedBox(height: 12),
-
-                  Row(
-                    children: [
-                      Expanded(
-                        child: TextFormField(
-                          controller: _qtyCtrl,
-                          autofocus: true,
-                          decoration: const InputDecoration(
-                            labelText: 'Quantité',
-                          ),
-                          keyboardType: TextInputType.number,
-                          textInputAction: TextInputAction.done,
-                          onChanged: (_) {
-                            if (_lockAmountToItems)
-                              setState(() => _syncAmountFromItems());
-                          },
-                          validator: (v) {
-                            final q = _parseInt(v ?? '');
-                            return q <= 0 ? 'Quantité invalide' : null;
-                          },
-                        ),
-                      ),
-                      if (!isCompact) const SizedBox(width: 12),
-                      if (!isCompact)
-                        Expanded(
-                          child: Container(
-                            padding: const EdgeInsets.all(12),
-                            decoration: BoxDecoration(
-                              borderRadius: BorderRadius.circular(12),
-                              color: Theme.of(
-                                context,
-                              ).colorScheme.surfaceVariant.withOpacity(0.45),
-                            ),
-                            child: Row(
-                              children: [
-                                const Icon(Icons.lock_outline, size: 16),
-                                const SizedBox(width: 8),
-                                Expanded(
-                                  child: Text(
-                                    'Montant calculé automatiquement',
-                                    style: Theme.of(
-                                      context,
-                                    ).textTheme.bodySmall,
-                                    overflow: TextOverflow.ellipsis,
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-                        ),
-                    ],
+                  _QtyWithStepper(
+                    controller: _qtyCtrl,
+                    onMinus: _submitting ? null : () => _incQty(-1),
+                    onPlus: _submitting ? null : () => _incQty(1),
+                    onChanged: () {
+                      if (_lockAmountToItems) {
+                        setState(() => _syncAmountFromItems());
+                      } else {
+                        setState(() {});
+                      }
+                    },
+                    enabled: !_submitting,
                   ),
-
                   const SizedBox(height: 18),
-
-                  // Pas de champ montant: lecture seule affichée en haut
-                  // Paiement et Mode de réception masqués pour simplicité
-                  const SizedBox(height: 6),
                 ],
               ),
             ),
@@ -448,10 +460,25 @@ class _OrderQuickPanelState extends ConsumerState<OrderQuickPanel> {
                 padding: const EdgeInsets.fromLTRB(16, 10, 16, 16),
                 child: Row(
                   children: [
+                    Expanded(
+                      child: Text(
+                        totalStr,
+                        overflow: TextOverflow.ellipsis,
+                        style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                          fontWeight: FontWeight.w800,
+                        ),
+                      ),
+                    ),
                     FilledButton.icon(
-                      onPressed: _submit,
-                      icon: const Icon(Icons.check_circle),
-                      label: const Text('Valider'),
+                      onPressed: _submitting ? null : _submit,
+                      icon: _submitting
+                          ? const SizedBox(
+                              width: 18,
+                              height: 18,
+                              child: CircularProgressIndicator(strokeWidth: 2),
+                            )
+                          : const Icon(Icons.check_circle),
+                      label: Text(_submitting ? 'Envoi…' : 'Valider'),
                     ),
                   ],
                 ),
@@ -488,5 +515,78 @@ class _OrderQuickPanelState extends ConsumerState<OrderQuickPanel> {
         _phoneCtrl.text = sessionUsername;
       }
     }
+  }
+}
+
+class _QtyWithStepper extends StatefulWidget {
+  final TextEditingController controller;
+  final VoidCallback? onMinus;
+  final VoidCallback? onPlus;
+  final VoidCallback onChanged;
+  final bool enabled;
+
+  const _QtyWithStepper({
+    required this.controller,
+    required this.onMinus,
+    required this.onPlus,
+    required this.onChanged,
+    this.enabled = true,
+  });
+
+  @override
+  State<_QtyWithStepper> createState() => _QtyWithStepperState();
+}
+
+class _QtyWithStepperState extends State<_QtyWithStepper> {
+  int _parseInt(String v, {int fallback = 1}) =>
+      int.tryParse(v.replaceAll(RegExp(r'[^0-9]'), '')) ?? fallback;
+
+  @override
+  Widget build(BuildContext context) {
+    final qty = _parseInt(widget.controller.text, fallback: 1);
+    final canDec = qty > 1 && widget.enabled;
+
+    return Row(
+      children: [
+        Expanded(
+          child: TextFormField(
+            controller: widget.controller,
+            enabled: widget.enabled,
+            decoration: const InputDecoration(labelText: 'Quantité'),
+            keyboardType: TextInputType.number,
+            textInputAction: TextInputAction.done,
+            onChanged: (_) => widget.onChanged(),
+            validator: (v) {
+              final q = _parseInt(v ?? '');
+              return q <= 0 ? 'Quantité invalide' : null;
+            },
+          ),
+        ),
+        const SizedBox(width: 10),
+        SizedBox(
+          height: 44,
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Tooltip(
+                message: 'Diminuer',
+                child: IconButton.filledTonal(
+                  onPressed: canDec ? widget.onMinus : null,
+                  icon: const Icon(Icons.remove),
+                ),
+              ),
+              const SizedBox(width: 6),
+              Tooltip(
+                message: 'Augmenter',
+                child: IconButton.filled(
+                  onPressed: widget.enabled ? widget.onPlus : null,
+                  icon: const Icon(Icons.add),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
   }
 }
