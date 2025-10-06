@@ -1,14 +1,14 @@
 // Vertical marketplace feed with search and companies filter.
-// TikTok-like floating actions ("Message" and "Commander").
-// Only ONE image per product (first URL), no horizontal swiping.
-// WhatsApp opening is made robust on iOS by avoiding canLaunchUrl()
-// and trying native -> web fallback with try/catch.
+// TikTok-like layout: top-left search, companies chips; each product shows a single image.
+// Bottom-left: a pill "Message • <Boutique>" above compact product info; bottom-right: "Commander" bubble.
+// WhatsApp launcher is robust (native scheme first, then web fallback).
+// Logs key interactions; "ALL" invalidates the pager to force a fresh API reload.
 
 import 'dart:ui';
 import 'package:flutter/material.dart';
-import 'package:flutter/gestures.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:url_launcher/url_launcher.dart';
+
 import 'package:money_pulse/marketplace/presentation/order_quick_panel.dart';
 import '../../presentation/widgets/right_drawer.dart';
 import '../../shared/formatters.dart';
@@ -69,9 +69,7 @@ class _MarketplacePageState extends ConsumerState<MarketplacePage> {
     setState(() => _selectedCompanyId = null);
     _searchCtrl.clear();
     ref.invalidate(marketplacePagerProvider(widget.baseUri));
-    if (_pageCtrl.hasClients) {
-      _pageCtrl.jumpToPage(0);
-    }
+    if (_pageCtrl.hasClients) _pageCtrl.jumpToPage(0);
   }
 
   @override
@@ -112,7 +110,7 @@ class _MarketplacePageState extends ConsumerState<MarketplacePage> {
               },
               itemBuilder: (context, index) {
                 final item = state.items[index];
-                return _buildProductPage(context, item, state, notifier);
+                return _buildProductPage(context, item);
               },
             ),
 
@@ -168,145 +166,127 @@ class _MarketplacePageState extends ConsumerState<MarketplacePage> {
     );
   }
 
-  Widget _buildProductPage(
-    BuildContext context,
-    MarketplaceItem item,
-    MarketplacePagerState state,
-    MarketplacePager notifier,
-  ) {
+  Widget _buildProductPage(BuildContext context, MarketplaceItem item) {
     final theme = Theme.of(context);
     final urls = item.imageUrls.where((e) => e.trim().isNotEmpty).toList();
     final firstUrl = urls.isNotEmpty ? urls.first : null;
 
     final safeBottom = MediaQuery.of(context).padding.bottom;
-    const ctaSpacing = 16.0;
 
     return Stack(
       fit: StackFit.expand,
       children: [
-        // ❗ Only ONE image (first URL) — no horizontal pager
+        // Single image (first URL)
         if (firstUrl != null)
           FadeInImage.assetNetwork(
             placeholder: 'assets/transparent_1px.png',
             image: firstUrl,
             fit: BoxFit.cover,
-            fadeInDuration: const Duration(milliseconds: 150),
+            fadeInDuration: const Duration(milliseconds: 180),
             imageErrorBuilder: (_, __, ___) =>
                 const ColoredBox(color: Colors.black),
           )
         else
           const ColoredBox(color: Colors.black),
 
-        // Top/bottom gradient overlays
+        // Gradient overlays
         Container(
           decoration: BoxDecoration(
             gradient: LinearGradient(
               colors: [
-                Colors.black.withOpacity(0.7),
+                Colors.black.withOpacity(0.75),
                 Colors.transparent,
-                Colors.black.withOpacity(0.88),
+                Colors.black.withOpacity(0.92),
               ],
+              stops: const [0.0, 0.45, 1.0],
               begin: Alignment.topCenter,
               end: Alignment.bottomCenter,
             ),
           ),
         ),
 
-        // Title / price / description
+        // Bottom bar: Shop message pill (top-left) + product info (left) + Commander (right)
         Positioned(
-          left: 16,
-          bottom: (ctaSpacing * 4) + safeBottom,
-          right: 110,
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
+          left: 12,
+          right: 12,
+          bottom: 12 + safeBottom,
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.end,
             children: [
-              Text(
-                item.name,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: theme.textTheme.headlineSmall?.copyWith(
-                  color: Colors.white,
-                  fontWeight: FontWeight.bold,
+              // Left column: Message pill above product info
+              Flexible(
+                flex: 4,
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    _ProductInfoCompact(
+                      name: item.name,
+                      priceStr:
+                          '${Formatters.amountFromCents(item.defaultPrice * 100)} FCFA',
+                      description: item.description,
+                      theme: theme,
+                    ),
+                    const SizedBox(height: 8),
+                    _ShopMessagePill(
+                      shopName: _shopName(item),
+                      onTap: () async {
+                        debugPrint(
+                          '[MarketplacePage] message seller item="${item.name}" id=${item.id}',
+                        );
+                        final text =
+                            'Bonjour, je suis intéressé par "${item.name}" à '
+                            '${Formatters.amountFromCents(item.defaultPrice * 100)} FCFA.';
+                        await _openWhatsApp(context, text);
+                      },
+                    ),
+                  ],
                 ),
               ),
-              const SizedBox(height: 6),
-              Text(
-                '${Formatters.amountFromCents(item.defaultPrice * 100)} FCFA',
-                style: theme.textTheme.titleLarge?.copyWith(
-                  color: Colors.greenAccent,
-                  fontWeight: FontWeight.w600,
-                ),
-              ),
-              if ((item.description ?? '').isNotEmpty) ...[
-                const SizedBox(height: 6),
-                Text(
-                  item.description!,
-                  maxLines: 2,
-                  overflow: TextOverflow.ellipsis,
-                  style: theme.textTheme.bodyMedium?.copyWith(
-                    color: Colors.white70,
-                  ),
-                ),
-              ],
-            ],
-          ),
-        ),
 
-        // Actions: Message + Commander
-        Positioned(
-          right: 16,
-          bottom: 16 + safeBottom + 64 + 16,
-          child: _ActionBubble(
-            icon: Icons.chat_bubble_rounded,
-            label: 'Message',
-            gradient: const [Color(0xFF1E88E5), Color(0xFF64B5F6)],
-            onTap: () async {
-              debugPrint(
-                '[MarketplacePage] message seller item="${item.name}" id=${item.id}',
-              );
-              final text =
-                  'Bonjour, je suis intéressé par "${item.name}" à '
-                  '${Formatters.amountFromCents(item.defaultPrice * 100)} FCFA.';
-              await _openWhatsApp(context, text);
-            },
-          ),
-        ),
-        Positioned(
-          right: 16,
-          bottom: 16 + safeBottom,
-          child: _ActionBubble(
-            icon: Icons.shopping_bag,
-            label: 'Commander',
-            gradient: const [Color(0xFF00C853), Color(0xFF66BB6A)],
-            onTap: () {
-              debugPrint(
-                '[MarketplacePage] open order panel for item="${item.name}" unit=${item.defaultPrice}XOF',
-              );
-              final w = MediaQuery.of(context).size.width;
-              final widthFraction = w < 520
-                  ? 0.96
-                  : OrderQuickPanel.suggestedWidthFraction;
-              showRightDrawer(
-                context,
-                widthFraction: widthFraction,
-                heightFraction: OrderQuickPanel.suggestedHeightFraction,
-                child: OrderQuickPanel(item: item),
-              );
-            },
+              const SizedBox(width: 12),
+              const Spacer(),
+
+              // Right: Commander bubble
+              _ActionBubble(
+                icon: Icons.shopping_bag,
+                label: 'Commander',
+                gradient: const [Color(0xFF00C853), Color(0xFF66BB6A)],
+                onTap: () {
+                  debugPrint(
+                    '[MarketplacePage] open order panel for item="${item.name}" unit=${item.defaultPrice}XOF',
+                  );
+                  final w = MediaQuery.of(context).size.width;
+                  final widthFraction = w < 520
+                      ? 0.96
+                      : OrderQuickPanel.suggestedWidthFraction;
+                  showRightDrawer(
+                    context,
+                    widthFraction: widthFraction,
+                    heightFraction: OrderQuickPanel.suggestedHeightFraction,
+                    child: OrderQuickPanel(item: item),
+                  );
+                },
+              ),
+            ],
           ),
         ),
       ],
     );
   }
 
-  /// Robust WhatsApp launcher: try native scheme first, then web fallback.
-  /// Avoids `canLaunchUrl` (which throws on some iOS set-ups with Pigeon channel).
+  // Replace with your real shop field (e.g. item.companyName) if available.
+  String _shopName(MarketplaceItem item) {
+    // TODO: use item.companyName / item.company?.name / item.sellerName if your model exposes it
+    return 'Envoyer un message';
+  }
+
+  /// Robust WhatsApp launcher: native scheme first, then web fallback (avoids canLaunchUrl on iOS).
   Future<void> _openWhatsApp(BuildContext context, String message) async {
     final encoded = Uri.encodeComponent(message);
     final native = Uri.parse('whatsapp://send?text=$encoded');
     final web = Uri.parse('https://wa.me/?text=$encoded');
 
-    // Try native app
     try {
       final ok = await launchUrl(
         native,
@@ -317,7 +297,6 @@ class _MarketplacePageState extends ConsumerState<MarketplacePage> {
       debugPrint('[MarketplacePage] WhatsApp native launch failed: $e');
     }
 
-    // Fallback to web
     try {
       final ok = await launchUrl(web, mode: LaunchMode.externalApplication);
       if (ok) return;
@@ -332,28 +311,144 @@ class _MarketplacePageState extends ConsumerState<MarketplacePage> {
   }
 }
 
-/* ---------- Helpers ---------- */
+/* ---------- Compact product info (bottom-left) ---------- */
 
-class _NoGlowBehavior extends ScrollBehavior {
+class _ProductInfoCompact extends StatelessWidget {
+  final String name;
+  final String priceStr;
+  final String? description;
+  final ThemeData theme;
+
+  const _ProductInfoCompact({
+    required this.name,
+    required this.priceStr,
+    required this.theme,
+    this.description,
+  });
+
   @override
-  Widget buildViewportChrome(
-    BuildContext context,
-    Widget child,
-    AxisDirection axisDirection,
-  ) {
-    return child;
+  Widget build(BuildContext context) {
+    return ConstrainedBox(
+      constraints: const BoxConstraints(minHeight: 60),
+      child: Padding(
+        padding: const EdgeInsets.only(left: 2, bottom: 2, top: 2, right: 2),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // Name
+            Text(
+              name,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: theme.textTheme.titleLarge?.copyWith(
+                color: Colors.white,
+                fontWeight: FontWeight.w800,
+                letterSpacing: 0.2,
+                height: 1.1,
+              ),
+            ),
+            const SizedBox(height: 4),
+            // Price
+            Text(
+              priceStr,
+              style: theme.textTheme.titleMedium?.copyWith(
+                color: Colors.greenAccent,
+                fontWeight: FontWeight.w700,
+                height: 1.0,
+              ),
+            ),
+            if ((description ?? '').trim().isNotEmpty) ...[
+              const SizedBox(height: 4),
+              Text(
+                description!.trim(),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: theme.textTheme.bodySmall?.copyWith(
+                  color: Colors.white70,
+                  height: 1.1,
+                ),
+              ),
+            ],
+          ],
+        ),
+      ),
+    );
   }
-
-  @override
-  Set<PointerDeviceKind> get dragDevices => {
-    PointerDeviceKind.touch,
-    PointerDeviceKind.mouse,
-    PointerDeviceKind.trackpad,
-    PointerDeviceKind.stylus,
-  };
 }
 
-/* ---------- UI: Action Bubble (animated) ---------- */
+/* ---------- UI: Shop Message Pill (TikTok-like) ---------- */
+
+class _ShopMessagePill extends StatefulWidget {
+  final String shopName;
+  final VoidCallback onTap;
+
+  const _ShopMessagePill({required this.shopName, required this.onTap});
+
+  @override
+  State<_ShopMessagePill> createState() => _ShopMessagePillState();
+}
+
+class _ShopMessagePillState extends State<_ShopMessagePill> {
+  bool _pressed = false;
+
+  @override
+  Widget build(BuildContext context) {
+    return Semantics(
+      button: true,
+      label: 'Message ${widget.shopName}',
+      child: GestureDetector(
+        onTapDown: (_) => setState(() => _pressed = true),
+        onTapCancel: () => setState(() => _pressed = false),
+        onTapUp: (_) => setState(() => _pressed = false),
+        onTap: () {
+          Feedback.forTap(context);
+          widget.onTap();
+        },
+        child: AnimatedScale(
+          scale: _pressed ? 0.97 : 1.0,
+          duration: const Duration(milliseconds: 80),
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(20),
+              gradient: const LinearGradient(
+                colors: [Color(0xFF1E88E5), Color(0xFF64B5F6)],
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+              ),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withOpacity(0.35),
+                  blurRadius: 10,
+                  offset: const Offset(0, 4),
+                ),
+              ],
+            ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  '${widget.shopName} ',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+                const SizedBox(width: 8),
+                const Icon(Icons.send, color: Colors.white, size: 18),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/* ---------- UI: Action Bubble (Commander) ---------- */
 
 class _ActionBubble extends StatefulWidget {
   final IconData icon;
@@ -379,43 +474,51 @@ class _ActionBubbleState extends State<_ActionBubble> {
   Widget build(BuildContext context) {
     return Column(
       children: [
-        GestureDetector(
-          onTapDown: (_) => setState(() => _pressed = true),
-          onTapCancel: () => setState(() => _pressed = false),
-          onTapUp: (_) => setState(() => _pressed = false),
-          onTap: () {
-            Feedback.forTap(context);
-            widget.onTap();
-          },
-          child: AnimatedScale(
-            scale: _pressed ? 0.94 : 1.0,
-            duration: const Duration(milliseconds: 80),
-            child: Container(
-              width: 58,
-              height: 58,
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                gradient: LinearGradient(
-                  colors: widget.gradient,
-                  begin: Alignment.topLeft,
-                  end: Alignment.bottomRight,
-                ),
-                boxShadow: [
-                  BoxShadow(
-                    color: Colors.black.withOpacity(0.35),
-                    blurRadius: 10,
-                    offset: const Offset(0, 4),
+        Semantics(
+          button: true,
+          label: widget.label,
+          child: GestureDetector(
+            onTapDown: (_) => setState(() => _pressed = true),
+            onTapCancel: () => setState(() => _pressed = false),
+            onTapUp: (_) => setState(() => _pressed = false),
+            onTap: () {
+              Feedback.forTap(context);
+              widget.onTap();
+            },
+            child: AnimatedScale(
+              scale: _pressed ? 0.94 : 1.0,
+              duration: const Duration(milliseconds: 80),
+              child: Container(
+                width: 60,
+                height: 60,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  gradient: LinearGradient(
+                    colors: widget.gradient,
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
                   ),
-                ],
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withOpacity(0.35),
+                      blurRadius: 12,
+                      offset: const Offset(0, 5),
+                    ),
+                  ],
+                ),
+                child: Icon(widget.icon, color: Colors.white, size: 26),
               ),
-              child: Icon(widget.icon, color: Colors.white, size: 26),
             ),
           ),
         ),
         const SizedBox(height: 6),
         Text(
           widget.label,
-          style: const TextStyle(color: Colors.white, fontSize: 12),
+          style: const TextStyle(
+            color: Colors.white,
+            fontSize: 12,
+            fontWeight: FontWeight.w600,
+          ),
         ),
       ],
     );
