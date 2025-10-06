@@ -208,14 +208,14 @@ class _MarketplacePageState extends ConsumerState<MarketplacePage> {
         // Bottom bar: Shop message pill (top-left) + product info (left) + Commander (right)
         Positioned(
           left: 12,
-          right: 12,
+          right: 0, // <-- pour coller à l'extrême droite
           bottom: 12 + safeBottom,
           child: Row(
             crossAxisAlignment: CrossAxisAlignment.end,
             children: [
-              // Left column: Message pill above product info
-              Flexible(
-                flex: 4,
+              // Gauche : Message pill + infos produit
+              Expanded(
+                // <-- prend tout l’espace restant
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -245,28 +245,30 @@ class _MarketplacePageState extends ConsumerState<MarketplacePage> {
               ),
 
               const SizedBox(width: 12),
-              const Spacer(),
 
-              // Right: Commander bubble
-              _ActionBubble(
-                icon: Icons.shopping_bag,
-                label: 'Commander',
-                gradient: const [Color(0xFF00C853), Color(0xFF66BB6A)],
-                onTap: () {
-                  debugPrint(
-                    '[MarketplacePage] open order panel for item="${item.name}" unit=${item.defaultPrice}XOF',
-                  );
-                  final w = MediaQuery.of(context).size.width;
-                  final widthFraction = w < 520
-                      ? 0.96
-                      : OrderQuickPanel.suggestedWidthFraction;
-                  showRightDrawer(
-                    context,
-                    widthFraction: widthFraction,
-                    heightFraction: OrderQuickPanel.suggestedHeightFraction,
-                    child: OrderQuickPanel(item: item),
-                  );
-                },
+              // Droite : bouton Commander collé au bord
+              Align(
+                alignment: Alignment.bottomRight,
+                child: _ActionBubble(
+                  icon: Icons.shopping_bag,
+                  label: 'Commander',
+                  gradient: const [Color(0xFF00C853), Color(0xFF66BB6A)],
+                  onTap: () {
+                    debugPrint(
+                      '[MarketplacePage] open order panel for item="${item.name}" unit=${item.defaultPrice}XOF',
+                    );
+                    final w = MediaQuery.of(context).size.width;
+                    final widthFraction = w < 520
+                        ? 0.96
+                        : OrderQuickPanel.suggestedWidthFraction;
+                    showRightDrawer(
+                      context,
+                      widthFraction: widthFraction,
+                      heightFraction: OrderQuickPanel.suggestedHeightFraction,
+                      child: OrderQuickPanel(item: item),
+                    );
+                  },
+                ),
               ),
             ],
           ),
