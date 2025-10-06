@@ -1,15 +1,17 @@
-// Mini right-drawer quick order panel (French UI): compact size so product stays visible; prefill from session/prefs; only "Identifiant" required; amount read-only via header; quantity +/- controls; ENTER submits; posts to API v1; clears prefs on reset; always logs payload.
-
+// Mini right-drawer quick order panel (French UI) with duplicate-order guard and confirmation.
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../shared/formatters.dart';
+import '../../presentation/widgets/right_drawer.dart';
 import '../application/order_prefs_controller.dart';
 import '../domain/entities/marketplace_item.dart';
 import 'package:money_pulse/onboarding/presentation/providers/access_session_provider.dart';
 import '../domain/entities/order_command_request.dart';
 import '../infrastructure/order_command_repo_provider.dart';
 import 'package:flutter/foundation.dart';
+import 'widgets/order_confirmation_panel.dart';
+import '../infrastructure/order_guard_provider.dart';
 
 class OrderQuickPanel extends ConsumerStatefulWidget {
   final MarketplaceItem item;
@@ -138,17 +140,50 @@ class _OrderQuickPanelState extends ConsumerState<OrderQuickPanel> {
     }
   }
 
+  Future<bool> _confirmDuplicateIfNeeded() async {
+    final already = ref
+        .read(orderedProductsGuardProvider)
+        .contains(widget.item.id);
+    if (!already) return true;
+    final ok = await showDialog<bool>(
+      context: context,
+      barrierDismissible: true,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Confirmer une deuxième commande'),
+        content: Text(
+          'Vous avez déjà commandé « ${widget.item.name} ». Voulez-vous confirmer une nouvelle commande pour ce produit ?',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(false),
+            child: const Text('Annuler'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(ctx).pop(true),
+            child: const Text('Confirmer'),
+          ),
+        ],
+      ),
+    );
+    debugPrint(
+      '[OrderQuickPanel] duplicate-check productId=${widget.item.id} confirm=$ok',
+    );
+    return ok == true;
+  }
+
   Future<void> _submit() async {
     if (!_formKey.currentState!.validate()) return;
     if (_submitting) return;
 
+    final proceed = await _confirmDuplicateIfNeeded();
+    if (!proceed) return;
+
     final qty = _parseInt(_qtyCtrl.text, fallback: 1);
-    // Montant calculé en XOF (entier) → l'API accepte un "number"
     final amountXof = _parseInt(
       _amountCtrl.text,
       fallback: widget.item.defaultPrice,
     );
-    final amountCents = amountXof * 100; // on reste cohérent avec "cents"
+    final amountCents = amountXof * 100;
 
     var buyerName = _nameCtrl.text.trim();
     final grant = ref.read(accessSessionProvider);
@@ -181,20 +216,19 @@ class _OrderQuickPanelState extends ConsumerState<OrderQuickPanel> {
       deliveryMethod: _deliveryMethod,
     );
 
-    // --- Build API v1 payload
     final cmd = OrderCommandRequest(
       productId: widget.item.id,
-      userId: null, // pas disponible pour l’instant (à brancher si tu l’as)
+      userId: null,
       identifiant: prefs.phone ?? '',
-      telephone: prefs.phone, // on envoie aussi dans "telephone"
+      telephone: prefs.phone,
       mail: grant?.email,
-      ville: null, // peut être complété si tu as l’info
+      ville: null,
       remoteId: null,
       localId: null,
       status: null,
       buyerName: prefs.buyerName,
       address: prefs.address,
-      notes: null, // notes masquées dans l’UI mini
+      notes: null,
       paymentMethod: prefs.paymentMethod,
       deliveryMethod: prefs.deliveryMethod,
       amountCents: prefs.amountCents ?? amountCents,
@@ -202,7 +236,6 @@ class _OrderQuickPanelState extends ConsumerState<OrderQuickPanel> {
       dateCommand: DateTime.now().toUtc(),
     );
 
-    // --- Log exhaustif du payload avant envoi
     debugPrint(
       '[OrderQuickPanel] about to send command payload.map=${cmd.toJson()}',
     );
@@ -211,17 +244,28 @@ class _OrderQuickPanelState extends ConsumerState<OrderQuickPanel> {
     try {
       await ref.read(orderCommandRepoProvider(widget.baseUri)).send(cmd);
       await ref.read(orderPrefsProvider.notifier).save(prefs);
+
+      ref
+          .read(orderedProductsGuardProvider.notifier)
+          .markOrdered(widget.item.id);
+
       if (!mounted) return;
+
       final totalStr =
           '${Formatters.amountFromCents((prefs.amountCents ?? amountCents))} FCFA';
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            'Commande envoyée • ${widget.item.name} • ${prefs.quantity ?? qty} x • $totalStr',
-          ),
+
+      Navigator.of(context).maybePop();
+
+      await showRightDrawer(
+        context,
+        widthFraction: OrderConfirmationPanel.suggestedWidthFraction,
+        heightFraction: OrderConfirmationPanel.suggestedHeightFraction,
+        child: OrderConfirmationPanel(
+          productName: widget.item.name,
+          totalStr: totalStr,
+          quantity: prefs.quantity ?? qty,
         ),
       );
-      Navigator.of(context).maybePop();
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(

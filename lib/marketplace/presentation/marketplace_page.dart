@@ -1,16 +1,19 @@
-// Orchestrates the vertical marketplace feed, search, companies filter, and right-drawer details.
-// Ensures "ALL" invalidates the pager to perform a fresh API reload and logs user actions.
-// Improves a11y, adds explicit debug logs (scroll/loadNext, actions), and uses OrderQuickPanel suggested mini-popup size.
+// Vertical marketplace feed with search and companies filter.
+// TikTok-like floating actions ("Message" and "Commander").
+// Only ONE image per product (first URL), no horizontal swiping.
+// WhatsApp opening is made robust on iOS by avoiding canLaunchUrl()
+// and trying native -> web fallback with try/catch.
 
 import 'dart:ui';
 import 'package:flutter/material.dart';
+import 'package:flutter/gestures.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:url_launcher/url_launcher.dart';
 import 'package:money_pulse/marketplace/presentation/order_quick_panel.dart';
 import '../../presentation/widgets/right_drawer.dart';
 import '../../shared/formatters.dart';
 import '../application/marketplace_pager_controller.dart';
 import '../domain/entities/marketplace_item.dart';
-import 'product_view_panel.dart';
 import 'widgets/companies_chips_row.dart';
 
 class MarketplacePage extends ConsumerStatefulWidget {
@@ -173,83 +176,41 @@ class _MarketplacePageState extends ConsumerState<MarketplacePage> {
   ) {
     final theme = Theme.of(context);
     final urls = item.imageUrls.where((e) => e.trim().isNotEmpty).toList();
-    final multiple = urls.length > 1;
-    final imagesCtrl = PageController();
+    final firstUrl = urls.isNotEmpty ? urls.first : null;
 
     final safeBottom = MediaQuery.of(context).padding.bottom;
-    const ctaHeight = 44.0;
     const ctaSpacing = 16.0;
 
     return Stack(
       fit: StackFit.expand,
       children: [
-        if (urls.isNotEmpty)
-          PageView.builder(
-            controller: imagesCtrl,
-            scrollDirection: Axis.horizontal,
-            itemCount: urls.length,
-            itemBuilder: (_, i) {
-              final u = urls[i];
-              return FadeInImage.assetNetwork(
-                placeholder: 'assets/transparent_1px.png',
-                image: u,
-                fit: BoxFit.cover,
-                fadeInDuration: const Duration(milliseconds: 150),
-                imageErrorBuilder: (_, __, ___) =>
-                    const ColoredBox(color: Colors.black),
-              );
-            },
+        // ❗ Only ONE image (first URL) — no horizontal pager
+        if (firstUrl != null)
+          FadeInImage.assetNetwork(
+            placeholder: 'assets/transparent_1px.png',
+            image: firstUrl,
+            fit: BoxFit.cover,
+            fadeInDuration: const Duration(milliseconds: 150),
+            imageErrorBuilder: (_, __, ___) =>
+                const ColoredBox(color: Colors.black),
           )
         else
           const ColoredBox(color: Colors.black),
 
-        // Top/bottom gradient overlays for readability
+        // Top/bottom gradient overlays
         Container(
           decoration: BoxDecoration(
             gradient: LinearGradient(
               colors: [
                 Colors.black.withOpacity(0.7),
                 Colors.transparent,
-                Colors.black.withOpacity(0.8),
+                Colors.black.withOpacity(0.88),
               ],
               begin: Alignment.topCenter,
               end: Alignment.bottomCenter,
             ),
           ),
         ),
-
-        // Image counter when multiple
-        if (multiple)
-          Positioned(
-            right: 16,
-            bottom: ctaSpacing + safeBottom + ctaHeight + 8,
-            child: Semantics(
-              label: 'Nombre d’images: ${urls.length}',
-              child: Container(
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                decoration: BoxDecoration(
-                  color: Colors.black54,
-                  borderRadius: BorderRadius.circular(12),
-                  border: Border.all(color: Colors.white24, width: 0.6),
-                ),
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    const Icon(
-                      Icons.photo_library_outlined,
-                      color: Colors.white,
-                      size: 16,
-                    ),
-                    const SizedBox(width: 6),
-                    Text(
-                      '${urls.length}',
-                      style: const TextStyle(color: Colors.white),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-          ),
 
         // Title / price / description
         Positioned(
@@ -291,104 +252,173 @@ class _MarketplacePageState extends ConsumerState<MarketplacePage> {
           ),
         ),
 
-        // Actions column (details/share)
+        // Actions: Message + Commander
         Positioned(
-          right: 20,
-          bottom: (ctaSpacing * 4) + safeBottom,
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              _actionBtn(
-                icon: Icons.visibility,
-                label: 'Détails',
-                onTap: () {
-                  debugPrint(
-                    '[MarketplacePage] open details for item="${item.name}" id=${item.id}',
-                  );
-                  showRightDrawer(context, child: ProductViewPanel(item: item));
-                },
-              ),
-              const SizedBox(height: 16),
-              _actionBtn(
-                icon: Icons.share,
-                label: 'Partager',
-                onTap: () {
-                  debugPrint(
-                    '[MarketplacePage] share item="${item.name}" id=${item.id}',
-                  );
-                  _snack(context, 'Partager ${item.name}');
-                },
-              ),
-            ],
+          right: 16,
+          bottom: 16 + safeBottom + 64 + 16,
+          child: _ActionBubble(
+            icon: Icons.chat_bubble_rounded,
+            label: 'Message',
+            gradient: const [Color(0xFF1E88E5), Color(0xFF64B5F6)],
+            onTap: () async {
+              debugPrint(
+                '[MarketplacePage] message seller item="${item.name}" id=${item.id}',
+              );
+              final text =
+                  'Bonjour, je suis intéressé par "${item.name}" à '
+                  '${Formatters.amountFromCents(item.defaultPrice * 100)} FCFA.';
+              await _openWhatsApp(context, text);
+            },
           ),
         ),
-
-        // CTA Commander (opens mini right-drawer order)
         Positioned(
           right: 16,
           bottom: 16 + safeBottom,
-          child: SizedBox(
-            height: ctaHeight,
-            child: Semantics(
-              button: true,
-              label: 'Commander ${item.name}',
-              child: FilledButton.icon(
-                onPressed: () {
-                  debugPrint(
-                    '[MarketplacePage] open order panel for item="${item.name}" unit=${item.defaultPrice}XOF',
-                  );
-                  final w = MediaQuery.of(context).size.width;
-                  final widthFraction = w < 520
-                      ? 0.96
-                      : OrderQuickPanel.suggestedWidthFraction;
-                  showRightDrawer(
-                    context,
-                    widthFraction: widthFraction,
-                    heightFraction: OrderQuickPanel.suggestedHeightFraction,
-                    child: OrderQuickPanel(item: item),
-                  );
-                },
-                icon: const Icon(Icons.shopping_bag),
-                label: const Text('Commander'),
-              ),
-            ),
+          child: _ActionBubble(
+            icon: Icons.shopping_bag,
+            label: 'Commander',
+            gradient: const [Color(0xFF00C853), Color(0xFF66BB6A)],
+            onTap: () {
+              debugPrint(
+                '[MarketplacePage] open order panel for item="${item.name}" unit=${item.defaultPrice}XOF',
+              );
+              final w = MediaQuery.of(context).size.width;
+              final widthFraction = w < 520
+                  ? 0.96
+                  : OrderQuickPanel.suggestedWidthFraction;
+              showRightDrawer(
+                context,
+                widthFraction: widthFraction,
+                heightFraction: OrderQuickPanel.suggestedHeightFraction,
+                child: OrderQuickPanel(item: item),
+              );
+            },
           ),
         ),
       ],
     );
   }
 
-  Widget _actionBtn({
-    required IconData icon,
-    required String label,
-    required VoidCallback onTap,
-  }) {
+  /// Robust WhatsApp launcher: try native scheme first, then web fallback.
+  /// Avoids `canLaunchUrl` (which throws on some iOS set-ups with Pigeon channel).
+  Future<void> _openWhatsApp(BuildContext context, String message) async {
+    final encoded = Uri.encodeComponent(message);
+    final native = Uri.parse('whatsapp://send?text=$encoded');
+    final web = Uri.parse('https://wa.me/?text=$encoded');
+
+    // Try native app
+    try {
+      final ok = await launchUrl(
+        native,
+        mode: LaunchMode.externalNonBrowserApplication,
+      );
+      if (ok) return;
+    } catch (e) {
+      debugPrint('[MarketplacePage] WhatsApp native launch failed: $e');
+    }
+
+    // Fallback to web
+    try {
+      final ok = await launchUrl(web, mode: LaunchMode.externalApplication);
+      if (ok) return;
+    } catch (e) {
+      debugPrint('[MarketplacePage] WhatsApp web launch failed: $e');
+    }
+
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('WhatsApp introuvable sur cet appareil')),
+    );
+  }
+}
+
+/* ---------- Helpers ---------- */
+
+class _NoGlowBehavior extends ScrollBehavior {
+  @override
+  Widget buildViewportChrome(
+    BuildContext context,
+    Widget child,
+    AxisDirection axisDirection,
+  ) {
+    return child;
+  }
+
+  @override
+  Set<PointerDeviceKind> get dragDevices => {
+    PointerDeviceKind.touch,
+    PointerDeviceKind.mouse,
+    PointerDeviceKind.trackpad,
+    PointerDeviceKind.stylus,
+  };
+}
+
+/* ---------- UI: Action Bubble (animated) ---------- */
+
+class _ActionBubble extends StatefulWidget {
+  final IconData icon;
+  final String label;
+  final List<Color> gradient;
+  final VoidCallback onTap;
+
+  const _ActionBubble({
+    required this.icon,
+    required this.label,
+    required this.gradient,
+    required this.onTap,
+  });
+
+  @override
+  State<_ActionBubble> createState() => _ActionBubbleState();
+}
+
+class _ActionBubbleState extends State<_ActionBubble> {
+  bool _pressed = false;
+
+  @override
+  Widget build(BuildContext context) {
     return Column(
       children: [
-        InkWell(
-          onTap: onTap,
-          borderRadius: BorderRadius.circular(30),
-          child: Semantics(
-            button: true,
-            label: label,
+        GestureDetector(
+          onTapDown: (_) => setState(() => _pressed = true),
+          onTapCancel: () => setState(() => _pressed = false),
+          onTapUp: (_) => setState(() => _pressed = false),
+          onTap: () {
+            Feedback.forTap(context);
+            widget.onTap();
+          },
+          child: AnimatedScale(
+            scale: _pressed ? 0.94 : 1.0,
+            duration: const Duration(milliseconds: 80),
             child: Container(
-              padding: const EdgeInsets.all(8),
-              decoration: const BoxDecoration(
+              width: 58,
+              height: 58,
+              decoration: BoxDecoration(
                 shape: BoxShape.circle,
-                color: Colors.black54,
+                gradient: LinearGradient(
+                  colors: widget.gradient,
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                ),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withOpacity(0.35),
+                    blurRadius: 10,
+                    offset: const Offset(0, 4),
+                  ),
+                ],
               ),
-              child: Icon(icon, color: Colors.white, size: 32),
+              child: Icon(widget.icon, color: Colors.white, size: 26),
             ),
           ),
         ),
-        const SizedBox(height: 4),
-        Text(label, style: const TextStyle(color: Colors.white, fontSize: 12)),
+        const SizedBox(height: 6),
+        Text(
+          widget.label,
+          style: const TextStyle(color: Colors.white, fontSize: 12),
+        ),
       ],
     );
-  }
-
-  void _snack(BuildContext ctx, String msg) {
-    ScaffoldMessenger.of(ctx).showSnackBar(SnackBar(content: Text(msg)));
   }
 }
 

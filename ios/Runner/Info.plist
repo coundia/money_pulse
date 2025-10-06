@@ -53,5 +53,11 @@
 		<string>Money Pulse a besoin d’accéder à votre photothèque pour sélectionner des images de produits.</string>
 		<key>NSPhotoLibraryAddUsageDescription</key>
 		<string>Money Pulse a besoin d’écrire dans votre photothèque pour enregistrer des images de produits.</string>
+	
+		<key>LSApplicationQueriesSchemes</key>
+		<array>
+		<string>whatsapp</string>
+		</array>
+
 	</dict>
 </plist>

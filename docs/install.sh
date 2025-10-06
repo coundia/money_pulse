@@ -20,3 +20,4 @@ mkdir -p lib/presentation/app lib/presentation/features/home lib/presentation/fe
 
 
 flutter pub add flutter_native_splash
+flutter pub add url_launcher
