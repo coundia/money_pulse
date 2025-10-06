@@ -6,6 +6,7 @@ class AccessGrant {
   final String? username;
   final String? phone;
   final String? expiresAt;
+  final String? id;
 
   const AccessGrant({
     required this.email,
@@ -14,6 +15,7 @@ class AccessGrant {
     this.username,
     this.phone,
     this.expiresAt,
+    this.id,
   });
 
   AccessGrant copyWith({
@@ -23,6 +25,7 @@ class AccessGrant {
     String? username,
     String? phone,
     String? expiresAt,
+    String? id,
   }) {
     return AccessGrant(
       email: email ?? this.email,
@@ -31,6 +34,7 @@ class AccessGrant {
       username: username ?? this.username,
       phone: phone ?? this.phone,
       expiresAt: expiresAt ?? this.expiresAt,
+      id: id ?? this.id,
     );
   }
 }

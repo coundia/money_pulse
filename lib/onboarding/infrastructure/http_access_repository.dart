@@ -41,6 +41,7 @@ class HttpAccessRepository implements AccessRepository {
     }
     final map = jsonDecode(res.body) as Map<String, Object?>;
     final token = (map['token'] ?? '') as String;
+    final id = (map['id'] ?? '') as String;
     final u = (map['username'] ?? username) as String;
     final expIso = (map['expirationAt'] ?? '') as String;
     final grantedAt = DateTime.now();
@@ -55,6 +56,7 @@ class HttpAccessRepository implements AccessRepository {
       grantedAt: grantedAt,
       phone: null,
       expiresAt: at.toString(),
+      id: id,
     );
   }
 
@@ -73,11 +75,11 @@ class HttpAccessRepository implements AccessRepository {
       throw Exception('VERIFY_CODE_FAILED');
     }
     final data = jsonDecode(res.body) as Map<String, dynamic>;
-    print("connected #### respone");
-    print(data);
+
     return AccessGrant(
       email: identity.email ?? '',
       token: (data['token'] as String?) ?? '',
+      id: (data['id'] as String?) ?? '',
       grantedAt: DateTime.now(),
       username: (data['username'] as String?) ?? identity.email,
       phone: (data['phone'] as String?) ?? identity.email,
@@ -107,6 +109,7 @@ class HttpAccessRepository implements AccessRepository {
       grantedAt: DateTime.now().toUtc(),
       username: (map['username'] as String?) ?? uname,
       phone: (map['phone'] as String?) ?? uname,
+      id: (map['id'] as String?) ?? "",
     );
   }
 

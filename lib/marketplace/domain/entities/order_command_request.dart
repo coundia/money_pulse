@@ -13,6 +13,8 @@ class OrderCommandRequest {
   final String? buyerName;
   final String? address;
   final String? notes;
+  final String? message;
+  final String? typeOrder;
   final String? paymentMethod;
   final String? deliveryMethod;
   final num amountCents; // API sample shows a number (can be int/decimal)
@@ -35,6 +37,8 @@ class OrderCommandRequest {
     this.buyerName,
     this.address,
     this.notes,
+    this.message,
+    this.typeOrder,
     this.paymentMethod,
     this.deliveryMethod,
   });
@@ -56,6 +60,8 @@ class OrderCommandRequest {
       if (buyerName != null) 'buyerName': buyerName,
       if (address != null) 'address': address,
       if (notes != null) 'notes': notes,
+      if (message != null) 'message': message,
+      if (typeOrder != null) 'typeOrder': typeOrder,
       if (paymentMethod != null) 'paymentMethod': paymentMethod,
       if (deliveryMethod != null) 'deliveryMethod': deliveryMethod,
     };
