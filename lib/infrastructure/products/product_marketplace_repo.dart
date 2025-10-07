@@ -113,9 +113,9 @@ class ProductMarketplaceRepo {
         'category': product.categoryId,
         'account': product.account,
         'company': companyRemote ?? product.company,
-        'defaultPrice': product.defaultPrice / 100.0,
+        'defaultPrice': product.defaultPrice,
         'statuses': statusesCode,
-        'purchasePrice': product.purchasePrice / 100.0,
+        'purchasePrice': product.purchasePrice,
         'level': product.levelId,
         'quantity': product.quantity,
         'hasSold': product.hasSold == 1,
@@ -165,9 +165,9 @@ class ProductMarketplaceRepo {
       'quantity': p.quantity,
       'hasSold': p.hasSold == 1,
       'hasPrice': p.hasPrice == 1,
-      'defaultPrice': p.defaultPrice / 100.0,
+      'defaultPrice': p.defaultPrice * 100.0,
       'statuses': 'PUBLISH',
-      'purchasePrice': p.purchasePrice / 100.0,
+      'purchasePrice': p.purchasePrice * 100.0,
     };
     map.removeWhere((_, v) => v == null);
     return map;

@@ -35,7 +35,7 @@ class ProductInfoCompact extends StatelessWidget {
     // - si priceXof est fourni: afficher uniquement si > 1
     // - sinon: fallback à "priceStr non vide"
     final bool shouldShowPrice = (priceXof != null)
-        ? (priceXof! > 1)
+        ? (priceXof! > 100)
         : priceStr.trim().isNotEmpty;
 
     return ConstrainedBox(

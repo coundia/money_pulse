@@ -31,9 +31,9 @@ class ProductMarketplaceRepositoryHttp implements ProductMarketplaceRepository {
       'syncAt': product.syncAt?.toIso8601String(),
       'category': product.categoryId,
       'account': product.account,
-      'defaultPrice': product.defaultPrice / 100,
+      'defaultPrice': product.defaultPrice * 100,
       'statuses': product.statuses,
-      'purchasePrice': product.purchasePrice / 100,
+      'purchasePrice': product.purchasePrice * 100,
     };
 
     request.fields['product'] = jsonEncode(productJson);

@@ -337,7 +337,7 @@ class _AmountFieldQuickPadState extends State<AmountFieldQuickPad> {
                     localSet(() {});
                   },
                   child: Text(
-                    Formatters.amountFromCents(u * 100),
+                    Formatters.amountFromCents(u),
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                   ),

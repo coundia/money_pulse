@@ -41,7 +41,7 @@ class ProductViewPanel extends StatelessWidget {
                   ProductImageGallery(imageUrls: item.imageUrls),
                   const SizedBox(height: 16),
                   Text(
-                    '${Formatters.amountFromCents(item.defaultPrice * 100)} FCFA',
+                    '${Formatters.amountFromCents(item.defaultPrice)} FCFA',
                     style: Theme.of(
                       context,
                     ).textTheme.headlineSmall?.copyWith(color: Colors.green),

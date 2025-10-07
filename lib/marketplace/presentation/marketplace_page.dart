@@ -182,14 +182,14 @@ class _MarketplacePageState extends ConsumerState<MarketplacePage> {
 
     // Règles d’affichage
     final int unitXof = item.defaultPrice; // prix unitaire en XOF (entier)
-    final bool showPrice = unitXof > 1; // <-- affiche SEULEMENT si > 1
+    final bool showPrice = unitXof > 100; // <-- affiche SEULEMENT si > 1
     final bool outOfStock =
         (item.quantity ?? 0) <= 0; // si 0 => masquer “Commander” & informer
 
     final bool hideCommandAndSold = outOfStock && !showPrice;
 
     final String priceStr = showPrice
-        ? '${Formatters.amountFromCents(unitXof * 100)} FCFA'
+        ? '${Formatters.amountFromCents(unitXof)} FCFA'
         : '';
 
     return Stack(
@@ -240,7 +240,7 @@ class _MarketplacePageState extends ConsumerState<MarketplacePage> {
                     ProductInfoCompact(
                       name: item.name,
                       priceStr:
-                          '${Formatters.amountFromCents(item.defaultPrice * 100)} FCFA',
+                          '${Formatters.amountFromCents(item.defaultPrice)} FCFA',
                       priceXof: item
                           .defaultPrice, // le prix s’affichera seulement si > 1
                       description: item.description,

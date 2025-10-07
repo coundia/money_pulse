@@ -280,8 +280,8 @@ class _OrderQuickPanelState extends ConsumerState<OrderQuickPanel> {
     final qty = _parseInt(_qtyCtrl.text, fallback: 1);
     final unit = widget.item.defaultPrice;
     final total = _parseInt(_amountCtrl.text, fallback: unit);
-    final unitStr = '${Formatters.amountFromCents(unit * 100)} FCFA';
-    final totalStr = '${Formatters.amountFromCents(total * 100)} FCFA';
+    final unitStr = '${Formatters.amountFromCents(unit)} FCFA';
+    final totalStr = '${Formatters.amountFromCents(total)} FCFA';
 
     showDialog(
       context: context,
@@ -364,7 +364,7 @@ class _OrderQuickPanelState extends ConsumerState<OrderQuickPanel> {
       _amountCtrl.text,
       fallback: widget.item.defaultPrice,
     );
-    final totalStr = '${Formatters.amountFromCents(amountXof * 100)} FCFA';
+    final totalStr = '${Formatters.amountFromCents(amountXof)} FCFA';
 
     return Shortcuts(
       shortcuts: <LogicalKeySet, Intent>{
@@ -449,7 +449,7 @@ class _OrderQuickPanelState extends ConsumerState<OrderQuickPanel> {
                               ),
                               const SizedBox(height: 2),
                               Text(
-                                'Prix unitaire: ${Formatters.amountFromCents(widget.item.defaultPrice * 100)} FCFA',
+                                'Prix unitaire: ${Formatters.amountFromCents(widget.item.defaultPrice)} FCFA',
                                 style: Theme.of(context).textTheme.bodySmall,
                               ),
                             ],
