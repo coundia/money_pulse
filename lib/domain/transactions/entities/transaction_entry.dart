@@ -12,7 +12,7 @@ class TransactionEntry {
   final String? description;
   final int amount;
 
-  /// 'DEBIT' | 'CREDIT' | 'DEBT' | 'REMBOURSEMENT' | 'PRET' ...
+  /// 'DEBIT' | 'CREDIT' | 'DEBT' | 'REMBOURSEMENT' | 'PRET' | 'COMMAND' ...
   final String typeEntry;
   final DateTime dateTransaction;
   final String? status;
