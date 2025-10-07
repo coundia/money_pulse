@@ -56,6 +56,12 @@ class TransactionDetailView extends ConsumerWidget {
 
     final hasRemote = (entry.remoteId ?? '').trim().isNotEmpty;
 
+    // ✅ Afficher le bouton "Modifier" uniquement pour DEBIT ou CREDIT
+    final canEdit = (() {
+      final t = (entry.typeEntry).toUpperCase().trim();
+      return t == 'DEBIT' || t == 'CREDIT';
+    })();
+
     return Scaffold(
       appBar: AppBar(
         title: const Text('Détails de la transaction'),
@@ -211,34 +217,39 @@ class TransactionDetailView extends ConsumerWidget {
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              SizedBox(
-                width: double.infinity,
-                child: OutlinedButton.icon(
-                  onPressed: () async {
-                    final ok = await showRightDrawer<bool>(
-                      context,
-                      child: TransactionFormSheet(entry: entry),
-                      widthFraction: 0.86,
-                      heightFraction: 0.96,
-                    );
-                    if (ok == true) {
-                      await ref.read(transactionsProvider.notifier).load();
-                      await ref.read(balanceProvider.notifier).load();
-                      ref.invalidate(transactionListItemsProvider);
-                      if (context.mounted) {
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(
-                            content: Text('Transaction mise à jour'),
-                          ),
-                        );
+              // ✅ Bouton "Modifier" seulement pour DEBIT/CREDIT
+              if (canEdit)
+                SizedBox(
+                  width: double.infinity,
+                  child: OutlinedButton.icon(
+                    onPressed: () async {
+                      final ok = await showRightDrawer<bool>(
+                        context,
+                        child: TransactionFormSheet(entry: entry),
+                        widthFraction: 0.86,
+                        heightFraction: 0.96,
+                      );
+                      if (ok == true) {
+                        await ref.read(transactionsProvider.notifier).load();
+                        await ref.read(balanceProvider.notifier).load();
+                        ref.invalidate(transactionListItemsProvider);
+                        if (context.mounted) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(
+                              content: Text('Transaction mise à jour'),
+                            ),
+                          );
+                        }
                       }
-                    }
-                  },
-                  icon: const Icon(Icons.edit_outlined),
-                  label: const Text('Modifier'),
+                    },
+                    icon: const Icon(Icons.edit_outlined),
+                    label: const Text('Modifier'),
+                  ),
                 ),
-              ),
-              const SizedBox(height: 8),
+
+              if (canEdit) const SizedBox(height: 8),
+
+              // Reçu (toujours visible)
               SizedBox(
                 width: double.infinity,
                 child: FilledButton.icon(
@@ -255,6 +266,8 @@ class TransactionDetailView extends ConsumerWidget {
                 ),
               ),
               const SizedBox(height: 8),
+
+              // Supprimer (toujours visible)
               SizedBox(
                 width: double.infinity,
                 child: FilledButton.tonalIcon(
