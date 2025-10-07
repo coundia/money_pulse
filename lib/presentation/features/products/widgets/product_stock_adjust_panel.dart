@@ -1,4 +1,6 @@
-// Right drawer to adjust product stock without exposing codes or raw IDs in UI.
+// widgets/product_stock_adjust_panel.dart
+// Right drawer to adjust product stock and also update Product.quantity accordingly.
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -6,6 +8,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:money_pulse/domain/products/entities/product.dart';
 import 'package:money_pulse/presentation/shared/formatters.dart';
 import 'package:money_pulse/presentation/features/stock/providers/stock_level_repo_provider.dart';
+// ⬇️ NEW: update product repo to keep Product.quantity in sync
+import 'package:money_pulse/presentation/features/products/product_repo_provider.dart';
 
 class ProductStockAdjustPanel extends ConsumerStatefulWidget {
   final Product product;
@@ -64,29 +68,47 @@ class _ProductStockAdjustPanelState
     }
 
     setState(() => _loading = true);
-    final repo = ref.read(stockLevelRepoProvider);
+    final stockRepo = ref.read(stockLevelRepoProvider);
+    // NEW: product repo to mirror quantity locally
+    final productRepo = ref.read(productRepoProvider);
+
     try {
+      final now = DateTime.now();
+      int newQty = widget.product.quantity;
+
       if (_mode == _AdjustMode.byDelta) {
         final delta = int.tryParse(_qtyCtrl.text.trim()) ?? 0;
         if (delta == 0) {
           _safeSnack('La variation ne peut pas être 0');
           return;
         }
-        await repo.adjustOnHandBy(
+        await stockRepo.adjustOnHandBy(
           productVariantId: widget.product.id,
           companyId: _companyId!,
           delta: delta,
           reason: _reasonCtrl.text.trim().isEmpty ? null : _reasonCtrl.text,
         );
+        // NEW: mirror locally on the Product row
+        newQty = (widget.product.quantity + delta);
       } else {
         final target = int.tryParse(_targetCtrl.text.trim()) ?? 0;
-        await repo.adjustOnHandTo(
+        await stockRepo.adjustOnHandTo(
           productVariantId: widget.product.id,
           companyId: _companyId!,
           target: target,
           reason: _reasonCtrl.text.trim().isEmpty ? null : _reasonCtrl.text,
         );
+        // NEW: mirror locally on the Product row
+        newQty = target;
       }
+
+      // Clamp to ≥ 0, mark dirty and update timestamp
+      if (newQty < 0) newQty = 0;
+
+      await productRepo.update(
+        widget.product.copyWith(quantity: newQty, updatedAt: now, isDirty: 1),
+      );
+
       if (!mounted) return;
       Navigator.of(context).pop(true);
     } finally {
@@ -157,6 +179,10 @@ class _ProductStockAdjustPanelState
                                 ),
                                 visualDensity: VisualDensity.compact,
                               ),
+                              Chip(
+                                label: Text('Stock actuel: ${p.quantity}'),
+                                visualDensity: VisualDensity.compact,
+                              ),
                             ],
                           ),
                         ],
@@ -192,7 +218,7 @@ class _ProductStockAdjustPanelState
                     ButtonSegment(
                       value: _AdjustMode.toTarget,
                       label: Text('Fixer à N'),
-                      icon: Icon(Icons.tablet),
+                      icon: Icon(Icons.table_rows_rounded),
                     ),
                   ],
                   selected: {_mode},

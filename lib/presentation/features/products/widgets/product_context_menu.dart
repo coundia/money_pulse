@@ -1,4 +1,4 @@
-// Context menu entries for product list item (FR labels, action keys used by list page).
+// widgets/product_context_menu.dart
 import 'package:flutter/material.dart';
 
 List<PopupMenuEntry<String>> buildProductContextMenuItems() {
@@ -23,6 +23,13 @@ List<PopupMenuEntry<String>> buildProductContextMenuItems() {
       child: ListTile(
         leading: Icon(Icons.inventory_2_outlined),
         title: Text('Ajuster le stock'),
+      ),
+    ),
+    const PopupMenuItem(
+      value: 'soldout', // NEW
+      child: ListTile(
+        leading: Icon(Icons.do_not_disturb_alt_outlined),
+        title: Text('Marquer épuisé'),
       ),
     ),
     const PopupMenuDivider(),

@@ -673,6 +673,42 @@ class _ProductListPageState extends ConsumerState<ProductListPage> {
                                     case 'share':
                                       await _share(p);
                                       break;
+                                    // inside onMenuAction switch (ProductListPage)
+                                    case 'soldout':
+                                      {
+                                        final now = DateTime.now();
+                                        final updated = p.copyWith(
+                                          quantity: 0,
+                                          updatedAt: now,
+                                          isDirty: 1,
+                                          // Optionnel: tagguer le statut
+                                          statuses:
+                                              (p.statuses ?? '').contains(
+                                                'SOLD_OUT',
+                                              )
+                                              ? p.statuses
+                                              : ((p.statuses == null ||
+                                                        p.statuses!
+                                                            .trim()
+                                                            .isEmpty)
+                                                    ? 'SOLD_OUT'
+                                                    : '${p.statuses}'),
+                                        );
+                                        await _repo.update(updated);
+                                        if (mounted) {
+                                          ScaffoldMessenger.of(
+                                            context,
+                                          ).showSnackBar(
+                                            const SnackBar(
+                                              content: Text(
+                                                'Produit marqué comme épuisé',
+                                              ),
+                                            ),
+                                          );
+                                          setState(() {});
+                                        }
+                                        break;
+                                      }
                                   }
                                 },
                               );
