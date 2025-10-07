@@ -186,6 +186,8 @@ class _MarketplacePageState extends ConsumerState<MarketplacePage> {
     final bool outOfStock =
         (item.quantity ?? 0) <= 0; // si 0 => masquer “Commander” & informer
 
+    final bool hideCommandAndSold = outOfStock && !showPrice;
+
     final String priceStr = showPrice
         ? '${Formatters.amountFromCents(unitXof * 100)} FCFA'
         : '';
@@ -270,36 +272,43 @@ class _MarketplacePageState extends ConsumerState<MarketplacePage> {
               ),
               const SizedBox(width: 12),
 
-              // Right: “Commander” (si dispo) sinon badge rupture
-              Align(
-                alignment: Alignment.bottomRight,
-                child: outOfStock
-                    ? const _OutOfStockBadge()
-                    : ActionBubble(
-                        icon: Icons.shopping_bag,
-                        label: 'Commander',
-                        gradient: const [Color(0xFF00C853), Color(0xFF66BB6A)],
-                        onTap: () {
-                          debugPrint(
-                            '[MarketplacePage] open order panel for item="${item.name}" unit=${item.defaultPrice}XOF',
-                          );
-                          final w = MediaQuery.of(context).size.width;
-                          final widthFraction = w < 520
-                              ? 0.96
-                              : OrderQuickPanel.suggestedWidthFraction;
-                          showRightDrawer(
-                            context,
-                            widthFraction: widthFraction,
-                            heightFraction:
-                                OrderQuickPanel.suggestedHeightFraction,
-                            child: OrderQuickPanel(
-                              item: item,
-                              baseUri: widget.baseUri,
-                            ),
-                          );
-                        },
-                      ),
-              ),
+              // Right: “Commander” (si dispo) sinon badge rupture —
+              // et si hideCommandAndSold == true, on masque totalement la zone de droite.
+              if (hideCommandAndSold)
+                const SizedBox.shrink()
+              else
+                Align(
+                  alignment: Alignment.bottomRight,
+                  child: outOfStock
+                      ? const _OutOfStockBadge()
+                      : ActionBubble(
+                          icon: Icons.shopping_bag,
+                          label: 'Commander',
+                          gradient: const [
+                            Color(0xFF00C853),
+                            Color(0xFF66BB6A),
+                          ],
+                          onTap: () {
+                            debugPrint(
+                              '[MarketplacePage] open order panel for item="${item.name}" unit=${item.defaultPrice}XOF',
+                            );
+                            final w = MediaQuery.of(context).size.width;
+                            final widthFraction = w < 520
+                                ? 0.96
+                                : OrderQuickPanel.suggestedWidthFraction;
+                            showRightDrawer(
+                              context,
+                              widthFraction: widthFraction,
+                              heightFraction:
+                                  OrderQuickPanel.suggestedHeightFraction,
+                              child: OrderQuickPanel(
+                                item: item,
+                                baseUri: widget.baseUri,
+                              ),
+                            );
+                          },
+                        ),
+                ),
             ],
           ),
         ),
