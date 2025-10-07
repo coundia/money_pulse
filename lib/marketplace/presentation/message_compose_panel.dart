@@ -45,7 +45,7 @@ class _MessageComposePanelState extends ConsumerState<MessageComposePanel> {
     _identCtrl.text = prefIdent;
     _messageCtrl.text =
         'Bonjour, je suis intéressé par "${widget.item.name}" '
-        'à ${Formatters.amountFromCents(widget.item.defaultPrice * 100)} FCFA.';
+        '.';
   }
 
   @override
