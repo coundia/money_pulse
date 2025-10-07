@@ -2,6 +2,8 @@
 // TikTok-like layout: top-left search, companies chips; each product shows a single image.
 // Bottom-left: "Message • <Boutique>" au-dessus des infos produit; à droite: bulle "Commander".
 // "Message" ouvre un drawer pour éditer puis enregistre via l'API (typeOrder="MESSAGE").
+// Si item.quantity == 0 => masquer "Commander" + badge "Rupture de stock".
+// Si item.defaultPrice <= 1 => masquer le prix.
 // Logs des interactions + payload API; "ALL" force un reload frais.
 
 import 'dart:ui';
@@ -178,6 +180,16 @@ class _MarketplacePageState extends ConsumerState<MarketplacePage> {
     final firstUrl = urls.isNotEmpty ? urls.first : null;
     final safeBottom = MediaQuery.of(context).padding.bottom;
 
+    // Règles d’affichage
+    final int unitXof = item.defaultPrice; // prix unitaire en XOF (entier)
+    final bool showPrice = unitXof > 1; // <-- affiche SEULEMENT si > 1
+    final bool outOfStock =
+        (item.quantity ?? 0) <= 0; // si 0 => masquer “Commander” & informer
+
+    final String priceStr = showPrice
+        ? '${Formatters.amountFromCents(unitXof * 100)} FCFA'
+        : '';
+
     return Stack(
       fit: StackFit.expand,
       children: [
@@ -193,7 +205,7 @@ class _MarketplacePageState extends ConsumerState<MarketplacePage> {
         else
           const ColoredBox(color: Colors.black),
 
-        // Gradients
+        // Gradient overlays
         Container(
           decoration: BoxDecoration(
             gradient: LinearGradient(
@@ -209,7 +221,7 @@ class _MarketplacePageState extends ConsumerState<MarketplacePage> {
           ),
         ),
 
-        // Bottom bar: message+infos (gauche) / commander (droite)
+        // Bottom bar: message+infos (gauche) / commander (droite ou badge rupture)
         Positioned(
           left: 12,
           right: 0,
@@ -227,9 +239,12 @@ class _MarketplacePageState extends ConsumerState<MarketplacePage> {
                       name: item.name,
                       priceStr:
                           '${Formatters.amountFromCents(item.defaultPrice * 100)} FCFA',
+                      priceXof: item
+                          .defaultPrice, // le prix s’affichera seulement si > 1
                       description: item.description,
-                      theme: theme,
+                      theme: Theme.of(context),
                     ),
+
                     const SizedBox(height: 8),
                     ShopMessagePill(
                       shopName: _shopName(item),
@@ -254,32 +269,36 @@ class _MarketplacePageState extends ConsumerState<MarketplacePage> {
                 ),
               ),
               const SizedBox(width: 12),
-              // Right: bouton Commander
+
+              // Right: “Commander” (si dispo) sinon badge rupture
               Align(
                 alignment: Alignment.bottomRight,
-                child: ActionBubble(
-                  icon: Icons.shopping_bag,
-                  label: 'Commander',
-                  gradient: const [Color(0xFF00C853), Color(0xFF66BB6A)],
-                  onTap: () {
-                    debugPrint(
-                      '[MarketplacePage] open order panel for item="${item.name}" unit=${item.defaultPrice}XOF',
-                    );
-                    final w = MediaQuery.of(context).size.width;
-                    final widthFraction = w < 520
-                        ? 0.96
-                        : OrderQuickPanel.suggestedWidthFraction;
-                    showRightDrawer(
-                      context,
-                      widthFraction: widthFraction,
-                      heightFraction: OrderQuickPanel.suggestedHeightFraction,
-                      child: OrderQuickPanel(
-                        item: item,
-                        baseUri: widget.baseUri,
+                child: outOfStock
+                    ? const _OutOfStockBadge()
+                    : ActionBubble(
+                        icon: Icons.shopping_bag,
+                        label: 'Commander',
+                        gradient: const [Color(0xFF00C853), Color(0xFF66BB6A)],
+                        onTap: () {
+                          debugPrint(
+                            '[MarketplacePage] open order panel for item="${item.name}" unit=${item.defaultPrice}XOF',
+                          );
+                          final w = MediaQuery.of(context).size.width;
+                          final widthFraction = w < 520
+                              ? 0.96
+                              : OrderQuickPanel.suggestedWidthFraction;
+                          showRightDrawer(
+                            context,
+                            widthFraction: widthFraction,
+                            heightFraction:
+                                OrderQuickPanel.suggestedHeightFraction,
+                            child: OrderQuickPanel(
+                              item: item,
+                              baseUri: widget.baseUri,
+                            ),
+                          );
+                        },
                       ),
-                    );
-                  },
-                ),
               ),
             ],
           ),
@@ -291,5 +310,48 @@ class _MarketplacePageState extends ConsumerState<MarketplacePage> {
   String _shopName(MarketplaceItem item) {
     // TODO: si votre modèle expose le nom de la boutique: item.companyName ?? ...
     return 'Message • Boutique';
+  }
+}
+
+// Petit badge “Rupture de stock” (à droite)
+class _OutOfStockBadge extends StatelessWidget {
+  const _OutOfStockBadge();
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      children: [
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+          decoration: BoxDecoration(
+            color: Colors.redAccent.withOpacity(0.92),
+            borderRadius: BorderRadius.circular(20),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withOpacity(0.35),
+                blurRadius: 10,
+                offset: const Offset(0, 4),
+              ),
+            ],
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: const [
+              Icon(Icons.do_not_disturb_alt, color: Colors.white, size: 18),
+              SizedBox(width: 8),
+              Text(
+                'Rupture de stock',
+                style: TextStyle(
+                  color: Colors.white,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(height: 6),
+        const SizedBox(height: 18), // garde une hauteur proche de la bulle
+      ],
+    );
   }
 }

@@ -4,7 +4,15 @@ class MarketplaceItem {
   final String code;
   final String name;
   final String? description;
+
   final int defaultPrice;
+
+  final int quantity;
+
+  final bool hasSold;
+
+  final bool hasPrice;
+
   final List<String> imageUrls;
 
   MarketplaceItem({
@@ -13,6 +21,9 @@ class MarketplaceItem {
     required this.name,
     required this.defaultPrice,
     required this.imageUrls,
+    required this.quantity,
+    required this.hasSold,
+    required this.hasPrice,
     this.description,
   });
 
@@ -23,6 +34,9 @@ class MarketplaceItem {
       name: json['name'] as String,
       description: json['description'] as String?,
       defaultPrice: (json['defaultPrice'] as num).toInt(),
+      quantity: (json['quantity'] as num).toInt(),
+      hasSold: (json['hasSold'] as bool?) ?? false,
+      hasPrice: (json['hasPrice'] as bool?) ?? false,
       imageUrls: ((json['imageUrls'] as List?) ?? [])
           .map((e) => e.toString())
           .toList(),
