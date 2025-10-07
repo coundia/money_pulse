@@ -76,7 +76,7 @@ class _CompaniesChipsRowState extends ConsumerState<CompaniesChipsRow> {
                     );
                   }
                 },
-                child: const Icon(Icons.refresh, size: 22, color: Colors.black),
+                child: const Icon(Icons.home, size: 22, color: Colors.black),
               ),
               ...list.map((c) {
                 final selected = _effectiveSelectedId == c.id;
