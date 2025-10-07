@@ -11,6 +11,9 @@ class ProductListPage extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final queryCtrl = ref.watch(productQueryControllerProvider);
 
+    // ✅ Key pour accéder au state interne du body (afin d'appeler startAdd()).
+    final bodyKey = GlobalKey<ProductListBodyState>();
+
     return Scaffold(
       appBar: AppBar(
         title: const Text('Produits'),
@@ -23,17 +26,19 @@ class ProductListPage extends ConsumerWidget {
           ),
           IconButton(
             tooltip: 'Ajouter',
-            onPressed: () => ProductListBody.openAdd(context, ref),
+            // ✅ Ouvre le panneau d’ajout via la méthode publique du state
+            onPressed: () => bodyKey.currentState?.startAdd(),
             icon: const Icon(Icons.add),
           ),
         ],
       ),
       floatingActionButton: FloatingActionButton.extended(
-        onPressed: () => ProductListBody.openAdd(context, ref),
+        onPressed: () => bodyKey.currentState?.startAdd(),
         icon: const Icon(Icons.add),
         label: const Text('Nouveau produit'),
       ),
-      body: ProductListBody(queryController: queryCtrl),
+      // ✅ on passe la key au body
+      body: ProductListBody(key: bodyKey, queryController: queryCtrl),
     );
   }
 }

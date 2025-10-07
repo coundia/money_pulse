@@ -1,4 +1,6 @@
-// Three-action toolbar to publish, unpublish, and republish a product, handling remoteId presence and images requirement.
+// Three-action toolbar to publish, unpublish, and republish a product, handling
+// remoteId presence and images requirement. "Republier" is NEVER disabled.
+
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -113,6 +115,7 @@ class _ProductPublishActionsState extends ConsumerState<ProductPublishActions> {
     final repo = ref.read(productMarketplaceRepoProvider(widget.baseUri));
     try {
       var current = widget.product;
+      // If it's not yet on the marketplace, push it first (requires at least one image)
       if (!_hasRemoteId) {
         if (widget.images.isEmpty) {
           ScaffoldMessenger.of(context).showSnackBar(
@@ -124,6 +127,7 @@ class _ProductPublishActionsState extends ConsumerState<ProductPublishActions> {
         }
         current = await repo.pushToMarketplace(current, widget.images);
       }
+      // Republier = (re)forcer l’état PUBLISH quelle que soit la situation
       await repo.changeRemoteStatus(product: current, statusesCode: 'PUBLISH');
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
@@ -144,8 +148,6 @@ class _ProductPublishActionsState extends ConsumerState<ProductPublishActions> {
   Widget build(BuildContext context) {
     final canPublish = !_isPublished;
     final canUnpublish = _isPublished && _hasRemoteId;
-    final canRepublish =
-        !_isPublished; // republish behaves like publish but label differs
 
     return LayoutBuilder(
       builder: (_, bc) {
@@ -183,12 +185,11 @@ class _ProductPublishActionsState extends ConsumerState<ProductPublishActions> {
               label: const Text('Retirer'),
             ),
           ),
+          // 🔥 Republier: toujours actif (sauf durant le chargement)
           Tooltip(
-            message: canRepublish ? 'Republier sur le marché' : 'Déjà publié',
+            message: 'Republier sur le marché',
             child: OutlinedButton.icon(
-              onPressed: (!canRepublish || _loadingRepublish)
-                  ? null
-                  : _doRepublish,
+              onPressed: _loadingRepublish ? null : _doRepublish,
               icon: _loadingRepublish
                   ? const SizedBox(
                       width: 16,

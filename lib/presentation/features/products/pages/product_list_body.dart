@@ -8,6 +8,7 @@ import 'package:uuid/uuid.dart';
 import 'package:money_pulse/domain/products/entities/product.dart';
 import 'package:money_pulse/domain/products/entities/product_file.dart';
 import 'package:money_pulse/domain/products/repositories/product_repository.dart';
+
 import 'package:money_pulse/presentation/widgets/attachments_picker.dart';
 import 'package:money_pulse/presentation/widgets/right_drawer.dart';
 
@@ -26,25 +27,27 @@ import '../../stock/providers/stock_level_repo_provider.dart';
 import '../widgets/top_bar.dart';
 import '../application/product_list_providers.dart';
 
+// ✅ Imports nécessaires pour typer correctement les catégories
+import 'package:money_pulse/domain/categories/entities/category.dart';
+import 'package:money_pulse/domain/categories/repositories/category_repository.dart';
+
 class ProductListBody extends ConsumerStatefulWidget {
   final TextEditingController queryController;
   const ProductListBody({super.key, required this.queryController});
 
-  static Future<void> openAdd(BuildContext context, WidgetRef ref) async {
-    final state = context.findAncestorStateOfType<_ProductListBodyState>();
-    await state?._addOrEdit();
-  }
-
   @override
-  ConsumerState<ProductListBody> createState() => _ProductListBodyState();
+  ConsumerState<ProductListBody> createState() => ProductListBodyState();
 }
 
-class _ProductListBodyState extends ConsumerState<ProductListBody> {
+class ProductListBodyState extends ConsumerState<ProductListBody> {
   static const String _marketplaceBaseUri = 'http://127.0.0.1:8095';
 
   late final ProductRepository _repo = ref.read(productRepoProvider);
   late final dynamic _fileRepo;
-  late final dynamic _categoryRepo;
+
+  // ❗️ Était "dynamic" -> on le **type** correctement
+  late final CategoryRepository _categoryRepo;
+
   late final dynamic _marketRepo;
   late final dynamic _stockRepo;
 
@@ -52,7 +55,10 @@ class _ProductListBodyState extends ConsumerState<ProductListBody> {
   void initState() {
     super.initState();
     _fileRepo = ref.read(productFileRepoProvider);
+
+    // ✅ Provider doit renvoyer un CategoryRepository
     _categoryRepo = ref.read(categoryRepoProvider);
+
     _stockRepo = ref.read(stockLevelRepoProvider);
     _marketRepo = ref.read(productMarketplaceRepoProvider(_marketplaceBaseUri));
   }
@@ -60,7 +66,6 @@ class _ProductListBodyState extends ConsumerState<ProductListBody> {
   void _unfocus() => FocusManager.instance.primaryFocus?.unfocus();
 
   // -------------------- Files helpers --------------------
-
   Future<String> _persistBytesToDisk(String name, List<int> bytes) async {
     final dir = await getApplicationDocumentsDirectory();
     final folder = Directory('${dir.path}/product_files');
@@ -125,13 +130,38 @@ class _ProductListBodyState extends ConsumerState<ProductListBody> {
 
   // -------------------- Product CRUD (+view) --------------------
 
+  /// Méthode publique (utilisée par la page) pour ouvrir l’ajout.
+  Future<void> startAdd() => _addOrEdit();
+
   Future<void> _addOrEdit({Product? existing}) async {
     _unfocus();
-    final categories = await _categoryRepo.findAllActive();
+
+    // ✅ On force un type List<Category> ici
+    List<Category> categories;
+    try {
+      final result = await _categoryRepo.findAllActive();
+      // Si ton repo renvoie déjà List<Category>, ceci suffit:
+      // categories = result;
+
+      // Si ton repo renvoie List<dynamic>, on caste:
+      categories = result.cast<Category>();
+
+      // Si (cas extrême) il renvoie List<Map>, utilise:
+      // categories = (result as List)
+      //     .map((e) => e is Category ? e : Category.fromMap(e as Map<String, Object?>))
+      //     .toList();
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('Erreur catégories : $e')));
+      return;
+    }
     if (!mounted) return;
 
     final res = await showRightDrawer<ProductFormResult?>(
       context,
+      // ✅ On passe bien un List<Category>
       child: ProductFormPanel(existing: existing, categories: categories),
       widthFraction: 0.92,
       heightFraction: 0.96,
@@ -188,7 +218,6 @@ class _ProductListBodyState extends ConsumerState<ProductListBody> {
           .copyWith(levelId: res.levelId, version: existing.version);
 
       final finalUpdated = updated.copyWith(
-        // override quantity & boolean flags from form
         quantity: res.quantity,
         hasSold: res.hasSold ? 1 : 0,
         hasPrice: res.hasPrice ? 1 : 0,
@@ -200,7 +229,6 @@ class _ProductListBodyState extends ConsumerState<ProductListBody> {
       await _saveFormFiles(finalUpdated.id, res.files, _fileRepo);
     }
 
-    // refresh all async sources
     ref.invalidate(productsFutureProvider);
     ref.invalidate(stockMapFutureProvider);
     ref.invalidate(imageMapFutureProvider);
@@ -208,7 +236,19 @@ class _ProductListBodyState extends ConsumerState<ProductListBody> {
 
   Future<void> _duplicate(Product p) async {
     _unfocus();
-    final categories = await _categoryRepo.findAllActive();
+
+    // ✅ Ici aussi on tape fort en List<Category>
+    List<Category> categories;
+    try {
+      final result = await _categoryRepo.findAllActive();
+      categories = result.cast<Category>();
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('Erreur catégories : $e')));
+      return;
+    }
     if (!mounted) return;
 
     final res = await showRightDrawer<ProductFormResult?>(
@@ -248,8 +288,8 @@ class _ProductListBodyState extends ConsumerState<ProductListBody> {
       isDirty: 1,
     );
     await _repo.create(copy);
-
     await _saveFormFiles(copy.id, res.files, _fileRepo);
+
     ref.invalidate(productsFutureProvider);
   }
 
@@ -341,7 +381,6 @@ class _ProductListBodyState extends ConsumerState<ProductListBody> {
   }
 
   // -------------------- Quick actions --------------------
-
   Future<void> _share(Product p) async {
     final text = [
       'Produit: ${p.name ?? p.code ?? '—'}',
@@ -396,7 +435,6 @@ class _ProductListBodyState extends ConsumerState<ProductListBody> {
   }
 
   // -------------------- Build --------------------
-
   @override
   Widget build(BuildContext context) {
     final productsAsync = ref.watch(productsFutureProvider);
@@ -458,6 +496,8 @@ class _ProductListBodyState extends ConsumerState<ProductListBody> {
               }
 
               final p = items[i - 1];
+
+              stockMapAsync.maybeWhen(orElse: () {}, data: (_) {});
 
               final imagePath = imageMapAsync.maybeWhen(
                 data: (m) => m[p.id],
