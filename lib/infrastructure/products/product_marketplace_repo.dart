@@ -165,9 +165,9 @@ class ProductMarketplaceRepo {
       'quantity': p.quantity,
       'hasSold': p.hasSold == 1,
       'hasPrice': p.hasPrice == 1,
-      'defaultPrice': p.defaultPrice * 100.0,
+      'defaultPrice': p.defaultPrice,
       'statuses': 'PUBLISH',
-      'purchasePrice': p.purchasePrice * 100.0,
+      'purchasePrice': p.purchasePrice,
     };
     map.removeWhere((_, v) => v == null);
     return map;

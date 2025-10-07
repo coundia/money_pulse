@@ -78,7 +78,7 @@ class _MessageComposePanelState extends ConsumerState<MessageComposePanel> {
       typeOrder: 'MESSAGE',
       paymentMethod: 'NA',
       deliveryMethod: 'NA',
-      amountCents: widget.item.defaultPrice * 100,
+      amountCents: widget.item.defaultPrice,
       quantity: 1,
       dateCommand: DateTime.now().toUtc(),
     );

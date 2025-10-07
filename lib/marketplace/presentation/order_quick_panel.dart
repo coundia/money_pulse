@@ -183,7 +183,7 @@ class _OrderQuickPanelState extends ConsumerState<OrderQuickPanel> {
       _amountCtrl.text,
       fallback: widget.item.defaultPrice,
     );
-    final amountCents = amountXof * 100;
+    final amountCents = amountXof * 1;
 
     var buyerName = _nameCtrl.text.trim();
     final grant = ref.read(accessSessionProvider);
