@@ -222,7 +222,7 @@ class TransactionRepositorySqflite implements TransactionRepository {
     final toIso = to.toUtc().toIso8601String();
 
     final where = StringBuffer(
-      '(accountId = ? OR (accountId IS NULL AND typeEntry = "DEBT")) '
+      '(accountId = ? OR (accountId IS NULL  )) '
       'AND deletedAt IS NULL '
       'AND dateTransaction >= ? '
       'AND dateTransaction < ?',
