@@ -13,7 +13,7 @@ Future<AccessGrant?> startAccessFlow(
 }) async {
   final first = await showRightDrawer<dynamic>(
     context,
-    child: AccessEmailRequestPanel(initialEmail: prefillEmail),
+    child: AccessEmailRequestPanel(initialPhone: prefillEmail),
     widthFraction: 0.86,
     heightFraction: 1.0,
   );

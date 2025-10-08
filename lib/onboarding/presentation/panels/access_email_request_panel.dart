@@ -1,5 +1,5 @@
-// Right-drawer to request an access code (email or phone), with register, password login, and direct code verification.
-// Modern UI with improved layout, clarity, and accessibility.
+// Right-drawer to request access code using only phone number (WhatsApp-based login).
+// Simplified and mobile-first design for single-step identity entry.
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -17,11 +17,9 @@ class AccessEmailRequestResult {
   const AccessEmailRequestResult(this.identity);
 }
 
-enum IdentityMode { email, phone }
-
 class AccessEmailRequestPanel extends ConsumerStatefulWidget {
-  final String? initialEmail;
-  const AccessEmailRequestPanel({super.key, this.initialEmail});
+  final String? initialPhone;
+  const AccessEmailRequestPanel({super.key, this.initialPhone});
 
   @override
   ConsumerState<AccessEmailRequestPanel> createState() =>
@@ -31,50 +29,38 @@ class AccessEmailRequestPanel extends ConsumerStatefulWidget {
 class _AccessEmailRequestPanelState
     extends ConsumerState<AccessEmailRequestPanel> {
   final _formKey = GlobalKey<FormState>();
-  final _emailCtrl = TextEditingController();
   final _phoneCtrl = TextEditingController();
   final _nameCtrl = TextEditingController();
   final _messageCtrl = TextEditingController();
-  final _emailFocus = FocusNode();
   final _phoneFocus = FocusNode();
-  IdentityMode _mode = IdentityMode.phone;
   bool _sending = false;
 
   @override
   void initState() {
     super.initState();
-    _emailCtrl.text = widget.initialEmail ?? '';
+    _phoneCtrl.text = widget.initialPhone ?? '';
   }
 
   @override
   void dispose() {
-    _emailCtrl.dispose();
     _phoneCtrl.dispose();
     _nameCtrl.dispose();
     _messageCtrl.dispose();
-    _emailFocus.dispose();
     _phoneFocus.dispose();
     super.dispose();
   }
 
-  bool get _emailValid =>
-      RegExp(r'^[^@]+@[^@]+\.[^@]+$').hasMatch(_emailCtrl.text.trim());
-  bool get _phoneValid =>
-      RegExp(r'^[0-9+\-\s]{6,20}$').hasMatch(_phoneCtrl.text.trim());
-  bool get _identityValid =>
-      _mode == IdentityMode.email ? _emailValid : _phoneValid;
-  String get _username => _mode == IdentityMode.email
-      ? _emailCtrl.text.trim()
-      : _phoneCtrl.text.trim();
+  bool get _phoneValid {
+    final v = _phoneCtrl.text.trim();
+    return RegExp(r'^[0-9+\-\s]{6,20}$').hasMatch(v);
+  }
 
   Future<AccessIdentity> _buildIdentity() async {
-    final email = _mode == IdentityMode.email ? _emailCtrl.text.trim() : '';
-    final phone = _mode == IdentityMode.phone ? _phoneCtrl.text.trim() : '';
+    final phone = _phoneCtrl.text.trim();
     final source = await ref.read(installationIdProvider.future);
     return AccessIdentity(
-      username: _username,
-      email: email.isEmpty ? null : email,
-      phone: phone.isEmpty ? null : phone,
+      username: phone,
+      phone: phone,
       name: _nameCtrl.text.trim().isEmpty ? null : _nameCtrl.text.trim(),
       notes: _messageCtrl.text.trim().isEmpty ? null : _messageCtrl.text.trim(),
       source: source,
@@ -82,7 +68,7 @@ class _AccessEmailRequestPanelState
   }
 
   Future<void> _submit() async {
-    if (_sending || !_identityValid) return;
+    if (_sending || !_phoneValid) return;
     final ok = _formKey.currentState?.validate() ?? false;
     if (!ok) return;
 
@@ -97,7 +83,6 @@ class _AccessEmailRequestPanelState
         context,
         child: AccessCodeVerifyPanel(identity: identity),
       );
-
       if (grant != null) {
         Navigator.of(context).pop<AccessGrant>(grant);
       } else {
@@ -107,9 +92,7 @@ class _AccessEmailRequestPanelState
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
-            content: Text(
-              'Échec de l’envoi du code. Vérifiez vos informations.',
-            ),
+            content: Text('Échec de l’envoi du code. Vérifiez votre numéro.'),
             behavior: SnackBarBehavior.floating,
           ),
         );
@@ -131,14 +114,16 @@ class _AccessEmailRequestPanelState
     final username = await showRightDrawer<String?>(
       context,
       child: AccessRegisterPanel(
-        initialUsername: _username.isNotEmpty ? _username : null,
+        initialUsername: _phoneCtrl.text.trim().isNotEmpty
+            ? _phoneCtrl.text.trim()
+            : null,
       ),
     );
     if (username != null && mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
           content: Text(
-            'Compte créé avec succès. Vous pouvez demander un code.',
+            'Compte créé. Demandez un code pour valider votre numéro.',
           ),
           behavior: SnackBarBehavior.floating,
         ),
@@ -184,29 +169,17 @@ class _AccessEmailRequestPanelState
                           mainAxisSize: MainAxisSize.min,
                           children: [
                             const Text(
-                              'Recevez un code de confirmation par e-mail ou téléphone.',
+                              'Entrez votre numéro WhatsApp pour recevoir un code de connexion.',
                               style: TextStyle(fontSize: 16),
                               textAlign: TextAlign.center,
                             ),
-                            const SizedBox(height: 20),
-                            _modeSwitcher(),
-                            const SizedBox(height: 16),
-                            if (isWide)
-                              Row(
-                                children: [
-                                  Expanded(child: _identityField()),
-                                  const SizedBox(width: 12),
-                                  Expanded(child: _nameField()),
-                                ],
-                              )
-                            else ...[
-                              _identityField(),
-                              const SizedBox(height: 12),
-                              _nameField(),
-                            ],
+                            const SizedBox(height: 24),
+                            _phoneField(),
+                            const SizedBox(height: 12),
+                            _nameField(),
                             const SizedBox(height: 12),
                             _messageField(),
-                            const SizedBox(height: 20),
+                            const SizedBox(height: 24),
                             _buttonsLayout(isWide),
                           ],
                         ),
@@ -222,63 +195,31 @@ class _AccessEmailRequestPanelState
     );
   }
 
-  Widget _modeSwitcher() => SegmentedButton<IdentityMode>(
-    segments: const [
-      ButtonSegment(
-        value: IdentityMode.phone,
-        label: Text('Téléphone (WhatsApp)'),
-        icon: Icon(Icons.phone),
-      ),
-      ButtonSegment(
-        value: IdentityMode.email,
-        label: Text('E-mail'),
-        icon: Icon(Icons.alternate_email),
-      ),
-    ],
-    selected: {_mode},
-    onSelectionChanged: (s) {
-      setState(() => _mode = s.first);
-      Future.delayed(const Duration(milliseconds: 100), () {
-        if (_mode == IdentityMode.email) {
-          _emailFocus.requestFocus();
-        } else {
-          _phoneFocus.requestFocus();
-        }
-      });
-    },
-  );
-
-  Widget _identityField() {
-    final isEmail = _mode == IdentityMode.email;
-    return TextFormField(
-      controller: isEmail ? _emailCtrl : _phoneCtrl,
-      focusNode: isEmail ? _emailFocus : _phoneFocus,
-      decoration: InputDecoration(
-        labelText: isEmail ? 'Adresse e-mail' : 'Téléphone',
-        hintText: isEmail ? 'exemple@domaine.com' : '221 77 000 00 00',
-        prefixIcon: Icon(isEmail ? Icons.email_outlined : Icons.phone_outlined),
-        border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
-        errorText: (isEmail && _emailCtrl.text.isNotEmpty && !_emailValid)
-            ? 'E-mail invalide'
-            : (!isEmail && _phoneCtrl.text.isNotEmpty && !_phoneValid)
-            ? 'Numéro invalide'
-            : null,
-      ),
-      keyboardType: isEmail ? TextInputType.emailAddress : TextInputType.phone,
-      inputFormatters: isEmail
+  Widget _phoneField() => TextFormField(
+    controller: _phoneCtrl,
+    focusNode: _phoneFocus,
+    decoration: InputDecoration(
+      labelText: 'Numéro de téléphone (WhatsApp)',
+      hintText: '221 77 000 00 00',
+      prefixIcon: const Icon(Icons.phone),
+      border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+      errorText: _phoneCtrl.text.isEmpty
           ? null
-          : [FilteringTextInputFormatter.allow(RegExp(r'[0-9+\-\s]'))],
-      textInputAction: TextInputAction.next,
-      onFieldSubmitted: (_) => _submit(),
-    );
-  }
+          : (_phoneValid ? null : 'Numéro invalide'),
+    ),
+    keyboardType: TextInputType.phone,
+    inputFormatters: [FilteringTextInputFormatter.allow(RegExp(r'[0-9+\-\s]'))],
+    textInputAction: TextInputAction.next,
+    onFieldSubmitted: (_) => _submit(),
+    validator: (v) => (v == null || v.trim().isEmpty) ? 'Champ requis' : null,
+  );
 
   Widget _nameField() => TextFormField(
     controller: _nameCtrl,
     decoration: InputDecoration(
       labelText: 'Nom complet',
       hintText: 'Prénom Nom',
-      prefixIcon: const Icon(Icons.badge_outlined),
+      prefixIcon: const Icon(Icons.person_outline),
       border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
     ),
     textInputAction: TextInputAction.next,
@@ -333,7 +274,6 @@ class _AccessEmailRequestPanelState
         label: const Text('J’ai déjà reçu le code'),
       ),
     ];
-
     return isWide
         ? Wrap(
             alignment: WrapAlignment.center,
