@@ -1,11 +1,11 @@
-// Right-drawer to login with username and password with Enter-to-validate and forgot-password flow.
+// Right-drawer to login using phone number and one-time code with Enter-to-validate, resend support, and request-code shortcut.
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../domain/entities/access_grant.dart';
+import '../../domain/models/access_identity.dart';
 import '../providers/access_repo_provider.dart';
-import 'access_forgot_password_panel.dart';
-import 'access_reset_password_panel.dart';
+import 'access_email_request_panel.dart';
 import 'package:money_pulse/presentation/widgets/right_drawer.dart';
 
 class AccessPasswordLoginPanel extends ConsumerStatefulWidget {
@@ -19,71 +19,101 @@ class AccessPasswordLoginPanel extends ConsumerStatefulWidget {
 class _AccessPasswordLoginPanelState
     extends ConsumerState<AccessPasswordLoginPanel> {
   final _formKey = GlobalKey<FormState>();
-  final _userCtrl = TextEditingController();
-  final _passCtrl = TextEditingController();
-  final _userFocus = FocusNode();
-  final _passFocus = FocusNode();
+  final _phoneCtrl = TextEditingController();
+  final _codeCtrl = TextEditingController();
+  final _phoneFocus = FocusNode();
+  final _codeFocus = FocusNode();
   bool _busy = false;
-  bool _obscure = true;
+  bool _resending = false;
 
   @override
   void dispose() {
-    _userCtrl.dispose();
-    _passCtrl.dispose();
-    _userFocus.dispose();
-    _passFocus.dispose();
+    _phoneCtrl.dispose();
+    _codeCtrl.dispose();
+    _phoneFocus.dispose();
+    _codeFocus.dispose();
     super.dispose();
   }
 
-  bool get _valid =>
-      _userCtrl.text.trim().isNotEmpty && _passCtrl.text.isNotEmpty;
+  bool get _validPhone =>
+      RegExp(r'^[0-9]{6,20}$').hasMatch(_phoneCtrl.text.trim());
+  bool get _validCode =>
+      RegExp(r'^[0-9]{2,18}$').hasMatch(_codeCtrl.text.trim());
 
   Future<void> _submit() async {
     final ok = _formKey.currentState?.validate() ?? false;
-    if (!ok || !_valid || _busy) return;
+    if (!ok || !_validPhone || !_validCode || _busy) {
+      if (!_validPhone)
+        _phoneFocus.requestFocus();
+      else if (!_validCode)
+        _codeFocus.requestFocus();
+      return;
+    }
     setState(() => _busy = true);
     try {
-      final uc = ref.read(loginWithPasswordUseCaseProvider);
-      final grant = await uc.execute(_userCtrl.text.trim(), _passCtrl.text);
+      final identity = AccessIdentity(
+        username: _phoneCtrl.text.trim(),
+        phone: _phoneCtrl.text.trim(),
+      );
+      final uc = ref.read(verifyAccessUseCaseProvider);
+      final grant = await uc.execute(identity, _codeCtrl.text.trim());
       if (!mounted) return;
       Navigator.of(context).pop<AccessGrant>(grant);
     } catch (_) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Identifiants invalides. Réessayez.')),
+        const SnackBar(content: Text('Code invalide ou expiré. Réessayez.')),
       );
     } finally {
       if (mounted) setState(() => _busy = false);
     }
   }
 
-  Future<void> _openForgotFlow() async {
-    final sent = await showRightDrawer<bool?>(
+  Future<void> _resend() async {
+    if (_resending || !_validPhone) {
+      if (!_validPhone) _phoneFocus.requestFocus();
+      return;
+    }
+    setState(() => _resending = true);
+    try {
+      final identity = AccessIdentity(
+        username: _phoneCtrl.text.trim(),
+        phone: _phoneCtrl.text.trim(),
+      );
+      final uc = ref.read(requestAccessUseCaseProvider);
+      await uc.execute(identity);
+      if (!mounted) return;
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('Nouveau code envoyé.')));
+      _codeFocus.requestFocus();
+    } catch (_) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('Échec de renvoi du code.')));
+    } finally {
+      if (mounted) setState(() => _resending = false);
+    }
+  }
+
+  Future<void> _openRequestCode() async {
+    final res = await showRightDrawer<AccessEmailRequestResult?>(
       context,
-      child: AccessForgotPasswordPanel(
-        initialUsername: _userCtrl.text.trim().isNotEmpty
-            ? _userCtrl.text.trim()
+      child: AccessEmailRequestPanel(
+        initialPhone: _phoneCtrl.text.trim().isNotEmpty
+            ? _phoneCtrl.text.trim()
             : null,
       ),
       widthFraction: 0.86,
       heightFraction: 1.0,
     );
-    if (sent == true && mounted) {
-      final resetOk = await showRightDrawer<bool?>(
-        context,
-        child: const AccessResetPasswordPanel(),
-        widthFraction: 0.86,
-        heightFraction: 1.0,
-      );
-      if (resetOk == true && mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Mot de passe mis à jour. Connectez-vous.'),
-          ),
-        );
-        _passCtrl.clear();
-        _userFocus.requestFocus();
-      }
+    if (!mounted) return;
+    if (res != null) {
+      _phoneCtrl.text = res.identity.phone ?? res.identity.username;
+      _codeCtrl.clear();
+      _codeFocus.requestFocus();
+      setState(() {});
     }
   }
 
@@ -127,37 +157,57 @@ class _AccessPasswordLoginPanelState
                           mainAxisSize: MainAxisSize.min,
                           children: [
                             const Text(
-                              'Entrez votre identifiant et votre mot de passe pour accéder à votre compte.',
+                              'Entrez votre numéro et le code reçu pour accéder à votre compte.',
                               textAlign: TextAlign.center,
                             ),
                             const SizedBox(height: 16),
                             if (isWide)
                               Row(
                                 children: [
-                                  Expanded(child: _userField()),
+                                  Expanded(child: _phoneField()),
                                   const SizedBox(width: 12),
-                                  Expanded(child: _passField()),
+                                  Expanded(child: _codeField()),
                                 ],
                               )
                             else ...[
-                              _userField(),
+                              _phoneField(),
                               const SizedBox(height: 12),
-                              _passField(),
+                              _codeField(),
                             ],
-                            const SizedBox(height: 16),
+                            const SizedBox(height: 12),
+                            Align(
+                              alignment: Alignment.centerRight,
+                              child: Wrap(
+                                alignment: WrapAlignment.end,
+                                spacing: 8,
+                                runSpacing: 8,
+                                children: [
+                                  TextButton.icon(
+                                    onPressed: _openRequestCode,
+                                    icon: const Icon(Icons.sms_outlined),
+                                    label: const Text('Recevoir un code'),
+                                  ),
+                                  TextButton.icon(
+                                    onPressed: _resending ? null : _resend,
+                                    icon: _resending
+                                        ? const SizedBox(
+                                            width: 16,
+                                            height: 16,
+                                            child: CircularProgressIndicator(
+                                              strokeWidth: 2,
+                                            ),
+                                          )
+                                        : const Icon(Icons.refresh),
+                                    label: const Text('Renvoyer le code'),
+                                  ),
+                                ],
+                              ),
+                            ),
+                            const SizedBox(height: 12),
                             SizedBox(
                               width: isWide ? 200 : double.infinity,
                               height: 48,
                               child: _primaryBtn(),
-                            ),
-                            const SizedBox(height: 8),
-                            Align(
-                              alignment: Alignment.centerRight,
-                              child: TextButton.icon(
-                                onPressed: _openForgotFlow,
-                                icon: const Icon(Icons.help_outline),
-                                label: const Text('Mot de passe oublié ?'),
-                              ),
                             ),
                           ],
                         ),
@@ -173,41 +223,53 @@ class _AccessPasswordLoginPanelState
     );
   }
 
-  Widget _userField() {
+  Widget _phoneField() {
     return TextFormField(
-      controller: _userCtrl,
-      focusNode: _userFocus,
+      controller: _phoneCtrl,
+      focusNode: _phoneFocus,
       decoration: InputDecoration(
-        labelText: 'Nom d’utilisateur',
-        hintText: 'admin',
-        prefixIcon: const Icon(Icons.person_outline),
+        labelText: 'Téléphone',
+        hintText: '770000000',
+        prefixIcon: const Icon(Icons.phone_outlined),
         border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+        counterText: '',
       ),
+      keyboardType: TextInputType.number,
+      inputFormatters: [
+        FilteringTextInputFormatter.digitsOnly,
+        LengthLimitingTextInputFormatter(15),
+      ],
+      maxLength: 15,
       textInputAction: TextInputAction.next,
-      onFieldSubmitted: (_) => _passFocus.requestFocus(),
-      validator: (v) => (v == null || v.trim().isEmpty) ? 'Champ requis' : null,
+      onFieldSubmitted: (_) => _codeFocus.requestFocus(),
+      validator: (v) => (v == null || v.trim().isEmpty)
+          ? 'Champ requis'
+          : (_validPhone ? null : 'Numéro invalide'),
     );
   }
 
-  Widget _passField() {
+  Widget _codeField() {
     return TextFormField(
-      controller: _passCtrl,
-      focusNode: _passFocus,
+      controller: _codeCtrl,
+      focusNode: _codeFocus,
       decoration: InputDecoration(
-        labelText: 'Mot de passe',
-        hintText: 'Votre mot de passe',
-        prefixIcon: const Icon(Icons.lock_outline),
-        suffixIcon: IconButton(
-          onPressed: () => setState(() => _obscure = !_obscure),
-          icon: Icon(_obscure ? Icons.visibility : Icons.visibility_off),
-          tooltip: _obscure ? 'Afficher' : 'Masquer',
-        ),
+        labelText: 'Code',
+        hintText: '123456',
+        prefixIcon: const Icon(Icons.verified_user_outlined),
         border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+        counterText: '',
       ),
-      obscureText: _obscure,
+      keyboardType: TextInputType.number,
+      inputFormatters: [
+        FilteringTextInputFormatter.digitsOnly,
+        LengthLimitingTextInputFormatter(8),
+      ],
+      maxLength: 8,
       textInputAction: TextInputAction.done,
       onFieldSubmitted: (_) => _submit(),
-      validator: (v) => (v == null || v.isEmpty) ? 'Champ requis' : null,
+      validator: (v) => (v == null || v.trim().isEmpty)
+          ? 'Champ requis'
+          : (_validCode ? null : 'Code invalide'),
     );
   }
 

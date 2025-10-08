@@ -1,4 +1,4 @@
-// Right-drawer to request an access code using phone only, with non-intrusive bottom warning instead of red error text.
+// Right-drawer to request access code using phone only, with non-intrusive bottom warning and a "J’ai déjà un compte" button that opens password login.
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -53,7 +53,7 @@ class _AccessEmailRequestPanelState
 
   bool get _phoneValid {
     final v = _phoneCtrl.text.trim();
-    return RegExp(r'^[0-9]{2,30}$').hasMatch(v);
+    return RegExp(r'^[0-9]{6,20}$').hasMatch(v);
   }
 
   String? get _warningText {
@@ -62,7 +62,7 @@ class _AccessEmailRequestPanelState
       return 'Veuillez saisir votre numéro de téléphone.';
     }
     if (!_phoneValid) {
-      return 'Veuillez saisir un bon numéro de téléphone.';
+      return 'Numéro invalide : 6 à 20 chiffres, sans espaces.';
     }
     return null;
   }
@@ -182,7 +182,7 @@ class _AccessEmailRequestPanelState
                       child: Stack(
                         children: [
                           Padding(
-                            padding: const EdgeInsets.fromLTRB(20, 16, 20, 120),
+                            padding: const EdgeInsets.fromLTRB(20, 16, 20, 140),
                             child: Column(
                               mainAxisSize: MainAxisSize.min,
                               children: [
@@ -193,12 +193,12 @@ class _AccessEmailRequestPanelState
                                 ),
                                 const SizedBox(height: 24),
                                 _phoneField(),
-                                const SizedBox(height: 12),
+                                /*const SizedBox(height: 12),
                                 _nameField(),
                                 const SizedBox(height: 12),
                                 _messageField(),
-                                const SizedBox(height: 24),
-                                _buttonsRow(isWide),
+                                const SizedBox(height: 24),*/
+                                _buttonsBloc(isWide),
                               ],
                             ),
                           ),
@@ -269,77 +269,67 @@ class _AccessEmailRequestPanelState
     textInputAction: TextInputAction.done,
   );
 
-  Widget _buttonsRow(bool isWide) {
-    final children = [
-      Expanded(
-        child: SizedBox(
-          height: 48,
-          child: ElevatedButton.icon(
-            onPressed: _sending ? null : _submit,
-            icon: _sending
-                ? const SizedBox(
-                    width: 18,
-                    height: 18,
-                    child: CircularProgressIndicator(strokeWidth: 2),
-                  )
-                : const Icon(Icons.send),
-            label: const Text('Recevoir le code'),
-          ),
-        ),
+  Widget _buttonsBloc(bool isWide) {
+    final primary = SizedBox(
+      width: isWide ? 240 : double.infinity,
+      height: 48,
+      child: ElevatedButton.icon(
+        onPressed: _sending ? null : _submit,
+        icon: _sending
+            ? const SizedBox(
+                width: 18,
+                height: 18,
+                child: CircularProgressIndicator(strokeWidth: 2),
+              )
+            : const Icon(Icons.send),
+        label: const Text('Recevoir le code'),
       ),
-      const SizedBox(width: 12),
-      OutlinedButton.icon(
-        onPressed: _openPasswordLogin,
-        icon: const Icon(Icons.lock_open),
-        label: const Text('Mot de passe'),
-      ),
-      const SizedBox(width: 8),
-      OutlinedButton.icon(
-        onPressed: _openRegister,
-        icon: const Icon(Icons.person_add_alt_1),
-        label: const Text('Créer un compte'),
-      ),
-    ];
+    );
+
+    final login = TextButton.icon(
+      onPressed: _openPasswordLogin,
+      icon: const Icon(Icons.login_rounded),
+      label: const Text('J’ai déjà un code'),
+    );
+
+    final withPassword = OutlinedButton.icon(
+      onPressed: _openPasswordLogin,
+      icon: const Icon(Icons.lock_open),
+      label: const Text('Connexion avec mot de passe'),
+    );
+
+    final register = OutlinedButton.icon(
+      onPressed: _openRegister,
+      icon: const Icon(Icons.person_add_alt_1),
+      label: const Text('Créer un compte'),
+    );
 
     return isWide
-        ? Row(children: children)
+        ? Column(
+            crossAxisAlignment: CrossAxisAlignment.center,
+            children: [
+              Row(
+                children: [
+                  primary,
+                  const SizedBox(width: 12),
+                  withPassword,
+                  const SizedBox(width: 8),
+                  register,
+                ],
+              ),
+              const SizedBox(height: 6),
+              Align(alignment: Alignment.centerLeft, child: login),
+            ],
+          )
         : Column(
             children: [
-              SizedBox(
-                width: double.infinity,
-                height: 48,
-                child: ElevatedButton.icon(
-                  onPressed: _sending ? null : _submit,
-                  icon: _sending
-                      ? const SizedBox(
-                          width: 18,
-                          height: 18,
-                          child: CircularProgressIndicator(strokeWidth: 2),
-                        )
-                      : const Icon(Icons.send),
-                  label: const Text('Recevoir le code'),
-                ),
-              ),
+              primary,
               const SizedBox(height: 8),
-              SizedBox(
-                width: double.infinity,
-                height: 44,
-                child: OutlinedButton.icon(
-                  onPressed: _openPasswordLogin,
-                  icon: const Icon(Icons.lock_open),
-                  label: const Text('Mot de passe'),
-                ),
-              ),
+              SizedBox(width: double.infinity, height: 44, child: withPassword),
               const SizedBox(height: 8),
-              SizedBox(
-                width: double.infinity,
-                height: 44,
-                child: OutlinedButton.icon(
-                  onPressed: _openRegister,
-                  icon: const Icon(Icons.person_add_alt_1),
-                  label: const Text('Créer un compte'),
-                ),
-              ),
+              SizedBox(width: double.infinity, height: 44, child: register),
+              const SizedBox(height: 4),
+              Align(alignment: Alignment.centerLeft, child: login),
             ],
           );
   }
