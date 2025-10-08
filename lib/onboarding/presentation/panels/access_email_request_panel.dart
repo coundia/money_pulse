@@ -1,5 +1,4 @@
-// Right-drawer to request access code using only phone number (WhatsApp-based login).
-// Simplified and mobile-first design for single-step identity entry.
+// Right-drawer to request an access code using phone only, with non-intrusive bottom warning instead of red error text.
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -33,7 +32,9 @@ class _AccessEmailRequestPanelState
   final _nameCtrl = TextEditingController();
   final _messageCtrl = TextEditingController();
   final _phoneFocus = FocusNode();
+
   bool _sending = false;
+  bool _dirtyPhone = false;
 
   @override
   void initState() {
@@ -52,7 +53,18 @@ class _AccessEmailRequestPanelState
 
   bool get _phoneValid {
     final v = _phoneCtrl.text.trim();
-    return RegExp(r'^[0-9+\-\s]{6,20}$').hasMatch(v);
+    return RegExp(r'^[0-9]{2,30}$').hasMatch(v);
+  }
+
+  String? get _warningText {
+    if (!_dirtyPhone) return null;
+    if (_phoneCtrl.text.trim().isEmpty) {
+      return 'Veuillez saisir votre numéro de téléphone.';
+    }
+    if (!_phoneValid) {
+      return 'Veuillez saisir un bon numéro de téléphone.';
+    }
+    return null;
   }
 
   Future<AccessIdentity> _buildIdentity() async {
@@ -68,9 +80,12 @@ class _AccessEmailRequestPanelState
   }
 
   Future<void> _submit() async {
-    if (_sending || !_phoneValid) return;
-    final ok = _formKey.currentState?.validate() ?? false;
-    if (!ok) return;
+    _dirtyPhone = true;
+    setState(() {});
+    if (_sending || !_phoneValid) {
+      _phoneFocus.requestFocus();
+      return;
+    }
 
     setState(() => _sending = true);
     try {
@@ -163,26 +178,40 @@ class _AccessEmailRequestPanelState
                     constraints: const BoxConstraints(maxWidth: 880),
                     child: Form(
                       key: _formKey,
-                      child: Padding(
-                        padding: const EdgeInsets.fromLTRB(20, 16, 20, 32),
-                        child: Column(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            const Text(
-                              'Entrez votre numéro WhatsApp pour recevoir un code de connexion.',
-                              style: TextStyle(fontSize: 16),
-                              textAlign: TextAlign.center,
+                      autovalidateMode: AutovalidateMode.disabled,
+                      child: Stack(
+                        children: [
+                          Padding(
+                            padding: const EdgeInsets.fromLTRB(20, 16, 20, 120),
+                            child: Column(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                const Text(
+                                  'Entrez votre numéro WhatsApp pour recevoir un code de connexion.',
+                                  style: TextStyle(fontSize: 16),
+                                  textAlign: TextAlign.center,
+                                ),
+                                const SizedBox(height: 24),
+                                _phoneField(),
+                                const SizedBox(height: 12),
+                                _nameField(),
+                                const SizedBox(height: 12),
+                                _messageField(),
+                                const SizedBox(height: 24),
+                                _buttonsRow(isWide),
+                              ],
                             ),
-                            const SizedBox(height: 24),
-                            _phoneField(),
-                            const SizedBox(height: 12),
-                            _nameField(),
-                            const SizedBox(height: 12),
-                            _messageField(),
-                            const SizedBox(height: 24),
-                            _buttonsLayout(isWide),
-                          ],
-                        ),
+                          ),
+                          Positioned(
+                            left: 0,
+                            right: 0,
+                            bottom: 0,
+                            child: SafeArea(
+                              top: false,
+                              child: _bottomWarningBar(),
+                            ),
+                          ),
+                        ],
                       ),
                     ),
                   ),
@@ -198,29 +227,32 @@ class _AccessEmailRequestPanelState
   Widget _phoneField() => TextFormField(
     controller: _phoneCtrl,
     focusNode: _phoneFocus,
-    decoration: InputDecoration(
+    decoration: const InputDecoration(
       labelText: 'Numéro de téléphone (WhatsApp)',
-      hintText: '221 77 000 00 00',
-      prefixIcon: const Icon(Icons.phone),
-      border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
-      errorText: _phoneCtrl.text.isEmpty
-          ? null
-          : (_phoneValid ? null : 'Numéro invalide'),
+      hintText: '770000000',
+      prefixIcon: Icon(Icons.phone),
+      counterText: '',
     ),
-    keyboardType: TextInputType.phone,
-    inputFormatters: [FilteringTextInputFormatter.allow(RegExp(r'[0-9+\-\s]'))],
-    textInputAction: TextInputAction.next,
+    keyboardType: TextInputType.number,
+    inputFormatters: [
+      FilteringTextInputFormatter.digitsOnly,
+      LengthLimitingTextInputFormatter(15),
+    ],
+    maxLength: 15,
+    textInputAction: TextInputAction.done,
+    onChanged: (_) {
+      _dirtyPhone = true;
+      setState(() {});
+    },
     onFieldSubmitted: (_) => _submit(),
-    validator: (v) => (v == null || v.trim().isEmpty) ? 'Champ requis' : null,
   );
 
   Widget _nameField() => TextFormField(
     controller: _nameCtrl,
-    decoration: InputDecoration(
+    decoration: const InputDecoration(
       labelText: 'Nom complet',
       hintText: 'Prénom Nom',
-      prefixIcon: const Icon(Icons.person_outline),
-      border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+      prefixIcon: Icon(Icons.person_outline),
     ),
     textInputAction: TextInputAction.next,
     onFieldSubmitted: (_) => _submit(),
@@ -228,59 +260,135 @@ class _AccessEmailRequestPanelState
 
   Widget _messageField() => TextFormField(
     controller: _messageCtrl,
-    decoration: InputDecoration(
+    decoration: const InputDecoration(
       labelText: 'Message (optionnel)',
-      prefixIcon: const Icon(Icons.message_outlined),
-      border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+      prefixIcon: Icon(Icons.message_outlined),
     ),
     minLines: 2,
     maxLines: 4,
     textInputAction: TextInputAction.done,
   );
 
-  Widget _buttonsLayout(bool isWide) {
+  Widget _buttonsRow(bool isWide) {
     final children = [
-      SizedBox(
-        width: isWide ? 220 : double.infinity,
-        height: 48,
-        child: ElevatedButton.icon(
-          onPressed: _sending ? null : _submit,
-          icon: _sending
-              ? const SizedBox(
-                  width: 18,
-                  height: 18,
-                  child: CircularProgressIndicator(strokeWidth: 2),
-                )
-              : const Icon(Icons.send),
-          label: const Text('Recevoir le code'),
+      Expanded(
+        child: SizedBox(
+          height: 48,
+          child: ElevatedButton.icon(
+            onPressed: _sending ? null : _submit,
+            icon: _sending
+                ? const SizedBox(
+                    width: 18,
+                    height: 18,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  )
+                : const Icon(Icons.send),
+            label: const Text('Recevoir le code'),
+          ),
         ),
       ),
-      const SizedBox(height: 12),
+      const SizedBox(width: 12),
       OutlinedButton.icon(
         onPressed: _openPasswordLogin,
         icon: const Icon(Icons.lock_open),
-        label: const Text('Connexion avec mot de passe'),
+        label: const Text('Mot de passe'),
       ),
-      const SizedBox(height: 8),
+      const SizedBox(width: 8),
       OutlinedButton.icon(
         onPressed: _openRegister,
         icon: const Icon(Icons.person_add_alt_1),
         label: const Text('Créer un compte'),
       ),
-      const SizedBox(height: 8),
-      TextButton.icon(
-        onPressed: _openPasswordLogin,
-        icon: const Icon(Icons.verified_user_outlined),
-        label: const Text('J’ai déjà reçu le code'),
-      ),
     ];
+
     return isWide
-        ? Wrap(
-            alignment: WrapAlignment.center,
-            spacing: 12,
-            runSpacing: 8,
-            children: children,
-          )
-        : Column(children: children);
+        ? Row(children: children)
+        : Column(
+            children: [
+              SizedBox(
+                width: double.infinity,
+                height: 48,
+                child: ElevatedButton.icon(
+                  onPressed: _sending ? null : _submit,
+                  icon: _sending
+                      ? const SizedBox(
+                          width: 18,
+                          height: 18,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        )
+                      : const Icon(Icons.send),
+                  label: const Text('Recevoir le code'),
+                ),
+              ),
+              const SizedBox(height: 8),
+              SizedBox(
+                width: double.infinity,
+                height: 44,
+                child: OutlinedButton.icon(
+                  onPressed: _openPasswordLogin,
+                  icon: const Icon(Icons.lock_open),
+                  label: const Text('Mot de passe'),
+                ),
+              ),
+              const SizedBox(height: 8),
+              SizedBox(
+                width: double.infinity,
+                height: 44,
+                child: OutlinedButton.icon(
+                  onPressed: _openRegister,
+                  icon: const Icon(Icons.person_add_alt_1),
+                  label: const Text('Créer un compte'),
+                ),
+              ),
+            ],
+          );
+  }
+
+  Widget _bottomWarningBar() {
+    final text = _warningText;
+    final show = text != null;
+    final scheme = Theme.of(context).colorScheme;
+    return AnimatedSlide(
+      duration: const Duration(milliseconds: 220),
+      offset: show ? Offset.zero : const Offset(0, 1),
+      child: AnimatedOpacity(
+        duration: const Duration(milliseconds: 180),
+        opacity: show ? 1 : 0,
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+          child: Material(
+            color: scheme.tertiaryContainer,
+            borderRadius: BorderRadius.circular(14),
+            elevation: 0,
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+              child: Row(
+                children: [
+                  Icon(
+                    Icons.warning_amber_rounded,
+                    color: scheme.onTertiaryContainer,
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Text(
+                      text ?? '',
+                      style: TextStyle(
+                        color: scheme.onTertiaryContainer,
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                  ),
+                  if (!_phoneValid)
+                    TextButton(
+                      onPressed: () => _phoneFocus.requestFocus(),
+                      child: const Text('Corriger'),
+                    ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
   }
 }
