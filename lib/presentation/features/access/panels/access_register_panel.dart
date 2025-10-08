@@ -128,7 +128,7 @@ class _AccessRegisterPanelState extends ConsumerState<AccessRegisterPanel> {
                           focusNode: _userFocus,
                           decoration: InputDecoration(
                             labelText: 'Identifiant',
-                            hintText: 'admin',
+                            hintText: 'Email ou Téléphone',
                             prefixIcon: const Icon(Icons.person_add_alt),
                             border: OutlineInputBorder(
                               borderRadius: BorderRadius.circular(12),
