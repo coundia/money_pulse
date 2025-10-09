@@ -5,9 +5,8 @@ import 'package:flutter/scheduler.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:money_pulse/onboarding/presentation/providers/access_repo_provider.dart'
     show registerWithPasswordUseCaseProvider;
-import '../../../../onboarding/presentation/providers/access_session_provider.dart';
-import '../../home/home_page.dart';
-import '../providers/access_repo_provider.dart';
+import '../providers/access_session_provider.dart';
+import '../../../presentation/features/home/home_page.dart';
 
 class AccessRegisterPanel extends ConsumerStatefulWidget {
   final String? initialUsername;

@@ -2,7 +2,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import '../../../presentation/features/access/panels/access_register_panel.dart';
+import 'access_register_panel.dart';
 import '../providers/access_repo_provider.dart';
 import '../../domain/models/access_identity.dart';
 import 'package:money_pulse/presentation/app/installation_id_provider.dart';
@@ -187,7 +187,7 @@ class _AccessEmailRequestPanelState
                               mainAxisSize: MainAxisSize.min,
                               children: [
                                 const Text(
-                                  'Entrez votre numéro WhatsApp pour recevoir un code de connexion.',
+                                  'Entrez votre numéro de téléphone pour recevoir un code de connexion.',
                                   style: TextStyle(fontSize: 16),
                                   textAlign: TextAlign.center,
                                 ),
@@ -228,7 +228,7 @@ class _AccessEmailRequestPanelState
     controller: _phoneCtrl,
     focusNode: _phoneFocus,
     decoration: const InputDecoration(
-      labelText: 'Numéro de téléphone (WhatsApp)',
+      labelText: 'Numéro de téléphone ',
       hintText: '770000000',
       prefixIcon: Icon(Icons.phone),
       counterText: '',

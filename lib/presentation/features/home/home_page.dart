@@ -64,7 +64,6 @@ class _HomePageState extends ConsumerState<HomePage> {
       await ref.read(ensureSelectedAccountProvider.future);
       ref.invalidate(selectedAccountProvider);
       ref.invalidate(transactionListItemsProvider);
-      await ref.read(accessSessionProvider.notifier).restore();
     });
   }
 
@@ -81,7 +80,13 @@ class _HomePageState extends ConsumerState<HomePage> {
   }
 
   Future<void> _refreshAll({bool remount = true}) async {
-    RestartApp.restart(context);
+    setState(() => _isBusy = true);
+    try {
+      await HomeRefreshHook.onManualRefresh(ref);
+      RestartApp.restart(context);
+    } finally {
+      if (mounted) setState(() => _isBusy = false);
+    }
   }
 
   Future<void> _showAccountPicker() async {
@@ -297,15 +302,26 @@ class _HomePageState extends ConsumerState<HomePage> {
                 onSelected: (action) async {
                   switch (action) {
                     case 'refresh':
-                      await _runPullAll();
-                      await _refreshAll(remount: true);
+                      setState(() => _isBusy = true);
+                      try {
+                        await _runPullAll();
+                        await _refreshAll(remount: true);
+                      } finally {
+                        if (mounted) setState(() => _isBusy = false);
+                      }
                       break;
                     case 'login':
                       {
                         final ok = await requireAccess(context, ref);
                         if (!mounted || !ok) break;
 
-                        await _runPullAll();
+                        try {
+                          setState(() => _isBusy = true);
+                          await HomeRefreshHook.onManualRefresh(ref);
+                          await _runPullAll();
+                        } finally {
+                          if (mounted) setState(() => _isBusy = false);
+                        }
 
                         ScaffoldMessenger.of(context).showSnackBar(
                           const SnackBar(
