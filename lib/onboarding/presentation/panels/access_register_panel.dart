@@ -1,4 +1,5 @@
-// Right-drawer register form with gentle warnings (no red), robust error mapping, and keyboard/UX polish.
+// Register form that surfaces server error messages and logs them.
+import 'dart:developer' as dev;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter/scheduler.dart';
@@ -7,6 +8,7 @@ import 'package:money_pulse/onboarding/presentation/providers/access_repo_provid
     show registerWithPasswordUseCaseProvider;
 import '../providers/access_session_provider.dart';
 import '../../../presentation/features/home/home_page.dart';
+import '../../infrastructure/api_error.dart';
 
 class AccessRegisterPanel extends ConsumerStatefulWidget {
   final String? initialUsername;
@@ -28,11 +30,10 @@ class _AccessRegisterPanelState extends ConsumerState<AccessRegisterPanel> {
   bool _busy = false;
   bool _obscure = true;
 
-  // Gentle, non-intrusive warning states
   String? _userWarn;
   String? _passWarn;
   String? _pass2Warn;
-  String? _formWarn; // top-level API/server warning
+  String? _formWarn;
 
   @override
   void initState() {
@@ -117,25 +118,33 @@ class _AccessRegisterPanelState extends ConsumerState<AccessRegisterPanel> {
       await ref.read(accessSessionProvider.notifier).save(grant);
       if (!mounted) return;
       _openHomeAfterFrame();
-    } catch (e) {
+    } catch (e, st) {
+      final msg = _errorToUserMessage(e);
+      dev.log(
+        'Register failed',
+        name: 'AccessRegisterPanel',
+        error: {'message': msg, 'error': e.toString()},
+        stackTrace: st,
+      );
       if (!mounted) return;
-      setState(() {
-        _formWarn = _mapRegisterError(e);
-      });
+      setState(() => _formWarn = msg);
     } finally {
       if (mounted) setState(() => _busy = false);
     }
   }
 
-  String _mapRegisterError(Object e) {
-    final msg = e.toString();
-    if (msg.contains('409') ||
-        msg.contains('already') ||
-        msg.contains('exists')) {
-      return 'Cet identifiant est déjà utilisé. Choisissez-en un autre.';
+  String _errorToUserMessage(Object e) {
+    if (e is ApiError) {
+      if (e.message.trim().isNotEmpty) return e.message.trim();
+      return 'Erreur $e';
     }
-    if (msg.contains('network') || msg.contains('SocketException')) {
+    final s = e.toString();
+    if (s.contains('network') || s.contains('SocketException')) {
       return 'Connexion indisponible. Vérifiez votre réseau et réessayez.';
+    }
+    if (s.toLowerCase().contains('already') ||
+        s.toLowerCase().contains('exists')) {
+      return 'Cet identifiant est déjà utilisé. Choisissez-en un autre.';
     }
     return 'Échec de la création du compte. Réessayez.';
   }
@@ -184,8 +193,6 @@ class _AccessRegisterPanelState extends ConsumerState<AccessRegisterPanel> {
                           textAlign: TextAlign.center,
                         ),
                         const SizedBox(height: 16),
-
-                        // Username
                         TextFormField(
                           controller: _userCtrl,
                           focusNode: _userFocus,
@@ -207,8 +214,6 @@ class _AccessRegisterPanelState extends ConsumerState<AccessRegisterPanel> {
                           onFieldSubmitted: (_) => _passFocus.requestFocus(),
                         ),
                         const SizedBox(height: 12),
-
-                        // Password
                         TextFormField(
                           controller: _passCtrl,
                           focusNode: _passFocus,
@@ -240,8 +245,6 @@ class _AccessRegisterPanelState extends ConsumerState<AccessRegisterPanel> {
                           textInputAction: TextInputAction.next,
                         ),
                         const SizedBox(height: 12),
-
-                        // Confirm Password
                         TextFormField(
                           controller: _pass2Ctrl,
                           decoration: InputDecoration(
@@ -261,13 +264,12 @@ class _AccessRegisterPanelState extends ConsumerState<AccessRegisterPanel> {
                           textInputAction: TextInputAction.done,
                           onFieldSubmitted: (_) => _submit(),
                         ),
-
-                        // Form-level warning (API/server)
                         AnimatedSwitcher(
                           duration: const Duration(milliseconds: 200),
                           child: (_formWarn == null)
                               ? const SizedBox.shrink()
                               : Padding(
+                                  key: const ValueKey('warn'),
                                   padding: const EdgeInsets.only(top: 12),
                                   child: Row(
                                     crossAxisAlignment:
@@ -291,7 +293,6 @@ class _AccessRegisterPanelState extends ConsumerState<AccessRegisterPanel> {
                                   ),
                                 ),
                         ),
-
                         const SizedBox(height: 16),
                         SizedBox(
                           width: double.infinity,
