@@ -1,4 +1,4 @@
-// Right-drawer to register, persist session, then open HomePage by replacing the whole stack.
+// Right-drawer register form with gentle warnings (no red), robust error mapping, and keyboard/UX polish.
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter/scheduler.dart';
@@ -24,13 +24,23 @@ class _AccessRegisterPanelState extends ConsumerState<AccessRegisterPanel> {
   final _pass2Ctrl = TextEditingController();
   final _userFocus = FocusNode();
   final _passFocus = FocusNode();
+
   bool _busy = false;
   bool _obscure = true;
+
+  // Gentle, non-intrusive warning states
+  String? _userWarn;
+  String? _passWarn;
+  String? _pass2Warn;
+  String? _formWarn; // top-level API/server warning
 
   @override
   void initState() {
     super.initState();
     _userCtrl.text = widget.initialUsername ?? '';
+    _userCtrl.addListener(_clearFieldWarnings);
+    _passCtrl.addListener(_clearFieldWarnings);
+    _pass2Ctrl.addListener(_clearFieldWarnings);
   }
 
   @override
@@ -43,9 +53,36 @@ class _AccessRegisterPanelState extends ConsumerState<AccessRegisterPanel> {
     super.dispose();
   }
 
+  void _clearFieldWarnings() {
+    if (_userWarn != null ||
+        _passWarn != null ||
+        _pass2Warn != null ||
+        _formWarn != null) {
+      setState(() {
+        _userWarn = null;
+        _passWarn = null;
+        _pass2Warn = null;
+        _formWarn = null;
+      });
+    }
+  }
+
   bool get _validUser => _userCtrl.text.trim().isNotEmpty;
-  bool get _validPass =>
-      _passCtrl.text.length >= 4 && _passCtrl.text == _pass2Ctrl.text;
+  bool get _validPass => _passCtrl.text.length >= 4;
+  bool get _match => _passCtrl.text == _pass2Ctrl.text;
+
+  bool _validateGently() {
+    String? u, p, p2;
+    if (!_validUser) u = 'Identifiant requis';
+    if (!_validPass) p = 'Mot de passe trop court (≥ 4)';
+    if (!_match) p2 = 'Les mots de passe ne correspondent pas';
+    setState(() {
+      _userWarn = u;
+      _passWarn = p;
+      _pass2Warn = p2;
+    });
+    return u == null && p == null && p2 == null;
+  }
 
   void _openHomeAfterFrame() {
     SchedulerBinding.instance.addPostFrameCallback((_) {
@@ -58,24 +95,49 @@ class _AccessRegisterPanelState extends ConsumerState<AccessRegisterPanel> {
   }
 
   Future<void> _submit() async {
-    final ok = _formKey.currentState?.validate() ?? false;
-    if (!ok || !_validUser || !_validPass || _busy) return;
-    setState(() => _busy = true);
+    if (_busy) return;
+    final ok = _validateGently();
+    if (!ok) {
+      if (!_validUser) {
+        _userFocus.requestFocus();
+      } else if (!_validPass) {
+        _passFocus.requestFocus();
+      }
+      return;
+    }
+
+    setState(() {
+      _busy = true;
+      _formWarn = null;
+    });
+
     try {
       final uc = ref.read(registerWithPasswordUseCaseProvider);
       final grant = await uc.execute(_userCtrl.text.trim(), _passCtrl.text);
       await ref.read(accessSessionProvider.notifier).save(grant);
       if (!mounted) return;
       _openHomeAfterFrame();
-    } catch (_) {
+    } catch (e) {
       if (!mounted) return;
-      SchedulerBinding.instance.addPostFrameCallback((_) {
-        if (!mounted) return;
-        Navigator.of(context).maybePop(true);
+      setState(() {
+        _formWarn = _mapRegisterError(e);
       });
     } finally {
       if (mounted) setState(() => _busy = false);
     }
+  }
+
+  String _mapRegisterError(Object e) {
+    final msg = e.toString();
+    if (msg.contains('409') ||
+        msg.contains('already') ||
+        msg.contains('exists')) {
+      return 'Cet identifiant est déjà utilisé. Choisissez-en un autre.';
+    }
+    if (msg.contains('network') || msg.contains('SocketException')) {
+      return 'Connexion indisponible. Vérifiez votre réseau et réessayez.';
+    }
+    return 'Échec de la création du compte. Réessayez.';
   }
 
   @override
@@ -113,7 +175,7 @@ class _AccessRegisterPanelState extends ConsumerState<AccessRegisterPanel> {
                   constraints: const BoxConstraints(maxWidth: 640),
                   child: Form(
                     key: _formKey,
-                    autovalidateMode: AutovalidateMode.onUserInteraction,
+                    autovalidateMode: AutovalidateMode.disabled,
                     child: Column(
                       mainAxisSize: MainAxisSize.min,
                       children: [
@@ -122,6 +184,8 @@ class _AccessRegisterPanelState extends ConsumerState<AccessRegisterPanel> {
                           textAlign: TextAlign.center,
                         ),
                         const SizedBox(height: 16),
+
+                        // Username
                         TextFormField(
                           controller: _userCtrl,
                           focusNode: _userFocus,
@@ -132,14 +196,19 @@ class _AccessRegisterPanelState extends ConsumerState<AccessRegisterPanel> {
                             border: OutlineInputBorder(
                               borderRadius: BorderRadius.circular(12),
                             ),
+                            helperText: _userWarn,
+                            helperMaxLines: 3,
+                            helperStyle: TextStyle(
+                              color: Colors.amber.shade800,
+                              fontSize: 12.5,
+                            ),
                           ),
                           textInputAction: TextInputAction.next,
                           onFieldSubmitted: (_) => _passFocus.requestFocus(),
-                          validator: (v) => (v == null || v.trim().isEmpty)
-                              ? 'Champ requis'
-                              : null,
                         ),
                         const SizedBox(height: 12),
+
+                        // Password
                         TextFormField(
                           controller: _passCtrl,
                           focusNode: _passFocus,
@@ -160,13 +229,19 @@ class _AccessRegisterPanelState extends ConsumerState<AccessRegisterPanel> {
                             border: OutlineInputBorder(
                               borderRadius: BorderRadius.circular(12),
                             ),
+                            helperText: _passWarn,
+                            helperMaxLines: 3,
+                            helperStyle: TextStyle(
+                              color: Colors.amber.shade800,
+                              fontSize: 12.5,
+                            ),
                           ),
                           obscureText: _obscure,
                           textInputAction: TextInputAction.next,
-                          validator: (v) =>
-                              (v == null || v.length < 4) ? 'Trop court' : null,
                         ),
                         const SizedBox(height: 12),
+
+                        // Confirm Password
                         TextFormField(
                           controller: _pass2Ctrl,
                           decoration: InputDecoration(
@@ -175,14 +250,48 @@ class _AccessRegisterPanelState extends ConsumerState<AccessRegisterPanel> {
                             border: OutlineInputBorder(
                               borderRadius: BorderRadius.circular(12),
                             ),
+                            helperText: _pass2Warn,
+                            helperMaxLines: 3,
+                            helperStyle: TextStyle(
+                              color: Colors.amber.shade800,
+                              fontSize: 12.5,
+                            ),
                           ),
                           obscureText: _obscure,
                           textInputAction: TextInputAction.done,
                           onFieldSubmitted: (_) => _submit(),
-                          validator: (v) => (v != _passCtrl.text)
-                              ? 'Les mots de passe ne correspondent pas'
-                              : null,
                         ),
+
+                        // Form-level warning (API/server)
+                        AnimatedSwitcher(
+                          duration: const Duration(milliseconds: 200),
+                          child: (_formWarn == null)
+                              ? const SizedBox.shrink()
+                              : Padding(
+                                  padding: const EdgeInsets.only(top: 12),
+                                  child: Row(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
+                                    children: [
+                                      const Icon(
+                                        Icons.warning_amber_rounded,
+                                        size: 18,
+                                        color: Colors.amber,
+                                      ),
+                                      const SizedBox(width: 8),
+                                      Expanded(
+                                        child: Text(
+                                          _formWarn!,
+                                          style: const TextStyle(
+                                            fontSize: 13.5,
+                                          ),
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                        ),
+
                         const SizedBox(height: 16),
                         SizedBox(
                           width: double.infinity,
