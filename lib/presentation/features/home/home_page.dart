@@ -22,6 +22,7 @@ import '../../../sync/infrastructure/pull_ports/account_pull_port_sqflite.dart';
 import '../../../sync/infrastructure/pull_providers.dart';
 import '../../../sync/infrastructure/sync_api_client.dart';
 import '../../../sync/infrastructure/sync_logger.dart';
+import '../../app/home/home_page_refresh_hook.dart';
 import '../accounts/account_share_screen.dart';
 import '../transactions/controllers/transaction_list_controller.dart';
 import '../transactions/prefs/summary_card_prefs_panel.dart';
@@ -55,6 +56,9 @@ class _HomePageState extends ConsumerState<HomePage> {
   void initState() {
     super.initState();
     Future.microtask(() async {
+      await ref.read(accessSessionProvider.notifier).restore();
+      await HomeRefreshHook.onStartup(ref);
+
       await ref.read(transactionsProvider.notifier).load();
       await ref.read(categoriesProvider.notifier).load();
       await ref.read(ensureSelectedAccountProvider.future);

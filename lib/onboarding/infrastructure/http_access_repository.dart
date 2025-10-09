@@ -97,8 +97,7 @@ class HttpAccessRepository implements AccessRepository {
       throw Exception('login failed');
     }
     final map = jsonDecode(res.body) as Map<String, dynamic>;
-    print("connected #### respone");
-    print(map);
+
     final code = map['code'] is num ? (map['code'] as num).toInt() : -1;
     final token = map['token']?.toString() ?? '';
     final uname = map['username']?.toString() ?? username;
