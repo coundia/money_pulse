@@ -1,4 +1,6 @@
 // ReceiptPdfRenderer: builds a 58mm-style PDF receipt including company and customer info.
+// Also includes ReceiptTextFormatter (text receipt) with consistent type mapping (CREDIT/DEBIT/DETTE/etc).
+
 import 'dart:typed_data';
 import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
@@ -7,6 +9,20 @@ import 'package:printing/printing.dart';
 
 typedef AmountFormatter = String Function(int cents);
 typedef DateFormatter = String Function(DateTime dt);
+
+// ---- Type mapping (shared) ---------------------------------------------------
+String _labelForType(String typeEntry) {
+  final t = typeEntry.toUpperCase().trim();
+  if (t == 'CREDIT') return 'Vente';
+  if (t == 'DEBIT') return 'Dépense';
+  if (t.contains('DETTE')) return 'Dette';
+  if (t.startsWith('REMBOUR')) return 'Remboursement';
+  if (t.startsWith('TRANSF')) return 'Transfert';
+  if (t == 'AVOIR') return 'Avoir';
+  if (t == 'VERSEMENT') return 'Versement';
+  return t.isEmpty ? 'Transaction' : t;
+}
+// -----------------------------------------------------------------------------
 
 class ReceiptPdfRenderer {
   final AmountFormatter amount;
@@ -43,12 +59,19 @@ class ReceiptPdfRenderer {
     }
 
     pw.Widget headerBlock() {
-      final title = (d.storeName ?? 'Reçu').toUpperCase();
+      // Prefer the business/store name, fall back to the ReceiptData.title if present
+      final title =
+          (d.storeName?.trim().isNotEmpty == true
+                  ? d.storeName!
+                  : (d.title.trim().isNotEmpty ? d.title : 'Reçu'))
+              .toUpperCase();
+
       final sub = <String>[];
       if ((d.companyCode ?? '').trim().isNotEmpty)
         sub.add('Code: ${d.companyCode}');
       if ((d.companyTaxId ?? '').trim().isNotEmpty)
         sub.add('N° Fiscal: ${d.companyTaxId}');
+
       return pw.Column(
         crossAxisAlignment: pw.CrossAxisAlignment.stretch,
         children: [
@@ -93,7 +116,8 @@ class ReceiptPdfRenderer {
     pw.Widget partyBlock() {
       final left = <pw.Widget>[
         rowLR('Date', date(d.date)),
-        rowLR('Type', d.typeEntry == 'CREDIT' ? 'Vente' : 'Dépense'),
+        // ✅ Fixed mapping for type (handles DETTE/REMBOURSEMENT/TRANSFERT/…)
+        rowLR('Type', _labelForType(d.typeEntry)),
         if ((d.categoryLabel ?? '').isNotEmpty)
           rowLR('Catégorie', d.categoryLabel!),
       ];
@@ -171,7 +195,8 @@ class ReceiptPdfRenderer {
               hr(),
               pw.SizedBox(height: 6),
               pw.Text(
-                'Merci pour votre achat',
+                // Keep generic message; could be adapted per type if desired
+                'Merci ',
                 style: style,
                 textAlign: pw.TextAlign.center,
               ),
@@ -189,4 +214,94 @@ class ReceiptPdfRenderer {
 
     return doc.save();
   }
+}
+
+// ====================== TEXT RENDERER ===============================
+
+class ReceiptTextFormatter {
+  final AmountFormatter amount;
+  final DateFormatter date;
+
+  ReceiptTextFormatter({required this.amount, required this.date});
+
+  String build(ReceiptData d, {int width = 32}) {
+    final b = StringBuffer();
+    String line([String char = '-']) => char * width;
+    String center(String s) {
+      final t = s.trim();
+      if (t.length >= width) return t;
+      final pad = (width - t.length) ~/ 2;
+      return ' ' * pad + t;
+    }
+
+    String lr(String l, String r) {
+      final left = l.trim();
+      final right = r.trim();
+      final space = width - left.length - right.length;
+      return space <= 0 ? '$left $right' : '$left${' ' * space}$right';
+    }
+
+    List<String> wrap(String text, int max) {
+      final words = text.split(RegExp(r'\s+'));
+      final lines = <String>[];
+      var cur = '';
+      for (final w in words) {
+        if (cur.isEmpty) {
+          cur = w;
+        } else if ((cur.length + 1 + w.length) <= max) {
+          cur = '$cur $w';
+        } else {
+          lines.add(cur);
+          cur = w;
+        }
+      }
+      if (cur.isNotEmpty) lines.add(cur);
+      return lines;
+    }
+
+    b.writeln(center(d.storeName?.toUpperCase() ?? 'REÇU'));
+    if ((d.accountLabel ?? '').isNotEmpty) b.writeln(center(d.accountLabel!));
+    b.writeln(center(d.title)); // already adapted in controller
+    b.writeln(line());
+    b.writeln(lr('Date', date(d.date)));
+
+    // ✅ Fixed type mapping
+    b.writeln(lr('Type', _labelForType(d.typeEntry)));
+
+    if ((d.categoryLabel ?? '').isNotEmpty) {
+      b.writeln(lr('Catégorie', d.categoryLabel!));
+    }
+    b.writeln(line());
+
+    const qtyW = 3;
+    const priceW = 9;
+    const totalW = 9;
+    final labelW = width - qtyW - priceW - totalW - 3;
+
+    for (final it in d.lines) {
+      final lblLines = wrap(it.label, labelW);
+      final qtyStr = it.quantity.toString().padLeft(qtyW);
+      final unitStr = amount(it.unitPrice).padLeft(priceW);
+      final totStr = amount(it.total).padLeft(totalW);
+      b.writeln('${lblLines.first.padRight(labelW)} $qtyStr $unitStr $totStr');
+      for (var i = 1; i < lblLines.length; i++) {
+        b.writeln(
+          '${lblLines[i].padRight(labelW)} ${' ' * qtyW} ${' ' * priceW} ${' ' * totalW}',
+        );
+      }
+    }
+
+    b.writeln(line());
+    b.writeln(lr('Sous-total', '${amount(d.subtotal)} ${d.currency}'));
+    b.writeln(lr('Total', '${amount(d.total)} ${d.currency}'));
+    b.writeln(line());
+    b.writeln(center('Merci'));
+    if ((d.footerNote ?? '').isNotEmpty) b.writeln(center(d.footerNote!));
+    b.writeln();
+    return b.toString();
+  }
+}
+
+extension _Mul on String {
+  String operator *(int n) => List.filled(n, this).join();
 }

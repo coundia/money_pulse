@@ -32,6 +32,90 @@ import '../receipt/receipt_controller.dart';
 import '../receipt/receipt_preview_page.dart';
 import 'items_section.dart' hide ItemsSection;
 
+// ---------- Type meta (libellé, signe, couleur, éditabilité) ----------
+class _TypeMeta {
+  final String label;
+  final String sign; // "", "+", "-", "±", "↔"
+  final Color color;
+  final bool canEdit;
+  const _TypeMeta({
+    required this.label,
+    required this.sign,
+    required this.color,
+    required this.canEdit,
+  });
+}
+
+_TypeMeta _typeMeta(BuildContext context, String rawType) {
+  final t = (rawType).toUpperCase().trim();
+  final cs = Theme.of(context).colorScheme;
+
+  // Par défaut (fallback)
+  var meta = _TypeMeta(
+    label: t.isEmpty ? 'Transaction' : t,
+    sign: '',
+    color: cs.primary,
+    canEdit: false,
+  );
+
+  if (t == 'CREDIT') {
+    meta = _TypeMeta(
+      label: 'Vente',
+      sign: '+',
+      color: Colors.green,
+      canEdit: true,
+    );
+  } else if (t == 'DEBIT') {
+    meta = _TypeMeta(
+      label: 'Dépense',
+      sign: '-',
+      color: Colors.red,
+      canEdit: true,
+    );
+  } else if (t.contains('DETTE')) {
+    // ex: DETTE, DETTE_CLIENT, DETTE_FOURNISSEUR...
+    meta = _TypeMeta(
+      label: 'Dette',
+      sign: '±',
+      color: Colors.orange,
+      canEdit: true,
+    );
+  } else if (t.startsWith('REMBOUR')) {
+    // ex: REMBOURSEMENT, REMBOURSEMENT_DETTE
+    meta = _TypeMeta(
+      label: 'Remboursement',
+      sign: '±',
+      color: Colors.blue,
+      canEdit: true,
+    );
+  } else if (t.startsWith('TRANSF')) {
+    // ex: TRANSFERT
+    meta = _TypeMeta(
+      label: 'Transfert',
+      sign: '↔',
+      color: Colors.purple,
+      canEdit: false,
+    );
+  } else if (t == 'AVOIR') {
+    meta = _TypeMeta(
+      label: 'Avoir',
+      sign: '+',
+      color: Colors.teal,
+      canEdit: true,
+    );
+  } else if (t == 'VERSEMENT') {
+    meta = _TypeMeta(
+      label: 'Versement',
+      sign: '+',
+      color: Colors.green.shade700,
+      canEdit: true,
+    );
+  }
+
+  return meta;
+}
+// ----------------------------------------------------------------------
+
 class TransactionDetailView extends ConsumerWidget {
   final TransactionEntry entry;
   const TransactionDetailView({super.key, required this.entry});
@@ -39,9 +123,10 @@ class TransactionDetailView extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final tone = toneForType(context, entry.typeEntry);
-    final isDebit = entry.typeEntry.toUpperCase() == 'DEBIT';
-    final sign = isDebit ? '-' : '+';
+    final meta = _typeMeta(context, entry.typeEntry);
+
     final amount = Formatters.amountFromCents(entry.amount);
+    final amountText = meta.sign.isEmpty ? amount : '${meta.sign}$amount';
     final dateLabel = Formatters.dateFull(entry.dateTransaction);
 
     final catAsync = ref.watch(categoryByIdProvider(entry.categoryId));
@@ -55,16 +140,11 @@ class TransactionDetailView extends ConsumerWidget {
         : ref.watch(customerByIdProvider(entry.customerId!));
 
     final hasRemote = (entry.remoteId ?? '').trim().isNotEmpty;
-
-    // ✅ Afficher le bouton "Modifier" uniquement pour DEBIT ou CREDIT
-    final canEdit = (() {
-      final t = (entry.typeEntry).toUpperCase().trim();
-      return t == 'DEBIT' || t == 'CREDIT';
-    })();
+    final canEdit = meta.canEdit; // 👈 selon le type
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Détails de la transaction'),
+        title: Text('Détails • ${meta.label}'),
         actions: [
           IconButton(
             tooltip: (entry.remoteId ?? '').isEmpty
@@ -100,7 +180,7 @@ class TransactionDetailView extends ConsumerWidget {
         children: [
           HeaderCard(
             tone: tone,
-            amountText: '$sign$amount',
+            amountText: amountText, // 👈 signe par type
             dateText: dateLabel,
             status: entry.status,
             accountless: (entry.accountId ?? '').isEmpty,
@@ -110,6 +190,12 @@ class TransactionDetailView extends ConsumerWidget {
           SectionCard(
             title: 'Informations',
             children: [
+              InfoTile(
+                icon: Icons.info_outline,
+                title: 'Type',
+                value: meta.label, // 👈 libellé humain
+                trailing: Icon(Icons.circle, size: 12, color: meta.color),
+              ),
               InfoTile(
                 icon: Icons.notes_outlined,
                 title: 'Description',
@@ -203,7 +289,7 @@ class TransactionDetailView extends ConsumerWidget {
                           ),
                         )
                         .toList(),
-                    accent: tone.color,
+                    accent: tone.color, // on peut aussi mettre meta.color
                   ),
             loading: () => const SizedBox.shrink(),
             error: (_, __) => const SizedBox.shrink(),
@@ -217,7 +303,6 @@ class TransactionDetailView extends ConsumerWidget {
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              // ✅ Bouton "Modifier" seulement pour DEBIT/CREDIT
               if (canEdit)
                 SizedBox(
                   width: double.infinity,
@@ -249,7 +334,6 @@ class TransactionDetailView extends ConsumerWidget {
 
               if (canEdit) const SizedBox(height: 8),
 
-              // Reçu (toujours visible)
               SizedBox(
                 width: double.infinity,
                 child: FilledButton.icon(
@@ -267,7 +351,6 @@ class TransactionDetailView extends ConsumerWidget {
               ),
               const SizedBox(height: 8),
 
-              // Supprimer (toujours visible)
               SizedBox(
                 width: double.infinity,
                 child: FilledButton.tonalIcon(

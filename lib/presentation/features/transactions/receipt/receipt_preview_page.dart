@@ -1,4 +1,6 @@
+// lib/presentation/features/transactions/receipt/receipt_preview_page.dart
 // ReceiptPreviewPage: previews receipt with chips for date/type/total/company/customer and allows share/print/download.
+
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -6,15 +8,28 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:share_plus/share_plus.dart';
 import 'package:printing/printing.dart';
-import 'package:money_pulse/domain/receipts/entities/receipt_models.dart';
 import 'package:money_pulse/infrastructure/receipts/receipt_text_formatter.dart';
-import 'package:money_pulse/infrastructure/receipts/receipt_pdf_renderer.dart';
+import 'package:money_pulse/infrastructure/receipts/receipt_pdf_renderer.dart'
+    hide ReceiptTextFormatter;
 import 'package:money_pulse/presentation/features/transactions/receipt/receipt_controller.dart';
 import 'package:money_pulse/presentation/shared/formatters.dart';
 
 class ReceiptPreviewPage extends ConsumerWidget {
   final String transactionId;
   const ReceiptPreviewPage({super.key, required this.transactionId});
+
+  // petite meta locale (sans canEdit)
+  (String label, Color color) _labelAndColor(String type) {
+    final t = type.toUpperCase().trim();
+    if (t == 'CREDIT') return ('Vente', Colors.green);
+    if (t == 'DEBIT') return ('Dépense', Colors.red);
+    if (t.contains('DETTE')) return ('Dette', Colors.orange);
+    if (t.startsWith('REMBOUR')) return ('Remboursement', Colors.blue);
+    if (t.startsWith('TRANSF')) return ('Transfert', Colors.purple);
+    if (t == 'AVOIR') return ('Avoir', Colors.teal);
+    if (t == 'VERSEMENT') return ('Versement', Colors.green.shade700);
+    return (t.isEmpty ? 'Transaction' : t, Colors.grey);
+  }
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -71,7 +86,7 @@ class ReceiptPreviewPage extends ConsumerWidget {
       ),
       body: async.when(
         data: (d) {
-          final accent = d.typeEntry == 'CREDIT' ? Colors.green : Colors.red;
+          final (label, accent) = _labelAndColor(d.typeEntry);
           final textBlock = ReceiptTextFormatter(
             amount: fmtAmount,
             date: fmtDate,
@@ -81,11 +96,11 @@ class ReceiptPreviewPage extends ConsumerWidget {
             children: [
               _HeaderChips(
                 date: fmtDate(d.date),
-                type: d.typeEntry == 'CREDIT' ? 'Vente' : 'Dépense',
+                type: label, // 👈 libellé humain du type
                 total: '${Formatters.amountFromCents(d.total)} ${d.currency}',
                 company: d.companyName ?? '—',
                 customer: d.customerName ?? '—',
-                accent: accent,
+                accent: accent, // 👈 couleur selon type
               ),
               const SizedBox(height: 12),
               _ReceiptPreview(text: textBlock, accent: accent),

@@ -1,10 +1,24 @@
+// lib/presentation/features/transactions/receipt/receipt_controller.dart
 // Receipt controller: builds ReceiptData for a transaction including company and customer info.
+
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:money_pulse/domain/receipts/entities/receipt_models.dart';
 import 'package:money_pulse/presentation/app/providers.dart';
 import 'package:money_pulse/presentation/shared/formatters.dart';
 import 'package:money_pulse/presentation/app/providers/company_repo_provider.dart';
 import 'package:money_pulse/presentation/app/providers/customer_repo_provider.dart';
+
+String _titleForType(String type) {
+  final t = type.toUpperCase().trim();
+  if (t == 'CREDIT') return 'Reçu de vente';
+  if (t == 'DEBIT') return 'Reçu de dépense';
+  if (t.contains('DETTE')) return 'Reçu de dette';
+  if (t.startsWith('REMBOUR')) return 'Reçu de remboursement';
+  if (t.startsWith('TRANSF')) return 'Reçu de transfert';
+  if (t == 'AVOIR') return 'Reçu d’avoir';
+  if (t == 'VERSEMENT') return 'Reçu de versement';
+  return 'Reçu';
+}
 
 final receiptDataProvider = FutureProvider.family<ReceiptData, String>((
   ref,
@@ -66,7 +80,7 @@ final receiptDataProvider = FutureProvider.family<ReceiptData, String>((
 
   return ReceiptData(
     id: entry.id,
-    title: entry.typeEntry == 'CREDIT' ? 'Reçu de vente' : 'Reçu de dépense',
+    title: _titleForType(entry.typeEntry), // 👈 titre adapté au type
     storeName: co?.name,
     accountLabel: (acc?.description ?? acc?.code) ?? 'Compte',
     categoryLabel: cat == null

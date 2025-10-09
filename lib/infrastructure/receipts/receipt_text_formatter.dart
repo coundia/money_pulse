@@ -3,6 +3,16 @@ import 'package:money_pulse/domain/receipts/entities/receipt_models.dart';
 typedef AmountFormatter = String Function(int cents);
 typedef DateFormatter = String Function(DateTime dt);
 
+// Map internal/remote type codes to human-friendly French labels.
+String _labelForType(String typeEntry) {
+  final t = typeEntry.toUpperCase().trim();
+  if (t == 'CREDIT') return 'Vente';
+  if (t == 'DEBIT') return 'Dépense';
+  if (t.contains('DEBT')) return 'Dette';
+  if (t.startsWith('REMBOUR')) return 'Remboursement';
+  return t.isEmpty ? 'Transaction' : t;
+}
+
 class ReceiptTextFormatter {
   final AmountFormatter amount;
   final DateFormatter date;
@@ -49,7 +59,10 @@ class ReceiptTextFormatter {
     b.writeln(center(d.title));
     b.writeln(line());
     b.writeln(lr('Date', date(d.date)));
-    b.writeln(lr('Type', d.typeEntry == 'CREDIT' ? 'Vente' : 'Dépense'));
+
+    // ✅ Fixed type mapping
+    b.writeln(lr('Type', _labelForType(d.typeEntry)));
+
     if ((d.categoryLabel ?? '').isNotEmpty) {
       b.writeln(lr('Catégorie', d.categoryLabel!));
     }
@@ -77,7 +90,7 @@ class ReceiptTextFormatter {
     b.writeln(lr('Sous-total', '${amount(d.subtotal)} ${d.currency}'));
     b.writeln(lr('Total', '${amount(d.total)} ${d.currency}'));
     b.writeln(line());
-    b.writeln(center('Merci pour votre achat'));
+    b.writeln(center('Merci'));
     if ((d.footerNote ?? '').isNotEmpty) b.writeln(center(d.footerNote!));
     b.writeln();
     return b.toString();
