@@ -1,9 +1,12 @@
-/* Publish/Unpublish/Republish actions: calls marketplace repo, reconciles, and invalidates providers. */
+/* Publish/Unpublish/Republish actions: calls marketplace repo, reconciles, and invalidates providers.
+   Now requires an authenticated user via requireAccess() before any action. */
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:money_pulse/domain/company/entities/company.dart';
 import 'package:money_pulse/presentation/features/companies/providers/company_detail_providers.dart';
 import 'package:money_pulse/presentation/features/companies/providers/company_list_providers.dart';
+import 'package:money_pulse/onboarding/presentation/providers/access_session_provider.dart'
+    show requireAccess;
 
 import '../../../../infrastructure/company/repositories/company_marketplace_repo_provider.dart';
 
@@ -32,18 +35,32 @@ class _CompanyPublishActionsState extends ConsumerState<CompanyPublishActions> {
     return (s.startsWith('PUBLISH')) && widget.company.isPublic == true;
   }
 
+  Future<bool> _mustBeLoggedIn() async {
+    final ok = await requireAccess(context, ref);
+    if (!mounted) return false;
+    if (!ok) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Connexion requise pour cette action.')),
+      );
+    }
+    return ok;
+  }
+
   Future<void> _do(Future<Company> Function() op, String okMsg) async {
     if (_busy) return;
+
+    // ✅ Exiger l'accès avant d'exécuter l'opération
+    if (!await _mustBeLoggedIn()) return;
+
     setState(() => _busy = true);
     try {
       final repo = ref.read(companyMarketplaceRepoProvider(widget.baseUri));
       final updated =
           await op(); // publish/unpublish/republish already reconciles
-
-      // Ensure a fresh reconciliation right after
+      // Sécurité : s’assurer d’une réconciliation juste après
       await repo.reconcileFromRemote(updated);
 
-      // Invalidate detail + list providers so UI re-reads the latest local row
+      // Invalidate detail + list providers pour recharger la ligne locale
       ref.invalidate(companyByIdProvider(updated.id));
       ref.invalidate(companyListProvider);
       ref.invalidate(companyCountProvider);
@@ -69,7 +86,8 @@ class _CompanyPublishActionsState extends ConsumerState<CompanyPublishActions> {
   Widget build(BuildContext context) {
     final canPublish = !_isPublished;
     final canUnpublish = _isPublished;
-    final canRepublish = !_isPublished;
+    final canRepublish =
+        !_isPublished; // gardé identique à votre logique actuelle
 
     return Wrap(
       spacing: 8,

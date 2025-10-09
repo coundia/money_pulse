@@ -1,11 +1,14 @@
-// Three-action toolbar to publish, unpublish, and republish a product, handling
-// remoteId presence and images requirement. "Republier" is NEVER disabled.
+// Three-action toolbar to publish, unpublish, and republish a product,
+// now requiring an authenticated user via requireAccess() before any action.
+// "Republier" is NEVER disabled.
 
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:money_pulse/domain/products/entities/product.dart';
 import 'package:money_pulse/infrastructure/products/product_marketplace_repo_provider.dart';
+import 'package:money_pulse/onboarding/presentation/providers/access_session_provider.dart'
+    show requireAccess;
 
 class ProductPublishActions extends ConsumerStatefulWidget {
   final Product product;
@@ -38,9 +41,34 @@ class _ProductPublishActionsState extends ConsumerState<ProductPublishActions> {
     return s == 'PUBLISH' || s == 'PUBLISHED';
   }
 
+  Future<void> _ensureAccessOrToast() async {
+    final ok = await requireAccess(context, ref);
+    if (!mounted) return;
+    if (!ok) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Connexion requise pour cette action.')),
+      );
+    }
+  }
+
+  Future<bool> _mustBeLoggedIn() async {
+    final ok = await requireAccess(context, ref);
+    if (!mounted) return false;
+    if (!ok) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Connexion requise pour cette action.')),
+      );
+    }
+    return ok;
+  }
+
   Future<void> _doPublish() async {
+    // ✅ Exiger l'accès AVANT de lancer l'action (pas de spinner si refus)
+    if (!await _mustBeLoggedIn()) return;
+
     if (_loadingPublish) return;
     setState(() => _loadingPublish = true);
+
     final repo = ref.read(productMarketplaceRepoProvider(widget.baseUri));
     try {
       var current = widget.product;
@@ -72,18 +100,22 @@ class _ProductPublishActionsState extends ConsumerState<ProductPublishActions> {
   }
 
   Future<void> _doUnpublish() async {
+    // ✅ Exiger l'accès
+    if (!await _mustBeLoggedIn()) return;
+
     if (_loadingUnpublish) return;
     if (!_hasRemoteId) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
           content: Text(
-            "Impossible de retirer la publication: identifiant distant manquant.",
+            'Impossible de retirer la publication: identifiant distant manquant.',
           ),
         ),
       );
       return;
     }
     setState(() => _loadingUnpublish = true);
+
     final repo = ref.read(productMarketplaceRepoProvider(widget.baseUri));
     try {
       await repo.changeRemoteStatus(
@@ -110,12 +142,16 @@ class _ProductPublishActionsState extends ConsumerState<ProductPublishActions> {
   }
 
   Future<void> _doRepublish() async {
+    // ✅ Exiger l'accès
+    if (!await _mustBeLoggedIn()) return;
+
     if (_loadingRepublish) return;
     setState(() => _loadingRepublish = true);
+
     final repo = ref.read(productMarketplaceRepoProvider(widget.baseUri));
     try {
       var current = widget.product;
-      // If it's not yet on the marketplace, push it first (requires at least one image)
+      // Si pas encore sur la marketplace, pousser d’abord (nécessite au moins une image)
       if (!_hasRemoteId) {
         if (widget.images.isEmpty) {
           ScaffoldMessenger.of(context).showSnackBar(
@@ -127,7 +163,7 @@ class _ProductPublishActionsState extends ConsumerState<ProductPublishActions> {
         }
         current = await repo.pushToMarketplace(current, widget.images);
       }
-      // Republier = (re)forcer l’état PUBLISH quelle que soit la situation
+      // Republier = forcer l’état PUBLISH quelle que soit la situation
       await repo.changeRemoteStatus(product: current, statusesCode: 'PUBLISH');
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(

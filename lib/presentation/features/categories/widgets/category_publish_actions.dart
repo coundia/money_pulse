@@ -1,9 +1,13 @@
-// Category publish/unpublish actions that call remote and ensure local is in-sync.
+// Category publish/unpublish actions that call remote and ensure local is in-sync,
+// now requiring an authenticated user via requireAccess() before any action.
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'package:money_pulse/domain/categories/entities/category.dart';
 import 'package:money_pulse/infrastructure/categories/category_marketplace_repo_provider.dart';
+import 'package:money_pulse/onboarding/presentation/providers/access_session_provider.dart'
+    show requireAccess;
 
 class CategoryPublishActions extends ConsumerStatefulWidget {
   final Category category;
@@ -33,7 +37,21 @@ class _CategoryPublishActionsState
     return (s == 'PUBLISH' || s == 'PUBLISHED') && pub == true;
   }
 
+  Future<bool> _mustBeLoggedIn() async {
+    final ok = await requireAccess(context, ref);
+    if (!mounted) return false;
+    if (!ok) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Connexion requise pour cette action.')),
+      );
+    }
+    return ok;
+  }
+
   Future<void> _doPublish() async {
+    // ✅ Exiger l'accès avant l'action
+    if (!await _mustBeLoggedIn()) return;
+
     if (_loadingPublish) return;
     setState(() => _loadingPublish = true);
     try {
@@ -55,6 +73,9 @@ class _CategoryPublishActionsState
   }
 
   Future<void> _doUnpublish() async {
+    //  Exiger l'accès avant l'action
+    if (!await _mustBeLoggedIn()) return;
+
     if (_loadingUnpublish) return;
     setState(() => _loadingUnpublish = true);
     try {

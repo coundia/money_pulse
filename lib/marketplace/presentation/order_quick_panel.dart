@@ -468,12 +468,9 @@ class _OrderQuickPanelState extends ConsumerState<OrderQuickPanel> {
                     controller: _phoneCtrl,
                     decoration: const InputDecoration(
                       labelText: 'Identifiant',
-                      hintText: 'Téléphone ou identifiant',
+                      hintText: 'Téléphone ou Email',
                     ),
-                    inputFormatters: [
-                      FilteringTextInputFormatter.allow(RegExp(r'[0-9+\s-]')),
-                    ],
-                    keyboardType: TextInputType.phone,
+
                     textInputAction: TextInputAction.next,
                     validator: (v) => (v == null || v.trim().isEmpty)
                         ? 'Identifiant requis'
