@@ -2,9 +2,9 @@
 //
 // Sqflite-backed transaction repository using ChangeTrackedExec helpers:
 // - UTC timestamps
-// - Centralized balance math (DEBIT = -, CREDIT = +)
-// - Proper undo/apply when account changes
-// - Auto change_log + version bump via insertTracked/updateTracked/softDeleteTracked
+// - Balance math applied ONLY when status == COMPLETED
+// - Proper undo/apply on UPDATE depending on status transition
+// - Centralized change_log + version bump via insertTracked/updateTracked/softDeleteTracked
 // - List queries ordered by updatedAt DESC
 //
 import 'package:sqflite/sqflite.dart';
@@ -13,7 +13,7 @@ import 'package:money_pulse/infrastructure/db/app_database.dart';
 import 'package:money_pulse/domain/transactions/entities/transaction_entry.dart';
 import 'package:money_pulse/domain/transactions/repositories/transaction_repository.dart';
 
-//  extension with insertTracked / updateTracked / softDeleteTracked
+// extension with insertTracked / updateTracked / softDeleteTracked
 import 'package:money_pulse/sync/infrastructure/change_tracked_exec.dart';
 
 class TransactionRepositorySqflite implements TransactionRepository {
@@ -22,7 +22,10 @@ class TransactionRepositorySqflite implements TransactionRepository {
 
   String _nowUtcIso() => DateTime.now().toUtc().toIso8601String();
 
-  /// DEBIT decreases balance; CREDIT increases balance.
+  bool _isCompleted(String? status) =>
+      (status ?? '').toUpperCase() == 'COMPLETED';
+
+  /// DEBIT decreases balance; CREDIT increases balance (amount is cents, positive).
   int _signedAmount(String typeEntry, int amount) {
     return typeEntry.toUpperCase() == 'DEBIT' ? -amount : amount;
   }
@@ -36,10 +39,9 @@ class TransactionRepositorySqflite implements TransactionRepository {
     final now = _nowUtcIso();
 
     // Mark the account row as changed (logs + version++).
-    // We pass a benign field to satisfy update(), real arithmetic happens just after.
     await txn.updateTracked(
       'account',
-      {'updatedAt': now}, // updateTracked overwrites updatedAt/isDirty anyway
+      {'updatedAt': now}, // updateTracked stamps updatedAt/isDirty/version
       where: 'id=?',
       whereArgs: [accountId],
       entityId: accountId,
@@ -57,23 +59,25 @@ class TransactionRepositorySqflite implements TransactionRepository {
   Future<TransactionEntry> create(TransactionEntry e) async {
     final entry = e.copyWith(
       updatedAt: DateTime.now().toUtc(),
-      version: 0, // on INSERT we keep 0; server sync can reconcile
+      version: 0, // server sync can reconcile later
       isDirty: true,
     );
 
     await _db.tx((txn) async {
-      // Insert txn (auto-stamp + changelog)
+      // Insert transaction (auto-stamp + changelog)
       await txn.insertTracked(
         'transaction_entry',
         entry.toMap(),
         operation: 'INSERT',
       );
 
-      // Apply account delta if accountId present
-      final accId = entry.accountId ?? '';
-      if (accId.isNotEmpty) {
-        final delta = _signedAmount(entry.typeEntry, entry.amount);
-        await _adjustAccount(txn, accountId: accId, delta: delta);
+      // APPLY ONLY IF COMPLETED
+      if (_isCompleted(entry.status)) {
+        final accId = entry.accountId ?? '';
+        if (accId.isNotEmpty) {
+          final delta = _signedAmount(entry.typeEntry, entry.amount);
+          await _adjustAccount(txn, accountId: accId, delta: delta);
+        }
       }
     });
 
@@ -93,17 +97,25 @@ class TransactionRepositorySqflite implements TransactionRepository {
 
       final prev = TransactionEntry.fromMap(rows.first);
 
-      // ---- Balance adjustments (undo previous, apply new) ----
-      final prevAcc = prev.accountId ?? '';
-      final nextAcc = next.accountId ?? '';
+      final prevCompleted = _isCompleted(prev.status);
+      final nextCompleted = _isCompleted(next.status);
 
-      if (prevAcc.isNotEmpty) {
-        final undo = -_signedAmount(prev.typeEntry, prev.amount);
-        await _adjustAccount(txn, accountId: prevAcc, delta: undo);
+      // ---- Balance adjustments according to status transitions ----
+      // We first UNDO previous impact if it was completed,
+      // then APPLY new impact if it is completed.
+      if (prevCompleted) {
+        final prevAcc = prev.accountId ?? '';
+        if (prevAcc.isNotEmpty) {
+          final undo = -_signedAmount(prev.typeEntry, prev.amount);
+          await _adjustAccount(txn, accountId: prevAcc, delta: undo);
+        }
       }
-      if (nextAcc.isNotEmpty) {
-        final apply = _signedAmount(next.typeEntry, next.amount);
-        await _adjustAccount(txn, accountId: nextAcc, delta: apply);
+      if (nextCompleted) {
+        final nextAcc = (next.accountId ?? '');
+        if (nextAcc.isNotEmpty) {
+          final apply = _signedAmount(next.typeEntry, next.amount);
+          await _adjustAccount(txn, accountId: nextAcc, delta: apply);
+        }
       }
 
       // ---- Persist transaction changes (auto version++ & changelog) ----
@@ -111,7 +123,6 @@ class TransactionRepositorySqflite implements TransactionRepository {
         updatedAt: DateTime.now().toUtc(),
         isDirty: true,
         createdAt: prev.createdAt,
-        // ⚠️ Don't bump version here; updateTracked will do it.
       );
 
       final map = updated.toMap()..remove('version');
@@ -139,15 +150,17 @@ class TransactionRepositorySqflite implements TransactionRepository {
 
       final entry = TransactionEntry.fromMap(rows.first);
 
+      // If it impacted balance (COMPLETED), revert before delete.
+      if (_isCompleted(entry.status)) {
+        final accId = entry.accountId ?? '';
+        if (accId.isNotEmpty) {
+          final revert = -_signedAmount(entry.typeEntry, entry.amount);
+          await _adjustAccount(txn, accountId: accId, delta: revert);
+        }
+      }
+
       // Mark deleted (auto changelog)
       await txn.softDeleteTracked('transaction_entry', entityId: id);
-
-      // Revert account effect if any
-      final accId = entry.accountId ?? '';
-      if (accId.isNotEmpty) {
-        final revert = -_signedAmount(entry.typeEntry, entry.amount);
-        await _adjustAccount(txn, accountId: accId, delta: revert);
-      }
     });
   }
 
@@ -222,7 +235,7 @@ class TransactionRepositorySqflite implements TransactionRepository {
     final toIso = to.toUtc().toIso8601String();
 
     final where = StringBuffer(
-      '(accountId = ? OR (accountId IS NULL  )) '
+      '(accountId = ? OR (accountId IS NULL)) '
       'AND deletedAt IS NULL '
       'AND dateTransaction >= ? '
       'AND dateTransaction < ?',

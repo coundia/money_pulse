@@ -1,3 +1,6 @@
+// File: transaction_tile.dart
+// Transaction list tile with context menu, swipe-to-delete and action buttons (Accepter/Rejeter) when status=INIT.
+
 import 'package:flutter/material.dart';
 import 'package:money_pulse/domain/transactions/entities/transaction_entry.dart';
 import 'package:money_pulse/presentation/features/transactions/transaction_form_sheet.dart';
@@ -9,6 +12,12 @@ class TransactionTile extends StatelessWidget {
   final TransactionEntry entry;
   final Future<void> Function() onDeleted;
   final Future<void> Function() onUpdated;
+
+  // Nouveaux callbacks pour gérer l’application dans le compte + statut
+  final Future<void> Function(TransactionEntry entry)? onAccept;
+  final Future<void> Function(TransactionEntry entry)? onReject;
+
+  // Optionnel : action sync existante
   final Future<void> Function(TransactionEntry entry)? onSync;
 
   const TransactionTile({
@@ -16,6 +25,8 @@ class TransactionTile extends StatelessWidget {
     required this.entry,
     required this.onDeleted,
     required this.onUpdated,
+    this.onAccept,
+    this.onReject,
     this.onSync,
   });
 
@@ -26,6 +37,7 @@ class TransactionTile extends StatelessWidget {
     final time = Formatters.timeHm(entry.dateTransaction);
 
     final hasRemote = (entry.remoteId ?? '').trim().isNotEmpty;
+    final isInit = (entry.status ?? '').toUpperCase() == 'INIT';
 
     return Dismissible(
       key: ValueKey('txn-${entry.id}'),
@@ -36,7 +48,6 @@ class TransactionTile extends StatelessWidget {
         final ok = await _confirmDelete(context);
         if (!ok) return false;
         await onDeleted();
-        // Empêche Dismissible de retirer l’item (la liste sera rechargée côté appelant)
         return false;
       },
       child: Semantics(
@@ -50,6 +61,7 @@ class TransactionTile extends StatelessWidget {
             vertical: 4,
           ),
           leading: _LeadingToneAvatar(icon: tone.icon, base: tone.color),
+
           title: Row(
             children: [
               Tooltip(
@@ -77,13 +89,46 @@ class TransactionTile extends StatelessWidget {
             ],
           ),
 
-          subtitle: Row(
+          subtitle: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              const Icon(Icons.schedule, size: 14),
-              const SizedBox(width: 4),
-              Text(time, style: Theme.of(context).textTheme.bodySmall),
+              Row(
+                children: [
+                  const Icon(Icons.schedule, size: 14),
+                  const SizedBox(width: 4),
+                  Text(time, style: Theme.of(context).textTheme.bodySmall),
+                  const SizedBox(width: 8),
+                  _TypePill(label: tone.label, color: tone.color),
+                ],
+              ),
+
+              // Barre d’actions quand statut=INIT
+              if (isInit) ...[
+                const SizedBox(height: 8),
+                Wrap(
+                  spacing: 8,
+                  runSpacing: 6,
+                  children: [
+                    FilledButton.icon(
+                      icon: const Icon(Icons.check),
+                      label: const Text('Accepter'),
+                      onPressed: onAccept != null
+                          ? () async => await onAccept!(entry)
+                          : () => _fallbackSnack(context),
+                    ),
+                    OutlinedButton.icon(
+                      icon: const Icon(Icons.close),
+                      label: const Text('Rejeter'),
+                      onPressed: onReject != null
+                          ? () async => await onReject!(entry)
+                          : () => _fallbackSnack(context),
+                    ),
+                  ],
+                ),
+              ],
             ],
           ),
+
           trailing: Column(
             mainAxisAlignment: MainAxisAlignment.center,
             crossAxisAlignment: CrossAxisAlignment.end,
@@ -105,6 +150,7 @@ class TransactionTile extends StatelessWidget {
                 ),
             ],
           ),
+
           onTap: () async {
             final ok = await showRightDrawer<bool>(
               context,
@@ -120,7 +166,13 @@ class TransactionTile extends StatelessWidget {
     );
   }
 
-  // ————————————————— UI helpers —————————————————
+  static void _fallbackSnack(BuildContext context) {
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(const SnackBar(content: Text('Action indisponible')));
+  }
+
+  // —— UI helpers —— //
 
   static Widget _buildSwipeBg(
     BuildContext context, {
@@ -241,7 +293,7 @@ class TransactionTile extends StatelessWidget {
   }
 }
 
-// ————————————————— Styles & petits widgets —————————————————
+// —— Small widgets —— //
 
 class _TypePill extends StatelessWidget {
   final String label;
@@ -268,18 +320,6 @@ class _TypePill extends StatelessWidget {
           letterSpacing: 0.2,
         ),
       ),
-    );
-  }
-}
-
-class _MetaDot extends StatelessWidget {
-  @override
-  Widget build(BuildContext context) {
-    final c = Theme.of(context).colorScheme.outline.withOpacity(0.45);
-    return Container(
-      width: 4,
-      height: 4,
-      decoration: BoxDecoration(color: c, shape: BoxShape.circle),
     );
   }
 }
@@ -316,15 +356,15 @@ class _LeadingToneAvatar extends StatelessWidget {
   }
 }
 
-// ————————————————— Tone logic —————————————————
+// —— Tone —— //
 
 class _Tone {
   final Color color;
   final IconData icon;
   final String label;
-  final String signPrefix; // "+", "-", ou "" (DEBT)
-  final String semanticLabel; // pour l’accessibilité
-  final String? trailingHint; // ex: "Dette", "Remb."
+  final String signPrefix;
+  final String semanticLabel;
+  final String? trailingHint;
   final Color textColor;
 
   _Tone({
@@ -355,7 +395,7 @@ _Tone _toneForType(BuildContext context, String type) {
       );
     case 'CREDIT':
       return _Tone(
-        color: scheme.tertiary, // souvent “green-like” dans les thèmes MD3
+        color: scheme.tertiary,
         icon: Icons.north,
         label: 'Revenu',
         signPrefix: '+',
@@ -388,7 +428,7 @@ _Tone _toneForType(BuildContext context, String type) {
         color: Colors.amber.shade800,
         icon: Icons.receipt_long,
         label: 'Dette',
-        signPrefix: '', // compte souvent nul → pas de signe visuel
+        signPrefix: '',
         semanticLabel: 'Dette',
         textColor: Colors.amber.shade800,
         trailingHint: 'Dette',
