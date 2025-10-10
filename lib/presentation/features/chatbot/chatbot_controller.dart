@@ -1,5 +1,5 @@
 // File: lib/presentation/features/chatbot/chatbot_controller.dart
-// State controller for Chat UI: pagination, sending, error handling; ticks come from API state/remoteId.
+// State controller for Chat UI: pagination, sending, error handling; mounted-safe updates.
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:uuid/uuid.dart';
 import 'package:money_pulse/domain/chat/entities/chat_models.dart';
@@ -95,7 +95,13 @@ class ChatbotController extends StateNotifier<ChatState> {
     required this.accountId,
   }) : super(ChatState.initial());
 
-  void toggleLogs() => state = state.copyWith(showLogs: !state.showLogs);
+  // Mounted-safe setter
+  void _set(ChatState next) {
+    if (!mounted) return;
+    state = next;
+  }
+
+  void toggleLogs() => _set(state.copyWith(showLogs: !state.showLogs));
 
   ChatMessageEntity _sys(String text) => ChatMessageEntity(
     id: DateTime.now().microsecondsSinceEpoch.toString(),
@@ -105,29 +111,31 @@ class ChatbotController extends StateNotifier<ChatState> {
   );
 
   Future<void> refresh() async {
-    state = state.copyWith(loading: true, page: 0, error: null);
+    _set(state.copyWith(loading: true, page: 0, error: null));
     try {
+      final currentToken = token.state; // snapshot before await
       final res = await fetchUc.execute(
         page: 0,
         limit: _pageSize,
-        token: token.state,
+        token: currentToken,
       );
       final merged = [...res.items]
         ..sort((a, b) => a.createdAt.compareTo(b.createdAt));
-      state = state.copyWith(
-        messages: merged,
-        loading: false,
-        hasMore: res.hasMore,
-        page: 0,
+      _set(
+        state.copyWith(
+          messages: merged,
+          loading: false,
+          hasMore: res.hasMore,
+          page: 0,
+        ),
       );
     } catch (e) {
-      final friendly = extractHumanError(e); // <-- use humanized message
+      final friendly = extractHumanError(e);
       final raw = e.toString();
       final isUnauthorized =
           raw.contains('401') || raw.contains('Unauthorized');
-      state = state.copyWith(
-        loading: false,
-        error: isUnauthorized ? null : friendly,
+      _set(
+        state.copyWith(loading: false, error: isUnauthorized ? null : friendly),
       );
     }
   }
@@ -135,29 +143,31 @@ class ChatbotController extends StateNotifier<ChatState> {
   Future<void> loadMore() async {
     if (!state.hasMore || state.loading) return;
     final next = state.page + 1;
-    state = state.copyWith(loading: true, error: null);
+    _set(state.copyWith(loading: true, error: null));
     try {
+      final currentToken = token.state; // snapshot before await
       final res = await fetchUc.execute(
         page: next,
         limit: _pageSize,
-        token: token.state,
+        token: currentToken,
       );
       final merged = [...state.messages, ...res.items]
         ..sort((a, b) => a.createdAt.compareTo(b.createdAt));
-      state = state.copyWith(
-        messages: merged,
-        loading: false,
-        hasMore: res.hasMore,
-        page: next,
+      _set(
+        state.copyWith(
+          messages: merged,
+          loading: false,
+          hasMore: res.hasMore,
+          page: next,
+        ),
       );
     } catch (e) {
-      final friendly = extractHumanError(e); // <-- use humanized message
+      final friendly = extractHumanError(e);
       final raw = e.toString();
       final isUnauthorized =
           raw.contains('401') || raw.contains('Unauthorized');
-      state = state.copyWith(
-        loading: false,
-        error: isUnauthorized ? null : friendly,
+      _set(
+        state.copyWith(loading: false, error: isUnauthorized ? null : friendly),
       );
     }
   }
@@ -165,9 +175,12 @@ class ChatbotController extends StateNotifier<ChatState> {
   Future<void> send(String text) async {
     if (state.sending) return;
 
+    // Snapshot BEFORE awaits to avoid touching disposed controllers later
     final acc = accountId.state;
+    final currentToken = token.state;
+
     if ((acc ?? '').isEmpty) {
-      state = state.copyWith(error: 'Compte introuvable');
+      _set(state.copyWith(error: 'Compte introuvable'));
       return;
     }
 
@@ -183,51 +196,60 @@ class ChatbotController extends StateNotifier<ChatState> {
     final pre = <ChatMessageEntity>[];
     if (state.showLogs) pre.add(_sys('↗️ POST /api/v1/commands/chat …'));
 
-    state = state.copyWith(
-      sending: true,
-      error: null,
-      messages: [...state.messages, temp, ...pre],
+    _set(
+      state.copyWith(
+        sending: true,
+        error: null,
+        messages: [...state.messages, temp, ...pre],
+      ),
     );
 
     try {
-      await sendUc.execute(text: text, accountId: acc!, token: token.state);
-
+      await sendUc.execute(text: text, accountId: acc!, token: currentToken);
+      // mark delivered (mounted-safe)
       final updated = state.messages.map((m) {
         if (m.id == temp.id) {
           return m.copyWith(status: ChatDeliveryStatus.delivered);
         }
         return m;
       }).toList();
-      state = state.copyWith(messages: updated);
+      _set(state.copyWith(messages: updated));
 
       await refresh();
 
       if (state.showLogs) {
-        state = state.copyWith(
-          messages: [...state.messages, _sys('✅ Message envoyé')],
+        _set(
+          state.copyWith(
+            messages: [...state.messages, _sys('✅ Message envoyé')],
+          ),
         );
       }
     } catch (e) {
-      final friendly = extractHumanError(e); // <-- use humanized message
+      final friendly = extractHumanError(e);
       final postErr = state.showLogs
           ? [_sys('❌ Échec: $friendly')]
           : const <ChatMessageEntity>[];
-      state = state.copyWith(
-        sending: false,
-        error: friendly,
-        messages: [...state.messages, ...postErr],
+      _set(
+        state.copyWith(
+          sending: false,
+          error: friendly,
+          messages: [...state.messages, ...postErr],
+        ),
       );
       return;
     }
 
-    state = state.copyWith(sending: false);
+    _set(state.copyWith(sending: false));
   }
 
   void setToken(String? bearer) {
+    // setter mounted-safe
+    if (!mounted) return;
     token.state = bearer;
   }
 
   void setAccount(String? id) {
+    if (!mounted) return;
     accountId.state = id;
   }
 }

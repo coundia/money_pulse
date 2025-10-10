@@ -1,6 +1,5 @@
 // File: lib/presentation/features/chatbot/widgets/chat_input_bar.dart
-// Input row with Enter-to-send and send button, guarded by access flow.
-// The send button enables as soon as the user types (controller listener).
+// Input row with Enter-to-send and send button; mounted-safe after awaits.
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -23,8 +22,7 @@ class _ChatInputBarState extends ConsumerState<ChatInputBar> {
   void initState() {
     super.initState();
     _ctrl.addListener(() {
-      // Rebuild to update the enabled/disabled state of the send button.
-      if (mounted) setState(() {});
+      if (mounted) setState(() {}); // update send button enabled state
     });
   }
 
@@ -37,7 +35,7 @@ class _ChatInputBarState extends ConsumerState<ChatInputBar> {
 
   Future<void> _ensureAccessAndSetToken() async {
     final ok = await requireAccess(context, ref);
-    if (!ok) return;
+    if (!mounted || !ok) return;
     final g = ref.read(accessSessionProvider);
     if (g?.token != null && g!.token.isNotEmpty) {
       ref.read(chatbotControllerProvider.notifier).setToken(g.token);
@@ -54,11 +52,14 @@ class _ChatInputBarState extends ConsumerState<ChatInputBar> {
     final grant = ref.read(accessSessionProvider);
     if (grant?.token == null || grant!.token.isEmpty) {
       await _ensureAccessAndSetToken();
+      if (!mounted) return;
       final g2 = ref.read(accessSessionProvider);
       if (g2?.token == null || g2!.token.isEmpty) return;
     }
 
     await ref.read(chatbotControllerProvider.notifier).send(txt);
+    if (!mounted) return;
+
     _ctrl.clear();
 
     if (widget.scrollController?.hasClients == true) {
@@ -107,7 +108,6 @@ class _ChatInputBarState extends ConsumerState<ChatInputBar> {
           ),
           const SizedBox(width: 8),
           FilledButton.icon(
-            // Enabled as soon as there is text; only disabled while sending.
             onPressed: sending || !hasText ? null : _send,
             icon: const Icon(Icons.send),
             label: Text(sending ? "Envoi…" : "Envoyer"),

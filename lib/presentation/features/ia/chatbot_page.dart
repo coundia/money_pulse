@@ -1,6 +1,6 @@
 // File: lib/presentation/features/chatbot/pages/chatbot_page.dart
 // Screen scaffold that wires app bar, banner, message list and input bar together.
-// Uses showApiErrorSnackBar to display clean error messages.
+// Uses showApiErrorSnackBar to display clean error messages and attaches default accountId.
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:money_pulse/onboarding/presentation/providers/access_session_provider.dart';
@@ -9,6 +9,7 @@ import 'package:money_pulse/presentation/features/chatbot/widgets/chat_app_bar.d
 import 'package:money_pulse/presentation/features/chatbot/widgets/chat_connect_banner.dart';
 import 'package:money_pulse/presentation/features/chatbot/widgets/chat_input_bar.dart';
 import 'package:money_pulse/presentation/features/chatbot/widgets/chat_message_list.dart';
+import 'package:money_pulse/presentation/features/chatbot/hooks/chat_attach_default_account.dart';
 
 import '../../../shared/api_error_toast.dart';
 
@@ -54,11 +55,13 @@ class _ChatbotPageState extends ConsumerState<ChatbotPage> {
 
   @override
   Widget build(BuildContext context) {
+    // Keep chat accountId synced with default selected account
+    ref.watch(chatAttachDefaultAccountProvider);
+
     final state = ref.watch(chatbotControllerProvider);
     final grant = ref.watch(accessSessionProvider);
 
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      // Use the shared helper to display a clean error toast.
       if ((state.error ?? '').isNotEmpty && mounted) {
         showApiErrorSnackBar(context, state.error!);
       }
