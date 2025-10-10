@@ -18,6 +18,7 @@ import 'package:money_pulse/presentation/features/transactions/search/widgets/tx
 import 'package:money_pulse/presentation/features/settings/settings_page.dart';
 import 'package:money_pulse/presentation/features/reports/report_page.dart';
 
+import '../../../app/account_selection.dart';
 import '../controllers/transaction_list_controller.dart';
 
 class TransactionListPage extends ConsumerWidget {
@@ -44,13 +45,76 @@ class TransactionListPage extends ConsumerWidget {
     }
 
     Future<void> _acceptTxn(TransactionEntry e) async {
-      final repo = ref.read(transactionRepoProvider);
-      await repo.update(e.copyWith(status: 'COMPLETED'));
-      await _refreshAll();
-      if (context.mounted) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(const SnackBar(content: Text('Transaction acceptée')));
+      // Normalise "IN"/"OUT" en "CREDIT"/"DEBIT" si nécessaire
+      String _normalizeType(String t) {
+        final u = (t.isEmpty ? '' : t).toUpperCase();
+        switch (u) {
+          case 'IN':
+            return 'CREDIT';
+          case 'OUT':
+            return 'DEBIT';
+          default:
+            return u; // DEBIT, CREDIT, DEBT, REMBOURSEMENT, PRET...
+        }
+      }
+
+      try {
+        // Déjà accepté ? Ne rien refaire
+        if ((e.status ?? '').toUpperCase() == 'COMPLETED') {
+          if (context.mounted) {
+            ScaffoldMessenger.of(
+              context,
+            ).showSnackBar(const SnackBar(content: Text('Déjà accepté')));
+          }
+          return;
+        }
+
+        // Récupère le compte sélectionné (obligatoire pour ajuster le solde)
+        final selectedId = ref.read(selectedAccountIdProvider);
+        if ((selectedId ?? '').isEmpty) {
+          if (context.mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(content: Text('Aucun compte sélectionné')),
+            );
+          }
+          return;
+        }
+
+        final repo = ref.read(transactionRepoProvider);
+
+        // Construit la version acceptée :
+        // - status -> COMPLETED
+        // - typeEntry normalisé (si IN/OUT)
+        // - accountId -> compte sélectionné (déclenchera l’ajustement du solde)
+        final next = e.copyWith(
+          status: 'COMPLETED',
+          typeEntry: _normalizeType(e.typeEntry),
+          accountId: selectedId,
+          updatedAt: DateTime.now().toUtc(),
+        );
+
+        // IMPORTANT : le repo s’occupe d’annuler l’ancien effet et d’appliquer le nouveau
+        // (si l’ancienne transaction n’avait pas de compte, pas d’annulation ; on applique juste le delta)
+        await repo.update(next);
+
+        // Rafraîchit la liste et les soldes
+        await ref.read(balanceProvider.notifier).load();
+        await ref.read(transactionsProvider.notifier).load();
+        ref.invalidate(transactionListItemsProvider);
+
+        if (context.mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Transaction acceptée. Solde mis à jour.'),
+            ),
+          );
+        }
+      } catch (e) {
+        if (context.mounted) {
+          ScaffoldMessenger.of(
+            context,
+          ).showSnackBar(SnackBar(content: Text('Erreur : $e')));
+        }
       }
     }
 
