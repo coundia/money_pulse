@@ -97,7 +97,8 @@ class _ChatInputBarState extends ConsumerState<ChatInputBar> {
                 maxLines: null,
                 textInputAction: TextInputAction.send,
                 decoration: const InputDecoration(
-                  hintText: "Écris une dépense (ex: 2000 café)…",
+                  hintText:
+                      "Écris une dépense (ex: 100 franc pour achat café touba)…",
                   border: OutlineInputBorder(),
                   isDense: true,
                   labelText: "Message",

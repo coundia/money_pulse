@@ -32,7 +32,7 @@ CREATE TABLE IF NOT EXISTS  account (
   createdBy TEXT,
   isDirty INTEGER DEFAULT 1
 );
-//766027155
+ 
 CREATE INDEX idx_account_code ON account(code);
 CREATE INDEX idx_account_dirty ON account(isDirty);
 CREATE INDEX idx_account_deleted ON account(deletedAt);
