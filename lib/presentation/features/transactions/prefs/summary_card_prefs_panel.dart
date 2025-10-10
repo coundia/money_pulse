@@ -113,13 +113,7 @@ class SummaryCardPrefsPanel extends ConsumerWidget {
                   ? (v) => ctrl.setShowNavSearchButton(v)
                   : null,
             ),
-            SwitchListTile.adaptive(
-              title: const Text('Stock'),
-              value: prefs.showNavStockButton,
-              onChanged: prefs.showQuickActions && prefs.showNavShortcuts
-                  ? (v) => ctrl.setShowNavStockButton(v)
-                  : null,
-            ),
+
             SwitchListTile.adaptive(
               title: const Text('Rapport'),
               value: prefs.showNavReportButton,

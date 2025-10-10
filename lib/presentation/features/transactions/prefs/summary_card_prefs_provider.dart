@@ -71,14 +71,14 @@ class SummaryCardPrefs {
     showNavSettingsButton: false,
     showNavSearchButton: false,
     showNavStockButton: false,
-    showNavReportButton: true,
+    showNavReportButton: false,
     showNavProductsButton: false,
     showNavCustomersButton: false,
     showNavCategoriesButton: false,
     showNavAccountsButton: false,
-    showPeriodHeader: false,
-    showMetrics: false,
-    showNavMarketplaceButton: false,
+    showPeriodHeader: true,
+    showMetrics: true,
+    showNavMarketplaceButton: true,
     showNavChatbotButton: false,
   );
 

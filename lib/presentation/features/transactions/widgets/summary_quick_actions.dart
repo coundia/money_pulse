@@ -398,23 +398,25 @@ class SummaryQuickActions extends StatelessWidget {
             ),
           );
         }
-
-        buttons.add(
-          _btn(
-            context,
-            label: 'Entreprise',
-            icon: Icons.home_rounded,
-            tone: Theme.of(context).colorScheme.primary,
-            onTap:
-                onOpenChatbot ??
-                () {
-                  Navigator.of(context).push(
-                    MaterialPageRoute(builder: (_) => const CompanyListPage()),
-                  );
-                },
-          ),
-        );
-
+        if (showNavCustomersButton) {
+          buttons.add(
+            _btn(
+              context,
+              label: 'Entreprise',
+              icon: Icons.home_rounded,
+              tone: Theme.of(context).colorScheme.primary,
+              onTap:
+                  onOpenChatbot ??
+                  () {
+                    Navigator.of(context).push(
+                      MaterialPageRoute(
+                        builder: (_) => const CompanyListPage(),
+                      ),
+                    );
+                  },
+            ),
+          );
+        }
         if (buttons.isEmpty) return const SizedBox.shrink();
 
         final w = c.maxWidth;

@@ -2,6 +2,7 @@
 // now requiring an authenticated user via requireAccess() before any action.
 // "Republier" is NEVER disabled.
 
+import 'dart:convert';
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -9,6 +10,17 @@ import 'package:money_pulse/domain/products/entities/product.dart';
 import 'package:money_pulse/infrastructure/products/product_marketplace_repo_provider.dart';
 import 'package:money_pulse/onboarding/presentation/providers/access_session_provider.dart'
     show requireAccess;
+
+import '../../../../shared/api_error_toast.dart';
+
+// If you put ApiException in a shared file, import it instead.
+class ApiException implements Exception {
+  final String message;
+  final int? statusCode;
+  ApiException(this.message, [this.statusCode]);
+  @override
+  String toString() => message;
+}
 
 class ProductPublishActions extends ConsumerStatefulWidget {
   final Product product;
@@ -41,16 +53,6 @@ class _ProductPublishActionsState extends ConsumerState<ProductPublishActions> {
     return s == 'PUBLISH' || s == 'PUBLISHED';
   }
 
-  Future<void> _ensureAccessOrToast() async {
-    final ok = await requireAccess(context, ref);
-    if (!mounted) return;
-    if (!ok) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Connexion requise pour cette action.')),
-      );
-    }
-  }
-
   Future<bool> _mustBeLoggedIn() async {
     final ok = await requireAccess(context, ref);
     if (!mounted) return false;
@@ -63,9 +65,7 @@ class _ProductPublishActionsState extends ConsumerState<ProductPublishActions> {
   }
 
   Future<void> _doPublish() async {
-    // ✅ Exiger l'accès AVANT de lancer l'action (pas de spinner si refus)
     if (!await _mustBeLoggedIn()) return;
-
     if (_loadingPublish) return;
     setState(() => _loadingPublish = true);
 
@@ -81,6 +81,7 @@ class _ProductPublishActionsState extends ConsumerState<ProductPublishActions> {
           );
           return;
         }
+        // Expect an updated product with remoteId from the repo:
         current = await repo.pushToMarketplace(current, widget.images);
       }
       await repo.changeRemoteStatus(product: current, statusesCode: 'PUBLISH');
@@ -90,19 +91,18 @@ class _ProductPublishActionsState extends ConsumerState<ProductPublishActions> {
       );
       widget.onChanged?.call();
     } catch (e) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(
+      showApiErrorSnackBar(
         context,
-      ).showSnackBar(SnackBar(content: Text('Erreur: $e')));
+        e,
+        fallback: 'Action impossible pour le moment.',
+      );
     } finally {
       if (mounted) setState(() => _loadingPublish = false);
     }
   }
 
   Future<void> _doUnpublish() async {
-    // ✅ Exiger l'accès
     if (!await _mustBeLoggedIn()) return;
-
     if (_loadingUnpublish) return;
     if (!_hasRemoteId) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -132,26 +132,24 @@ class _ProductPublishActionsState extends ConsumerState<ProductPublishActions> {
       );
       widget.onChanged?.call();
     } catch (e) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(
+      showApiErrorSnackBar(
         context,
-      ).showSnackBar(SnackBar(content: Text('Erreur: $e')));
+        e,
+        fallback: 'Action impossible pour le moment.',
+      );
     } finally {
       if (mounted) setState(() => _loadingUnpublish = false);
     }
   }
 
   Future<void> _doRepublish() async {
-    // ✅ Exiger l'accès
     if (!await _mustBeLoggedIn()) return;
-
     if (_loadingRepublish) return;
     setState(() => _loadingRepublish = true);
 
     final repo = ref.read(productMarketplaceRepoProvider(widget.baseUri));
     try {
       var current = widget.product;
-      // Si pas encore sur la marketplace, pousser d’abord (nécessite au moins une image)
       if (!_hasRemoteId) {
         if (widget.images.isEmpty) {
           ScaffoldMessenger.of(context).showSnackBar(
@@ -163,7 +161,6 @@ class _ProductPublishActionsState extends ConsumerState<ProductPublishActions> {
         }
         current = await repo.pushToMarketplace(current, widget.images);
       }
-      // Republier = forcer l’état PUBLISH quelle que soit la situation
       await repo.changeRemoteStatus(product: current, statusesCode: 'PUBLISH');
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
@@ -171,10 +168,11 @@ class _ProductPublishActionsState extends ConsumerState<ProductPublishActions> {
       );
       widget.onChanged?.call();
     } catch (e) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(
+      showApiErrorSnackBar(
         context,
-      ).showSnackBar(SnackBar(content: Text('Erreur: $e')));
+        e,
+        fallback: 'Action impossible pour le moment.',
+      );
     } finally {
       if (mounted) setState(() => _loadingRepublish = false);
     }
@@ -221,7 +219,6 @@ class _ProductPublishActionsState extends ConsumerState<ProductPublishActions> {
               label: const Text('Retirer'),
             ),
           ),
-          // 🔥 Republier: toujours actif (sauf durant le chargement)
           Tooltip(
             message: 'Republier sur le marché',
             child: OutlinedButton.icon(

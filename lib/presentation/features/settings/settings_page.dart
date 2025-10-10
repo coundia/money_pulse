@@ -215,59 +215,6 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
           _SectionCard(
             title: 'Gestion',
             children: [
-              _tile(
-                icon: Icons.category_outlined,
-                title: 'Gérer les catégories',
-                subtitle: 'Créer, modifier, supprimer des catégories',
-                onTap: () => Navigator.of(context).push(
-                  MaterialPageRoute(builder: (_) => const CategoryListPage()),
-                ),
-              ),
-              _divider(),
-              _tile(
-                icon: Icons.account_balance_wallet_outlined,
-                title: 'Gérer les comptes',
-                subtitle: 'Ajouter, définir par défaut, modifier, supprimer',
-                onTap: () => Navigator.of(context).push(
-                  MaterialPageRoute(builder: (_) => const AccountListPage()),
-                ),
-              ),
-              _divider(),
-              _tile(
-                icon: Icons.inventory_2_rounded,
-                title: 'Gérer les produits',
-                subtitle: 'Créer, modifier, supprimer des produits',
-                onTap: () => Navigator.of(context).push(
-                  MaterialPageRoute(builder: (_) => const ProductListPage()),
-                ),
-              ),
-              _divider(),
-              _tile(
-                icon: Icons.group_rounded,
-                title: 'Gérer les clients',
-                subtitle: 'Créer, modifier, supprimer des clients',
-                onTap: () => Navigator.of(context).push(
-                  MaterialPageRoute(builder: (_) => const CustomerListPage()),
-                ),
-              ),
-              _divider(),
-              _tile(
-                icon: Icons.apartment_rounded,
-                title: 'Gérer les entreprises',
-                subtitle: 'Créer, modifier, supprimer des entreprises',
-                onTap: () => Navigator.of(context).push(
-                  MaterialPageRoute(builder: (_) => const CompanyListPage()),
-                ),
-              ),
-              _divider(),
-              _tile(
-                icon: Icons.inventory_rounded,
-                title: 'Gérer le stock',
-                subtitle: 'Inventaire',
-                onTap: () => Navigator.of(context).push(
-                  MaterialPageRoute(builder: (_) => const StockLevelListPage()),
-                ),
-              ),
               _divider(),
               _tile(
                 icon: Icons.swap_horiz_rounded,

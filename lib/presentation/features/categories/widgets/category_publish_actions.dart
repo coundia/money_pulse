@@ -9,6 +9,8 @@ import 'package:money_pulse/infrastructure/categories/category_marketplace_repo_
 import 'package:money_pulse/onboarding/presentation/providers/access_session_provider.dart'
     show requireAccess;
 
+import '../../../../shared/api_error_toast.dart';
+
 class CategoryPublishActions extends ConsumerStatefulWidget {
   final Category category;
   final String baseUri;
@@ -63,10 +65,13 @@ class _CategoryPublishActionsState
       ).showSnackBar(const SnackBar(content: Text('Publié avec succès')));
       widget.onChanged?.call();
     } catch (e) {
+      print(e);
       if (!mounted) return;
-      ScaffoldMessenger.of(
+      showApiErrorSnackBar(
         context,
-      ).showSnackBar(SnackBar(content: Text('Erreur: $e')));
+        e,
+        fallback: 'Action impossible pour le moment.',
+      );
     } finally {
       if (mounted) setState(() => _loadingPublish = false);
     }
