@@ -1,11 +1,12 @@
 // File: lib/presentation/features/chatbot/chatbot_page.dart
-// Chat UI with access gate: requires session via right-drawer flow before sending messages.
+// Chat UI with access gate and WhatsApp-like ticks for "Moi" messages (based on API state/remoteId).
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:money_pulse/presentation/features/chatbot/chatbot_controller.dart';
 import 'package:money_pulse/shared/formatters.dart';
 import 'package:money_pulse/onboarding/presentation/providers/access_session_provider.dart';
+import 'package:money_pulse/domain/chat/entities/chat_models.dart';
 
 class ChatbotPage extends ConsumerStatefulWidget {
   const ChatbotPage({super.key});
@@ -38,7 +39,7 @@ class _ChatbotPageState extends ConsumerState<ChatbotPage> {
       if (grant?.token != null && grant!.token.isNotEmpty) {
         final ctrl = ref.read(chatbotControllerProvider.notifier);
         ctrl.setToken(grant.token);
-        await ctrl.refresh(); // <- refresh seulement si token dispo
+        await ctrl.refresh();
       }
     });
   }
@@ -57,7 +58,6 @@ class _ChatbotPageState extends ConsumerState<ChatbotPage> {
     final grant = ref.watch(accessSessionProvider);
 
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      // Ne pas harceler de SnackBar pour 401 silencieux (on ignore null error)
       if ((state.error ?? '').isNotEmpty && mounted) {
         ScaffoldMessenger.of(
           context,
@@ -73,6 +73,20 @@ class _ChatbotPageState extends ConsumerState<ChatbotPage> {
     });
 
     final isConnected = grant?.token.isNotEmpty == true;
+
+    Color _tickColor(ChatDeliveryStatus? s) {
+      switch (s) {
+        case ChatDeliveryStatus.delivered:
+          return Colors.grey; // ✓✓ gris quand remoteId présent
+        case ChatDeliveryStatus.processed:
+          return Colors.green; // ✓✓ vert quand state=COMPLETED
+        case ChatDeliveryStatus.failed:
+          return Colors.red; // ✓✓ rouge quand state=FAIL
+        case ChatDeliveryStatus.sending:
+        default:
+          return Colors.grey; // par défaut gris
+      }
+    }
 
     return Scaffold(
       appBar: AppBar(
@@ -142,13 +156,24 @@ class _ChatbotPageState extends ConsumerState<ChatbotPage> {
                 itemCount: state.messages.length,
                 itemBuilder: (context, i) {
                   final msg = state.messages[i];
-                  final isMe = msg.sender.toLowerCase() == 'moi';
+                  final isMe = msg.isMe;
                   final bubbleColor = isMe
                       ? Theme.of(context).colorScheme.primaryContainer
                       : Theme.of(context).colorScheme.surfaceVariant;
                   final textColor = isMe
                       ? Theme.of(context).colorScheme.onPrimaryContainer
                       : Theme.of(context).colorScheme.onSurfaceVariant;
+
+                  Widget? _statusIcon() {
+                    if (!isMe) return null;
+                    if (msg.status == null) return null;
+                    // Double coche (done_all) colorée selon statut
+                    return Icon(
+                      Icons.done_all,
+                      size: 16,
+                      color: _tickColor(msg.status),
+                    );
+                  }
 
                   return Align(
                     alignment: isMe
@@ -164,7 +189,7 @@ class _ChatbotPageState extends ConsumerState<ChatbotPage> {
                         ),
                         child: Container(
                           margin: const EdgeInsets.symmetric(vertical: 6),
-                          padding: const EdgeInsets.fromLTRB(12, 10, 12, 6),
+                          padding: const EdgeInsets.fromLTRB(12, 10, 12, 8),
                           decoration: BoxDecoration(
                             color: bubbleColor,
                             borderRadius: BorderRadius.only(
@@ -181,36 +206,29 @@ class _ChatbotPageState extends ConsumerState<ChatbotPage> {
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
-                              Row(
-                                mainAxisSize: MainAxisSize.min,
-                                children: [
-                                  CircleAvatar(
-                                    radius: 10,
-                                    child: Text(
-                                      isMe ? 'M' : 'IA',
-                                      style: const TextStyle(fontSize: 11),
+                              if (!isMe)
+                                Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    const CircleAvatar(
+                                      radius: 10,
+                                      child: Text(
+                                        'IA',
+                                        style: TextStyle(fontSize: 11),
+                                      ),
                                     ),
-                                  ),
-                                  const SizedBox(width: 8),
-                                  Text(
-                                    msg.sender,
-                                    style: TextStyle(
-                                      fontWeight: FontWeight.w600,
-                                      fontSize: 12,
-                                      color: textColor.withOpacity(0.9),
+                                    const SizedBox(width: 8),
+                                    Text(
+                                      msg.sender,
+                                      style: TextStyle(
+                                        fontWeight: FontWeight.w600,
+                                        fontSize: 12,
+                                        color: textColor.withOpacity(0.9),
+                                      ),
                                     ),
-                                  ),
-                                  const SizedBox(width: 8),
-                                  Text(
-                                    Formatters.timeHm(msg.createdAt),
-                                    style: TextStyle(
-                                      fontSize: 11,
-                                      color: textColor.withOpacity(0.7),
-                                    ),
-                                  ),
-                                ],
-                              ),
-                              const SizedBox(height: 6),
+                                  ],
+                                ),
+                              if (!isMe) const SizedBox(height: 6),
                               Text(
                                 msg.text,
                                 style: TextStyle(
@@ -218,6 +236,24 @@ class _ChatbotPageState extends ConsumerState<ChatbotPage> {
                                   fontSize: 15,
                                   height: 1.25,
                                 ),
+                              ),
+                              const SizedBox(height: 4),
+                              Row(
+                                mainAxisSize: MainAxisSize.min,
+                                mainAxisAlignment: MainAxisAlignment.end,
+                                children: [
+                                  Text(
+                                    Formatters.timeHm(msg.createdAt),
+                                    style: TextStyle(
+                                      fontSize: 11,
+                                      color: textColor.withOpacity(0.7),
+                                    ),
+                                  ),
+                                  if (_statusIcon() != null) ...[
+                                    const SizedBox(width: 6),
+                                    _statusIcon()!,
+                                  ],
+                                ],
                               ),
                             ],
                           ),
