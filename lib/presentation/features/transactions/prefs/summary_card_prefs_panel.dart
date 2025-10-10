@@ -1,4 +1,6 @@
-// Right-drawer panel to configure SummaryCard sections and shortcuts, incl. debt/repayment/loan toggles.
+// lib/presentation/features/transactions/prefs/summary_card_prefs_panel.dart
+// Right-drawer panel to configure SummaryCard sections and shortcuts,
+// now with "Reset", "Tout cocher", and "Tout décocher" buttons at the top.
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -16,17 +18,123 @@ class SummaryCardPrefsPanel extends ConsumerWidget {
     final uiPrefs = ref.watch(homeUiPrefsProvider);
     final uiCtrl = ref.read(homeUiPrefsProvider.notifier);
 
+    Future<void> checkAll() async {
+      // Active tout ce qui a du sens
+      await ctrl.setShowQuickActions(true);
+      await ctrl.setShowExpenseButton(true);
+      await ctrl.setShowIncomeButton(true);
+      await ctrl.setShowDebtButton(true);
+      await ctrl.setShowRepaymentButton(true);
+      await ctrl.setShowLoanButton(true);
+
+      await ctrl.setShowNavShortcuts(true);
+      await ctrl.setShowNavTransactionsButton(true);
+      await ctrl.setShowNavPosButton(true);
+      await ctrl.setShowNavSettingsButton(true);
+
+      await ctrl.setShowNavSearchButton(true);
+      await ctrl.setShowNavStockButton(true);
+      await ctrl.setShowNavReportButton(true);
+      await ctrl.setShowNavProductsButton(true);
+      await ctrl.setShowNavCustomersButton(true);
+      await ctrl.setShowNavCategoriesButton(true);
+      await ctrl.setShowNavAccountsButton(true);
+
+      await ctrl.setShowPeriodHeader(true);
+      await ctrl.setShowMetrics(true);
+
+      await ctrl.setShowNavMarketplaceButton(true);
+      await ctrl.setShowNavChatbotButton(true);
+
+      // (Optionnel) activer la bottom nav si vous le souhaitez aussi
+      // await uiCtrl.setShowBottomNav(true);
+    }
+
+    Future<void> uncheckAll() async {
+      // Désactive tout
+      await ctrl.setShowQuickActions(false);
+      await ctrl.setShowExpenseButton(false);
+      await ctrl.setShowIncomeButton(false);
+      await ctrl.setShowDebtButton(false);
+      await ctrl.setShowRepaymentButton(false);
+      await ctrl.setShowLoanButton(false);
+
+      await ctrl.setShowNavShortcuts(false);
+      await ctrl.setShowNavTransactionsButton(false);
+      await ctrl.setShowNavPosButton(false);
+      await ctrl.setShowNavSettingsButton(false);
+
+      await ctrl.setShowNavSearchButton(false);
+      await ctrl.setShowNavStockButton(false);
+      await ctrl.setShowNavReportButton(false);
+      await ctrl.setShowNavProductsButton(false);
+      await ctrl.setShowNavCustomersButton(false);
+      await ctrl.setShowNavCategoriesButton(false);
+      await ctrl.setShowNavAccountsButton(false);
+
+      await ctrl.setShowPeriodHeader(false);
+      await ctrl.setShowMetrics(false);
+
+      await ctrl.setShowNavMarketplaceButton(false);
+      await ctrl.setShowNavChatbotButton(false);
+
+      // (Optionnel) masquer la bottom nav
+      // await uiCtrl.setShowBottomNav(false);
+    }
+
     return SafeArea(
       child: Padding(
         padding: const EdgeInsets.all(16),
         child: ListView(
           children: [
-            Text(
-              'Personnalisation',
-              style: Theme.of(context).textTheme.titleLarge,
+            // ---- Header + boutons d'action (TOP) ----
+            Row(
+              children: [
+                Expanded(
+                  child: Text(
+                    'Personnalisation',
+                    style: Theme.of(context).textTheme.titleLarge,
+                  ),
+                ),
+              ],
             ),
-            const SizedBox(height: 12),
+            const SizedBox(height: 8),
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: [
+                // Reset en premier
+                FilledButton.tonal(
+                  onPressed: () async {
+                    await ctrl.reset();
+                    await uiCtrl.reset();
+                    if (context.mounted) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(
+                          content: Text('Réglages réinitialisés.'),
+                        ),
+                      );
+                    }
+                  },
+                  child: const Text('Réinitialiser'),
+                ),
+                OutlinedButton.icon(
+                  onPressed: uncheckAll,
+                  icon: const Icon(Icons.remove_done),
+                  label: const Text('Tout décocher'),
+                ),
+                FilledButton.icon(
+                  onPressed: checkAll,
+                  icon: const Icon(Icons.done_all),
+                  label: const Text('Tout cocher'),
+                ),
+              ],
+            ),
 
+            const SizedBox(height: 12),
+            const Divider(height: 24),
+
+            // ---- Contenu existant ----
             SwitchListTile.adaptive(
               title: const Text('Afficher les actions rapides'),
               value: prefs.showQuickActions,
@@ -85,6 +193,13 @@ class SummaryCardPrefsPanel extends ConsumerWidget {
             ),
 
             SwitchListTile.adaptive(
+              title: const Text('Transactions'),
+              value: prefs.showNavTransactionsButton,
+              onChanged: prefs.showQuickActions && prefs.showNavShortcuts
+                  ? (v) => ctrl.setShowNavTransactionsButton(v)
+                  : null,
+            ),
+            SwitchListTile.adaptive(
               title: const Text('POS'),
               value: prefs.showNavPosButton,
               onChanged: prefs.showQuickActions && prefs.showNavShortcuts
@@ -113,7 +228,13 @@ class SummaryCardPrefsPanel extends ConsumerWidget {
                   ? (v) => ctrl.setShowNavSearchButton(v)
                   : null,
             ),
-
+            SwitchListTile.adaptive(
+              title: const Text('Stock'),
+              value: prefs.showNavStockButton,
+              onChanged: prefs.showQuickActions && prefs.showNavShortcuts
+                  ? (v) => ctrl.setShowNavStockButton(v)
+                  : null,
+            ),
             SwitchListTile.adaptive(
               title: const Text('Rapport'),
               value: prefs.showNavReportButton,
@@ -164,6 +285,7 @@ class SummaryCardPrefsPanel extends ConsumerWidget {
             ),
 
             const Divider(height: 24),
+
             SwitchListTile.adaptive(
               title: const Text('Marketplace'),
               value: prefs.showNavMarketplaceButton,
@@ -179,25 +301,13 @@ class SummaryCardPrefsPanel extends ConsumerWidget {
                   : null,
             ),
 
-            const Divider(height: 24),
-
-            // SwitchListTile.adaptive(
-            //   title: const Text('Afficher la barre de navigation en bas'),
-            //   value: uiPrefs.showBottomNav,
-            //   onChanged: (v) => uiCtrl.setShowBottomNav(v),
-            // ),
-            const SizedBox(height: 16),
-            FilledButton.tonal(
-              onPressed: () async {
-                await ctrl.reset();
-                await uiCtrl.reset();
-              },
-              child: const Text('Réinitialiser'),
-            ),
             const SizedBox(height: 8),
-            OutlinedButton(
-              onPressed: () => Navigator.of(context).maybePop(),
-              child: const Text('Fermer'),
+            Align(
+              alignment: Alignment.centerRight,
+              child: OutlinedButton(
+                onPressed: () => Navigator.of(context).maybePop(),
+                child: const Text('Fermer'),
+              ),
             ),
           ],
         ),
