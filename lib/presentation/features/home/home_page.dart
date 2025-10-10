@@ -449,35 +449,7 @@ class _HomePageState extends ConsumerState<HomePage> {
                       ),
                     ),
                     PopupMenuDivider(),
-                    PopupMenuItem(
-                      value: 'produits',
-                      child: ListTile(
-                        leading: Icon(Icons.shop),
-                        title: Text('Produits'),
-                      ),
-                    ),
-                    PopupMenuItem(
-                      value: 'manageCategories',
-                      child: ListTile(
-                        leading: Icon(Icons.category_outlined),
-                        title: Text('Catégories'),
-                      ),
-                    ),
-                    PopupMenuItem(
-                      value: 'manageAccounts',
-                      child: ListTile(
-                        leading: Icon(Icons.wallet_giftcard),
-                        title: Text('Comptes'),
-                      ),
-                    ),
-                    PopupMenuItem(
-                      value: 'clients',
-                      child: ListTile(
-                        leading: Icon(Icons.person),
-                        title: Text('Clients'),
-                      ),
-                    ),
-                    PopupMenuDivider(),
+
                     PopupMenuItem(
                       value: 'personnalisation',
                       child: ListTile(
