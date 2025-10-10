@@ -274,7 +274,7 @@ class SummaryCardPrefsPanel extends ConsumerWidget {
                     : null,
               ),
               SwitchListTile.adaptive(
-                title: const Text('Chatbot'),
+                title: const Text('Assistant IA'),
                 value: prefs.showNavChatbotButton,
                 onChanged: prefs.showQuickActions && prefs.showNavShortcuts
                     ? (v) => ctrl.setShowNavChatbotButton(v)

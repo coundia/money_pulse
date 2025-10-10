@@ -385,7 +385,7 @@ class SummaryQuickActions extends StatelessWidget {
           buttons.add(
             _btn(
               context,
-              label: 'Chatbot',
+              label: 'Assistant IA',
               icon: Icons.chat_bubble_rounded,
               tone: Theme.of(context).colorScheme.primary,
               onTap:
