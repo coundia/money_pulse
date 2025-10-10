@@ -1,5 +1,6 @@
 // File: lib/presentation/features/chatbot/widgets/chat_input_bar.dart
 // Input row with Enter-to-send and send button, guarded by access flow.
+// The send button enables as soon as the user types (controller listener).
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -17,6 +18,15 @@ class ChatInputBar extends ConsumerStatefulWidget {
 class _ChatInputBarState extends ConsumerState<ChatInputBar> {
   final _ctrl = TextEditingController();
   final _focusNode = FocusNode();
+
+  @override
+  void initState() {
+    super.initState();
+    _ctrl.addListener(() {
+      // Rebuild to update the enabled/disabled state of the send button.
+      if (mounted) setState(() {});
+    });
+  }
 
   @override
   void dispose() {
@@ -50,7 +60,7 @@ class _ChatInputBarState extends ConsumerState<ChatInputBar> {
 
     await ref.read(chatbotControllerProvider.notifier).send(txt);
     _ctrl.clear();
-    setState(() {});
+
     if (widget.scrollController?.hasClients == true) {
       widget.scrollController!.animateTo(
         widget.scrollController!.position.maxScrollExtent,
@@ -65,6 +75,7 @@ class _ChatInputBarState extends ConsumerState<ChatInputBar> {
     final sending = ref.watch(
       chatbotControllerProvider.select((s) => s.sending),
     );
+    final hasText = _ctrl.text.trim().isNotEmpty;
 
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
@@ -90,13 +101,14 @@ class _ChatInputBarState extends ConsumerState<ChatInputBar> {
                   isDense: true,
                   labelText: "Message",
                 ),
-                onSubmitted: null,
+                onSubmitted: (_) => _send(),
               ),
             ),
           ),
           const SizedBox(width: 8),
           FilledButton.icon(
-            onPressed: (sending || _ctrl.text.trim().isEmpty) ? null : _send,
+            // Enabled as soon as there is text; only disabled while sending.
+            onPressed: sending || !hasText ? null : _send,
             icon: const Icon(Icons.send),
             label: Text(sending ? "Envoi…" : "Envoyer"),
           ),

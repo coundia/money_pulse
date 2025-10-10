@@ -6,6 +6,8 @@ import 'package:money_pulse/domain/chat/entities/chat_models.dart';
 import 'package:money_pulse/presentation/features/chatbot/chat_repo_provider.dart';
 import 'package:money_pulse/application/chat/chat_usecases.dart';
 
+import '../../../shared/api_error_toast.dart';
+
 class ChatState {
   final List<ChatMessageEntity> messages;
   final bool loading;
@@ -110,7 +112,6 @@ class ChatbotController extends StateNotifier<ChatState> {
         limit: _pageSize,
         token: token.state,
       );
-
       final merged = [...res.items]
         ..sort((a, b) => a.createdAt.compareTo(b.createdAt));
       state = state.copyWith(
@@ -120,12 +121,13 @@ class ChatbotController extends StateNotifier<ChatState> {
         page: 0,
       );
     } catch (e) {
-      final msg = e.toString();
+      final friendly = extractHumanError(e); // <-- use humanized message
+      final raw = e.toString();
       final isUnauthorized =
-          msg.contains('401') || msg.contains('Unauthorized');
+          raw.contains('401') || raw.contains('Unauthorized');
       state = state.copyWith(
         loading: false,
-        error: isUnauthorized ? null : msg,
+        error: isUnauthorized ? null : friendly,
       );
     }
   }
@@ -149,12 +151,13 @@ class ChatbotController extends StateNotifier<ChatState> {
         page: next,
       );
     } catch (e) {
-      final msg = e.toString();
+      final friendly = extractHumanError(e); // <-- use humanized message
+      final raw = e.toString();
       final isUnauthorized =
-          msg.contains('401') || msg.contains('Unauthorized');
+          raw.contains('401') || raw.contains('Unauthorized');
       state = state.copyWith(
         loading: false,
-        error: isUnauthorized ? null : msg,
+        error: isUnauthorized ? null : friendly,
       );
     }
   }
@@ -168,7 +171,6 @@ class ChatbotController extends StateNotifier<ChatState> {
       return;
     }
 
-    // Ajout optimiste: on affiche "Moi" avec statut sending tout de suite
     final temp = ChatMessageEntity(
       id: 'local-${const Uuid().v4()}',
       sender: 'Moi',
@@ -190,7 +192,6 @@ class ChatbotController extends StateNotifier<ChatState> {
     try {
       await sendUc.execute(text: text, accountId: acc!, token: token.state);
 
-      // Après succès HTTP, on passe en "delivered" (✓✓ gris) tant que l’API n’est pas COMPLETED/FAIL
       final updated = state.messages.map((m) {
         if (m.id == temp.id) {
           return m.copyWith(status: ChatDeliveryStatus.delivered);
@@ -199,7 +200,6 @@ class ChatbotController extends StateNotifier<ChatState> {
       }).toList();
       state = state.copyWith(messages: updated);
 
-      // Puis on recharge depuis l’API pour refléter COMPLETED/FAIL éventuels
       await refresh();
 
       if (state.showLogs) {
@@ -208,12 +208,13 @@ class ChatbotController extends StateNotifier<ChatState> {
         );
       }
     } catch (e) {
+      final friendly = extractHumanError(e); // <-- use humanized message
       final postErr = state.showLogs
-          ? [_sys('❌ Échec: $e')]
+          ? [_sys('❌ Échec: $friendly')]
           : const <ChatMessageEntity>[];
       state = state.copyWith(
         sending: false,
-        error: e.toString(),
+        error: friendly,
         messages: [...state.messages, ...postErr],
       );
       return;
