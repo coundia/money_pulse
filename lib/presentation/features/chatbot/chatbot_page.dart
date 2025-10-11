@@ -1,8 +1,7 @@
-// File: lib/presentation/features/chatbot/pages/chatbot_page.dart
 // Screen scaffold that wires app bar, banner, message list and input bar together.
 // Uses showApiErrorSnackBar to display clean error messages and attaches default accountId.
 // NOTE: When leaving this page (system back or app bar back), we pop with a "refresh" result
-// so the caller (e.g., HomePage) can auto-refresh immediately.
+// so the caller can auto-refresh immediately.
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -11,10 +10,14 @@ import 'package:money_pulse/presentation/features/chatbot/chatbot_controller.dar
 import 'package:money_pulse/presentation/features/chatbot/widgets/chat_app_bar.dart';
 import 'package:money_pulse/presentation/features/chatbot/widgets/chat_connect_banner.dart';
 import 'package:money_pulse/presentation/features/chatbot/widgets/chat_input_bar.dart';
+import 'package:money_pulse/presentation/features/chatbot/widgets/chat_message_list.dart';
 import 'package:money_pulse/presentation/features/chatbot/hooks/chat_attach_default_account.dart';
 
+// ensure selected account default
+import 'package:money_pulse/presentation/app/account_selection.dart'
+    show ensureSelectedAccountProvider, selectedAccountIdProvider;
+
 import '../../../shared/api_error_toast.dart';
-import 'widgets/chat_message_list.dart';
 
 class ChatbotPage extends ConsumerStatefulWidget {
   const ChatbotPage({super.key});
@@ -30,21 +33,33 @@ class _ChatbotPageState extends ConsumerState<ChatbotPage> {
   @override
   void initState() {
     super.initState();
+
     _scrollCtrl.addListener(() {
       if (_scrollCtrl.position.pixels <=
           _scrollCtrl.position.minScrollExtent + 64) {
         ref.read(chatbotControllerProvider.notifier).loadMore();
       }
     });
+
+    // Bootstrap after first frame
     WidgetsBinding.instance.addPostFrameCallback((_) async {
       if (_bootstrapped) return;
       _bootstrapped = true;
 
+      // 1) Restore session
       await ref.read(accessSessionProvider.notifier).restore();
+
+      // 2) Ensure a selected/default account exists and attach its id to the controller (snapshot-safe)
+      await ref.read(ensureSelectedAccountProvider.future);
+      final accId = ref.read(selectedAccountIdProvider);
+      if ((accId ?? '').isNotEmpty) {
+        ref.read(chatbotControllerProvider.notifier).setAccountSnapshot(accId);
+      }
+
+      // 3) If a token exists, set it snapshot-safe and load messages
       final grant = ref.read(accessSessionProvider);
       if (grant?.token != null && grant!.token.isNotEmpty) {
         final ctrl = ref.read(chatbotControllerProvider.notifier);
-        // ⚠️ Utilise le snapshot pour éviter les StateController disposés
         ctrl.setTokenSnapshot(grant.token);
         await ctrl.refresh();
       }
@@ -57,7 +72,7 @@ class _ChatbotPageState extends ConsumerState<ChatbotPage> {
     super.dispose();
   }
 
-  /// Pop with a "refresh" result so the previous page (HomePage) can reload.
+  /// Pop with a "refresh" result so the previous page can reload.
   Future<bool> _onWillPop() async {
     if (!mounted) return true;
     Navigator.of(context).pop('refresh');
@@ -66,14 +81,16 @@ class _ChatbotPageState extends ConsumerState<ChatbotPage> {
 
   @override
   Widget build(BuildContext context) {
-    // Keep chat accountId synced with default selected account
+    // Keep chat accountId synced with default selected account while page is alive
     ref.watch(chatAttachDefaultAccountProvider);
 
     final state = ref.watch(chatbotControllerProvider);
     final grant = ref.watch(accessSessionProvider);
 
+    // Post-frame UI effects
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      if ((state.error ?? '').isNotEmpty && mounted) {
+      if (!mounted) return;
+      if ((state.error ?? '').isNotEmpty) {
         showApiErrorSnackBar(context, state.error!);
       }
       if (_scrollCtrl.hasClients) {
@@ -92,8 +109,7 @@ class _ChatbotPageState extends ConsumerState<ChatbotPage> {
       child: Scaffold(
         appBar: ChatAppBar(
           isLoading: state.loading,
-          // Pas de paramètre `leading`: AppBar par défaut appellera Navigator.pop
-          // et WillPopScope transformera en pop('refresh').
+          // Back button from AppBar will pop; WillPopScope converts to pop('refresh')
           onRefresh: () async {
             final ctrl = ref.read(chatbotControllerProvider.notifier);
             if (!isConnected) {
@@ -101,8 +117,7 @@ class _ChatbotPageState extends ConsumerState<ChatbotPage> {
               if (!mounted || !ok) return;
               final g = ref.read(accessSessionProvider);
               if (g?.token != null && g!.token.isNotEmpty) {
-                // ⚠️ snapshot-safe
-                ctrl.setTokenSnapshot(g.token);
+                ctrl.setTokenSnapshot(g.token); // snapshot-safe
               }
             }
             await ctrl.refresh();
@@ -116,8 +131,7 @@ class _ChatbotPageState extends ConsumerState<ChatbotPage> {
                   final g = ref.read(accessSessionProvider);
                   if (g?.token != null && g!.token.isNotEmpty) {
                     final ctrl = ref.read(chatbotControllerProvider.notifier);
-                    // ⚠️ snapshot-safe
-                    ctrl.setTokenSnapshot(g.token);
+                    ctrl.setTokenSnapshot(g.token); // snapshot-safe
                     await ctrl.refresh();
                     if (!mounted) return;
                     ScaffoldMessenger.of(context).showSnackBar(

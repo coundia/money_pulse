@@ -1,11 +1,21 @@
 // Input row with Enter-to-send and send button; mounted-safe after awaits.
+// Auto-attaches default account if missing before sending.
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+
 import 'package:money_pulse/onboarding/presentation/providers/access_session_provider.dart';
-import 'package:money_pulse/presentation/features/chatbot/chatbot_controller.dart';
-import 'package:money_pulse/presentation/features/chatbot/chat_repo_provider.dart';
-import '../../../app/account_selection.dart';
+import 'package:money_pulse/presentation/features/chatbot/chatbot_controller.dart'
+    hide accountIdProvider;
+
+// ensure a default/selected account exists
+import 'package:money_pulse/presentation/app/account_selection.dart'
+    show ensureSelectedAccountProvider, selectedAccountIdProvider;
+
+// read current chat account id
+import 'package:money_pulse/presentation/features/chatbot/chat_repo_provider.dart'
+    show accountIdProvider;
 
 class ChatInputBar extends ConsumerStatefulWidget {
   final ScrollController? scrollController;
@@ -39,7 +49,7 @@ class _ChatInputBarState extends ConsumerState<ChatInputBar> {
     if (!mounted || !ok) return;
     final g = ref.read(accessSessionProvider);
     if (g?.token != null && g!.token.isNotEmpty) {
-      // MAJ snapshot (sûr) + tente MAJ StateProvider
+      // snapshot-safe
       ref.read(chatbotControllerProvider.notifier).setTokenSnapshot(g.token);
     }
   }
@@ -51,22 +61,7 @@ class _ChatInputBarState extends ConsumerState<ChatInputBar> {
     final txt = _ctrl.text.trim();
     if (txt.isEmpty) return;
 
-    // 1) S'assurer qu'un compte est sélectionné (et pousser le snapshot)
-    try {
-      await ref.read(ensureSelectedAccountProvider.future);
-    } catch (_) {}
-    final accAsync = ref.read(selectedAccountProvider);
-    final accId = accAsync.maybeWhen(data: (a) => a?.id, orElse: () => null);
-    if ((accId ?? '').isEmpty) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Veuillez sélectionner un compte.')),
-      );
-      return;
-    }
-    ref.read(chatbotControllerProvider.notifier).setAccountSnapshot(accId);
-
-    // 2) S'assurer du token
+    // 1) Ensure bearer token
     final grant = ref.read(accessSessionProvider);
     if (grant?.token == null || grant!.token.isEmpty) {
       await _ensureAccessAndSetToken();
@@ -75,7 +70,26 @@ class _ChatInputBarState extends ConsumerState<ChatInputBar> {
       if (g2?.token == null || g2!.token.isEmpty) return;
     }
 
-    // 3) Envoyer
+    // 2) Ensure an account id (auto-attach default)
+    var accId = ref.read(accountIdProvider);
+    if ((accId ?? '').isEmpty) {
+      await ref.read(ensureSelectedAccountProvider.future);
+      accId = ref.read(selectedAccountIdProvider);
+      if ((accId ?? '').isNotEmpty) {
+        ref.read(chatbotControllerProvider.notifier).setAccountSnapshot(accId);
+      } else {
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text(
+              'Aucun compte sélectionné. Sélectionnez un compte puis réessayez.',
+            ),
+          ),
+        );
+        return;
+      }
+    }
+
     await ref.read(chatbotControllerProvider.notifier).send(txt);
     if (!mounted) return;
 

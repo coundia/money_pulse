@@ -1,13 +1,23 @@
-// File: lib/presentation/features/chatbot/widgets/chat_message_tile.dart
 // Single chat bubble with time and double-tick colored by delivery status.
-// Adds a long-press / menu button context actions: Delete (API) and Resend.
+// Long-press opens context actions (Delete / Resend). No three-dots icon.
+// Ensures an account is attached before "Resend" on first open.
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+
 import 'package:money_pulse/domain/chat/entities/chat_models.dart';
 import 'package:money_pulse/shared/formatters.dart';
-import 'package:money_pulse/presentation/features/chatbot/chatbot_controller.dart';
+import 'package:money_pulse/presentation/features/chatbot/chatbot_controller.dart'
+    hide accountIdProvider;
+
+// ensure a default/selected account exists
+import 'package:money_pulse/presentation/app/account_selection.dart'
+    show ensureSelectedAccountProvider, selectedAccountIdProvider;
+
+// read current chat account id
+import 'package:money_pulse/presentation/features/chatbot/chat_repo_provider.dart'
+    show accountIdProvider;
 
 class ChatMessageTile extends ConsumerWidget {
   final ChatMessageEntity message;
@@ -40,15 +50,15 @@ class ChatMessageTile extends ConsumerWidget {
         globalPos.dx + 1,
         globalPos.dy + 1,
       ),
-      items: [
-        const PopupMenuItem<String>(
+      items: const [
+        PopupMenuItem<String>(
           value: 'resend',
           child: ListTile(
             leading: Icon(Icons.refresh_rounded),
             title: Text('Renvoyer'),
           ),
         ),
-        const PopupMenuItem<String>(
+        PopupMenuItem<String>(
           value: 'delete',
           child: ListTile(
             leading: Icon(Icons.delete_outline),
@@ -65,21 +75,50 @@ class ChatMessageTile extends ConsumerWidget {
     switch (result) {
       case 'resend':
         HapticFeedback.selectionClick();
+
+        // Auto-attach account if missing (first open scenarios)
+        var accId = ref.read(accountIdProvider);
+        if ((accId ?? '').isEmpty) {
+          await ref.read(ensureSelectedAccountProvider.future);
+          accId = ref.read(selectedAccountIdProvider);
+          if ((accId ?? '').isNotEmpty) {
+            ctrl.setAccountSnapshot(accId);
+          } else {
+            if (context.mounted) {
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(
+                  content: Text(
+                    'Aucun compte sélectionné. Sélectionnez un compte puis réessayez.',
+                  ),
+                ),
+              );
+            }
+            return;
+          }
+        }
+
         await ctrl.resendMessage(message.text);
         break;
+
       case 'delete':
         HapticFeedback.selectionClick();
-        final remoteId = message.remoteId ?? message.id; // fallback si besoin
-        if (remoteId == null || remoteId.isEmpty) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Impossible de supprimer ce message')),
-          );
+        final remoteId = message.remoteId ?? message.id; // fallback
+        if (remoteId.isEmpty) {
+          if (context.mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(
+                content: Text('Impossible de supprimer ce message'),
+              ),
+            );
+          }
           return;
         }
         await ctrl.deleteMessage(remoteId);
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(const SnackBar(content: Text('Message supprimé')));
+        if (context.mounted) {
+          ScaffoldMessenger.of(
+            context,
+          ).showSnackBar(const SnackBar(content: Text('Message supprimé')));
+        }
         break;
     }
   }
@@ -126,14 +165,11 @@ class ChatMessageTile extends ConsumerWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                // En-tête: nom + menu bouton (pour vos messages)
-                Row(
-                  crossAxisAlignment: CrossAxisAlignment.center,
-                  mainAxisAlignment: isMe
-                      ? MainAxisAlignment.end
-                      : MainAxisAlignment.start,
-                  children: [
-                    if (!isMe) ...[
+                // Header (avatar + name for IA only)
+                if (!isMe) ...[
+                  Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
                       const CircleAvatar(
                         radius: 10,
                         child: Text('IA', style: TextStyle(fontSize: 11)),
@@ -148,66 +184,11 @@ class ChatMessageTile extends ConsumerWidget {
                         ),
                       ),
                     ],
-                    if (isMe) ...[
-                      PopupMenuButton<String>(
-                        tooltip: 'Actions',
-                        icon: Icon(Icons.more_vert, color: textColor),
-                        onSelected: (value) async {
-                          switch (value) {
-                            case 'resend':
-                              HapticFeedback.selectionClick();
-                              await ref
-                                  .read(chatbotControllerProvider.notifier)
-                                  .resendMessage(message.text);
-                              break;
-                            case 'delete':
-                              HapticFeedback.selectionClick();
-                              final remoteId = message.remoteId ?? message.id;
-                              if (remoteId == null || remoteId.isEmpty) {
-                                ScaffoldMessenger.of(context).showSnackBar(
-                                  const SnackBar(
-                                    content: Text(
-                                      'Impossible de supprimer ce message',
-                                    ),
-                                  ),
-                                );
-                                return;
-                              }
-                              await ref
-                                  .read(chatbotControllerProvider.notifier)
-                                  .deleteMessage(remoteId);
-                              ScaffoldMessenger.of(context).showSnackBar(
-                                const SnackBar(
-                                  content: Text('Message supprimé'),
-                                ),
-                              );
-                              break;
-                          }
-                        },
-                        itemBuilder: (ctx) => const [
-                          PopupMenuItem(
-                            value: 'resend',
-                            child: ListTile(
-                              leading: Icon(Icons.refresh_rounded),
-                              title: Text('Renvoyer'),
-                            ),
-                          ),
-                          PopupMenuItem(
-                            value: 'delete',
-                            child: ListTile(
-                              leading: Icon(Icons.delete_outline),
-                              title: Text('Supprimer'),
-                            ),
-                          ),
-                        ],
-                      ),
-                    ],
-                  ],
-                ),
+                  ),
+                  const SizedBox(height: 6),
+                ],
 
-                if (!isMe) const SizedBox(height: 6),
-
-                // Contenu
+                // Content
                 Text(
                   message.text,
                   style: TextStyle(
@@ -218,7 +199,7 @@ class ChatMessageTile extends ConsumerWidget {
                 ),
                 const SizedBox(height: 4),
 
-                // Pied: heure + status
+                // Footer: time + status
                 Row(
                   mainAxisSize: MainAxisSize.min,
                   mainAxisAlignment: MainAxisAlignment.end,
