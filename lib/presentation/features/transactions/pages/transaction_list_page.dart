@@ -21,7 +21,7 @@ import 'package:money_pulse/presentation/features/settings/settings_page.dart';
 import 'package:money_pulse/presentation/features/reports/report_page.dart';
 import 'package:money_pulse/presentation/app/account_selection.dart';
 
-// ⬇️ pour le pull API "comme sur HomePage"
+//   pour le pull API "comme sur HomePage"
 import 'package:money_pulse/presentation/widgets/auto_refresh_on_focus.dart';
 import 'package:money_pulse/sync/infrastructure/pull_providers.dart';
 import 'package:money_pulse/sync/infrastructure/sync_logger.dart';
