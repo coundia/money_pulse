@@ -97,8 +97,8 @@ class TransactionTile extends StatelessWidget {
                   const Icon(Icons.schedule, size: 14),
                   const SizedBox(width: 4),
                   Text(time, style: Theme.of(context).textTheme.bodySmall),
-                  const SizedBox(width: 8),
-                  _TypePill(label: tone.label, color: tone.color),
+                  //const SizedBox(width: 8),
+                  // _TypePill(label: tone.label, color: tone.color),
                 ],
               ),
 
