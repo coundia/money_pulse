@@ -47,6 +47,8 @@ class TransactionListPage extends ConsumerWidget {
     final itemsAsync = ref.watch(transactionListItemsProvider);
 
     Future<void> _refreshLocal() async {
+      print("[_refreshLocal]");
+
       await ref.read(transactionsProvider.notifier).load();
       await ref.read(balanceProvider.notifier).load();
       ref.invalidate(transactionListItemsProvider);
@@ -54,6 +56,8 @@ class TransactionListPage extends ConsumerWidget {
 
     // Pull API “comme sur HomePage”, puis refresh local.
     Future<void> _pullFromApiAndRefresh() async {
+      print("[_pullFromApiAndRefresh]");
+
       try {
         ref.read(syncLoggerProvider).info('TxnList: pullAll (manual/auto)');
         await pullAllTables(ref);
@@ -348,6 +352,7 @@ class _PeriodDrawerState extends State<_PeriodDrawer> {
   void initState() {
     super.initState();
     _picked = widget.initialDate;
+    print("[initState]");
   }
 
   @override

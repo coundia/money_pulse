@@ -1,5 +1,4 @@
-// File: lib/main.dart  (ou là où est ce fichier Bootstrap)
-// App bootstrap with ProviderScope overrides; disables product sync via SyncPolicy.
+// App bootstrap with ProviderScope overrides.
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -7,36 +6,42 @@ import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:intl/intl.dart';
 import 'package:intl/date_symbol_data_local.dart';
 import 'package:sqflite/sqflite.dart';
+
 import 'package:money_pulse/infrastructure/db/app_database.dart';
-import 'package:money_pulse/presentation/app/app.dart';
+import 'package:money_pulse/presentation/app/app.dart'; // <- AppRoot est ici
 import 'package:money_pulse/presentation/app/providers.dart';
 import 'package:money_pulse/presentation/app/restart_app.dart';
 
+// RouteObserver global utilisé par AutoRefreshOnFocus (didPopNext, etc.)
 import 'package:money_pulse/presentation/navigation/route_observer.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
+
   FlutterError.onError = (details) {
     Zone.current.handleUncaughtError(
       details.exception,
       details.stack ?? StackTrace.empty,
     );
   };
+
   await Future.wait([
     initializeDateFormatting('fr'),
     initializeDateFormatting('fr_FR'),
   ]);
   Intl.defaultLocale = 'fr_FR';
+
   await AppDatabase.I.init();
 
   runZonedGuarded(() {
     runApp(
       RestartApp(
         child: ProviderScope(
-          overrides: [
-            /*syncPolicyProvider.overrideWithValue(
-              const DisabledSetSyncPolicy({SyncDomain.stockMovements}),
-            ),*/
+          overrides: const [
+            // Exemple si besoin :
+            // syncPolicyProvider.overrideWithValue(
+            //   const DisabledSetSyncPolicy({SyncDomain.stockMovements}),
+            // ),
           ],
           child: const Bootstrap(),
         ),
@@ -86,29 +91,44 @@ class _BootstrapState extends ConsumerState<Bootstrap> {
     return FutureBuilder<void>(
       future: _future,
       builder: (_, snap) {
+        // --- Écran de chargement ---
         if (snap.connectionState != ConnectionState.done) {
           return MaterialApp(
             debugShowCheckedModeBanner: false,
+            title: 'Money Pulse',
+            theme: ThemeData(
+              useMaterial3: true,
+              colorSchemeSeed: const Color(0xFF2563EB),
+            ),
             localizationsDelegates: const [
               GlobalMaterialLocalizations.delegate,
               GlobalWidgetsLocalizations.delegate,
               GlobalCupertinoLocalizations.delegate,
             ],
             supportedLocales: const [Locale('fr'), Locale('fr', 'FR')],
+            navigatorObservers: [routeObserver], // ⬅️ important
             home: const Scaffold(
               body: Center(child: CircularProgressIndicator()),
             ),
           );
         }
+
+        // --- Écran d’erreur ---
         if (snap.hasError) {
           return MaterialApp(
             debugShowCheckedModeBanner: false,
+            title: 'Money Pulse',
+            theme: ThemeData(
+              useMaterial3: true,
+              colorSchemeSeed: const Color(0xFF2563EB),
+            ),
             localizationsDelegates: const [
               GlobalMaterialLocalizations.delegate,
               GlobalWidgetsLocalizations.delegate,
               GlobalCupertinoLocalizations.delegate,
             ],
             supportedLocales: const [Locale('fr'), Locale('fr', 'FR')],
+            navigatorObservers: [routeObserver], // ⬅️ important
             home: _BootstrapErrorScreen(
               error: snap.error!,
               onRetry: _retry,
@@ -116,16 +136,23 @@ class _BootstrapState extends ConsumerState<Bootstrap> {
             ),
           );
         }
+
+        // --- App normale ---
         return MaterialApp(
           debugShowCheckedModeBanner: false,
+          title: 'Money Pulse',
+          theme: ThemeData(
+            useMaterial3: true,
+            colorSchemeSeed: const Color(0xFF2563EB),
+          ),
           localizationsDelegates: const [
             GlobalMaterialLocalizations.delegate,
             GlobalWidgetsLocalizations.delegate,
             GlobalCupertinoLocalizations.delegate,
           ],
           supportedLocales: const [Locale('fr'), Locale('fr', 'FR')],
-          navigatorObservers: [routeObserver],
-          home: const AppRoot(),
+          navigatorObservers: [routeObserver], // ⬅️ indispensable
+          home: const AppRoot(), // <- pas de MaterialApp imbriqué
         );
       },
     );
