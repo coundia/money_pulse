@@ -15,8 +15,8 @@ import 'package:money_pulse/presentation/features/categories/category_list_page.
 import 'package:money_pulse/presentation/features/accounts/account_page.dart';
 import 'package:money_pulse/presentation/features/stock/stock_level_list_page.dart';
 
-import '../../ia/chatbot_page.dart';
-import '../../ia/chatbot_provider.dart';
+import '../../chatbot/chatbot_page.dart';
+import '../../chatbot/chatbot_provider.dart';
 
 class SummaryQuickActions extends StatelessWidget {
   final VoidCallback? onAddExpense;

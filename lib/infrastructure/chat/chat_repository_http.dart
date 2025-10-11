@@ -1,4 +1,3 @@
-// File: lib/infrastructure/chat/chat_repository_http.dart
 // HTTP implementation for ChatRepository with overridable header builder and network logs.
 import 'dart:convert';
 import 'dart:developer' as dev;
@@ -167,8 +166,12 @@ class ChatRepositoryHttp implements ChatRepository {
     final raw = (data['content'] ?? data['items'] ?? []) as List<dynamic>;
 
     final items = raw.map((m) {
-      final id = (m['id'] ?? m['remoteId'] ?? m['localId'] ?? '').toString();
+      final remoteId = (m['remoteId'] ?? '').toString();
+      final localId = (m['localId'] ?? '').toString();
+      final idAny = (m['id'] ?? remoteId ?? localId ?? '').toString();
+
       final txt = (m['messages'] ?? m['text'] ?? m['message'] ?? '').toString();
+
       final createdAtStr =
           (m['dateTransaction'] ??
                   m['syncAt'] ??
@@ -179,7 +182,7 @@ class ChatRepositoryHttp implements ChatRepository {
           DateTime.tryParse(createdAtStr)?.toLocal() ?? DateTime.now();
 
       final stateStr = (m['state'] ?? '').toString().toUpperCase();
-      final hasRemote = (m['remoteId'] ?? '').toString().isNotEmpty;
+      final hasRemote = remoteId.isNotEmpty;
 
       ChatDeliveryStatus? status;
       if (stateStr == 'COMPLETED') {
@@ -192,11 +195,13 @@ class ChatRepositoryHttp implements ChatRepository {
         status = null; // inconnu (pas de coches)
       }
 
-      // On considère que le champ "messages" est le texte envoyé par l'utilisateur ("Moi")
+      // On considère "messages" (payload utilisateur) => isMe
       final isMe = (m['messages'] ?? '') != '';
 
       return ChatMessageEntity(
-        id: id.isEmpty ? const Uuid().v4() : id,
+        id: idAny.isEmpty ? const Uuid().v4() : idAny,
+        remoteId: remoteId.isEmpty ? null : remoteId,
+        localId: localId.isEmpty ? null : localId,
         sender: isMe ? 'Moi' : 'IA',
         text: txt,
         createdAt: createdAt,
@@ -205,6 +210,7 @@ class ChatRepositoryHttp implements ChatRepository {
       );
     }).toList();
 
+    // tri du plus récent au plus ancien (affichage courant)
     items.sort((a, b) => b.createdAt.compareTo(a.createdAt));
 
     final total =
@@ -222,5 +228,38 @@ class ChatRepositoryHttp implements ChatRepository {
       limit: sizeFromApi,
       hasMore: hasMore,
     );
+  }
+
+  @override
+  Future<void> deleteByRemoteId(String remoteId, {String? bearerToken}) async {
+    final uri = Uri.parse('$baseUri/api/v1/commands/chat/$remoteId');
+    final headers = _baseHeaders(bearerToken: bearerToken);
+
+    _logRequestResponse(method: 'DELETE', uri: uri, headers: headers);
+
+    http.Response resp;
+    try {
+      resp = await _client.delete(uri, headers: headers);
+    } catch (e) {
+      _logRequestResponse(
+        method: 'DELETE',
+        uri: uri,
+        headers: headers,
+        error: e,
+      );
+      rethrow;
+    }
+
+    _logRequestResponse(
+      method: 'DELETE',
+      uri: uri,
+      headers: headers,
+      status: resp.statusCode,
+      bodyIn: resp.body,
+    );
+
+    if (resp.statusCode < 200 || resp.statusCode >= 300) {
+      throw Exception('Erreur suppression (${resp.statusCode}): ${resp.body}');
+    }
   }
 }

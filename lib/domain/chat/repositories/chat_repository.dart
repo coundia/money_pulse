@@ -1,4 +1,3 @@
-// File: lib/domain/chat/repositories/chat_repository.dart
 // Abstraction for Chat data access and commands.
 import '../entities/chat_models.dart';
 
@@ -14,4 +13,6 @@ abstract class ChatRepository {
     required int limit,
     String? bearerToken,
   });
+
+  Future<void> deleteByRemoteId(String remoteId, {String? bearerToken});
 }

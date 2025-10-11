@@ -11,10 +11,10 @@ import 'package:money_pulse/presentation/features/chatbot/chatbot_controller.dar
 import 'package:money_pulse/presentation/features/chatbot/widgets/chat_app_bar.dart';
 import 'package:money_pulse/presentation/features/chatbot/widgets/chat_connect_banner.dart';
 import 'package:money_pulse/presentation/features/chatbot/widgets/chat_input_bar.dart';
-import 'package:money_pulse/presentation/features/chatbot/widgets/chat_message_list.dart';
 import 'package:money_pulse/presentation/features/chatbot/hooks/chat_attach_default_account.dart';
 
 import '../../../shared/api_error_toast.dart';
+import 'widgets/chat_message_list.dart';
 
 class ChatbotPage extends ConsumerStatefulWidget {
   const ChatbotPage({super.key});
