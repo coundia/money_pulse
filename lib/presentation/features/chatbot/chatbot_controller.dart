@@ -84,12 +84,11 @@ class ChatbotController extends StateNotifier<ChatState> {
   final FetchChatMessagesUseCase fetchUc;
   final SendChatMessageUseCase sendUc;
 
-  /// Riverpod state holders (peuvent être disposés par le scope).
+  // Ces StateController peuvent être disposés en dehors de la page
   final StateController<String?> token;
   final StateController<String?> accountId;
 
-  /// Snapshots internes pour éviter de toucher les StateController
-  /// après dispose (ex: on quitte la page pendant un envoi).
+  // Snapshots internes *persistants* et sûrs à utiliser après des awaits
   String? _tokenSnapshot;
   String? _accountSnapshot;
 
@@ -101,12 +100,10 @@ class ChatbotController extends StateNotifier<ChatState> {
     required this.token,
     required this.accountId,
   }) : super(ChatState.initial()) {
-    // Initialise les snapshots à partir des valeurs courantes.
     _tokenSnapshot = token.state;
     _accountSnapshot = accountId.state;
   }
 
-  // Mounted-safe setter
   void _set(ChatState next) {
     if (!mounted) return;
     state = next;
@@ -186,7 +183,6 @@ class ChatbotController extends StateNotifier<ChatState> {
   Future<void> send(String text) async {
     if (state.sending) return;
 
-    // Snapshots locaux : NE PAS toucher aux StateController ici
     final acc = _accountSnapshot;
     final currentToken = _tokenSnapshot;
 
@@ -217,7 +213,6 @@ class ChatbotController extends StateNotifier<ChatState> {
 
     try {
       await sendUc.execute(text: text, accountId: acc!, token: currentToken);
-      // mark delivered
       final updated = state.messages.map((m) {
         if (m.id == temp.id) {
           return m.copyWith(status: ChatDeliveryStatus.delivered);
@@ -225,7 +220,6 @@ class ChatbotController extends StateNotifier<ChatState> {
         return m;
       }).toList();
       _set(state.copyWith(messages: updated));
-
       await refresh();
 
       if (state.showLogs) {
@@ -253,17 +247,24 @@ class ChatbotController extends StateNotifier<ChatState> {
     _set(state.copyWith(sending: false));
   }
 
-  /// Met à jour la valeur Riverpod ET le snapshot local.
-  void setToken(String? bearer) {
-    if (!mounted) return;
-    token.state = bearer;
+  /// MAJ snapshots *seulement* (sûr si des StateController sont disposés).
+  void setTokenSnapshot(String? bearer) {
     _tokenSnapshot = bearer;
+    // On essaye d'écrire dans le StateProvider si possible, mais on ignore
+    // silencieusement si le controller est déjà disposé.
+    if (mounted) {
+      try {
+        token.state = bearer;
+      } catch (_) {}
+    }
   }
 
-  /// Met à jour la valeur Riverpod ET le snapshot local.
-  void setAccount(String? id) {
-    if (!mounted) return;
-    accountId.state = id;
+  void setAccountSnapshot(String? id) {
     _accountSnapshot = id;
+    if (mounted) {
+      try {
+        accountId.state = id;
+      } catch (_) {}
+    }
   }
 }

@@ -4,7 +4,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:money_pulse/onboarding/presentation/providers/access_session_provider.dart';
 import 'package:money_pulse/presentation/features/chatbot/chatbot_controller.dart';
-
+import 'package:money_pulse/presentation/features/chatbot/chat_repo_provider.dart';
 import '../../../app/account_selection.dart';
 
 class ChatInputBar extends ConsumerStatefulWidget {
@@ -39,7 +39,8 @@ class _ChatInputBarState extends ConsumerState<ChatInputBar> {
     if (!mounted || !ok) return;
     final g = ref.read(accessSessionProvider);
     if (g?.token != null && g!.token.isNotEmpty) {
-      ref.read(chatbotControllerProvider.notifier).setToken(g.token);
+      // MAJ snapshot (sûr) + tente MAJ StateProvider
+      ref.read(chatbotControllerProvider.notifier).setTokenSnapshot(g.token);
     }
   }
 
@@ -50,7 +51,7 @@ class _ChatInputBarState extends ConsumerState<ChatInputBar> {
     final txt = _ctrl.text.trim();
     if (txt.isEmpty) return;
 
-    // 1) S'assurer qu'un compte est sélectionné
+    // 1) S'assurer qu'un compte est sélectionné (et pousser le snapshot)
     try {
       await ref.read(ensureSelectedAccountProvider.future);
     } catch (_) {}
@@ -63,10 +64,9 @@ class _ChatInputBarState extends ConsumerState<ChatInputBar> {
       );
       return;
     }
-    // pousser aussi dans le contrôleur (met à jour le snapshot)
-    ref.read(chatbotControllerProvider.notifier).setAccount(accId);
+    ref.read(chatbotControllerProvider.notifier).setAccountSnapshot(accId);
 
-    // 2) S'assurer de l’access token
+    // 2) S'assurer du token
     final grant = ref.read(accessSessionProvider);
     if (grant?.token == null || grant!.token.isEmpty) {
       await _ensureAccessAndSetToken();
@@ -80,6 +80,7 @@ class _ChatInputBarState extends ConsumerState<ChatInputBar> {
     if (!mounted) return;
 
     _ctrl.clear();
+
     if (widget.scrollController?.hasClients == true) {
       widget.scrollController!.animateTo(
         widget.scrollController!.position.maxScrollExtent,

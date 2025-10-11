@@ -44,7 +44,8 @@ class _ChatbotPageState extends ConsumerState<ChatbotPage> {
       final grant = ref.read(accessSessionProvider);
       if (grant?.token != null && grant!.token.isNotEmpty) {
         final ctrl = ref.read(chatbotControllerProvider.notifier);
-        ctrl.setToken(grant.token);
+        // ⚠️ Utilise le snapshot pour éviter les StateController disposés
+        ctrl.setTokenSnapshot(grant.token);
         await ctrl.refresh();
       }
     });
@@ -91,10 +92,8 @@ class _ChatbotPageState extends ConsumerState<ChatbotPage> {
       child: Scaffold(
         appBar: ChatAppBar(
           isLoading: state.loading,
-          // Back should also return "refresh"
-          leading: BackButton(
-            onPressed: () => Navigator.of(context).pop('refresh'),
-          ),
+          // Pas de paramètre `leading`: AppBar par défaut appellera Navigator.pop
+          // et WillPopScope transformera en pop('refresh').
           onRefresh: () async {
             final ctrl = ref.read(chatbotControllerProvider.notifier);
             if (!isConnected) {
@@ -102,7 +101,8 @@ class _ChatbotPageState extends ConsumerState<ChatbotPage> {
               if (!mounted || !ok) return;
               final g = ref.read(accessSessionProvider);
               if (g?.token != null && g!.token.isNotEmpty) {
-                ctrl.setToken(g.token);
+                // ⚠️ snapshot-safe
+                ctrl.setTokenSnapshot(g.token);
               }
             }
             await ctrl.refresh();
@@ -116,7 +116,8 @@ class _ChatbotPageState extends ConsumerState<ChatbotPage> {
                   final g = ref.read(accessSessionProvider);
                   if (g?.token != null && g!.token.isNotEmpty) {
                     final ctrl = ref.read(chatbotControllerProvider.notifier);
-                    ctrl.setToken(g.token);
+                    // ⚠️ snapshot-safe
+                    ctrl.setTokenSnapshot(g.token);
                     await ctrl.refresh();
                     if (!mounted) return;
                     ScaffoldMessenger.of(context).showSnackBar(
