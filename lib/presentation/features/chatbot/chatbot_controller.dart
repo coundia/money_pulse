@@ -1,4 +1,3 @@
-// File: lib/presentation/features/chatbot/chatbot_controller.dart
 // State controller for Chat UI: pagination, sending, error handling; mounted-safe updates.
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:uuid/uuid.dart';
@@ -84,8 +83,16 @@ final chatbotControllerProvider =
 class ChatbotController extends StateNotifier<ChatState> {
   final FetchChatMessagesUseCase fetchUc;
   final SendChatMessageUseCase sendUc;
+
+  /// Riverpod state holders (peuvent être disposés par le scope).
   final StateController<String?> token;
   final StateController<String?> accountId;
+
+  /// Snapshots internes pour éviter de toucher les StateController
+  /// après dispose (ex: on quitte la page pendant un envoi).
+  String? _tokenSnapshot;
+  String? _accountSnapshot;
+
   static const _pageSize = 20;
 
   ChatbotController({
@@ -93,7 +100,11 @@ class ChatbotController extends StateNotifier<ChatState> {
     required this.sendUc,
     required this.token,
     required this.accountId,
-  }) : super(ChatState.initial());
+  }) : super(ChatState.initial()) {
+    // Initialise les snapshots à partir des valeurs courantes.
+    _tokenSnapshot = token.state;
+    _accountSnapshot = accountId.state;
+  }
 
   // Mounted-safe setter
   void _set(ChatState next) {
@@ -113,7 +124,7 @@ class ChatbotController extends StateNotifier<ChatState> {
   Future<void> refresh() async {
     _set(state.copyWith(loading: true, page: 0, error: null));
     try {
-      final currentToken = token.state; // snapshot before await
+      final currentToken = _tokenSnapshot;
       final res = await fetchUc.execute(
         page: 0,
         limit: _pageSize,
@@ -145,7 +156,7 @@ class ChatbotController extends StateNotifier<ChatState> {
     final next = state.page + 1;
     _set(state.copyWith(loading: true, error: null));
     try {
-      final currentToken = token.state; // snapshot before await
+      final currentToken = _tokenSnapshot;
       final res = await fetchUc.execute(
         page: next,
         limit: _pageSize,
@@ -175,12 +186,12 @@ class ChatbotController extends StateNotifier<ChatState> {
   Future<void> send(String text) async {
     if (state.sending) return;
 
-    // Snapshot BEFORE awaits to avoid touching disposed controllers later
-    final acc = accountId.state;
-    final currentToken = token.state;
+    // Snapshots locaux : NE PAS toucher aux StateController ici
+    final acc = _accountSnapshot;
+    final currentToken = _tokenSnapshot;
 
     if ((acc ?? '').isEmpty) {
-      _set(state.copyWith(error: 'Compte introuvable'));
+      _set(state.copyWith(error: 'Aucun compte sélectionné'));
       return;
     }
 
@@ -206,7 +217,7 @@ class ChatbotController extends StateNotifier<ChatState> {
 
     try {
       await sendUc.execute(text: text, accountId: acc!, token: currentToken);
-      // mark delivered (mounted-safe)
+      // mark delivered
       final updated = state.messages.map((m) {
         if (m.id == temp.id) {
           return m.copyWith(status: ChatDeliveryStatus.delivered);
@@ -242,14 +253,17 @@ class ChatbotController extends StateNotifier<ChatState> {
     _set(state.copyWith(sending: false));
   }
 
+  /// Met à jour la valeur Riverpod ET le snapshot local.
   void setToken(String? bearer) {
-    // setter mounted-safe
     if (!mounted) return;
     token.state = bearer;
+    _tokenSnapshot = bearer;
   }
 
+  /// Met à jour la valeur Riverpod ET le snapshot local.
   void setAccount(String? id) {
     if (!mounted) return;
     accountId.state = id;
+    _accountSnapshot = id;
   }
 }

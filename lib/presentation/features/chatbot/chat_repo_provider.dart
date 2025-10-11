@@ -1,4 +1,3 @@
-// File: lib/presentation/features/chatbot/chat_repo_provider.dart
 // Riverpod providers for ChatRepository (HTTP) and bindings. The accountIdProvider
 // initializes and stays synced with the app's default/selected account.
 
@@ -12,15 +11,14 @@ import 'package:money_pulse/presentation/app/providers.dart'
 import '../../app/account_selection.dart';
 
 final chatBaseUriProvider = Provider<String>((ref) {
+  // TODO: déduire depuis vos prefs/env si nécessaire
   return 'http://127.0.0.1:8095';
 });
 
-final chatAuthTokenProvider = StateProvider<String?>((ref) {
-  return null;
-});
+/// Jeton d’auth du chatbot (bearer)
+final chatAuthTokenProvider = StateProvider<String?>((ref) => null);
 
-/// Returns the *current* default/selected account id (or null if none).
-/// It watches the app's selectedAccountProvider so it stays in sync.
+/// ID du compte courant pour le chat — calé sur le compte sélectionné de l’app
 final accountIdProvider = StateProvider<String?>((ref) {
   final accAsync = ref.watch(selectedAccountProvider);
   final id = accAsync.maybeWhen(data: (a) => a?.id, orElse: () => null);

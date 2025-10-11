@@ -1,10 +1,11 @@
-// File: lib/presentation/features/chatbot/widgets/chat_input_bar.dart
 // Input row with Enter-to-send and send button; mounted-safe after awaits.
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:money_pulse/onboarding/presentation/providers/access_session_provider.dart';
 import 'package:money_pulse/presentation/features/chatbot/chatbot_controller.dart';
+
+import '../../../app/account_selection.dart';
 
 class ChatInputBar extends ConsumerStatefulWidget {
   final ScrollController? scrollController;
@@ -49,6 +50,23 @@ class _ChatInputBarState extends ConsumerState<ChatInputBar> {
     final txt = _ctrl.text.trim();
     if (txt.isEmpty) return;
 
+    // 1) S'assurer qu'un compte est sélectionné
+    try {
+      await ref.read(ensureSelectedAccountProvider.future);
+    } catch (_) {}
+    final accAsync = ref.read(selectedAccountProvider);
+    final accId = accAsync.maybeWhen(data: (a) => a?.id, orElse: () => null);
+    if ((accId ?? '').isEmpty) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Veuillez sélectionner un compte.')),
+      );
+      return;
+    }
+    // pousser aussi dans le contrôleur (met à jour le snapshot)
+    ref.read(chatbotControllerProvider.notifier).setAccount(accId);
+
+    // 2) S'assurer de l’access token
     final grant = ref.read(accessSessionProvider);
     if (grant?.token == null || grant!.token.isEmpty) {
       await _ensureAccessAndSetToken();
@@ -57,11 +75,11 @@ class _ChatInputBarState extends ConsumerState<ChatInputBar> {
       if (g2?.token == null || g2!.token.isEmpty) return;
     }
 
+    // 3) Envoyer
     await ref.read(chatbotControllerProvider.notifier).send(txt);
     if (!mounted) return;
 
     _ctrl.clear();
-
     if (widget.scrollController?.hasClients == true) {
       widget.scrollController!.animateTo(
         widget.scrollController!.position.maxScrollExtent,
