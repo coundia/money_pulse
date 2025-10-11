@@ -27,6 +27,9 @@ import 'package:money_pulse/presentation/widgets/auto_refresh_on_focus.dart';
 import 'package:money_pulse/sync/infrastructure/pull_providers.dart';
 import 'package:money_pulse/sync/infrastructure/sync_logger.dart';
 
+// Accès / session (requireAccess)
+import 'package:money_pulse/onboarding/presentation/providers/access_session_provider.dart';
+
 import '../controllers/transaction_list_controller.dart';
 
 class TransactionListPage extends ConsumerWidget {
@@ -47,16 +50,39 @@ class TransactionListPage extends ConsumerWidget {
     final itemsAsync = ref.watch(transactionListItemsProvider);
 
     Future<void> _refreshLocal() async {
+      // debug
+      // ignore: avoid_print
       print("[_refreshLocal]");
-
       await ref.read(transactionsProvider.notifier).load();
       await ref.read(balanceProvider.notifier).load();
       ref.invalidate(transactionListItemsProvider);
     }
 
-    // Pull API “comme sur HomePage”, puis refresh local.
+    /// Pull API “comme sur HomePage”, *si connecté*, puis refresh local.
+    /// Si pas connecté et l’accès échoue, on fait un refresh local et
+    /// on affiche un message "Hors ligne".
     Future<void> _pullFromApiAndRefresh() async {
+      // debug
+      // ignore: avoid_print
       print("[_pullFromApiAndRefresh]");
+
+      bool online = ref.read(accessSessionProvider) != null;
+      if (!online) {
+        final ok = await requireAccess(context, ref);
+        online = ok && ref.read(accessSessionProvider) != null;
+      }
+
+      if (!online) {
+        await _refreshLocal();
+        if (context.mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Hors ligne : données locales mises à jour'),
+            ),
+          );
+        }
+        return;
+      }
 
       try {
         ref.read(syncLoggerProvider).info('TxnList: pullAll (manual/auto)');
@@ -249,14 +275,9 @@ class TransactionListPage extends ConsumerWidget {
                           }
                         },
                         onUpdated: _refreshLocal,
-                        onSync: (entry) async {
-                          if (context.mounted) {
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              const SnackBar(
-                                content: Text('Synchronisation lancée'),
-                              ),
-                            );
-                          }
+                        onSync: (_) async {
+                          // Optionnel: forcer une synchro complète
+                          await _pullFromApiAndRefresh();
                         },
                         onAccept: (entry) => _acceptTxn(entry),
                         onReject: (entry) => _rejectTxn(entry),
@@ -352,7 +373,9 @@ class _PeriodDrawerState extends State<_PeriodDrawer> {
   void initState() {
     super.initState();
     _picked = widget.initialDate;
-    print("[initState]");
+    // debug
+    // ignore: avoid_print
+    print("[_PeriodDrawer.initState]");
   }
 
   @override
