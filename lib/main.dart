@@ -1,4 +1,5 @@
-/* App bootstrap with ProviderScope overrides; disables product sync via SyncPolicy. */
+// File: lib/main.dart  (ou là où est ce fichier Bootstrap)
+// App bootstrap with ProviderScope overrides; disables product sync via SyncPolicy.
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -10,12 +11,8 @@ import 'package:money_pulse/infrastructure/db/app_database.dart';
 import 'package:money_pulse/presentation/app/app.dart';
 import 'package:money_pulse/presentation/app/providers.dart';
 import 'package:money_pulse/presentation/app/restart_app.dart';
-import 'package:money_pulse/presentation/app/seed_bootstrap.dart';
 
-// ⬇️ imports for sync policy override
-import 'package:money_pulse/sync/application/sync_policy.dart';
-import 'package:money_pulse/sync/infrastructure/sync_policy_provider.dart';
-import 'package:money_pulse/sync/domain/sync_domain.dart';
+import 'package:money_pulse/presentation/navigation/route_observer.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -72,33 +69,6 @@ class _BootstrapState extends ConsumerState<Bootstrap> {
         rethrow;
       }
     } catch (_) {}
-
-    /* try {
-      await ref.read(seedDefaultCategoriesUseCaseProvider).execute();
-    } on DatabaseException catch (e) {
-      final msg = e.toString();
-      if (!msg.contains('UNIQUE constraint failed')) {
-        rethrow;
-      }
-    } catch (_) {} 
-
-     try {
-      await ref.read(seedDefaultCompanyUseCaseProvider).execute();
-    } on DatabaseException catch (e) {
-      final msg = e.toString();
-      if (!msg.contains('UNIQUE constraint failed')) {
-        rethrow;
-      }
-    } catch (_) {} 
-
-      try {
-      await ref.read(seedDefaultCustomerUseCaseProvider).execute();
-    } on DatabaseException catch (e) {
-      final msg = e.toString();
-      if (!msg.contains('UNIQUE constraint failed')) {
-        rethrow;
-      }
-    } catch (_) {} */
   }
 
   Future<void> _retry() async {
@@ -154,6 +124,7 @@ class _BootstrapState extends ConsumerState<Bootstrap> {
             GlobalCupertinoLocalizations.delegate,
           ],
           supportedLocales: const [Locale('fr'), Locale('fr', 'FR')],
+          navigatorObservers: [routeObserver],
           home: const AppRoot(),
         );
       },

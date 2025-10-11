@@ -1,4 +1,4 @@
-// Home page scaffold with menu-based refresh, full remount, and hot restart entry.
+// File: lib/presentation/app/home/home_page.dart
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -40,6 +40,9 @@ import 'package:money_pulse/onboarding/presentation/flows/logout_and_purge_flow.
 import 'package:money_pulse/presentation/widgets/under_construction_drawer.dart'
     hide showRightDrawer;
 
+// ⬇️ AJOUT
+import 'package:money_pulse/presentation/widgets/auto_refresh_on_focus.dart';
+
 class HomePage extends ConsumerStatefulWidget {
   const HomePage({super.key});
 
@@ -80,6 +83,8 @@ class _HomePageState extends ConsumerState<HomePage> {
   }
 
   Future<void> _refreshAll({bool remount = true}) async {
+    print("_refreshAll");
+
     setState(() => _isBusy = true);
     try {
       await HomeRefreshHook.onManualRefresh(ref);
@@ -285,245 +290,255 @@ class _HomePageState extends ConsumerState<HomePage> {
 
     return KeyedSubtree(
       key: ValueKey(_remountSeed),
-      child: Scaffold(
-        appBar: AppBar(
-          centerTitle: true,
-          title: HomeAppBarTitle(
-            accountAsync: accAsync,
-            onTap: _showAccountPicker,
-            hideAmounts: hide,
-            onToggleHide: () =>
-                ref.read(homePrivacyPrefsProvider.notifier).toggleHideBalance(),
-          ),
-          actions: [
-            if (pageIdx == 0)
-              PopupMenuButton<String>(
-                tooltip: 'Plus',
-                onSelected: (action) async {
-                  switch (action) {
-                    case 'refresh':
-                      setState(() => _isBusy = true);
-                      try {
-                        await _runPullAll();
-                        await _refreshAll(remount: true);
-                      } finally {
-                        if (mounted) setState(() => _isBusy = false);
-                      }
-                      break;
-                    case 'login':
-                      {
-                        final ok = await requireAccess(context, ref);
-                        if (!mounted || !ok) break;
-
+      // ⬇️⬇️ ENVELOPPE ICI pour auto-refresh au retour
+      child: AutoRefreshOnFocus(
+        onRefocus: () async {
+          // Un refresh complet (vos hooks existants) :
+          await _refreshAll(remount: true);
+        },
+        child: Scaffold(
+          appBar: AppBar(
+            centerTitle: true,
+            title: HomeAppBarTitle(
+              accountAsync: accAsync,
+              onTap: _showAccountPicker,
+              hideAmounts: hide,
+              onToggleHide: () => ref
+                  .read(homePrivacyPrefsProvider.notifier)
+                  .toggleHideBalance(),
+            ),
+            actions: [
+              if (pageIdx == 0)
+                PopupMenuButton<String>(
+                  tooltip: 'Plus',
+                  onSelected: (action) async {
+                    switch (action) {
+                      case 'refresh':
+                        setState(() => _isBusy = true);
                         try {
-                          setState(() => _isBusy = true);
-                          await HomeRefreshHook.onManualRefresh(ref);
                           await _runPullAll();
+                          await _refreshAll(remount: true);
                         } finally {
                           if (mounted) setState(() => _isBusy = false);
                         }
+                        break;
+                      case 'login':
+                        {
+                          final ok = await requireAccess(context, ref);
+                          if (!mounted || !ok) break;
 
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(
-                            content: Text('Connecté avec succès.'),
+                          try {
+                            setState(() => _isBusy = true);
+                            await HomeRefreshHook.onManualRefresh(ref);
+                            await _runPullAll();
+                          } finally {
+                            if (mounted) setState(() => _isBusy = false);
+                          }
+
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(
+                              content: Text('Connecté avec succès.'),
+                            ),
+                          );
+                          break;
+                        }
+                      case 'logout':
+                        {
+                          await runLogoutAndPurgeFlow(context, ref);
+                          break;
+                        }
+                      case 'search':
+                        {
+                          final items = await ref.read(
+                            transactionListItemsProvider.future,
+                          );
+                          final result = await showSearch<TransactionEntry?>(
+                            context: context,
+                            delegate: TxnSearchDelegate(items),
+                          );
+                          if (result != null) {
+                            final ok = await showModalBottomSheet<bool>(
+                              context: context,
+                              isScrollControlled: true,
+                              builder: (_) =>
+                                  TransactionFormSheet(entry: result),
+                            );
+                            if (ok == true) {
+                              await _refreshAll(remount: true);
+                            }
+                          }
+                          break;
+                        }
+                      case 'period':
+                        await _showPeriodSheet();
+                        break;
+                      case 'sync':
+                        await _runPullAndPush();
+                        break;
+                      case 'share':
+                        {
+                          final ok = await requireAccess(context, ref);
+                          if (!mounted || !ok) break;
+                          await _openShareDrawer();
+                          break;
+                        }
+                      case 'personnalisation':
+                        await openSummaryPrefs();
+                        break;
+                      case 'ui':
+                        await openUiPrefs();
+                        break;
+                      case 'manageCategories':
+                        await Navigator.of(context).push(
+                          MaterialPageRoute(
+                            builder: (_) => const CategoryListPage(),
                           ),
                         );
                         break;
-                      }
-                    case 'logout':
-                      {
-                        await runLogoutAndPurgeFlow(context, ref);
-                        break;
-                      }
-                    case 'search':
-                      {
-                        final items = await ref.read(
-                          transactionListItemsProvider.future,
+                      case 'manageAccounts':
+                        await Navigator.of(context).push(
+                          MaterialPageRoute(
+                            builder: (_) => const AccountListPage(),
+                          ),
                         );
-                        final result = await showSearch<TransactionEntry?>(
-                          context: context,
-                          delegate: TxnSearchDelegate(items),
+                        break;
+                      case 'clients':
+                        await Navigator.of(context).push(
+                          MaterialPageRoute(
+                            builder: (_) => const CustomerListPage(),
+                          ),
                         );
-                        if (result != null) {
-                          final ok = await showModalBottomSheet<bool>(
-                            context: context,
-                            isScrollControlled: true,
-                            builder: (_) => TransactionFormSheet(entry: result),
-                          );
-                          if (ok == true) {
-                            await _refreshAll(remount: true);
-                          }
-                        }
                         break;
-                      }
-                    case 'period':
-                      await _showPeriodSheet();
-                      break;
-                    case 'sync':
-                      await _runPullAndPush();
-                      break;
-                    case 'share':
-                      {
-                        final ok = await requireAccess(context, ref);
-                        if (!mounted || !ok) break;
-                        await _openShareDrawer();
+                      case 'produits':
+                        await Navigator.of(context).push(
+                          MaterialPageRoute(
+                            builder: (_) => const ProductListPage(),
+                          ),
+                        );
                         break;
-                      }
-                    case 'personnalisation':
-                      await openSummaryPrefs();
-                      break;
-                    case 'ui':
-                      await openUiPrefs();
-                      break;
-                    case 'manageCategories':
-                      await Navigator.of(context).push(
-                        MaterialPageRoute(
-                          builder: (_) => const CategoryListPage(),
-                        ),
-                      );
-                      break;
-                    case 'manageAccounts':
-                      await Navigator.of(context).push(
-                        MaterialPageRoute(
-                          builder: (_) => const AccountListPage(),
-                        ),
-                      );
-                      break;
-                    case 'clients':
-                      await Navigator.of(context).push(
-                        MaterialPageRoute(
-                          builder: (_) => const CustomerListPage(),
-                        ),
-                      );
-                      break;
-                    case 'produits':
-                      await Navigator.of(context).push(
-                        MaterialPageRoute(
-                          builder: (_) => const ProductListPage(),
-                        ),
-                      );
-                      break;
-                    case 'settings':
-                      await Navigator.of(context).push(
-                        MaterialPageRoute(builder: (_) => const SettingsPage()),
-                      );
-                      break;
-                  }
-                },
-                itemBuilder: (context) {
-                  final items = <PopupMenuEntry<String>>[];
-                  items.addAll(const [
-                    PopupMenuItem(
-                      value: 'refresh',
-                      child: ListTile(
-                        leading: Icon(Icons.refresh),
-                        title: Text('Rafraîchir'),
-                      ),
-                    ),
-                    PopupMenuItem(
-                      value: 'search',
-                      child: ListTile(
-                        leading: Icon(Icons.search),
-                        title: Text('Rechercher'),
-                      ),
-                    ),
-                    PopupMenuItem(
-                      value: 'period',
-                      child: ListTile(
-                        leading: Icon(Icons.filter_alt),
-                        title: Text('Sélectionner la période'),
-                      ),
-                    ),
-                    PopupMenuItem(
-                      value: 'sync',
-                      child: ListTile(
-                        leading: Icon(Icons.sync),
-                        title: Text('Synchroniser'),
-                      ),
-                    ),
-                    PopupMenuItem(
-                      value: 'share',
-                      child: ListTile(
-                        leading: Icon(Icons.ios_share),
-                        title: Text('Partager le compte'),
-                      ),
-                    ),
-                    PopupMenuDivider(),
-
-                    PopupMenuItem(
-                      value: 'personnalisation',
-                      child: ListTile(
-                        leading: Icon(Icons.dashboard_customize),
-                        title: Text('Personnalisation'),
-                      ),
-                    ),
-                    PopupMenuItem(
-                      value: 'settings',
-                      child: ListTile(
-                        leading: Icon(Icons.settings),
-                        title: Text('Paramètres'),
-                      ),
-                    ),
-                  ]);
-                  items.add(const PopupMenuDivider());
-                  final accessGrant = ref.read(accessSessionProvider);
-                  items.add(
-                    PopupMenuItem(
-                      value: accessGrant == null ? 'login' : 'logout',
-                      child: ListTile(
-                        leading: Icon(
-                          accessGrant == null ? Icons.login : Icons.logout,
-                        ),
-                        title: Text(
-                          accessGrant == null
-                              ? 'Se connecter'
-                              : 'Se déconnecter',
-                        ),
-                        subtitle: Text(
-                          accessGrant != null
-                              ? accessGrant.email
-                              : 'Hors ligne',
+                      case 'settings':
+                        await Navigator.of(context).push(
+                          MaterialPageRoute(
+                            builder: (_) => const SettingsPage(),
+                          ),
+                        );
+                        break;
+                    }
+                  },
+                  itemBuilder: (context) {
+                    final items = <PopupMenuEntry<String>>[];
+                    items.addAll(const [
+                      PopupMenuItem(
+                        value: 'refresh',
+                        child: ListTile(
+                          leading: Icon(Icons.refresh),
+                          title: Text('Rafraîchir'),
                         ),
                       ),
+                      PopupMenuItem(
+                        value: 'search',
+                        child: ListTile(
+                          leading: Icon(Icons.search),
+                          title: Text('Rechercher'),
+                        ),
+                      ),
+                      PopupMenuItem(
+                        value: 'period',
+                        child: ListTile(
+                          leading: Icon(Icons.filter_alt),
+                          title: Text('Sélectionner la période'),
+                        ),
+                      ),
+                      PopupMenuItem(
+                        value: 'sync',
+                        child: ListTile(
+                          leading: Icon(Icons.sync),
+                          title: Text('Synchroniser'),
+                        ),
+                      ),
+                      PopupMenuItem(
+                        value: 'share',
+                        child: ListTile(
+                          leading: Icon(Icons.ios_share),
+                          title: Text('Partager le compte'),
+                        ),
+                      ),
+                      PopupMenuDivider(),
+                      PopupMenuItem(
+                        value: 'personnalisation',
+                        child: ListTile(
+                          leading: Icon(Icons.dashboard_customize),
+                          title: Text('Personnalisation'),
+                        ),
+                      ),
+                      PopupMenuItem(
+                        value: 'settings',
+                        child: ListTile(
+                          leading: Icon(Icons.settings),
+                          title: Text('Paramètres'),
+                        ),
+                      ),
+                    ]);
+                    items.add(const PopupMenuDivider());
+                    final accessGrant = ref.read(accessSessionProvider);
+                    items.add(
+                      PopupMenuItem(
+                        value: accessGrant == null ? 'login' : 'logout',
+                        child: ListTile(
+                          leading: Icon(
+                            accessGrant == null ? Icons.login : Icons.logout,
+                          ),
+                          title: Text(
+                            accessGrant == null
+                                ? 'Se connecter'
+                                : 'Se déconnecter',
+                          ),
+                          subtitle: Text(
+                            accessGrant != null
+                                ? accessGrant.email
+                                : 'Hors ligne',
+                          ),
+                        ),
+                      ),
+                    );
+                    return items;
+                  },
+                ),
+            ],
+            bottom: _isBusy
+                ? const PreferredSize(
+                    preferredSize: Size(double.infinity, 3),
+                    child: LinearProgressIndicator(minHeight: 3),
+                  )
+                : null,
+          ),
+          body: IndexedStack(
+            index: pageIdx,
+            children: const [TransactionListPage(), PosPage(), SettingsPage()],
+          ),
+          bottomNavigationBar: uiPrefs.showBottomNav
+              ? NavigationBar(
+                  labelBehavior:
+                      NavigationDestinationLabelBehavior.onlyShowSelected,
+                  selectedIndex: pageIdx,
+                  onDestinationSelected: _onDestinationSelected,
+                  destinations: const [
+                    NavigationDestination(
+                      icon: Icon(Icons.list_alt),
+                      label: 'Transactions',
                     ),
-                  );
-                  return items;
-                },
-              ),
-          ],
-          bottom: _isBusy
-              ? const PreferredSize(
-                  preferredSize: Size(double.infinity, 3),
-                  child: LinearProgressIndicator(minHeight: 3),
+                    NavigationDestination(
+                      icon: Icon(Icons.point_of_sale),
+                      label: 'POS',
+                    ),
+                    NavigationDestination(
+                      icon: Icon(Icons.person),
+                      label: 'Profil',
+                    ),
+                  ],
                 )
               : null,
         ),
-        body: IndexedStack(
-          index: pageIdx,
-          children: const [TransactionListPage(), PosPage(), SettingsPage()],
-        ),
-        bottomNavigationBar: uiPrefs.showBottomNav
-            ? NavigationBar(
-                labelBehavior:
-                    NavigationDestinationLabelBehavior.onlyShowSelected,
-                selectedIndex: pageIdx,
-                onDestinationSelected: _onDestinationSelected,
-                destinations: const [
-                  NavigationDestination(
-                    icon: Icon(Icons.list_alt),
-                    label: 'Transactions',
-                  ),
-                  NavigationDestination(
-                    icon: Icon(Icons.point_of_sale),
-                    label: 'POS',
-                  ),
-                  NavigationDestination(
-                    icon: Icon(Icons.person),
-                    label: 'Profil',
-                  ),
-                ],
-              )
-            : null,
       ),
     );
   }
