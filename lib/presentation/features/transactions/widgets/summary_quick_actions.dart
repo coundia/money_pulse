@@ -261,24 +261,7 @@ class SummaryQuickActions extends StatelessWidget {
               ),
             );
           }
-          if (showNavReportButton) {
-            buttons.add(
-              _btn(
-                context,
-                label: 'Rapport',
-                icon: Icons.assessment_rounded,
-                tone: Theme.of(context).colorScheme.primary,
-                onTap:
-                    onOpenReport ??
-                    () {
-                      HapticFeedback.selectionClick();
-                      Navigator.of(context).push(
-                        MaterialPageRoute(builder: (_) => const ReportPage()),
-                      );
-                    },
-              ),
-            );
-          }
+
           if (showNavProductsButton) {
             buttons.add(
               _btn(
@@ -361,6 +344,45 @@ class SummaryQuickActions extends StatelessWidget {
           }
         }
 
+        if (showNavCustomersButton) {
+          buttons.add(
+            _btn(
+              context,
+              label: 'Entreprise',
+              icon: Icons.home_rounded,
+              tone: Theme.of(context).colorScheme.primary,
+              onTap:
+                  onOpenChatbot ??
+                  () {
+                    Navigator.of(context).push(
+                      MaterialPageRoute(
+                        builder: (_) => const CompanyListPage(),
+                      ),
+                    );
+                  },
+            ),
+          );
+        }
+
+        if (showNavReportButton) {
+          buttons.add(
+            _btn(
+              context,
+              label: 'Rapport',
+              icon: Icons.assessment_rounded,
+              tone: Theme.of(context).colorScheme.primary,
+              onTap:
+                  onOpenReport ??
+                  () {
+                    HapticFeedback.selectionClick();
+                    Navigator.of(context).push(
+                      MaterialPageRoute(builder: (_) => const ReportPage()),
+                    );
+                  },
+            ),
+          );
+        }
+
         if (showNavMarketplaceButton) {
           buttons.add(
             _btn(
@@ -398,25 +420,7 @@ class SummaryQuickActions extends StatelessWidget {
             ),
           );
         }
-        if (showNavCustomersButton) {
-          buttons.add(
-            _btn(
-              context,
-              label: 'Entreprise',
-              icon: Icons.home_rounded,
-              tone: Theme.of(context).colorScheme.primary,
-              onTap:
-                  onOpenChatbot ??
-                  () {
-                    Navigator.of(context).push(
-                      MaterialPageRoute(
-                        builder: (_) => const CompanyListPage(),
-                      ),
-                    );
-                  },
-            ),
-          );
-        }
+
         if (buttons.isEmpty) return const SizedBox.shrink();
 
         final w = c.maxWidth;

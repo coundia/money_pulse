@@ -208,20 +208,7 @@ class SummaryCardPrefsPanel extends ConsumerWidget {
                     ? (v) => ctrl.setShowNavSearchButton(v)
                     : null,
               ),
-              SwitchListTile.adaptive(
-                title: const Text('Stock'),
-                value: prefs.showNavStockButton,
-                onChanged: prefs.showQuickActions && prefs.showNavShortcuts
-                    ? (v) => ctrl.setShowNavStockButton(v)
-                    : null,
-              ),
-              SwitchListTile.adaptive(
-                title: const Text('Rapport'),
-                value: prefs.showNavReportButton,
-                onChanged: prefs.showQuickActions && prefs.showNavShortcuts
-                    ? (v) => ctrl.setShowNavReportButton(v)
-                    : null,
-              ),
+
               SwitchListTile.adaptive(
                 title: const Text('Produits'),
                 value: prefs.showNavProductsButton,
@@ -262,6 +249,14 @@ class SummaryCardPrefsPanel extends ConsumerWidget {
                 title: const Text('Afficher les métriques'),
                 value: prefs.showMetrics,
                 onChanged: (v) => ctrl.setShowMetrics(v),
+              ),
+
+              SwitchListTile.adaptive(
+                title: const Text('Rapport'),
+                value: prefs.showNavReportButton,
+                onChanged: prefs.showQuickActions && prefs.showNavShortcuts
+                    ? (v) => ctrl.setShowNavReportButton(v)
+                    : null,
               ),
 
               const Divider(height: 24),

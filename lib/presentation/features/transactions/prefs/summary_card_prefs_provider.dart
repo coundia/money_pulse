@@ -71,15 +71,15 @@ class SummaryCardPrefs {
     showNavSettingsButton: false,
     showNavSearchButton: false,
     showNavStockButton: false,
-    showNavReportButton: false,
-    showNavProductsButton: false,
+    showNavReportButton: true,
+    showNavProductsButton: true,
     showNavCustomersButton: false,
     showNavCategoriesButton: false,
     showNavAccountsButton: false,
     showPeriodHeader: true,
     showMetrics: true,
     showNavMarketplaceButton: true,
-    showNavChatbotButton: false,
+    showNavChatbotButton: true,
   );
 
   SummaryCardPrefs copyWith({
