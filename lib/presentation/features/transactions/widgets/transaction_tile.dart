@@ -1,5 +1,6 @@
 // File: transaction_tile.dart
-// Transaction list tile with context menu, swipe-to-delete and action buttons (Accepter/Rejeter) when status=INIT.
+// Transaction list tile with context menu, swipe-to-delete and action buttons.
+// NOTE: "Rejeter" supprime désormais directement la transaction (sans statut REJECTED).
 
 import 'package:flutter/material.dart';
 import 'package:money_pulse/domain/transactions/entities/transaction_entry.dart';
@@ -13,8 +14,11 @@ class TransactionTile extends StatelessWidget {
   final Future<void> Function() onDeleted;
   final Future<void> Function() onUpdated;
 
-  // Nouveaux callbacks pour gérer l’application dans le compte + statut
+  // "Accepter" peut encore être géré par le parent (ajustement solde, etc.)
   final Future<void> Function(TransactionEntry entry)? onAccept;
+
+  // Conservé pour compatibilité, mais "Rejeter" supprime désormais
+  // (onReject n'est plus utilisé par le bouton ci-dessous).
   final Future<void> Function(TransactionEntry entry)? onReject;
 
   // Optionnel : action sync existante
@@ -97,8 +101,6 @@ class TransactionTile extends StatelessWidget {
                   const Icon(Icons.schedule, size: 14),
                   const SizedBox(width: 4),
                   Text(time, style: Theme.of(context).textTheme.bodySmall),
-                  //const SizedBox(width: 8),
-                  // _TypePill(label: tone.label, color: tone.color),
                 ],
               ),
 
@@ -116,12 +118,20 @@ class TransactionTile extends StatelessWidget {
                           ? () async => await onAccept!(entry)
                           : () => _fallbackSnack(context),
                     ),
+                    // ⬇️ "Rejeter" = SUPPRIMER DIRECTEMENT (sans confirmation)
                     OutlinedButton.icon(
-                      icon: const Icon(Icons.close),
+                      icon: const Icon(Icons.delete_outline),
                       label: const Text('Rejeter'),
-                      onPressed: onReject != null
-                          ? () async => await onReject!(entry)
-                          : () => _fallbackSnack(context),
+                      onPressed: () async {
+                        await onDeleted();
+                        if (context.mounted) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(
+                              content: Text('Transaction supprimée'),
+                            ),
+                          );
+                        }
+                      },
                     ),
                   ],
                 ),
