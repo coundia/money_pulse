@@ -1,9 +1,9 @@
-// File: lib/presentation/widgets/auto_refresh_on_focus.dart
 import 'dart:async';
 import 'dart:developer' as dev;
 import 'package:flutter/material.dart';
 import 'package:flutter/scheduler.dart';
 import 'package:money_pulse/presentation/navigation/route_observer.dart';
+import 'package:money_pulse/presentation/navigation/refocus_bus.dart';
 
 /// Wrappe n'importe quelle page.
 /// Déclenche [onRefocus] automatiquement:
@@ -14,11 +14,13 @@ import 'package:money_pulse/presentation/navigation/route_observer.dart';
 ///  - [debounce]: anti-"double tir" si les événements s'enchaînent (popNext + resumed)
 ///  - [loggingEnabled]: active des logs détaillés dans la console (dev.log)
 ///  - [logTag]: tag utilisé pour les logs (par défaut: "AutoRefreshOnFocus")
+///  - [onlyWhenTag]: si fourni, on ne rafraîchit au retour (didPopNext)
+///    QUE si RefocusBus a ce tag (ex: 'chatbot'). Les refresh liés au
+///    retour d'app en avant-plan (resumed) restent actifs.
 class AutoRefreshOnFocus extends StatefulWidget {
   final Widget child;
 
-  /// Ton callback de rafraîchissement. Par ex. dans HomePage:
-  /// onRefocus: () => _refreshAll(remount: true)
+  /// Ton callback de rafraîchissement.
   final Future<void> Function() onRefocus;
 
   /// Lancer le refresh immédiatement au premier affichage ?
@@ -33,6 +35,10 @@ class AutoRefreshOnFocus extends StatefulWidget {
   /// Tag de logs.
   final String logTag;
 
+  /// Ne déclenche didPopNext que si le tag du RefocusBus matche.
+  /// Exemple : onlyWhenTag: 'chatbot'
+  final String? onlyWhenTag;
+
   const AutoRefreshOnFocus({
     super.key,
     required this.child,
@@ -41,6 +47,7 @@ class AutoRefreshOnFocus extends StatefulWidget {
     this.debounce = const Duration(milliseconds: 350),
     this.loggingEnabled = true,
     this.logTag = 'AutoRefreshOnFocus',
+    this.onlyWhenTag,
   });
 
   @override
@@ -64,13 +71,13 @@ class _AutoRefreshOnFocusState extends State<AutoRefreshOnFocus>
     super.initState();
     WidgetsBinding.instance.addObserver(this);
     _log(
-      'initState() — observer added, immediate=${widget.immediate}, debounce=${widget.debounce.inMilliseconds}ms',
+      'initState() — observer added, immediate=${widget.immediate}, debounce=${widget.debounce.inMilliseconds}ms, onlyWhenTag=${widget.onlyWhenTag}',
     );
 
     // Déclenchement optionnel dès le premier affichage
     if (widget.immediate) {
       SchedulerBinding.instance.addPostFrameCallback((_) {
-        _log('postFrame (immediate=true) -> trigger');
+        _log('postFrame (immediate=true) -> trigger (unconditional)');
         _trigger(reason: 'immediate_first_frame');
       });
     }
@@ -107,7 +114,20 @@ class _AutoRefreshOnFocusState extends State<AutoRefreshOnFocus>
   /// Appelé quand on revient sur cette page (ex: on a pop une autre route).
   @override
   void didPopNext() {
-    _log('didPopNext() -> trigger');
+    _log('didPopNext()');
+    // Si onlyWhenTag est défini, on déclenche uniquement
+    // si RefocusBus a ce tag (et on le consomme).
+    final expected = widget.onlyWhenTag;
+    if (expected != null) {
+      final tag = RefocusBus.take();
+      _log('didPopNext() — onlyWhenTag=$expected, busTag=$tag');
+      if (tag != expected) {
+        _log('didPopNext() — ignored (tag mismatch)');
+        return;
+      }
+    } else {
+      _log('didPopNext() — no onlyWhenTag => unconditional trigger');
+    }
     _trigger(reason: 'didPopNext');
   }
 
@@ -119,6 +139,7 @@ class _AutoRefreshOnFocusState extends State<AutoRefreshOnFocus>
   // — Cycle de vie de l’app —
 
   /// Quand l’app revient en avant-plan, relancer un refresh.
+  /// (Toujours actif, même si onlyWhenTag est renseigné.)
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
     _log('didChangeAppLifecycleState($state)');

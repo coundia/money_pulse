@@ -178,6 +178,7 @@ class TransactionListPage extends ConsumerWidget {
     return AutoRefreshOnFocus(
       onRefocus:
           _pullFromApiAndRefresh, // auto pull API quand on revient sur l’écran
+      onlyWhenTag: 'chatbot',
       child: Scaffold(
         body: RefreshIndicator(
           onRefresh: _pullFromApiAndRefresh, // ⬅️ PULL-TO-REFRESH depuis l’API

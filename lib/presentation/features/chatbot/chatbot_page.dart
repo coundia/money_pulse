@@ -1,10 +1,12 @@
+// File: lib/presentation/features/chatbot/pages/chatbot_page.dart
 // Screen scaffold that wires app bar, banner, message list and input bar together.
 // Uses showApiErrorSnackBar to display clean error messages and attaches default accountId.
-// NOTE: When leaving this page (system back or app bar back), we pop with a "refresh" result
-// so the caller can auto-refresh immediately.
+// NOTE: When leaving this page (system back or app bar back), we mark the RefocusBus with
+// 'chatbot' and pop with a "refresh" result so the caller can optionally auto-refresh.
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+
 import 'package:money_pulse/onboarding/presentation/providers/access_session_provider.dart';
 import 'package:money_pulse/presentation/features/chatbot/chatbot_controller.dart';
 import 'package:money_pulse/presentation/features/chatbot/widgets/chat_app_bar.dart';
@@ -16,6 +18,8 @@ import 'package:money_pulse/presentation/features/chatbot/hooks/chat_attach_defa
 // ensure selected account default
 import 'package:money_pulse/presentation/app/account_selection.dart'
     show ensureSelectedAccountProvider, selectedAccountIdProvider;
+
+import 'package:money_pulse/presentation/navigation/refocus_bus.dart';
 
 import '../../../shared/api_error_toast.dart';
 
@@ -72,9 +76,11 @@ class _ChatbotPageState extends ConsumerState<ChatbotPage> {
     super.dispose();
   }
 
-  /// Pop with a "refresh" result so the previous page can reload.
+  /// Pop with a "refresh" result so the previous page can reload,
+  /// and mark that we are coming back from the chatbot.
   Future<bool> _onWillPop() async {
     if (!mounted) return true;
+    RefocusBus.mark('chatbot');
     Navigator.of(context).pop('refresh');
     return false; // we handled the pop ourselves
   }
@@ -109,7 +115,7 @@ class _ChatbotPageState extends ConsumerState<ChatbotPage> {
       child: Scaffold(
         appBar: ChatAppBar(
           isLoading: state.loading,
-          // Back button from AppBar will pop; WillPopScope converts to pop('refresh')
+          // Back button from AppBar will pop; WillPopScope converts to pop('refresh') and marks bus.
           onRefresh: () async {
             final ctrl = ref.read(chatbotControllerProvider.notifier);
             if (!isConnected) {
