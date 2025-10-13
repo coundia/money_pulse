@@ -11,6 +11,8 @@ import 'package:money_pulse/presentation/features/categories/category_list_page.
 import 'package:money_pulse/presentation/features/accounts/account_page.dart';
 import 'package:money_pulse/presentation/features/companies/company_list_page.dart';
 import 'package:money_pulse/presentation/features/customers/customer_list_page.dart';
+import 'package:money_pulse/presentation/features/settings/app_settings_page.dart'
+    show AppSettingsPage;
 import 'package:money_pulse/presentation/features/stock/stock_level_list_page.dart';
 import 'package:money_pulse/presentation/features/stock_movement/stock_movement_list_page.dart';
 import 'package:money_pulse/presentation/features/sync/change_log_list_page.dart';
@@ -274,6 +276,17 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
           _SectionCard(
             title: 'Application',
             children: [
+              ListTile(
+                leading: const Icon(Icons.tune_rounded),
+                title: const Text('Paramètres de l’application'),
+                subtitle: const Text(
+                  'Activer/désactiver le rafraîchissement auto',
+                ),
+                onTap: () => Navigator.of(context).push(
+                  MaterialPageRoute(builder: (_) => const AppSettingsPage()),
+                ),
+              ),
+              const Divider(height: 1),
               ListTile(
                 leading: const Icon(Icons.info_outline_rounded),
                 title: const Text('Version de l’application'),

@@ -1,7 +1,4 @@
-// File: lib/presentation/features/transactions/pages/transaction_list_page.dart
-// Screen that lists transactions, groups by day, shows summary and wires tile actions including
-// Accepter/Rejeter when status=INIT. Also auto-refreshes from API when the page gets focus again
-// and exposes a pull-to-refresh to fetch from API on demand.
+// Screen that lists transactions, groups by day, shows summary and wires tile actions with optional auto refresh on focus.
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -22,15 +19,14 @@ import 'package:money_pulse/presentation/features/settings/settings_page.dart';
 import 'package:money_pulse/presentation/features/reports/report_page.dart';
 import 'package:money_pulse/presentation/app/account_selection.dart';
 
-// Auto refresh on focus + pull API “comme sur HomePage”
 import 'package:money_pulse/presentation/widgets/auto_refresh_on_focus.dart';
 import 'package:money_pulse/sync/infrastructure/pull_providers.dart';
 import 'package:money_pulse/sync/infrastructure/sync_logger.dart';
 
-// Accès / session (requireAccess)
 import 'package:money_pulse/onboarding/presentation/providers/access_session_provider.dart';
 
 import '../../../../shared/server_unavailable.dart';
+import '../../settings/app_settings_provider.dart';
 import '../controllers/transaction_list_controller.dart';
 
 class TransactionListPage extends ConsumerWidget {
@@ -51,28 +47,17 @@ class TransactionListPage extends ConsumerWidget {
     final itemsAsync = ref.watch(transactionListItemsProvider);
 
     Future<void> _refreshLocal() async {
-      // debug
-      // ignore: avoid_print
-      print("[_refreshLocal]");
       await ref.read(transactionsProvider.notifier).load();
       await ref.read(balanceProvider.notifier).load();
       ref.invalidate(transactionListItemsProvider);
     }
 
-    /// Pull API “comme sur HomePage”, *si connecté*, puis refresh local.
-    /// Si pas connecté et l’accès échoue, on fait un refresh local et
-    /// on affiche un message "Hors ligne".
     Future<void> _pullFromApiAndRefresh() async {
-      // debug
-      // ignore: avoid_print
-      print("[_pullFromApiAndRefresh]");
-
       bool online = ref.read(accessSessionProvider) != null;
       if (!online) {
         final ok = await requireAccess(context, ref);
         online = ok && ref.read(accessSessionProvider) != null;
       }
-
       if (!online) {
         await _refreshLocal();
         if (context.mounted) {
@@ -84,7 +69,6 @@ class TransactionListPage extends ConsumerWidget {
         }
         return;
       }
-
       try {
         ref.read(syncLoggerProvider).info('TxnList: pullAll (manual/auto)');
         await pullAllTables(ref);
@@ -106,7 +90,6 @@ class TransactionListPage extends ConsumerWidget {
     }
 
     Future<void> _acceptTxn(TransactionEntry e) async {
-      // Normalise "IN"/"OUT" en "CREDIT"/"DEBIT"
       String _normalizeType(String t) {
         final u = (t.isEmpty ? '' : t).toUpperCase();
         switch (u) {
@@ -128,8 +111,6 @@ class TransactionListPage extends ConsumerWidget {
           }
           return;
         }
-
-        // Compte sélectionné requis pour l’ajustement du solde
         final selectedId = ref.read(selectedAccountIdProvider);
         if ((selectedId ?? '').isEmpty) {
           if (context.mounted) {
@@ -139,20 +120,15 @@ class TransactionListPage extends ConsumerWidget {
           }
           return;
         }
-
         final repo = ref.read(transactionRepoProvider);
-
-        // Version acceptée : status=COMPLETED, typeEntry normalisé, accountId=compte courant
         final next = e.copyWith(
           status: 'COMPLETED',
           typeEntry: _normalizeType(e.typeEntry),
           accountId: selectedId,
           updatedAt: DateTime.now().toUtc(),
         );
-
-        await repo.update(next); // gère l’undo/apply du solde au niveau repo
+        await repo.update(next);
         await _refreshLocal();
-
         if (context.mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(
@@ -180,131 +156,126 @@ class TransactionListPage extends ConsumerWidget {
       }
     }
 
-    // === UI ===
-    return AutoRefreshOnFocus(
-      onRefocus:
-          _pullFromApiAndRefresh, // auto pull API quand on revient sur l’écran
-      onlyWhenTag: 'chatbot',
-      child: Scaffold(
-        body: RefreshIndicator(
-          onRefresh: _pullFromApiAndRefresh, // ⬅️ PULL-TO-REFRESH depuis l’API
-          child: itemsAsync.when(
-            // On rend aussi le RefreshIndicator “tirable” en loading/erreur
-            loading: () => ListView(
-              physics: const AlwaysScrollableScrollPhysics(),
-              children: const [
-                SizedBox(
-                  height: 240,
-                  child: Center(child: CircularProgressIndicator()),
-                ),
-              ],
-            ),
-            error: (e, _) => ListView(
-              physics: const AlwaysScrollableScrollPhysics(),
-              padding: const EdgeInsets.all(24),
-              children: [
-                Center(child: Text('Erreur : $e')),
-                const SizedBox(height: 12),
-                const Center(
-                  child: Text(
-                    'Tirez pour réessayer (pull-to-refresh).',
-                    style: TextStyle(fontSize: 12),
-                  ),
-                ),
-              ],
-            ),
-            data: (items) {
-              final txns = items.cast<TransactionEntry>();
-              final groups = groupByDay(txns);
-
-              final exp = txns
-                  .where((e) => e.typeEntry.toUpperCase() == 'DEBIT')
-                  .fold<int>(0, (p, e) => p + e.amount);
-              final inc = txns
-                  .where((e) => e.typeEntry.toUpperCase() == 'CREDIT')
-                  .fold<int>(0, (p, e) => p + e.amount);
-              final net = inc - exp;
-
-              final children = <Widget>[
-                TransactionSummaryCard(
-                  periodLabel: state.label,
-                  onPrev: () =>
-                      ref.read(transactionListStateProvider.notifier).prev(),
-                  onNext: () =>
-                      ref.read(transactionListStateProvider.notifier).next(),
-                  onTapPeriod: () => _openAnchorPicker(context, ref),
-                  expenseCents: exp,
-                  incomeCents: inc,
-                  netCents: net,
-                  onOpenReport: () {
-                    Navigator.of(context).push(
-                      MaterialPageRoute(builder: (_) => const ReportPage()),
-                    );
-                  },
-                  onOpenSettings: () {
-                    Navigator.of(context).push(
-                      MaterialPageRoute(builder: (_) => const SettingsPage()),
-                    );
-                  },
-                  onAddExpense: () => _onAdd(context, ref, 'DEBIT'),
-                  onAddIncome: () => _onAdd(context, ref, 'CREDIT'),
-                  onAddDebt: () => _onAdd(context, ref, 'DEBT'),
-                  onAddRepayment: () => _onAdd(context, ref, 'REMBOURSEMENT'),
-                  onAddLoan: () => _onAdd(context, ref, 'PRET'),
-                  onOpenSearch: () => _openTxnSearch(context, txns),
-                ),
-                const SizedBox(height: 12),
-                if (txns.isEmpty)
-                  const Padding(
-                    padding: EdgeInsets.all(32.0),
-                    child: Center(
-                      child: Text('Aucune transaction pour cette période'),
-                    ),
-                  )
-                else ...[
-                  for (final g in groups) ...[
-                    DayHeader(group: g),
-                    const SizedBox(height: 4),
-                    ...g.items.map(
-                      (e) => TransactionTile(
-                        entry: e,
-                        onDeleted: () async {
-                          await ref
-                              .read(transactionRepoProvider)
-                              .softDelete(e.id);
-                          await _refreshLocal();
-                          if (context.mounted) {
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              const SnackBar(
-                                content: Text('Transaction supprimée'),
-                              ),
-                            );
-                          }
-                        },
-                        onUpdated: _refreshLocal,
-                        onSync: (_) async {
-                          // Optionnel: forcer une synchro complète
-                          await _pullFromApiAndRefresh();
-                        },
-                        onAccept: (entry) => _acceptTxn(entry),
-                        onReject: (entry) => _rejectTxn(entry),
-                      ),
-                    ),
-                    const SizedBox(height: 8),
-                  ],
-                ],
-                TxnSearchCta(onTap: () => _openTxnSearch(context, txns)),
-              ];
-
-              return ListView(
-                physics: const AlwaysScrollableScrollPhysics(),
-                padding: const EdgeInsets.all(12),
-                children: children,
-              );
-            },
+    final scaffold = Scaffold(
+      body: RefreshIndicator(
+        onRefresh: _pullFromApiAndRefresh,
+        child: itemsAsync.when(
+          loading: () => ListView(
+            physics: const AlwaysScrollableScrollPhysics(),
+            children: const [
+              SizedBox(
+                height: 240,
+                child: Center(child: CircularProgressIndicator()),
+              ),
+            ],
           ),
+          error: (e, _) => ListView(
+            physics: const AlwaysScrollableScrollPhysics(),
+            padding: const EdgeInsets.all(24),
+            children: const [
+              Center(child: Text('Erreur de chargement')),
+              SizedBox(height: 12),
+              Center(
+                child: Text(
+                  'Tirez pour réessayer (pull-to-refresh).',
+                  style: TextStyle(fontSize: 12),
+                ),
+              ),
+            ],
+          ),
+          data: (items) {
+            final txns = items.cast<TransactionEntry>();
+            final groups = groupByDay(txns);
+
+            final exp = txns
+                .where((e) => e.typeEntry.toUpperCase() == 'DEBIT')
+                .fold<int>(0, (p, e) => p + e.amount);
+            final inc = txns
+                .where((e) => e.typeEntry.toUpperCase() == 'CREDIT')
+                .fold<int>(0, (p, e) => p + e.amount);
+            final net = inc - exp;
+
+            final children = <Widget>[
+              TransactionSummaryCard(
+                periodLabel: state.label,
+                onPrev: () =>
+                    ref.read(transactionListStateProvider.notifier).prev(),
+                onNext: () =>
+                    ref.read(transactionListStateProvider.notifier).next(),
+                onTapPeriod: () => _openAnchorPicker(context, ref),
+                expenseCents: exp,
+                incomeCents: inc,
+                netCents: net,
+                onOpenReport: () => Navigator.of(
+                  context,
+                ).push(MaterialPageRoute(builder: (_) => const ReportPage())),
+                onOpenSettings: () => Navigator.of(
+                  context,
+                ).push(MaterialPageRoute(builder: (_) => const SettingsPage())),
+                onAddExpense: () => _onAdd(context, ref, 'DEBIT'),
+                onAddIncome: () => _onAdd(context, ref, 'CREDIT'),
+                onAddDebt: () => _onAdd(context, ref, 'DEBT'),
+                onAddRepayment: () => _onAdd(context, ref, 'REMBOURSEMENT'),
+                onAddLoan: () => _onAdd(context, ref, 'PRET'),
+                onOpenSearch: () => _openTxnSearch(context, txns),
+              ),
+              const SizedBox(height: 12),
+              if (txns.isEmpty)
+                const Padding(
+                  padding: EdgeInsets.all(32.0),
+                  child: Center(
+                    child: Text('Aucune transaction pour cette période'),
+                  ),
+                )
+              else ...[
+                for (final g in groups) ...[
+                  DayHeader(group: g),
+                  const SizedBox(height: 4),
+                  ...g.items.map(
+                    (e) => TransactionTile(
+                      entry: e,
+                      onDeleted: () async {
+                        await ref
+                            .read(transactionRepoProvider)
+                            .softDelete(e.id);
+                        await _refreshLocal();
+                        if (context.mounted) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(
+                              content: Text('Transaction supprimée'),
+                            ),
+                          );
+                        }
+                      },
+                      onUpdated: _refreshLocal,
+                      onSync: (_) async => _pullFromApiAndRefresh(),
+                      onAccept: (entry) => _acceptTxn(entry),
+                      onReject: (entry) => _rejectTxn(entry),
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                ],
+              ],
+              TxnSearchCta(onTap: () => _openTxnSearch(context, txns)),
+            ];
+
+            return ListView(
+              physics: const AlwaysScrollableScrollPhysics(),
+              padding: const EdgeInsets.all(12),
+              children: children,
+            );
+          },
         ),
       ),
+    );
+
+    final autoRefreshEnabled = ref.watch(autoRefreshOnFocusEnabledProvider);
+    if (!autoRefreshEnabled) return scaffold;
+
+    return AutoRefreshOnFocus(
+      onRefocus: _pullFromApiAndRefresh,
+      onlyWhenTag: 'chatbot',
+      child: scaffold,
     );
   }
 
@@ -329,7 +300,6 @@ class TransactionListPage extends ConsumerWidget {
 
   Future<void> _openAnchorPicker(BuildContext context, WidgetRef ref) async {
     final state = ref.read(transactionListStateProvider);
-
     await showRightDrawer<void>(
       context,
       child: _PeriodDrawer(
@@ -380,9 +350,6 @@ class _PeriodDrawerState extends State<_PeriodDrawer> {
   void initState() {
     super.initState();
     _picked = widget.initialDate;
-    // debug
-    // ignore: avoid_print
-    print("[_PeriodDrawer.initState]");
   }
 
   @override
