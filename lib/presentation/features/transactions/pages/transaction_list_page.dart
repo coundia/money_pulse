@@ -30,6 +30,7 @@ import 'package:money_pulse/sync/infrastructure/sync_logger.dart';
 // Accès / session (requireAccess)
 import 'package:money_pulse/onboarding/presentation/providers/access_session_provider.dart';
 
+import '../../../../shared/server_unavailable.dart';
 import '../controllers/transaction_list_controller.dart';
 
 class TransactionListPage extends ConsumerWidget {
@@ -90,9 +91,14 @@ class TransactionListPage extends ConsumerWidget {
       } catch (e, st) {
         ref.read(syncLoggerProvider).error('TxnList: pullAll failed', e, st);
         if (context.mounted) {
-          ScaffoldMessenger.of(
+          ServerUnavailable.showSnackBar(
             context,
-          ).showSnackBar(SnackBar(content: Text('Échec import: $e')));
+            e,
+            stackTrace: st,
+            where: 'TransactionListPage.pullFromApi',
+            actionLabel: 'Réessayer',
+            onAction: () => _pullFromApiAndRefresh(),
+          );
         }
       } finally {
         await _refreshLocal();
