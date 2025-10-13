@@ -10,6 +10,7 @@ import 'package:money_pulse/presentation/widgets/right_drawer.dart';
 import 'package:money_pulse/domain/categories/entities/category.dart';
 import 'package:money_pulse/domain/categories/repositories/category_repository.dart';
 import '../../../infrastructure/categories/category_marketplace_repo_provider.dart';
+import '../../../shared/constants/env.dart';
 import 'widgets/category_form_panel.dart';
 import 'widgets/category_tile.dart';
 import 'widgets/category_context_menu.dart';
@@ -21,7 +22,7 @@ class CategoryListPage extends ConsumerStatefulWidget {
   final String marketplaceBaseUri;
   const CategoryListPage({
     super.key,
-    this.marketplaceBaseUri = 'http://127.0.0.1:8095',
+    this.marketplaceBaseUri = Env.BASE_URI,
   });
 
   @override

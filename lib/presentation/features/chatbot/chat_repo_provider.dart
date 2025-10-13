@@ -8,11 +8,12 @@ import 'package:money_pulse/infrastructure/chat/chat_repository_http.dart';
 import 'package:money_pulse/presentation/app/providers.dart'
     show selectedAccountProvider;
 
+import '../../../shared/constants/env.dart';
 import '../../app/account_selection.dart';
 
 final chatBaseUriProvider = Provider<String>((ref) {
   // TODO: déduire depuis vos prefs/env si nécessaire
-  return 'http://127.0.0.1:8095';
+  return Env.BASE_URI;
 });
 
 /// Jeton d’auth du chatbot (bearer)

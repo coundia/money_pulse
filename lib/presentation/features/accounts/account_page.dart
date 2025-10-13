@@ -17,6 +17,7 @@ import 'package:money_pulse/domain/accounts/entities/account.dart';
 import 'package:money_pulse/domain/accounts/repositories/account_repository.dart';
 import 'package:money_pulse/domain/accounts/entities/account_user.dart';
 
+import '../../../shared/constants/env.dart';
 import 'account_repo_provider.dart';
 import 'account_share_screen.dart';
 import 'providers/account_list_providers.dart';
@@ -147,7 +148,7 @@ class _AccountListPageState extends ConsumerState<AccountListPage> {
   Future<void> _syncWithServer() async {
     try {
       final market = ref.read(
-        accountMarketplaceRepoProvider('http://127.0.0.1:8095'),
+        accountMarketplaceRepoProvider(Env.BASE_URI),
       );
       final n = await market.pullAndReconcileList();
       ref.invalidate(accountListProvider);
@@ -189,7 +190,7 @@ class _AccountListPageState extends ConsumerState<AccountListPage> {
             ((acc.code ?? '').trim().isNotEmpty);
         if (hasRemote) {
           final market = ref.read(
-            accountMarketplaceRepoProvider('http://127.0.0.1:8095'),
+            accountMarketplaceRepoProvider(Env.BASE_URI),
           );
           await market.deleteRemoteThenLocal(acc);
         } else {
@@ -257,7 +258,7 @@ class _AccountListPageState extends ConsumerState<AccountListPage> {
         onShare: () => _share(a),
         onSaveRemote: () async {
           final market = ref.read(
-            accountMarketplaceRepoProvider('http://127.0.0.1:8095'),
+            accountMarketplaceRepoProvider(Env.BASE_URI),
           );
           await market.saveAndReconcile(a);
           if (context.mounted) {

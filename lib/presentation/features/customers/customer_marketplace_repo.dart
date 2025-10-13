@@ -4,7 +4,7 @@
 // now WITH dynamic headers (Authorization / API Key / Tenant) pulled from
 // Riverpod providers (see bottom of file). Works for GET/POST/PUT/DELETE.
 //
-// Base URL example: http://127.0.0.1:8095
+// Base URL example: https://cloud.megastore.sn
 import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';

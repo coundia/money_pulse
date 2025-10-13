@@ -3,11 +3,12 @@
 import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
+import '../../shared/constants/env.dart';
 import '../domain/entities/order_command_request.dart';
 
 class OrderCommandRepository {
   final String baseUri;
-  const OrderCommandRepository({this.baseUri = 'http://127.0.0.1:8095'});
+  const OrderCommandRepository({this.baseUri = Env.BASE_URI});
 
   Uri get _endpoint => Uri.parse('$baseUri/api/public/add/order');
 

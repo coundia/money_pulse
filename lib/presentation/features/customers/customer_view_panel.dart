@@ -9,6 +9,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:money_pulse/presentation/features/customers/customer_edit_panel.dart';
 import '../../../domain/customer/entities/customer.dart';
+import '../../../shared/constants/env.dart';
 import 'providers/customer_detail_providers.dart';
 import 'providers/customer_list_providers.dart';
 import 'widgets/customer_linked_section.dart';
@@ -41,7 +42,7 @@ class CustomerViewPanel extends ConsumerWidget {
   ) async {
     try {
       final market = ref.read(
-        customerMarketplaceRepoProvider('http://127.0.0.1:8095'),
+        customerMarketplaceRepoProvider(Env.BASE_URI),
       );
       await market.saveAndReconcile(c);
       await _refreshAll(ref);

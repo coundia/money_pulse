@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../infrastructure/company/repositories/company_marketplace_repo_provider.dart';
+import '../../../shared/constants/env.dart';
 import '../../app/providers/company_repo_provider.dart';
 import 'providers/company_detail_providers.dart';
 // ⚠️ Adapte ce chemin si nécessaire pour atteindre le provider du repo marketplace.
@@ -14,7 +15,7 @@ class CompanyDeletePanel extends ConsumerStatefulWidget {
   const CompanyDeletePanel({
     super.key,
     required this.companyId,
-    this.marketplaceBaseUri = 'http://127.0.0.1:8095',
+    this.marketplaceBaseUri = Env.BASE_URI,
   });
 
   @override

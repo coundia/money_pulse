@@ -9,6 +9,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'package:money_pulse/presentation/shared/formatters.dart';
+import '../../../shared/constants/env.dart';
 import 'providers/company_detail_providers.dart';
 
 import 'package:money_pulse/presentation/widgets/right_drawer.dart';
@@ -22,10 +23,11 @@ import 'package:money_pulse/presentation/app/providers/company_repo_provider.dar
 class CompanyViewPanel extends ConsumerWidget {
   final String companyId;
   final String marketplaceBaseUri;
+
   const CompanyViewPanel({
     super.key,
     required this.companyId,
-    this.marketplaceBaseUri = 'http://127.0.0.1:8095',
+    this.marketplaceBaseUri = Env.BASE_URI,
   });
 
   @override

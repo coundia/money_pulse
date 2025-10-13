@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../domain/customer/entities/customer.dart';
+import '../../../shared/constants/env.dart';
 import 'providers/customer_list_providers.dart';
 import 'widgets/active_filters_bar.dart';
 import 'widgets/customer_tile.dart';
@@ -44,7 +45,7 @@ class _CustomerListPageState extends ConsumerState<CustomerListPage> {
   Future<void> _syncWithServer() async {
     try {
       final market = ref.read(
-        customerMarketplaceRepoProvider('http://127.0.0.1:8095'),
+        customerMarketplaceRepoProvider(Env.BASE_URI),
       );
       final n = await market.pullAndReconcileList();
       _refresh();

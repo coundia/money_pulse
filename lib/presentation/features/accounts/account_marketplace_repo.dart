@@ -18,7 +18,6 @@ import 'package:money_pulse/domain/accounts/repositories/account_repository.dart
 import 'package:money_pulse/presentation/features/accounts/account_repo_provider.dart';
 import 'package:money_pulse/sync/infrastructure/sync_headers_provider.dart';
 
-/// DI: fournir la baseUri (ex: 'http://127.0.0.1:8095')
 final accountMarketplaceRepoProvider =
     Provider.family<AccountMarketplaceRepo, String>((ref, baseUri) {
       final httpClient = http.Client();

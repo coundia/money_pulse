@@ -2,6 +2,7 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:http/http.dart' as http;
 import '../../../application/register_with_password_usecase.dart';
+import '../../../shared/constants/env.dart';
 import '../../application/forgot_password_usecase.dart';
 import '../../application/login_with_password_usecase.dart';
 import '../../application/reset_password_usecase.dart';
@@ -15,7 +16,7 @@ final accessRepoProvider = Provider<AccessRepository>((ref) {
   final baseUri = Uri.parse(
     const String.fromEnvironment(
       'API_BASE_URL',
-      defaultValue: 'http://127.0.0.1:8095',
+      defaultValue: Env.BASE_URI,
     ),
   );
   return HttpAccessRepository(client: client, baseUri: baseUri);

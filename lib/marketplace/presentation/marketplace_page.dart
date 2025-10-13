@@ -12,6 +12,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'package:money_pulse/marketplace/presentation/order_quick_panel.dart';
 import '../../presentation/widgets/right_drawer.dart';
+import '../../shared/constants/env.dart';
 import '../../shared/formatters.dart';
 import '../application/marketplace_pager_controller.dart';
 import '../domain/entities/marketplace_item.dart';
@@ -26,7 +27,7 @@ import 'widgets/action_bubble.dart';
 
 class MarketplacePage extends ConsumerStatefulWidget {
   final String baseUri;
-  const MarketplacePage({super.key, this.baseUri = 'http://127.0.0.1:8095'});
+  const MarketplacePage({super.key, this.baseUri = Env.BASE_URI});
 
   @override
   ConsumerState<MarketplacePage> createState() => _MarketplacePageState();

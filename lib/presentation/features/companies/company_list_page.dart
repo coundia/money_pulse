@@ -54,7 +54,7 @@ class _CompanyListPageState extends ConsumerState<CompanyListPage> {
     final repo = ref.read(companyRepoProvider);
     final headerBuilder = ref.read(syncHeaderBuilderProvider);
     final uri = Uri.parse(
-      'http://127.0.0.1:8095/api/v1/queries/companies?page=0&limit=500',
+      'https://cloud.megastore.sn/api/v1/queries/companies?page=0&limit=500',
     );
 
     try {

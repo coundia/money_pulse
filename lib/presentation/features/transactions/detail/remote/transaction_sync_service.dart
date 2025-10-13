@@ -8,12 +8,13 @@ import 'package:http/http.dart' as http;
 
 import 'package:money_pulse/domain/transactions/entities/transaction_entry.dart';
 import 'package:money_pulse/presentation/app/providers.dart'; // syncHeaderBuilderProvider
+import '../../../../../shared/constants/env.dart';
 import '../../../../../sync/infrastructure/sync_headers_provider.dart';
 import '../../providers/transaction_list_providers.dart';
 import 'package:money_pulse/presentation/features/transactions/providers/transaction_detail_providers.dart';
 
 class TransactionSyncService {
-  static const String _baseUrl = 'http://127.0.0.1:8095';
+  static const String _baseUrl = Env.BASE_URI;
 
   static Uri _u(String path, [Map<String, String>? qp]) =>
       Uri.parse('$_baseUrl$path').replace(queryParameters: qp);

@@ -4,6 +4,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../shared/formatters.dart';
 import '../../presentation/widgets/right_drawer.dart';
+import '../../shared/constants/env.dart';
 import '../application/order_prefs_controller.dart';
 import '../domain/entities/marketplace_item.dart';
 import 'package:money_pulse/onboarding/presentation/providers/access_session_provider.dart';
@@ -19,7 +20,7 @@ class OrderQuickPanel extends ConsumerStatefulWidget {
   const OrderQuickPanel({
     super.key,
     required this.item,
-    this.baseUri = 'http://127.0.0.1:8095',
+    this.baseUri = Env.BASE_URI,
   });
 
   static const double suggestedWidthFraction = 0.62;

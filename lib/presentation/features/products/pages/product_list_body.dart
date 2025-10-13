@@ -13,6 +13,7 @@ import 'package:money_pulse/presentation/widgets/attachments_picker.dart';
 import 'package:money_pulse/presentation/widgets/right_drawer.dart';
 
 import '../../../../infrastructure/products/product_marketplace_repo_provider.dart';
+import '../../../../shared/constants/env.dart';
 import '../../../app/providers.dart';
 import '../product_file_repo_provider.dart';
 import '../product_repo_provider.dart';
@@ -40,7 +41,7 @@ class ProductListBody extends ConsumerStatefulWidget {
 }
 
 class ProductListBodyState extends ConsumerState<ProductListBody> {
-  static const String _marketplaceBaseUri = 'http://127.0.0.1:8095';
+  static const String _marketplaceBaseUri = Env.BASE_URI;
 
   late final ProductRepository _repo = ref.read(productRepoProvider);
   late final dynamic _fileRepo;
