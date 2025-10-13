@@ -1,8 +1,9 @@
 // File: lib/presentation/features/chatbot/pages/chatbot_page.dart
 // Screen scaffold that wires app bar, banner, message list and input bar together.
-// Uses showApiErrorSnackBar to display clean error messages and attaches default accountId.
-// NOTE: When leaving this page (system back or app bar back), we mark the RefocusBus with
-// 'chatbot' and pop with a "refresh" result so the caller can optionally auto-refresh.
+// Uses the reusable ServerUnavailable.showSnackBar for clear user messaging on server failures,
+// and attaches default accountId safely (snapshot-based).
+// When leaving this page (system back or app bar back), we mark the RefocusBus with 'chatbot'
+// and pop with a "refresh" result so the caller can optionally auto-refresh.
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -20,8 +21,7 @@ import 'package:money_pulse/presentation/app/account_selection.dart'
     show ensureSelectedAccountProvider, selectedAccountIdProvider;
 
 import 'package:money_pulse/presentation/navigation/refocus_bus.dart';
-
-import '../../../shared/api_error_toast.dart';
+import 'package:money_pulse/shared/server_unavailable.dart';
 
 class ChatbotPage extends ConsumerStatefulWidget {
   const ChatbotPage({super.key});
@@ -65,7 +65,30 @@ class _ChatbotPageState extends ConsumerState<ChatbotPage> {
       if (grant?.token != null && grant!.token.isNotEmpty) {
         final ctrl = ref.read(chatbotControllerProvider.notifier);
         ctrl.setTokenSnapshot(grant.token);
-        await ctrl.refresh();
+        try {
+          await ctrl.refresh();
+        } catch (e, st) {
+          if (!mounted) return;
+          ServerUnavailable.showSnackBar(
+            context,
+            e,
+            stackTrace: st,
+            where: 'ChatbotPage.bootstrap.refresh',
+            actionLabel: 'Réessayer',
+            onAction: () async {
+              try {
+                await ctrl.refresh();
+              } catch (e2, st2) {
+                ServerUnavailable.showSnackBar(
+                  context,
+                  e2,
+                  stackTrace: st2,
+                  where: 'ChatbotPage.bootstrap.refresh.retry',
+                );
+              }
+            },
+          );
+        }
       }
     });
   }
@@ -93,12 +116,32 @@ class _ChatbotPageState extends ConsumerState<ChatbotPage> {
     final state = ref.watch(chatbotControllerProvider);
     final grant = ref.watch(accessSessionProvider);
 
-    // Post-frame UI effects
+    // Post-frame UI effects (autoscroll; error toast via reusable server-unavailable)
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
+
+      // Display a generic "server unavailable" message if controller surfaces a friendly error
       if ((state.error ?? '').isNotEmpty) {
-        showApiErrorSnackBar(context, state.error!);
+        ServerUnavailable.showSnackBar(
+          context,
+          state.error!,
+          where: 'ChatbotPage.frame.error',
+          actionLabel: 'Réessayer',
+          onAction: () async {
+            try {
+              await ref.read(chatbotControllerProvider.notifier).refresh();
+            } catch (e2, st2) {
+              ServerUnavailable.showSnackBar(
+                context,
+                e2,
+                stackTrace: st2,
+                where: 'ChatbotPage.frame.error.retry',
+              );
+            }
+          },
+        );
       }
+
       if (_scrollCtrl.hasClients) {
         _scrollCtrl.animateTo(
           _scrollCtrl.position.maxScrollExtent,
@@ -126,7 +169,30 @@ class _ChatbotPageState extends ConsumerState<ChatbotPage> {
                 ctrl.setTokenSnapshot(g.token); // snapshot-safe
               }
             }
-            await ctrl.refresh();
+            try {
+              await ctrl.refresh();
+            } catch (e, st) {
+              if (!mounted) return;
+              ServerUnavailable.showSnackBar(
+                context,
+                e,
+                stackTrace: st,
+                where: 'ChatbotPage.appbar.refresh',
+                actionLabel: 'Réessayer',
+                onAction: () async {
+                  try {
+                    await ctrl.refresh();
+                  } catch (e2, st2) {
+                    ServerUnavailable.showSnackBar(
+                      context,
+                      e2,
+                      stackTrace: st2,
+                      where: 'ChatbotPage.appbar.refresh.retry',
+                    );
+                  }
+                },
+              );
+            }
           },
         ),
         body: Column(
@@ -138,13 +204,36 @@ class _ChatbotPageState extends ConsumerState<ChatbotPage> {
                   if (g?.token != null && g!.token.isNotEmpty) {
                     final ctrl = ref.read(chatbotControllerProvider.notifier);
                     ctrl.setTokenSnapshot(g.token); // snapshot-safe
-                    await ctrl.refresh();
-                    if (!mounted) return;
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(
-                        content: Text('Connecté. Vous pouvez discuter.'),
-                      ),
-                    );
+                    try {
+                      await ctrl.refresh();
+                      if (!mounted) return;
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(
+                          content: Text('Connecté. Vous pouvez discuter.'),
+                        ),
+                      );
+                    } catch (e, st) {
+                      if (!mounted) return;
+                      ServerUnavailable.showSnackBar(
+                        context,
+                        e,
+                        stackTrace: st,
+                        where: 'ChatbotPage.connectBanner.refresh',
+                        actionLabel: 'Réessayer',
+                        onAction: () async {
+                          try {
+                            await ctrl.refresh();
+                          } catch (e2, st2) {
+                            ServerUnavailable.showSnackBar(
+                              context,
+                              e2,
+                              stackTrace: st2,
+                              where: 'ChatbotPage.connectBanner.refresh.retry',
+                            );
+                          }
+                        },
+                      );
+                    }
                   }
                 },
               ),

@@ -1,4 +1,7 @@
+/// File: lib/presentation/features/settings/settings_page.dart
 /// Settings page including schema upgrade, and login/logout using right-drawer flow.
+/// Adds an "À propos" page with your information.
+
 import 'dart:io' show Platform;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -20,6 +23,7 @@ import '../../../sync/infrastructure/pull_providers.dart';
 import '../../app/app_exit/app_exit.dart';
 import '../products/product_list_page.dart';
 import 'widgets/confirm_panel.dart';
+import 'about_page.dart'; // <-- NEW
 
 class SettingsPage extends ConsumerStatefulWidget {
   const SettingsPage({super.key});
@@ -274,6 +278,15 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
                 leading: const Icon(Icons.info_outline_rounded),
                 title: const Text('Version de l’application'),
                 subtitle: Text(Formatters.dateFull(DateTime.now())),
+              ),
+              _divider(),
+              ListTile(
+                leading: const Icon(Icons.menu_book_rounded),
+                title: const Text('À propos'),
+                subtitle: const Text('Informations & contacts'),
+                onTap: () => Navigator.of(
+                  context,
+                ).push(MaterialPageRoute(builder: (_) => const AboutPage())),
               ),
               _divider(),
               ListTile(

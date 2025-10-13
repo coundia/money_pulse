@@ -47,7 +47,7 @@ class AutoRefreshOnFocus extends StatefulWidget {
     this.debounce = const Duration(milliseconds: 350),
     this.loggingEnabled = true,
     this.logTag = 'AutoRefreshOnFocus',
-    this.onlyWhenTag,
+    this.onlyWhenTag = 'chatbot',
   });
 
   @override
@@ -182,6 +182,7 @@ class _AutoRefreshOnFocusState extends State<AutoRefreshOnFocus>
           _log('trigger($reason) aborted — not mounted in postFrame');
           return;
         }
+
         await widget.onRefocus();
         _log('trigger($reason) — DONE');
       } catch (e, st) {

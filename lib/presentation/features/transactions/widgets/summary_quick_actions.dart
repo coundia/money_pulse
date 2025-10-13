@@ -163,26 +163,6 @@ class SummaryQuickActions extends StatelessWidget {
         }
 
         if (showNavShortcuts) {
-          if (showNavTransactionsButton) {
-            buttons.add(
-              _btn(
-                context,
-                label: 'Transactions',
-                icon: Icons.list_alt,
-                tone: Theme.of(context).colorScheme.primary,
-                onTap:
-                    onOpenTransactions ??
-                    () {
-                      HapticFeedback.selectionClick();
-                      Navigator.of(context).push(
-                        MaterialPageRoute(
-                          builder: (_) => const TransactionListPage(),
-                        ),
-                      );
-                    },
-              ),
-            );
-          }
           if (showNavPosButton) {
             buttons.add(
               _btn(
@@ -238,26 +218,6 @@ class SummaryQuickActions extends StatelessWidget {
                     );
                   }
                 },
-              ),
-            );
-          }
-          if (showNavStockButton) {
-            buttons.add(
-              _btn(
-                context,
-                label: 'Stock',
-                icon: Icons.inventory_rounded,
-                tone: Theme.of(context).colorScheme.primary,
-                onTap:
-                    onOpenStock ??
-                    () {
-                      HapticFeedback.selectionClick();
-                      Navigator.of(context).push(
-                        MaterialPageRoute(
-                          builder: (_) => const StockLevelListPage(),
-                        ),
-                      );
-                    },
               ),
             );
           }
