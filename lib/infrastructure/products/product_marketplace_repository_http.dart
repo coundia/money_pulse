@@ -157,35 +157,6 @@ class ProductMarketplaceRepositoryHttp implements ProductMarketplaceRepository {
     required Product product,
     required String statusesCode,
   }) async {
-    final uri = Uri.parse(
-      '$baseUri/api/v1/marketplace/${product.remoteId}/status',
-    );
-    final headers = _headers();
-    try {
-      final payload = {
-        'statuses': statusesCode,
-        'log': _clientLog(
-          endpoint: '/api/v1/marketplace/{id}/status',
-          action: 'changeRemoteStatus',
-          headers: headers,
-          extra: {'productRemoteId': product.remoteId},
-        ),
-      };
-
-      _devLogPayload('ProductMarketplaceRepositoryHttp', uri, payload);
-
-      final resp = await _http.post(
-        uri,
-        headers: {...headers, 'Content-Type': 'application/json'},
-        body: jsonEncode(payload),
-      );
-      if (resp.statusCode < 200 || resp.statusCode >= 300) _throwHttp(resp);
-    } on SocketException {
-      throw ApiException(
-        'Impossible de se connecter au serveur. Vérifiez votre connexion.',
-      );
-    } on TimeoutException {
-      throw ApiException('Délai dépassé. Réessayez plus tard.');
-    }
+    print("[#####changeRemoteStatus]");
   }
 }

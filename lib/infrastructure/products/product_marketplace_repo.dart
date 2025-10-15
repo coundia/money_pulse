@@ -1,6 +1,8 @@
-// Marketplace repo to publish/unpublish product and persist remoteId/status.
+// Product marketplace repo with structured dev logs and 'log' payload metadata for every API call.
+
 import 'dart:convert';
 import 'dart:io';
+import 'dart:developer' as dev;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:http/http.dart' as http;
 import 'package:http_parser/http_parser.dart';
@@ -16,10 +18,64 @@ class ProductMarketplaceRepo {
   final String baseUri;
   ProductMarketplaceRepo(this.ref, this.baseUri);
 
-  Future<Product> pushToMarketplace(Product product, List<File> images) async {
-    if (images.isEmpty) {
-      throw ArgumentError('Aucune image fournie');
+  Map<String, dynamic> _clientLog({
+    required String endpoint,
+    required String action,
+    Map<String, String>? headers,
+    Map<String, dynamic>? extra,
+  }) {
+    final now = DateTime.now().toUtc();
+    return {
+      'at': now.toIso8601String(),
+      'tzOffsetMin': DateTime.now().timeZoneOffset.inMinutes,
+      'platform': Platform.operatingSystem,
+      'platformVersion': Platform.operatingSystemVersion,
+      'dartVersion': Platform.version,
+      'endpoint': endpoint,
+      'action': action,
+      'headerUser': headers?['X-User-Id'] ?? headers?['x-user-id'],
+      'headerTenant': headers?['X-Tenant-Id'] ?? headers?['x-tenant-id'],
+      if (extra != null) ...extra,
+    };
+  }
+
+  void _logPost(String tag, Uri uri, Object payload) {
+    try {
+      final pretty = const JsonEncoder.withIndent('  ').convert(payload);
+      dev.log('POST→ $uri\n$pretty', name: tag);
+    } catch (_) {
+      dev.log('POST→ $uri\n$payload', name: tag);
     }
+  }
+
+  void _logPut(String tag, Uri uri, Object payload) {
+    try {
+      final pretty = const JsonEncoder.withIndent('  ').convert(payload);
+      dev.log('PUT→ $uri\n$pretty', name: tag);
+    } catch (_) {
+      dev.log('PUT→ $uri\n$payload', name: tag);
+    }
+  }
+
+  void _logResp(String tag, http.Response resp) {
+    final body = resp.body;
+    final head = 'HTTP ${resp.statusCode} ${resp.reasonPhrase ?? ''}';
+    if (body.isEmpty) {
+      dev.log('$head (empty body)', name: tag);
+      return;
+    }
+    try {
+      final pretty = const JsonEncoder.withIndent(
+        '  ',
+      ).convert(json.decode(body));
+      dev.log('$head\n$pretty', name: tag);
+    } catch (_) {
+      dev.log('$head\n$body', name: tag);
+    }
+  }
+
+  Future<Product> pushToMarketplace(Product product, List<File> images) async {
+    if (images.isEmpty) throw ArgumentError('Aucune image fournie');
     if ((product.remoteId ?? '').trim().isNotEmpty ||
         (product.statuses ?? '').toUpperCase() == 'PUBLISHED') {
       throw StateError('Le produit est déjà publié');
@@ -34,7 +90,22 @@ class ProductMarketplaceRepo {
     req.headers.addAll(headers);
 
     final companyRemote = await _resolveCompanyRemoteId(product.company);
-    final map = _buildProductMap(product, companyRemoteId: companyRemote);
+    final map = _buildProductMap(product, companyRemoteId: companyRemote)
+      ..['log'] = _clientLog(
+        endpoint: '/api/v1/marketplace',
+        action: 'pushToMarketplace',
+        headers: headers,
+        extra: {
+          'filesCount': images.length,
+          'productId': product.id,
+          'remoteId': product.remoteId,
+        },
+      );
+
+    _logPost('ProductMarketplaceRepo', uri, {
+      'product': map,
+      'files': '[${images.length}]',
+    });
 
     req.files.add(
       http.MultipartFile.fromString(
@@ -59,6 +130,8 @@ class ProductMarketplaceRepo {
 
     final streamed = await req.send().timeout(const Duration(seconds: 45));
     final resp = await http.Response.fromStream(streamed);
+    _logResp('ProductMarketplaceRepo', resp);
+
     if (resp.statusCode < 200 || resp.statusCode >= 300) {
       throw HttpException(
         'HTTP ${resp.statusCode} ${resp.reasonPhrase ?? ''} • ${resp.body}',
@@ -100,30 +173,44 @@ class ProductMarketplaceRepo {
 
     final companyRemote = await _resolveCompanyRemoteId(product.company);
 
-    final body = jsonEncode(
-      {
-        'remoteId': product.remoteId,
-        'localId': product.localId ?? product.id,
-        'code': product.code ?? product.id,
-        'name': product.name ?? product.code ?? 'Produit',
-        'description': product.description,
-        'barcode': product.barcode,
-        'unit': product.unitId,
-        'syncAt': DateTime.now().toUtc().toIso8601String(),
-        'category': product.categoryId,
-        'account': product.account,
-        'company': companyRemote ?? product.company,
-        'defaultPrice': product.defaultPrice,
-        'statuses': statusesCode,
-        'purchasePrice': product.purchasePrice,
-        'level': product.levelId,
-        'quantity': product.quantity,
-        'hasSold': product.hasSold == 1,
-        'hasPrice': product.hasPrice == 1,
-      }..removeWhere((k, v) => v == null),
-    );
+    final bodyMap = <String, dynamic>{
+      'remoteId': product.remoteId,
+      'localId': product.localId ?? product.id,
+      'code': product.code ?? product.id,
+      'name': product.name ?? product.code ?? 'Produit',
+      'description': product.description,
+      'barcode': product.barcode,
+      'unit': product.unitId,
+      'syncAt': DateTime.now().toUtc().toIso8601String(),
+      'category': product.categoryId,
+      'account': product.account,
+      'company': companyRemote ?? product.company,
+      'defaultPrice': product.defaultPrice,
+      'statuses': statusesCode,
+      'purchasePrice': product.purchasePrice,
+      'level': product.levelId,
+      'quantity': product.quantity,
+      'hasSold': product.hasSold == 1,
+      'hasPrice': product.hasPrice == 1,
+      'log': _clientLog(
+        endpoint: '/api/v1/commands/product/{id}',
+        action: 'changeRemoteStatus',
+        headers: headers,
+        extra: {
+          'productId': product.id,
+          'remoteId': product.remoteId,
+          'newStatuses': statusesCode,
+        },
+      ),
+    }..removeWhere((k, v) => v == null);
+
+    final body = jsonEncode(bodyMap);
+
+    _logPut('ProductMarketplaceRepo', uri, bodyMap);
 
     final resp = await http.put(uri, headers: headers, body: body);
+    _logResp('ProductMarketplaceRepo', resp);
+
     if (resp.statusCode < 200 || resp.statusCode >= 300) {
       throw HttpException(
         'HTTP ${resp.statusCode} ${resp.reasonPhrase ?? ''} • ${resp.body}',
@@ -250,9 +337,7 @@ class ProductMarketplaceRepo {
 
   Future<void> deleteRemote(Product product) async {
     final remoteId = (product.remoteId ?? '').trim();
-    if (remoteId.isEmpty) {
-      throw StateError('remoteId manquant pour ce produit');
-    }
+    if (remoteId.isEmpty) throw StateError('remoteId manquant pour ce produit');
 
     final uri = Uri.parse(_join(baseUri, '/api/v1/commands/product/$remoteId'));
 
@@ -262,7 +347,11 @@ class ProductMarketplaceRepo {
       'Content-Type': 'application/json',
     };
 
+    dev.log('DELETE→ $uri', name: 'ProductMarketplaceRepo');
+
     final resp = await http.delete(uri, headers: headers);
+    _logResp('ProductMarketplaceRepo', resp);
+
     if (resp.statusCode < 200 || resp.statusCode >= 300) {
       throw HttpException(
         'HTTP ${resp.statusCode} ${resp.reasonPhrase ?? ''} • ${resp.body}',
