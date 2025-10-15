@@ -1,5 +1,6 @@
-// Product list orchestration (page): create/update using ProductFormResult, preserves quantity/flags,
-// saves attachments, and refreshes list after view/edit/delete/adjust panels close. Ordered by updatedAt desc.
+// Product list orchestration (page): add "soldout" action to set quantity=0 locally
+// and push the full product snapshot to the API (PUT /commands/product/{remoteId})
+// using current statuses. Shows snackbars and refreshes the list.
 
 import 'dart:io';
 import 'dart:developer' as dev;
@@ -254,6 +255,52 @@ class ProductListBodyState extends ConsumerState<ProductListBody> {
     }
   }
 
+  // ✅ NEW: marquer épuisé (quantity=0) + push API (avec statuses courant)
+  Future<void> _markSoldOut(Product p) async {
+    try {
+      final now = DateTime.now();
+      final updated = p.copyWith(quantity: 0, updatedAt: now, isDirty: 1);
+
+      dev.log(
+        '[SoldOut] set quantity=0 (local) for id=${p.id}, remoteId=${p.remoteId}',
+        name: 'ProductListBody',
+      );
+
+      await _repo.update(updated);
+
+      final remoteId = (updated.remoteId ?? '').trim();
+      if (remoteId.isNotEmpty) {
+        // Pousse un snapshot complet avec la quantité 0, en conservant le statuses actuel
+        final statusesCode = (updated.statuses ?? 'PUBLISH');
+        dev.log(
+          '[SoldOut] push API PUT with qty=0, statuses=$statusesCode, remoteId=$remoteId',
+          name: 'ProductListBody',
+        );
+        await _marketRepo.changeRemoteStatus(
+          product: updated,
+          statusesCode: statusesCode,
+        );
+      } else {
+        dev.log(
+          '[SoldOut] no remoteId -> only local quantity=0 applied',
+          name: 'ProductListBody',
+        );
+      }
+
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Produit marqué comme épuisé.')),
+      );
+      ref.invalidate(productsFutureProvider);
+    } catch (e) {
+      dev.log('[SoldOut] error: $e', name: 'ProductListBody');
+      if (!mounted) return;
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('Erreur “épuisé”: $e')));
+    }
+  }
+
   Future<void> _view(Product p) async {
     _unfocus();
     final shouldRefresh = await Navigator.push<bool>(
@@ -352,6 +399,9 @@ class ProductListBodyState extends ConsumerState<ProductListBody> {
                       break;
                     case 'adjust':
                       await _openAdjust(p);
+                      break;
+                    case 'soldout': // ✅ NEW
+                      await _markSoldOut(p);
                       break;
                     case 'delete':
                       await _confirmDelete(p);
