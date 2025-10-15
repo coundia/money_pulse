@@ -1,5 +1,5 @@
-// Product list orchestration (page): applies all ProductFormResult fields on create & update,
-// including quantity, hasSold, hasPrice, company & level; adds debug logs for before/after.
+// Product list orchestration (page): create/update using ProductFormResult, preserves quantity/flags,
+// saves attachments, and refreshes list after view/edit/delete/adjust panels close. Ordered by updatedAt desc.
 
 import 'dart:io';
 import 'dart:developer' as dev;
@@ -134,7 +134,6 @@ class ProductListBodyState extends ConsumerState<ProductListBody> {
     final now = DateTime.now();
 
     if (existing == null) {
-      // CREATE
       final p = Product(
         id: const Uuid().v4(),
         remoteId: null,
@@ -148,8 +147,8 @@ class ProductListBodyState extends ConsumerState<ProductListBody> {
         account: null,
         company: res.companyId,
         levelId: res.levelId,
-        quantity: res.quantity, // ✅ apply quantity
-        hasSold: res.hasSold ? 1 : 0, // ✅ apply flags
+        quantity: res.quantity,
+        hasSold: res.hasSold ? 1 : 0,
         hasPrice: res.hasPrice ? 1 : 0,
         defaultPrice: res.priceCents,
         purchasePrice: res.purchasePriceCents,
@@ -171,7 +170,6 @@ class ProductListBodyState extends ConsumerState<ProductListBody> {
       await _repo.create(p);
       await _saveFormFiles(p.id, res.files, _fileRepo);
     } else {
-      // UPDATE (fix: also update quantity, flags, level & company)
       dev.log(
         'UPDATE before qty=${existing.quantity} → form qty=${res.quantity}',
         name: 'ProductListBody',
@@ -189,8 +187,8 @@ class ProductListBodyState extends ConsumerState<ProductListBody> {
         updatedAt: now,
         company: res.companyId,
         levelId: res.levelId,
-        quantity: res.quantity, // ✅ FIX: propagate quantity
-        hasSold: res.hasSold ? 1 : 0, // ✅ FIX: propagate flags
+        quantity: res.quantity,
+        hasSold: res.hasSold ? 1 : 0,
         hasPrice: res.hasPrice ? 1 : 0,
         isDirty: 1,
       );
@@ -224,23 +222,6 @@ class ProductListBodyState extends ConsumerState<ProductListBody> {
     }
   }
 
-  Future<void> _view(Product p) async {
-    _unfocus();
-    await Navigator.push(
-      context,
-      MaterialPageRoute(
-        builder: (_) => ProductViewPanel(
-          product: p,
-          marketplaceBaseUri: _marketplaceBaseUri,
-          onEdit: () async => _addOrEdit(existing: p),
-          onDelete: () async => _confirmDelete(p),
-          onShare: () => _share(p),
-          onAdjust: () async => _openAdjust(p),
-        ),
-      ),
-    );
-  }
-
   Future<void> _share(Product p) async {
     final text = [
       'Produit: ${p.name ?? p.code ?? '—'}',
@@ -269,6 +250,26 @@ class ProductListBodyState extends ConsumerState<ProductListBody> {
       ScaffoldMessenger.of(
         context,
       ).showSnackBar(const SnackBar(content: Text('Stock ajusté.')));
+      ref.invalidate(productsFutureProvider);
+    }
+  }
+
+  Future<void> _view(Product p) async {
+    _unfocus();
+    final shouldRefresh = await Navigator.push<bool>(
+      context,
+      MaterialPageRoute(
+        builder: (_) => ProductViewPanel(
+          product: p,
+          marketplaceBaseUri: _marketplaceBaseUri,
+          onEdit: () async => _addOrEdit(existing: p),
+          onDelete: () async => _confirmDelete(p),
+          onShare: () => _share(p),
+          onAdjust: () async => _openAdjust(p),
+        ),
+      ),
+    );
+    if (shouldRefresh == true && mounted) {
       ref.invalidate(productsFutureProvider);
     }
   }
@@ -333,6 +334,7 @@ class ProductListBodyState extends ConsumerState<ProductListBody> {
                 subtitle: sub.isEmpty ? null : sub,
                 priceCents: p.defaultPrice,
                 statuses: p.statuses,
+                remoteId: p.remoteId,
                 imageUrl: null,
                 onTap: () => _view(p),
                 onMenuAction: (action) async {
@@ -342,9 +344,11 @@ class ProductListBodyState extends ConsumerState<ProductListBody> {
                       break;
                     case 'edit':
                       await _addOrEdit(existing: p);
+                      ref.invalidate(productsFutureProvider);
                       break;
                     case 'duplicate':
                       await _addOrEdit(existing: p);
+                      ref.invalidate(productsFutureProvider);
                       break;
                     case 'adjust':
                       await _openAdjust(p);

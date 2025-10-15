@@ -1,8 +1,11 @@
 // Right-drawer product view with live refresh after edit; uses a provider to reload
-// the product from DB. Expects `onEdit` to be an async callback (Future<void> Function()).
+// the product from DB. Shows remoteId only in debug builds (kDebugMode) and provides
+// an action to copy it to clipboard in any build variant.
 
 import 'dart:io';
+import 'package:flutter/foundation.dart' show kDebugMode;
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 import 'package:money_pulse/domain/products/entities/product.dart';
@@ -39,7 +42,7 @@ class ProductViewPanel extends ConsumerWidget {
   final String? categoryLabel;
   final String marketplaceBaseUri;
 
-  // ⬇️ Fix: make this an async callback so we can `await` it
+  // Async edit callback (awaited) to refresh after returning from edit flow
   final Future<void> Function()? onEdit;
   final VoidCallback? onDelete;
   final VoidCallback? onShare;
@@ -73,9 +76,23 @@ class ProductViewPanel extends ConsumerWidget {
 
     Future<void> _editAndRefresh() async {
       if (onEdit != null) {
-        await onEdit!.call(); // ✅ await the async edit flow
-        ref.invalidate(_productByIdProvider(product.id)); // 🔄 refresh
+        await onEdit!.call();
+        ref.invalidate(_productByIdProvider(product.id));
       }
+    }
+
+    Future<void> _copyRemoteId() async {
+      final id = (p.remoteId ?? '').trim();
+      if (id.isEmpty) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Aucun identifiant distant.')),
+        );
+        return;
+      }
+      await Clipboard.setData(ClipboardData(text: id));
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('Identifiant copié.')));
     }
 
     return Scaffold(
@@ -101,6 +118,12 @@ class ProductViewPanel extends ConsumerWidget {
             onPressed: onAdjust,
             icon: const Icon(Icons.inventory_2_outlined),
             tooltip: 'Ajuster le stock',
+          ),
+          // Action accessible partout: copie du remoteId (sans l’afficher en prod)
+          IconButton(
+            onPressed: _copyRemoteId,
+            icon: const Icon(Icons.copy_all_outlined),
+            tooltip: 'Copier l’ID distant',
           ),
           IconButton(
             onPressed: onDelete,
@@ -155,6 +178,17 @@ class ProductViewPanel extends ConsumerWidget {
                     'Créé: $created • Modifié: $updated',
                     style: Theme.of(context).textTheme.bodySmall,
                   ),
+                  // ⬇️ N’affiche l’ID que en debug (pour respecter la consigne en prod)
+                  if (kDebugMode && (p.remoteId ?? '').trim().isNotEmpty) ...[
+                    const SizedBox(height: 8),
+                    SelectableText(
+                      'ID : ${p.remoteId}',
+                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                        fontFeatures: const [FontFeature.tabularFigures()],
+                        fontFamily: 'monospace',
+                      ),
+                    ),
+                  ],
                 ],
               );
 

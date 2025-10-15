@@ -182,9 +182,7 @@ class ProductTile extends StatelessWidget {
         ),
 
         // Optional subtitle (one-liner)
-        subtitle: (subtitle == null || subtitle!.trim().isEmpty)
-            ? null
-            : Text(subtitle!, maxLines: 1, overflow: TextOverflow.ellipsis),
+        subtitle: null,
 
         trailing: Column(
           mainAxisAlignment: MainAxisAlignment.center,

@@ -107,11 +107,8 @@ class _ProductFormPanelState extends ConsumerState<ProductFormPanel> {
   List<PickedAttachment> _files = const [];
 
   static const List<(String, String)> _statusOptions = <(String, String)>[
-    ('ACTIVE', 'Actif'),
-    ('PROMO', 'Promotion'),
-    ('ARCHIVED', 'Archivé'),
+    ('ACTIVE', 'Local'),
     ('PUBLISH', 'À publier'),
-    ('PUBLISHED', 'Publié'),
     ('UNPUBLISH', 'Retiré'),
   ];
 
