@@ -1,4 +1,4 @@
-// Right-drawer product view with stock chip: shows quantity in a chip alongside prices and category.
+// Right-drawer product view; responsive header using Row/Column (no Flexible inside Wrap) and shows stock quantity.
 
 import 'dart:io';
 import 'package:flutter/material.dart';
@@ -94,6 +94,110 @@ class ProductViewPanel extends ConsumerWidget {
         builder: (context, bc) {
           final maxW = 980.0;
           final side = bc.maxWidth > maxW ? (bc.maxWidth - maxW) / 2 : 0.0;
+          final isNarrow = bc.maxWidth < 640;
+
+          Widget infoColumn = Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                p.name ?? 'Produit',
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: Theme.of(context).textTheme.titleLarge,
+              ),
+              if ((p.description ?? '').isNotEmpty)
+                Padding(
+                  padding: const EdgeInsets.only(top: 6),
+                  child: Text(
+                    p.description!,
+                    maxLines: 3,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
+              const SizedBox(height: 8),
+              Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                children: [
+                  Chip(label: Text('PU: $price')),
+                  if (priceBuy != null) Chip(label: Text('Achat: $priceBuy')),
+                  Chip(label: Text('Stock: $qty')),
+                  if ((categoryLabel ?? '').isNotEmpty)
+                    Chip(label: Text('Catégorie: $categoryLabel')),
+                ],
+              ),
+              const SizedBox(height: 6),
+              Text(
+                'Créé: $created • Modifié: $updated',
+                style: Theme.of(context).textTheme.bodySmall,
+              ),
+            ],
+          );
+
+          Widget publishActions = imagesAsync.when(
+            data: (imgs) => ProductPublishActions(
+              product: p,
+              baseUri: marketplaceBaseUri,
+              images: imgs,
+              onChanged: () => Navigator.of(context).maybePop(true),
+            ),
+            loading: () => const Padding(
+              padding: EdgeInsets.symmetric(horizontal: 8),
+              child: SizedBox(
+                width: 24,
+                height: 24,
+                child: CircularProgressIndicator(strokeWidth: 2),
+              ),
+            ),
+            error: (e, _) => Text('Erreur images: $e'),
+          );
+
+          Widget header;
+          if (isNarrow) {
+            // Column layout on small screens (no Flexible in Wrap)
+            header = Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    CircleAvatar(
+                      radius: 24,
+                      child: Text(
+                        (p.name?.isNotEmpty == true
+                                ? p.name!.characters.first
+                                : 'P')
+                            .toUpperCase(),
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(child: infoColumn),
+                  ],
+                ),
+                const SizedBox(height: 12),
+                Align(alignment: Alignment.centerLeft, child: publishActions),
+              ],
+            );
+          } else {
+            // Row layout on wide screens (legal Flexible/Expanded usage)
+            header = Row(
+              crossAxisAlignment: CrossAxisAlignment.center,
+              children: [
+                CircleAvatar(
+                  radius: 24,
+                  child: Text(
+                    (p.name?.isNotEmpty == true
+                            ? p.name!.characters.first
+                            : 'P')
+                        .toUpperCase(),
+                  ),
+                ),
+                const SizedBox(width: 16),
+                Expanded(child: infoColumn),
+                const SizedBox(width: 12),
+                publishActions,
+              ],
+            );
+          }
 
           return ListView(
             padding: EdgeInsets.fromLTRB(side + 16, 16, side + 16, 24),
@@ -101,83 +205,7 @@ class ProductViewPanel extends ConsumerWidget {
               Card(
                 child: Padding(
                   padding: const EdgeInsets.all(16),
-                  child: Wrap(
-                    runSpacing: 10,
-                    spacing: 16,
-                    crossAxisAlignment: WrapCrossAlignment.center,
-                    children: [
-                      CircleAvatar(
-                        radius: 24,
-                        child: Text(
-                          (p.name?.isNotEmpty == true
-                                  ? p.name!.characters.first
-                                  : 'P')
-                              .toUpperCase(),
-                        ),
-                      ),
-                      Flexible(
-                        fit: FlexFit.loose,
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              p.name ?? 'Produit',
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                              style: Theme.of(context).textTheme.titleLarge,
-                            ),
-                            if ((p.description ?? '').isNotEmpty)
-                              Padding(
-                                padding: const EdgeInsets.only(top: 6),
-                                child: Text(
-                                  p.description!,
-                                  maxLines: 3,
-                                  overflow: TextOverflow.ellipsis,
-                                ),
-                              ),
-                            const SizedBox(height: 8),
-                            Wrap(
-                              spacing: 8,
-                              runSpacing: 8,
-                              children: [
-                                Chip(label: Text('PU: $price')),
-                                if (priceBuy != null)
-                                  Chip(label: Text('Achat: $priceBuy')),
-                                Chip(label: Text('Stock: $qty')),
-                                if ((categoryLabel ?? '').isNotEmpty)
-                                  Chip(
-                                    label: Text('Catégorie: $categoryLabel'),
-                                  ),
-                              ],
-                            ),
-                            const SizedBox(height: 6),
-                            Text(
-                              'Créé: $created • Modifié: $updated',
-                              style: Theme.of(context).textTheme.bodySmall,
-                            ),
-                          ],
-                        ),
-                      ),
-                      const SizedBox(width: 12),
-                      imagesAsync.when(
-                        data: (imgs) => ProductPublishActions(
-                          product: p,
-                          baseUri: marketplaceBaseUri,
-                          images: imgs,
-                          onChanged: () => Navigator.of(context).maybePop(true),
-                        ),
-                        loading: () => const Padding(
-                          padding: EdgeInsets.symmetric(horizontal: 8),
-                          child: SizedBox(
-                            width: 24,
-                            height: 24,
-                            child: CircularProgressIndicator(strokeWidth: 2),
-                          ),
-                        ),
-                        error: (e, _) => Text('Erreur images: $e'),
-                      ),
-                    ],
-                  ),
+                  child: header,
                 ),
               ),
               const SizedBox(height: 12),

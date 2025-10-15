@@ -1,10 +1,4 @@
-// Vertical marketplace feed with search and companies filter.
-// TikTok-like layout: top-left search, companies chips; each product shows a single image.
-// Bottom-left: "Message • <Boutique>" au-dessus des infos produit; à droite: bulle "Commander".
-// "Message" ouvre un drawer pour éditer puis enregistre via l'API (typeOrder="MESSAGE").
-// Si item.quantity == 0 => masquer "Commander" + badge "Rupture de stock".
-// Si item.defaultPrice <= 1 => masquer le prix.
-// Logs des interactions + payload API; "ALL" force un reload frais.
+// Vertical marketplace feed page with search, companies filter, lazy paging, image spinner, and drawer actions.
 
 import 'dart:ui';
 import 'package:flutter/material.dart';
@@ -17,8 +11,6 @@ import '../../shared/formatters.dart';
 import '../application/marketplace_pager_controller.dart';
 import '../domain/entities/marketplace_item.dart';
 import 'widgets/companies_chips_row.dart';
-
-// Panels / widgets découpés (SRP)
 import 'message_compose_panel.dart';
 import 'widgets/top_search_pill.dart';
 import 'widgets/product_info_compact.dart';
@@ -36,7 +28,6 @@ class MarketplacePage extends ConsumerStatefulWidget {
 class _MarketplacePageState extends ConsumerState<MarketplacePage> {
   final PageController _pageCtrl = PageController();
   final TextEditingController _searchCtrl = TextEditingController();
-
   String? _selectedCompanyId;
 
   @override
@@ -122,8 +113,6 @@ class _MarketplacePageState extends ConsumerState<MarketplacePage> {
                 return _buildProductPage(context, item);
               },
             ),
-
-          // Search pill
           Positioned(
             top: 8 + MediaQuery.of(context).padding.top,
             left: 8,
@@ -138,8 +127,6 @@ class _MarketplacePageState extends ConsumerState<MarketplacePage> {
               },
             ),
           ),
-
-          // Companies row
           Positioned(
             top: 56 + MediaQuery.of(context).padding.top,
             left: 0,
@@ -159,7 +146,6 @@ class _MarketplacePageState extends ConsumerState<MarketplacePage> {
               onRefreshAll: _refreshAll,
             ),
           ),
-
           if (state.isLoading)
             const Positioned(
               right: 16,
@@ -176,39 +162,56 @@ class _MarketplacePageState extends ConsumerState<MarketplacePage> {
   }
 
   Widget _buildProductPage(BuildContext context, MarketplaceItem item) {
-    final theme = Theme.of(context);
     final urls = item.imageUrls.where((e) => e.trim().isNotEmpty).toList();
     final firstUrl = urls.isNotEmpty ? urls.first : null;
     final safeBottom = MediaQuery.of(context).padding.bottom;
 
-    // Règles d’affichage
-    final int unitXof = item.defaultPrice; // prix unitaire en XOF (entier)
-    final bool showPrice = unitXof > 100; // <-- affiche SEULEMENT si > 1
-    final bool outOfStock =
-        (item.quantity ?? 0) <= 0; // si 0 => masquer “Commander” & informer
-
+    final int unitXof = item.defaultPrice;
+    final bool showPrice = unitXof > 1;
+    final bool outOfStock = (item.quantity ?? 0) <= 0;
     final bool hideCommandAndSold = outOfStock && !showPrice;
-
-    final String priceStr = showPrice
-        ? '${Formatters.amountFromCents(unitXof)} FCFA'
-        : '';
 
     return Stack(
       fit: StackFit.expand,
       children: [
         if (firstUrl != null)
-          FadeInImage.assetNetwork(
-            placeholder: 'assets/transparent_1px.png',
-            image: firstUrl,
+          Image.network(
+            firstUrl,
             fit: BoxFit.cover,
-            fadeInDuration: const Duration(milliseconds: 180),
-            imageErrorBuilder: (_, __, ___) =>
-                const ColoredBox(color: Colors.black),
+            frameBuilder: (context, child, frame, wasSyncLoaded) {
+              if (wasSyncLoaded) return child;
+              return AnimatedOpacity(
+                opacity: frame == null ? 0.0 : 1.0,
+                duration: const Duration(milliseconds: 220),
+                curve: Curves.easeOut,
+                child: child,
+              );
+            },
+            loadingBuilder: (context, child, loadingProgress) {
+              final isLoading = loadingProgress != null;
+              return Stack(
+                fit: StackFit.expand,
+                children: [
+                  const ColoredBox(color: Colors.black),
+                  if (!isLoading) child,
+                  if (isLoading)
+                    const Center(
+                      child: SizedBox(
+                        width: 28,
+                        height: 28,
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2.6,
+                          color: Colors.white70,
+                        ),
+                      ),
+                    ),
+                ],
+              );
+            },
+            errorBuilder: (_, __, ___) => const ColoredBox(color: Colors.black),
           )
         else
           const ColoredBox(color: Colors.black),
-
-        // Gradient overlays
         Container(
           decoration: BoxDecoration(
             gradient: LinearGradient(
@@ -223,8 +226,6 @@ class _MarketplacePageState extends ConsumerState<MarketplacePage> {
             ),
           ),
         ),
-
-        // Bottom bar: message+infos (gauche) / commander (droite ou badge rupture)
         Positioned(
           left: 12,
           right: 0,
@@ -232,7 +233,6 @@ class _MarketplacePageState extends ConsumerState<MarketplacePage> {
           child: Row(
             crossAxisAlignment: CrossAxisAlignment.end,
             children: [
-              // Left: infos + message (ouvre le drawer)
               Expanded(
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
@@ -240,14 +240,13 @@ class _MarketplacePageState extends ConsumerState<MarketplacePage> {
                   children: [
                     ProductInfoCompact(
                       name: item.name,
-                      priceStr:
-                          '${Formatters.amountFromCents(item.defaultPrice)} FCFA',
-                      priceXof: item
-                          .defaultPrice, // le prix s’affichera seulement si > 1
+                      priceStr: showPrice
+                          ? '${Formatters.amountFromCents(item.defaultPrice)} FCFA'
+                          : '',
+                      priceXof: item.defaultPrice,
                       description: item.description,
                       theme: Theme.of(context),
                     ),
-
                     const SizedBox(height: 8),
                     ShopMessagePill(
                       shopName: _shopName(item),
@@ -272,9 +271,6 @@ class _MarketplacePageState extends ConsumerState<MarketplacePage> {
                 ),
               ),
               const SizedBox(width: 12),
-
-              // Right: “Commander” (si dispo) sinon badge rupture —
-              // et si hideCommandAndSold == true, on masque totalement la zone de droite.
               if (hideCommandAndSold)
                 const SizedBox.shrink()
               else
@@ -318,12 +314,10 @@ class _MarketplacePageState extends ConsumerState<MarketplacePage> {
   }
 
   String _shopName(MarketplaceItem item) {
-    // TODO: si votre modèle expose le nom de la boutique: item.companyName ?? ...
     return 'Message • Boutique';
   }
 }
 
-// Petit badge “Rupture de stock” (à droite)
 class _OutOfStockBadge extends StatelessWidget {
   const _OutOfStockBadge();
 
@@ -360,7 +354,7 @@ class _OutOfStockBadge extends StatelessWidget {
           ),
         ),
         const SizedBox(height: 6),
-        const SizedBox(height: 18), // garde une hauteur proche de la bulle
+        const SizedBox(height: 18),
       ],
     );
   }
