@@ -1,5 +1,4 @@
 // File: lib/presentation/app/home/home_page.dart
-import 'dart:developer' as dev;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -58,39 +57,33 @@ class _HomePageState extends ConsumerState<HomePage>
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
-    dev.log('initState → restore session + preload data', name: 'HomePage');
     Future.microtask(() async {
       await ref.read(accessSessionProvider.notifier).restore();
       await HomeRefreshHook.onStartup(ref);
+
       await ref.read(transactionsProvider.notifier).load();
       await ref.read(categoriesProvider.notifier).load();
       await ref.read(ensureSelectedAccountProvider.future);
       ref.invalidate(selectedAccountProvider);
       ref.invalidate(transactionListItemsProvider);
-      dev.log('Bootstrap finished', name: 'HomePage');
     });
   }
 
   @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
-    dev.log('dispose()', name: 'HomePage');
     super.dispose();
   }
 
+  /// 🔁 Quand l’app revient en avant-plan, on rafraîchit
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (state == AppLifecycleState.resumed) {
-      dev.log('App resumed → refreshAll(remount: true)', name: 'HomePage');
       _refreshAll(remount: true);
     }
   }
 
   Future<void> _softReload() async {
-    dev.log(
-      '_softReload → reloading balances, categories, transactions',
-      name: 'HomePage',
-    );
     await ref.read(balanceProvider.notifier).load();
     await ref.read(categoriesProvider.notifier).load();
     await ref.read(transactionsProvider.notifier).load();
@@ -99,41 +92,32 @@ class _HomePageState extends ConsumerState<HomePage>
   }
 
   void _hardRemount() {
-    dev.log('_hardRemount → increment seed', name: 'HomePage');
     setState(() => _remountSeed++);
   }
 
   Future<void> _refreshAll({bool remount = true}) async {
-    dev.log('_refreshAll start', name: 'HomePage');
+    print("[_refreshAll]");
+
     setState(() => _isBusy = true);
     try {
       await HomeRefreshHook.onManualRefresh(ref);
-      //RestartApp.restart(context); // bug when upload image
-      dev.log('_refreshAll done (RestartApp)', name: 'HomePage');
-    } catch (e, st) {
-      dev.log(
-        'Error in _refreshAll',
-        name: 'HomePage',
-        error: e,
-        stackTrace: st,
-      );
+      RestartApp.restart(context);
     } finally {
       if (mounted) setState(() => _isBusy = false);
     }
   }
 
+  /// ✅ Helper qui ouvre une page et rafraîchit au retour
   Future<T?> _pushAndRefresh<T>(Widget page) async {
-    dev.log('push → ${page.runtimeType}', name: 'HomePage');
     final res = await Navigator.of(
       context,
     ).push<T>(MaterialPageRoute(builder: (_) => page));
-    dev.log('pop ← ${page.runtimeType}', name: 'HomePage');
+    // Au retour, on rafraîchit systématiquement
     await _refreshAll(remount: true);
     return res;
   }
 
   Future<void> _showAccountPicker() async {
-    dev.log('Opening account picker', name: 'HomePage');
     if (!mounted) return;
     final repo = ref.read(accountRepoProvider);
     final selectedIdPref = ref.read(selectedAccountIdProvider);
@@ -148,7 +132,11 @@ class _HomePageState extends ConsumerState<HomePage>
               (a) => a.id == (selectedIdPref ?? ''),
               orElse: () => list.first,
             );
-            await repo.update(target.copyWith(isDefault: true));
+            try {
+              await repo.setDefault(target.id);
+            } catch (_) {
+              await repo.update(target.copyWith(isDefault: true));
+            }
             return await repo.findAllActive();
           }
           return list;
@@ -161,7 +149,6 @@ class _HomePageState extends ConsumerState<HomePage>
     );
 
     if (picked != null) {
-      dev.log('Picked account: ${picked.code}', name: 'HomePage');
       try {
         await repo.setDefault(picked.id);
       } catch (_) {
@@ -176,14 +163,12 @@ class _HomePageState extends ConsumerState<HomePage>
   }
 
   Future<void> _showPeriodSheet() async {
-    dev.log('Opening period picker', name: 'HomePage');
     final state = ref.read(transactionListStateProvider);
     final sel = await showPeriodPickerSheet(
       context: context,
       current: state.period,
     );
     if (sel != null) {
-      dev.log('Period selected: $sel', name: 'HomePage');
       ref.read(transactionListStateProvider.notifier).setPeriod(sel);
       ref.invalidate(transactionListItemsProvider);
       _hardRemount();
@@ -191,7 +176,6 @@ class _HomePageState extends ConsumerState<HomePage>
   }
 
   Future<void> openSummaryPrefs() async {
-    dev.log('Open SummaryCardPrefsPanel', name: 'HomePage');
     await showRightDrawer(
       context,
       child: const SummaryCardPrefsPanel(),
@@ -201,7 +185,6 @@ class _HomePageState extends ConsumerState<HomePage>
   }
 
   Future<void> openUiPrefs() async {
-    dev.log('Open HomeUiPrefsPanel', name: 'HomePage');
     await showRightDrawer(
       context,
       child: const HomeUiPrefsPanel(),
@@ -211,7 +194,6 @@ class _HomePageState extends ConsumerState<HomePage>
   }
 
   Future<void> _runPullAndPush() async {
-    dev.log('Start pull + push full sync', name: 'HomePage');
     await _runPullAndUpdateRemoteIdOnly();
     await _runSyncAll();
     await _runPullAll();
@@ -235,13 +217,7 @@ class _HomePageState extends ConsumerState<HomePage>
       final adopted = await port.adoptRemoteIds(items);
       logger.info('Adopt remoteId: adopted=$adopted row(s)');
     } catch (e, st) {
-      logger.error('UI: adopt remoteId failed', e, st);
-      dev.log(
-        'Adopt remoteId failed',
-        name: 'HomePage',
-        error: e,
-        stackTrace: st,
-      );
+      ref.read(syncLoggerProvider).error('UI: adopt remoteId failed', e, st);
       if (!mounted) return;
       ScaffoldMessenger.of(
         context,
@@ -250,17 +226,15 @@ class _HomePageState extends ConsumerState<HomePage>
   }
 
   Future<void> _runSyncAll() async {
-    dev.log('Trigger syncAll', name: 'HomePage');
     final ok = await requireAccess(context, ref);
     if (!mounted || !ok) return;
     final logger = ref.read(syncLoggerProvider);
     logger.info('************** PUSH *****');
     try {
+      logger.info('UI: trigger syncAll');
       await syncAllTables(ref);
-      logger.info('UI: syncAll completed');
     } catch (e, st) {
       logger.error('UI: syncAll failed', e, st);
-      dev.log('SyncAll failed', name: 'HomePage', error: e, stackTrace: st);
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Erreur de synchronisation')),
@@ -269,10 +243,9 @@ class _HomePageState extends ConsumerState<HomePage>
   }
 
   Future<void> _runPullAll() async {
-    dev.log('Trigger pullAll', name: 'HomePage');
     try {
+      ref.read(syncLoggerProvider).info('UI: trigger pullAll');
       final sum = await pullAllTables(ref);
-      dev.log('PullAll done: ${sum.toString()}', name: 'HomePage');
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
@@ -282,7 +255,6 @@ class _HomePageState extends ConsumerState<HomePage>
         ),
       );
     } catch (e, st) {
-      dev.log('PullAll failed', name: 'HomePage', error: e, stackTrace: st);
       ref.read(syncLoggerProvider).error('UI: pullAll failed', e, st);
       if (!mounted) return;
       ScaffoldMessenger.of(
@@ -292,21 +264,21 @@ class _HomePageState extends ConsumerState<HomePage>
   }
 
   void _onDestinationSelected(int v) {
-    dev.log('BottomNav → index=$v', name: 'HomePage');
     if (!mounted) return;
     setState(() => pageIdx = v);
   }
 
   Future<void> _openShareDrawer() async {
-    dev.log('Opening share drawer', name: 'HomePage');
     Account? acc = ref
         .read(selectedAccountProvider)
         .maybeWhen(data: (a) => a, orElse: () => null);
     if (acc == null) {
-      await ref.read(ensureSelectedAccountProvider.future);
-      acc = ref
-          .read(selectedAccountProvider)
-          .maybeWhen(data: (a) => a, orElse: () => null);
+      try {
+        await ref.read(ensureSelectedAccountProvider.future);
+        acc = ref
+            .read(selectedAccountProvider)
+            .maybeWhen(data: (a) => a, orElse: () => null);
+      } catch (_) {}
     }
     if (acc == null) {
       final repo = ref.read(accountRepoProvider);
@@ -333,12 +305,11 @@ class _HomePageState extends ConsumerState<HomePage>
     final accAsync = ref.watch(selectedAccountProvider);
     final uiPrefs = ref.watch(homeUiPrefsProvider);
     final privacyAsync = ref.watch(homePrivacyPrefsProvider);
+    final accessGrant = ref.watch(accessSessionProvider);
     final hide = privacyAsync.maybeWhen(
       data: (p) => p.hideBalance,
       orElse: () => false,
     );
-
-    dev.log('build() → pageIdx=$pageIdx busy=$_isBusy', name: 'HomePage');
 
     return KeyedSubtree(
       key: ValueKey(_remountSeed),
@@ -357,41 +328,62 @@ class _HomePageState extends ConsumerState<HomePage>
               PopupMenuButton<String>(
                 tooltip: 'Plus',
                 onSelected: (action) async {
-                  dev.log('Popup selected: $action', name: 'HomePage');
                   switch (action) {
                     case 'refresh':
-                      await _runPullAll();
-                      await _refreshAll(remount: true);
-                      break;
-                    case 'login':
-                      final ok = await requireAccess(context, ref);
-                      if (!mounted || !ok) break;
-                      await HomeRefreshHook.onManualRefresh(ref);
-                      await _runPullAll();
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(content: Text('Connecté avec succès.')),
-                      );
-                      break;
-                    case 'logout':
-                      await runLogoutAndPurgeFlow(context, ref);
-                      break;
-                    case 'search':
-                      final items = await ref.read(
-                        transactionListItemsProvider.future,
-                      );
-                      final result = await showSearch<TransactionEntry?>(
-                        context: context,
-                        delegate: TxnSearchDelegate(items),
-                      );
-                      if (result != null) {
-                        final ok = await showModalBottomSheet<bool>(
-                          context: context,
-                          isScrollControlled: true,
-                          builder: (_) => TransactionFormSheet(entry: result),
-                        );
-                        if (ok == true) await _refreshAll(remount: true);
+                      setState(() => _isBusy = true);
+                      try {
+                        await _runPullAll();
+                        await _refreshAll(remount: true);
+                      } finally {
+                        if (mounted) setState(() => _isBusy = false);
                       }
                       break;
+                    case 'login':
+                      {
+                        final ok = await requireAccess(context, ref);
+                        if (!mounted || !ok) break;
+
+                        try {
+                          setState(() => _isBusy = true);
+                          await HomeRefreshHook.onManualRefresh(ref);
+                          await _runPullAll();
+                        } finally {
+                          if (mounted) setState(() => _isBusy = false);
+                        }
+
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(
+                            content: Text('Connecté avec succès.'),
+                          ),
+                        );
+                        break;
+                      }
+                    case 'logout':
+                      {
+                        await runLogoutAndPurgeFlow(context, ref);
+                        break;
+                      }
+                    case 'search':
+                      {
+                        final items = await ref.read(
+                          transactionListItemsProvider.future,
+                        );
+                        final result = await showSearch<TransactionEntry?>(
+                          context: context,
+                          delegate: TxnSearchDelegate(items),
+                        );
+                        if (result != null) {
+                          final ok = await showModalBottomSheet<bool>(
+                            context: context,
+                            isScrollControlled: true,
+                            builder: (_) => TransactionFormSheet(entry: result),
+                          );
+                          if (ok == true) {
+                            await _refreshAll(remount: true);
+                          }
+                        }
+                        break;
+                      }
                     case 'period':
                       await _showPeriodSheet();
                       break;
@@ -399,10 +391,12 @@ class _HomePageState extends ConsumerState<HomePage>
                       await _runPullAndPush();
                       break;
                     case 'share':
-                      final ok = await requireAccess(context, ref);
-                      if (!mounted || !ok) break;
-                      await _openShareDrawer();
-                      break;
+                      {
+                        final ok = await requireAccess(context, ref);
+                        if (!mounted || !ok) break;
+                        await _openShareDrawer();
+                        break;
+                      }
                     case 'personnalisation':
                       await openSummaryPrefs();
                       break;
@@ -426,58 +420,84 @@ class _HomePageState extends ConsumerState<HomePage>
                       break;
                   }
                 },
-                itemBuilder: (context) => const [
-                  PopupMenuItem(
-                    value: 'refresh',
-                    child: ListTile(
-                      leading: Icon(Icons.refresh),
-                      title: Text('Rafraîchir'),
+                itemBuilder: (context) {
+                  final items = <PopupMenuEntry<String>>[];
+                  items.addAll(const [
+                    PopupMenuItem(
+                      value: 'refresh',
+                      child: ListTile(
+                        leading: Icon(Icons.refresh),
+                        title: Text('Rafraîchir'),
+                      ),
                     ),
-                  ),
-                  PopupMenuItem(
-                    value: 'search',
-                    child: ListTile(
-                      leading: Icon(Icons.search),
-                      title: Text('Rechercher'),
+                    PopupMenuItem(
+                      value: 'search',
+                      child: ListTile(
+                        leading: Icon(Icons.search),
+                        title: Text('Rechercher'),
+                      ),
                     ),
-                  ),
-                  PopupMenuItem(
-                    value: 'period',
-                    child: ListTile(
-                      leading: Icon(Icons.filter_alt),
-                      title: Text('Sélectionner la période'),
+                    PopupMenuItem(
+                      value: 'period',
+                      child: ListTile(
+                        leading: Icon(Icons.filter_alt),
+                        title: Text('Sélectionner la période'),
+                      ),
                     ),
-                  ),
-                  PopupMenuItem(
-                    value: 'sync',
-                    child: ListTile(
-                      leading: Icon(Icons.sync),
-                      title: Text('Synchroniser'),
+                    PopupMenuItem(
+                      value: 'sync',
+                      child: ListTile(
+                        leading: Icon(Icons.sync),
+                        title: Text('Synchroniser'),
+                      ),
                     ),
-                  ),
-                  PopupMenuItem(
-                    value: 'share',
-                    child: ListTile(
-                      leading: Icon(Icons.ios_share),
-                      title: Text('Partager le compte'),
+                    PopupMenuItem(
+                      value: 'share',
+                      child: ListTile(
+                        leading: Icon(Icons.ios_share),
+                        title: Text('Partager le compte'),
+                      ),
                     ),
-                  ),
-                  PopupMenuDivider(),
-                  PopupMenuItem(
-                    value: 'personnalisation',
-                    child: ListTile(
-                      leading: Icon(Icons.dashboard_customize),
-                      title: Text('Personnalisation'),
+                    PopupMenuDivider(),
+                    PopupMenuItem(
+                      value: 'personnalisation',
+                      child: ListTile(
+                        leading: Icon(Icons.dashboard_customize),
+                        title: Text('Personnalisation'),
+                      ),
                     ),
-                  ),
-                  PopupMenuItem(
-                    value: 'settings',
-                    child: ListTile(
-                      leading: Icon(Icons.settings),
-                      title: Text('Paramètres'),
+                    PopupMenuItem(
+                      value: 'settings',
+                      child: ListTile(
+                        leading: Icon(Icons.settings),
+                        title: Text('Paramètres'),
+                      ),
                     ),
-                  ),
-                ],
+                  ]);
+                  items.add(const PopupMenuDivider());
+                  final accessGrant = ref.read(accessSessionProvider);
+                  items.add(
+                    PopupMenuItem(
+                      value: accessGrant == null ? 'login' : 'logout',
+                      child: ListTile(
+                        leading: Icon(
+                          accessGrant == null ? Icons.login : Icons.logout,
+                        ),
+                        title: Text(
+                          accessGrant == null
+                              ? 'Se connecter'
+                              : 'Se déconnecter',
+                        ),
+                        subtitle: Text(
+                          accessGrant != null
+                              ? accessGrant.email
+                              : 'Hors ligne',
+                        ),
+                      ),
+                    ),
+                  );
+                  return items;
+                },
               ),
           ],
           bottom: _isBusy
