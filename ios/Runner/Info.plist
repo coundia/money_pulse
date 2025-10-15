@@ -48,6 +48,10 @@
 		<key>UIStatusBarHidden</key>
 		<false/>
 
+		<key>NSCameraUsageDescription</key>
+<string>Money Pulse a besoin d’accéder à la caméra pour prendre des photos de produits.</string>
+
+
 		<!-- AUTORISATIONS PHOTOS -->
 		<key>NSPhotoLibraryUsageDescription</key>
 		<string>Money Pulse a besoin d’accéder à votre photothèque pour sélectionner des images de produits.</string>

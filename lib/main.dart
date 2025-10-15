@@ -1,29 +1,42 @@
-// App bootstrap with ProviderScope overrides.
+// lib/main.dart (or wherever your main() lives)
 import 'dart:async';
+import 'dart:isolate';
+import 'dart:ui';
 import 'package:flutter/material.dart';
-import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:intl/intl.dart';
 import 'package:intl/date_symbol_data_local.dart';
 import 'package:sqflite/sqflite.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import 'package:money_pulse/presentation/app/log.dart'; // <-- add
 import 'package:money_pulse/infrastructure/db/app_database.dart';
-import 'package:money_pulse/presentation/app/app.dart'; // <- AppRoot est ici
+import 'package:money_pulse/presentation/app/app.dart';
 import 'package:money_pulse/presentation/app/providers.dart';
 import 'package:money_pulse/presentation/app/restart_app.dart';
-
-// RouteObserver global utilisé par AutoRefreshOnFocus (didPopNext, etc.)
 import 'package:money_pulse/presentation/navigation/route_observer.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
-  FlutterError.onError = (details) {
-    Zone.current.handleUncaughtError(
-      details.exception,
-      details.stack ?? StackTrace.empty,
-    );
-  };
+  // init logging FIRST so early logs are visible in both consoles
+  Log.init(defaultTag: 'Startup');
+  Log.wireGlobalErrorHooks(tag: 'Startup');
+
+  // catch errors from other isolates
+  Isolate.current.addErrorListener(
+    RawReceivePort((pair) {
+      final List<dynamic> errorAndStacktrace = pair;
+      Log.e(
+        'IsolateError',
+        tag: 'Startup',
+        error: errorAndStacktrace.first,
+        st: errorAndStacktrace.last,
+      );
+    }).sendPort,
+  );
+
+  Log.d('Initializing locale & DB', tag: 'Startup');
 
   await Future.wait([
     initializeDateFormatting('fr'),
@@ -32,22 +45,21 @@ Future<void> main() async {
   Intl.defaultLocale = 'fr_FR';
 
   await AppDatabase.I.init();
+  Log.d('DB init done', tag: 'Startup');
 
-  runZonedGuarded(() {
-    runApp(
-      RestartApp(
-        child: ProviderScope(
-          overrides: const [
-            // Exemple si besoin :
-            // syncPolicyProvider.overrideWithValue(
-            //   const DisabledSetSyncPolicy({SyncDomain.stockMovements}),
-            // ),
-          ],
-          child: const Bootstrap(),
+  runZonedGuarded(
+    () {
+      Log.d('runApp()', tag: 'Startup');
+      runApp(
+        RestartApp(
+          child: ProviderScope(overrides: const [], child: const Bootstrap()),
         ),
-      ),
-    );
-  }, (error, stack) {});
+      );
+    },
+    (error, stack) {
+      Log.e('Uncaught in Zone', tag: 'Startup', error: error, st: stack);
+    },
+  );
 }
 
 class Bootstrap extends ConsumerStatefulWidget {
@@ -62,25 +74,31 @@ class _BootstrapState extends ConsumerState<Bootstrap> {
   @override
   void initState() {
     super.initState();
+    Log.d('Bootstrap.initState');
     _future = _init();
   }
 
   Future<void> _init() async {
     try {
+      Log.d('Bootstrap._init start');
       await ref.read(ensureDefaultAccountUseCaseProvider).execute();
+      Log.d('Bootstrap._init done');
     } on DatabaseException catch (e) {
       final msg = e.toString();
-      if (!msg.contains('UNIQUE constraint failed')) {
-        rethrow;
-      }
-    } catch (_) {}
+      if (!msg.contains('UNIQUE constraint failed')) rethrow;
+      Log.d('Bootstrap._init UNIQUE constraint ignored');
+    } catch (e, st) {
+      Log.e('Bootstrap._init error', error: e, st: st);
+    }
   }
 
   Future<void> _retry() async {
+    Log.d('Bootstrap._retry');
     setState(() => _future = _init());
   }
 
   Future<void> _resetDbAndRetry() async {
+    Log.d('Bootstrap._resetDbAndRetry');
     await AppDatabase.I.recreate(version: 1);
     if (!mounted) return;
     RestartApp.restart(context);
@@ -88,10 +106,10 @@ class _BootstrapState extends ConsumerState<Bootstrap> {
 
   @override
   Widget build(BuildContext context) {
+    Log.d('Bootstrap.build');
     return FutureBuilder<void>(
       future: _future,
       builder: (_, snap) {
-        // --- Écran de chargement ---
         if (snap.connectionState != ConnectionState.done) {
           return MaterialApp(
             debugShowCheckedModeBanner: false,
@@ -106,15 +124,15 @@ class _BootstrapState extends ConsumerState<Bootstrap> {
               GlobalCupertinoLocalizations.delegate,
             ],
             supportedLocales: const [Locale('fr'), Locale('fr', 'FR')],
-            navigatorObservers: [routeObserver], // ⬅️ important
+            navigatorObservers: [routeObserver],
             home: const Scaffold(
               body: Center(child: CircularProgressIndicator()),
             ),
           );
         }
 
-        // --- Écran d’erreur ---
         if (snap.hasError) {
+          Log.e('Bootstrap Future error screen', error: snap.error);
           return MaterialApp(
             debugShowCheckedModeBanner: false,
             title: 'Money Pulse',
@@ -128,7 +146,7 @@ class _BootstrapState extends ConsumerState<Bootstrap> {
               GlobalCupertinoLocalizations.delegate,
             ],
             supportedLocales: const [Locale('fr'), Locale('fr', 'FR')],
-            navigatorObservers: [routeObserver], // ⬅️ important
+            navigatorObservers: [routeObserver],
             home: _BootstrapErrorScreen(
               error: snap.error!,
               onRetry: _retry,
@@ -137,7 +155,6 @@ class _BootstrapState extends ConsumerState<Bootstrap> {
           );
         }
 
-        // --- App normale ---
         return MaterialApp(
           debugShowCheckedModeBanner: false,
           title: 'Money Pulse',
@@ -151,8 +168,8 @@ class _BootstrapState extends ConsumerState<Bootstrap> {
             GlobalCupertinoLocalizations.delegate,
           ],
           supportedLocales: const [Locale('fr'), Locale('fr', 'FR')],
-          navigatorObservers: [routeObserver], // ⬅️ indispensable
-          home: const AppRoot(), // <- pas de MaterialApp imbriqué
+          navigatorObservers: [routeObserver],
+          home: const AppRoot(),
         );
       },
     );
@@ -171,6 +188,7 @@ class _BootstrapErrorScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    Log.e('BootstrapErrorScreen.build', error: error);
     return Scaffold(
       body: Center(
         child: ConstrainedBox(

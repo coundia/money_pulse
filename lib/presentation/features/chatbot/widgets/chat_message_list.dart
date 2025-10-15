@@ -131,18 +131,6 @@ class ChatMessageList extends ConsumerWidget {
                     ),
                   ),
                 ),
-                const SizedBox(height: 6),
-                // D’autres idées
-                Wrap(
-                  spacing: 8,
-                  runSpacing: 6,
-                  alignment: WrapAlignment.center,
-                  children: const [
-                    _ExampleChip('Vente sac 2500 fr.'),
-                    _ExampleChip('Achat riz 19000 fr hier.'),
-                  ],
-                ),
-                const SizedBox(height: 18),
 
                 // Actions rapides
               ],

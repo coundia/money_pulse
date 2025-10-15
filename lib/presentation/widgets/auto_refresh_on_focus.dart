@@ -1,9 +1,11 @@
-// Auto refresh wrapper filtered by a tag for both popNext and app resume.
+/// No-op shim for AutoRefreshOnFocus.
+/// This version DOES NOT subscribe to RouteObserver or app lifecycle,
+/// and NEVER triggers the onRefocus callback. It simply renders [child].
+///
+/// Keep this file if existing pages still import/use AutoRefreshOnFocus;
+/// nothing will auto-refresh anymore.
 
-import 'package:flutter/material.dart';
-import 'package:flutter/scheduler.dart';
-import 'package:money_pulse/presentation/navigation/route_observer.dart';
-import 'package:money_pulse/presentation/navigation/refocus_bus.dart';
+import 'package:flutter/widgets.dart';
 
 class AutoRefreshOnFocus extends StatefulWidget {
   final Widget child;
@@ -20,88 +22,16 @@ class AutoRefreshOnFocus extends StatefulWidget {
     required this.onRefocus,
     this.immediate = false,
     this.debounce = const Duration(milliseconds: 350),
-    this.loggingEnabled = true,
+    this.loggingEnabled = false,
     this.logTag = 'AutoRefreshOnFocus',
-    this.onlyWhenTag = 'chatbot',
+    this.onlyWhenTag,
   });
 
   @override
   State<AutoRefreshOnFocus> createState() => _AutoRefreshOnFocusState();
 }
 
-class _AutoRefreshOnFocusState extends State<AutoRefreshOnFocus>
-    with RouteAware, WidgetsBindingObserver {
-  ModalRoute<dynamic>? _route;
-  bool _running = false;
-  DateTime? _lastRun;
-
-  @override
-  void initState() {
-    print("[####### AutoRefreshOnFocus ]");
-    super.initState();
-    WidgetsBinding.instance.addObserver(this);
-    if (widget.immediate) {
-      SchedulerBinding.instance.addPostFrameCallback((_) => _trigger());
-    }
-  }
-
-  @override
-  void didChangeDependencies() {
-    super.didChangeDependencies();
-    final r = ModalRoute.of(context);
-    if (_route != r && r != null) {
-      if (_route != null) routeObserver.unsubscribe(this);
-      _route = r;
-      routeObserver.subscribe(this, r);
-    }
-  }
-
-  @override
-  void dispose() {
-    WidgetsBinding.instance.removeObserver(this);
-    if (_route != null) routeObserver.unsubscribe(this);
-    super.dispose();
-  }
-
-  @override
-  void didPopNext() {
-    final expected = widget.onlyWhenTag;
-    if (expected != null) {
-      final tag = RefocusBus.take();
-      if (tag != expected) return;
-    }
-    _trigger();
-  }
-
-  @override
-  void didChangeAppLifecycleState(AppLifecycleState state) {
-    if (state == AppLifecycleState.resumed) {
-      final expected = widget.onlyWhenTag;
-      if (expected != null) {
-        final tag = RefocusBus.take();
-        if (tag != expected) return;
-      }
-      _trigger();
-    }
-  }
-
-  void _trigger() {
-    if (!mounted) return;
-    final now = DateTime.now();
-    if (_lastRun != null && now.difference(_lastRun!) < widget.debounce) return;
-    if (_running) return;
-    _running = true;
-    _lastRun = now;
-    WidgetsBinding.instance.addPostFrameCallback((_) async {
-      try {
-        if (!mounted) return;
-        await widget.onRefocus();
-      } finally {
-        _running = false;
-      }
-    });
-  }
-
+class _AutoRefreshOnFocusState extends State<AutoRefreshOnFocus> {
   @override
   Widget build(BuildContext context) => widget.child;
 }

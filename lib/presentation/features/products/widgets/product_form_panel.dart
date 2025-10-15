@@ -1,15 +1,18 @@
-// Right-drawer form to create or edit a product, with company selector and level/quantity/flags.
+/// Right-drawer product form using MediaAttachmentsPicker with logs and French UI.
+
+import 'dart:developer' as dev;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:intl/intl.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:money_pulse/domain/products/entities/product.dart';
 import 'package:money_pulse/domain/categories/entities/category.dart';
 import 'package:money_pulse/domain/company/entities/company.dart';
-import 'package:money_pulse/presentation/widgets/attachments_picker.dart';
-import 'package:flutter_riverpod/flutter_riverpod.dart';
-import '../../../../domain/company/repositories/company_repository.dart';
-import '../../../app/providers/company_repo_provider.dart';
-import '../../transactions/widgets/amount_field_quickpad.dart';
+import 'package:money_pulse/domain/company/repositories/company_repository.dart';
+import 'package:money_pulse/presentation/app/providers/company_repo_provider.dart';
+import 'package:money_pulse/presentation/features/transactions/widgets/amount_field_quickpad.dart';
+
+import '../../../widgets/attachments_picker.dart';
 
 class ProductFormResult {
   final String? code;
@@ -134,6 +137,10 @@ class _ProductFormPanelState extends ConsumerState<ProductFormPanel> {
     _hasSold = (widget.existing?.hasSold ?? 0) == 1;
     _hasPrice = (widget.existing?.hasPrice ?? 0) == 1;
     _companyId = widget.existing?.company;
+    dev.log(
+      'ProductFormPanel init status=$_status cat=$_categoryId company=$_companyId',
+      name: 'ProductFormPanel',
+    );
   }
 
   @override
@@ -208,7 +215,6 @@ class _ProductFormPanelState extends ConsumerState<ProductFormPanel> {
     final list = all
         .where((c) => (c.remoteId ?? '').trim().isNotEmpty)
         .toList();
-
     if (_companyId == null && list.isNotEmpty) {
       try {
         final def = list.firstWhere((c) => c.isDefault == true);
@@ -240,6 +246,10 @@ class _ProductFormPanelState extends ConsumerState<ProductFormPanel> {
       quantity: int.tryParse(_quantity.text.trim()) ?? 0,
       hasSold: _hasSold,
       hasPrice: _hasPrice,
+    );
+    dev.log(
+      'submit name=${result.name} price=${result.priceCents} files=${result.files.length}',
+      name: 'ProductFormPanel',
     );
     Navigator.pop(context, result);
   }
@@ -306,7 +316,6 @@ class _ProductFormPanelState extends ConsumerState<ProductFormPanel> {
                         companies.any((c) => c.id == _companyId))
                     ? _companyId
                     : null;
-
                 final allowedStatuses = _statusOptions
                     .map((e) => e.$1)
                     .toSet()
@@ -340,7 +349,6 @@ class _ProductFormPanelState extends ConsumerState<ProductFormPanel> {
                         onChanged: () => setState(() {}),
                       ),
                       const SizedBox(height: 16),
-
                       TextFormField(
                         focusNode: _fName,
                         controller: _name,
@@ -352,7 +360,6 @@ class _ProductFormPanelState extends ConsumerState<ProductFormPanel> {
                         validator: _required,
                       ),
                       const SizedBox(height: 12),
-
                       TextFormField(
                         focusNode: _fPriceBuy,
                         controller: _priceBuy,
@@ -368,7 +375,6 @@ class _ProductFormPanelState extends ConsumerState<ProductFormPanel> {
                         ),
                       ),
                       const SizedBox(height: 12),
-
                       TextFormField(
                         focusNode: _fCode,
                         controller: _code,
@@ -380,7 +386,6 @@ class _ProductFormPanelState extends ConsumerState<ProductFormPanel> {
                         validator: _validateSku,
                       ),
                       const SizedBox(height: 12),
-
                       TextFormField(
                         focusNode: _fBarcode,
                         controller: _barcode,
@@ -391,7 +396,6 @@ class _ProductFormPanelState extends ConsumerState<ProductFormPanel> {
                         ),
                       ),
                       const SizedBox(height: 12),
-
                       DropdownButtonFormField<String>(
                         value: _categoryId,
                         items: widget.categories
@@ -408,7 +412,6 @@ class _ProductFormPanelState extends ConsumerState<ProductFormPanel> {
                         ),
                       ),
                       const SizedBox(height: 12),
-
                       DropdownButtonFormField<String>(
                         value: safeStatus,
                         items: _statusOptions
@@ -425,7 +428,6 @@ class _ProductFormPanelState extends ConsumerState<ProductFormPanel> {
                         decoration: const InputDecoration(labelText: 'Statut'),
                       ),
                       const SizedBox(height: 16),
-
                       TextFormField(
                         focusNode: _fDesc,
                         controller: _desc,
@@ -437,7 +439,6 @@ class _ProductFormPanelState extends ConsumerState<ProductFormPanel> {
                         ),
                       ),
                       const SizedBox(height: 16),
-
                       DropdownButtonFormField<String?>(
                         key: ValueKey(safeCompanyId),
                         focusNode: _fCompany,
@@ -461,7 +462,6 @@ class _ProductFormPanelState extends ConsumerState<ProductFormPanel> {
                         decoration: const InputDecoration(labelText: 'Société'),
                       ),
                       const SizedBox(height: 12),
-
                       TextFormField(
                         focusNode: _fLevel,
                         controller: _levelId,
@@ -472,7 +472,6 @@ class _ProductFormPanelState extends ConsumerState<ProductFormPanel> {
                         ),
                       ),
                       const SizedBox(height: 12),
-
                       TextFormField(
                         focusNode: _fQuantity,
                         controller: _quantity,
@@ -485,7 +484,6 @@ class _ProductFormPanelState extends ConsumerState<ProductFormPanel> {
                         ),
                       ),
                       const SizedBox(height: 8),
-
                       SwitchListTile(
                         title: const Text('Déjà vendu (hasSold)'),
                         value: _hasSold,
@@ -497,14 +495,24 @@ class _ProductFormPanelState extends ConsumerState<ProductFormPanel> {
                         onChanged: (v) => setState(() => _hasPrice = v),
                       ),
                       const SizedBox(height: 16),
-
                       Text(
-                        'Photos du produit',
+                        'Pièces jointes',
                         style: Theme.of(context).textTheme.titleMedium,
                       ),
                       const SizedBox(height: 8),
-                      AttachmentsPicker(onChanged: (items) => _files = items),
-
+                      MediaAttachmentsPicker(
+                        onChanged: (items) {
+                          _files = items;
+                          dev.log(
+                            'attachments changed count=${items.length}',
+                            name: 'ProductFormPanel',
+                          );
+                        },
+                        onError: (m) => dev.log(
+                          'attachments error $m',
+                          name: 'ProductFormPanel',
+                        ),
+                      ),
                       const SizedBox(height: 10),
                       Text(
                         'Astuce : appuyez sur Entrée pour enregistrer rapidement.',

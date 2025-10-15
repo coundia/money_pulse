@@ -1,12 +1,11 @@
-// Small widget to pick image files with preview; robust mime detection,
-// duplicate guard, iOS large-file streams, and reactive to initial reset.
-
-import 'dart:typed_data';
+// Widget: MediaAttachmentsPicker with lost-data recovery on Android
+// Restores picked files if Android kills & restarts the Activity under memory pressure.
 import 'dart:io';
-import 'package:file_picker/file_picker.dart';
+import 'dart:typed_data';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:image_picker/image_picker.dart';
 import 'package:mime/mime.dart';
 
 class PickedAttachment {
@@ -30,110 +29,270 @@ class PickedAttachment {
       '${name.toLowerCase()}::${size ?? bytes?.length ?? 0}::${mimeType ?? ''}';
 }
 
-class AttachmentsPicker extends StatefulWidget {
+class MediaAttachmentsPicker extends StatefulWidget {
   final List<PickedAttachment> initial;
   final ValueChanged<List<PickedAttachment>> onChanged;
+  final ValueChanged<String>? onError;
+  final bool loggingEnabled;
+  final String logTag;
+  final bool allowPdf; // (non utilisé ici, on reste image-only)
 
-  const AttachmentsPicker({
+  const MediaAttachmentsPicker({
     super.key,
     this.initial = const [],
     required this.onChanged,
+    this.onError,
+    this.loggingEnabled = true,
+    this.logTag = 'MediaAttachmentsPicker',
+    this.allowPdf = true,
   });
 
   @override
-  State<AttachmentsPicker> createState() => _AttachmentsPickerState();
+  State<MediaAttachmentsPicker> createState() => _MediaAttachmentsPickerState();
 }
 
-class _AttachmentsPickerState extends State<AttachmentsPicker> {
+class _MediaAttachmentsPickerState extends State<MediaAttachmentsPicker>
+    with WidgetsBindingObserver {
+  final ImagePicker _picker = ImagePicker();
+
   late List<PickedAttachment> _items = [...widget.initial];
-  bool _temporarilyDisabled = false;
+  bool _busy = false;
+
+  void _log(String msg, {Object? error, StackTrace? st}) {
+    if (!widget.loggingEnabled) return;
+    final p = '[${widget.logTag}]';
+    // ignore: avoid_print
+    print('$p $msg');
+    if (error != null) print('$p ❌ $error');
+    if (st != null) print('$p stack:\n$st');
+  }
 
   @override
-  void didUpdateWidget(covariant AttachmentsPicker oldWidget) {
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addObserver(this);
+
+    // ✅ Au démarrage du widget, tente de récupérer d’éventuels médias perdus
+    // si l’Activity a été recréée par Android pendant la sélection.
+    if (!kIsWeb && Platform.isAndroid) {
+      // microtask pour laisser la frame s'installer
+      Future.microtask(_recoverLostDataIfAny);
+    }
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    super.dispose();
+  }
+
+  @override
+  void didUpdateWidget(covariant MediaAttachmentsPicker oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (!listEquals(oldWidget.initial, widget.initial)) {
+      _log('didUpdateWidget → reset from initial (${widget.initial.length})');
       _items = [...widget.initial];
     }
   }
 
-  Future<void> _pick() async {
-    if (_temporarilyDisabled) return;
+  // ✅ Si l’app revient en foreground après un kill/restart, on retente une récup.
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (!mounted) return;
+    if (state == AppLifecycleState.resumed &&
+        !kIsWeb &&
+        Platform.isAndroid &&
+        !_busy) {
+      _recoverLostDataIfAny();
+    }
+  }
+
+  Future<void> _recoverLostDataIfAny() async {
     try {
-      final res = await FilePicker.platform.pickFiles(
-        allowMultiple: true,
-        type: FileType.image,
-        withData: true,
-        withReadStream: true,
-      );
-      if (res == null) return;
+      final LostDataResponse resp = await _picker.retrieveLostData();
+      if (resp.isEmpty) return;
 
-      final added = res.files.map((f) {
-        final inferred =
-            lookupMimeType(
-              f.path ?? f.name,
-              headerBytes: f.bytes != null && f.bytes!.isNotEmpty
-                  ? f.bytes!.sublist(0, f.bytes!.length.clamp(0, 32))
-                  : null,
-            ) ??
-            (f.extension == null ? null : 'image/${f.extension}');
-        return PickedAttachment(
-          name: f.name,
-          path: f.path,
-          bytes: f.bytes,
-          size: f.size,
-          mimeType: inferred,
-          readStream: f.readStream,
-        );
-      }).toList();
+      final List<XFile> recovered =
+          resp.files ?? (resp.file != null ? [resp.file!] : <XFile>[]);
 
-      final existingKeys = _items.map((e) => e._dupeKey).toSet();
-      final merged = <PickedAttachment>[];
-      for (final a in added) {
-        if (!existingKeys.contains(a._dupeKey)) {
-          merged.add(a);
-          existingKeys.add(a._dupeKey);
+      if (recovered.isEmpty) {
+        if (resp.exception != null) {
+          _log('retrieveLostData error: ${resp.exception}');
+          _notifyError('Récupération interrompue (${resp.exception?.code}).');
         }
+        return;
       }
 
-      setState(() => _items = [..._items, ...merged]);
-      widget.onChanged(_items);
-    } on MissingPluginException catch (_) {
-      setState(() => _temporarilyDisabled = true);
-      ScaffoldMessenger.maybeOf(context)?.showSnackBar(
-        const SnackBar(
-          content: Text(
-            'Sélecteur indisponible. Relancez l’application après un build complet.',
-          ),
+      _log('retrieveLostData → ${recovered.length} fichier(s) retrouvé(s)');
+      final attachments = await _xfilesToAttachments(recovered);
+      _mergeAndNotify(attachments);
+    } catch (e, st) {
+      _log('retrieveLostData failed', error: e, st: st);
+    }
+  }
+
+  Future<List<PickedAttachment>> _xfilesToAttachments(List<XFile> files) async {
+    final out = <PickedAttachment>[];
+    for (final xf in files) {
+      final path = xf.path;
+      final name = path.split(Platform.pathSeparator).last;
+      final mime = lookupMimeType(path) ?? 'image/*';
+      Uint8List? bytes;
+      try {
+        bytes = await xf.readAsBytes();
+      } catch (_) {}
+      out.add(
+        PickedAttachment(
+          name: name,
+          path: path,
+          bytes: bytes,
+          size: bytes?.length,
+          mimeType: mime,
+          readStream: null,
         ),
       );
-    } on PlatformException catch (e) {
-      ScaffoldMessenger.maybeOf(
-        context,
-      )?.showSnackBar(SnackBar(content: Text('Erreur sélection: ${e.code}')));
-    } catch (e) {
-      ScaffoldMessenger.maybeOf(
-        context,
-      )?.showSnackBar(SnackBar(content: Text('Erreur: $e')));
     }
+    return out;
+  }
+
+  Future<void> _openChooser() async {
+    if (_busy) return;
+    final picks = <_PickAction>[
+      const _PickAction(
+        _PickChoice.images,
+        Icons.photo_library_outlined,
+        'Choisir des photos',
+        'Depuis la galerie',
+      ),
+      // (PDF désactivé ici pour rester 100% image_picker et éviter tout Intent externe)
+    ];
+
+    final choice = await showModalBottomSheet<_PickChoice>(
+      context: context,
+      useSafeArea: true,
+      showDragHandle: true,
+      builder: (ctx) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            for (final a in picks)
+              ListTile(
+                leading: Icon(a.icon),
+                title: Text(a.title),
+                subtitle: Text(a.subtitle),
+                onTap: () => Navigator.pop(ctx, a.choice),
+              ),
+            const SizedBox(height: 8),
+          ],
+        ),
+      ),
+    );
+
+    if (choice == null) return;
+    if (choice == _PickChoice.images) {
+      await _pickImagesInApp();
+    }
+  }
+
+  Future<void> _pickImagesInApp() async {
+    await _withBusyGuard(() async {
+      try {
+        _log('Starting in-app image picker');
+        final files = await _picker.pickMultiImage(
+          imageQuality: null,
+          maxWidth: null,
+          maxHeight: null,
+        );
+        if (files.isEmpty) {
+          _log('Image picker cancelled');
+          return;
+        }
+        final attachments = await _xfilesToAttachments(files);
+        _mergeAndNotify(attachments);
+      } on PlatformException catch (e, st) {
+        final msg = _platformErrorToMessage(e);
+        _notifyError(msg);
+        _log('PlatformException(images): $msg', error: e, st: st);
+      } catch (e, st) {
+        _notifyError('Erreur inattendue: $e');
+        _log('Unhandled(images)', error: e, st: st);
+      }
+    });
+  }
+
+  String _platformErrorToMessage(PlatformException e) {
+    final code = (e.code.isEmpty ? 'unknown' : e.code).toLowerCase();
+    if (code.contains('read') || code.contains('permission')) {
+      return 'Accès refusé au stockage/photothèque.';
+    }
+    if (code.contains('not_found') || code.contains('file')) {
+      return 'Fichier introuvable ou inaccessible.';
+    }
+    if (code.contains('size') || code.contains('too_large')) {
+      return 'Fichier trop volumineux.';
+    }
+    return 'Erreur sélection (${e.code}).';
+  }
+
+  void _mergeAndNotify(List<PickedAttachment> added) {
+    final existingKeys = _items.map((e) => e._dupeKey).toSet();
+    final uniques = added
+        .where((a) => !existingKeys.contains(a._dupeKey))
+        .toList();
+    final newCount = uniques.length;
+    if (newCount > 0) {
+      _items = [..._items, ...uniques];
+      widget.onChanged(_items);
+    }
+    _log('Merged +$newCount, total=${_items.length}');
+    if (newCount == 0 && added.isNotEmpty) {
+      _notifyError('Aucun nouveau fichier ajouté (doublons).');
+    }
+  }
+
+  Future<void> _withBusyGuard(Future<void> Function() fn) async {
+    if (_busy) return;
+    setState(() => _busy = true);
+    _log('Busy start');
+    try {
+      await fn();
+    } finally {
+      _log('Busy end');
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  void _notifyError(String msg) {
+    widget.onError?.call(msg);
+    _log('Error: $msg');
+    ScaffoldMessenger.maybeOf(
+      context,
+    )?.showSnackBar(SnackBar(content: Text(msg)));
   }
 
   void _removeAt(int i) {
+    if (i < 0 || i >= _items.length) return;
+    final removed = _items[i].name;
     setState(() => _items.removeAt(i));
     widget.onChanged(_items);
+    _log('Removed index=$i name=$removed now=${_items.length}');
   }
 
   Widget _thumb(PickedAttachment p) {
-    if (p.bytes != null && p.bytes!.isNotEmpty) {
-      return Image.memory(p.bytes!, fit: BoxFit.cover);
-    }
-    final path = p.path;
-    if (path != null && path.isNotEmpty) {
-      final f = File(path);
-      if (f.existsSync()) {
-        return Image.file(f, fit: BoxFit.cover);
+    final t = (p.mimeType ?? '');
+    if (t.startsWith('image/')) {
+      if (!kIsWeb && Platform.isAndroid && (p.path ?? '').isNotEmpty) {
+        final file = File(p.path!);
+        if (file.existsSync()) {
+          return Image.file(file, fit: BoxFit.cover, gaplessPlayback: true);
+        }
       }
+      if (p.bytes != null && p.bytes!.isNotEmpty) {
+        return Image.memory(p.bytes!, fit: BoxFit.cover, gaplessPlayback: true);
+      }
+      return const Icon(Icons.broken_image_outlined, size: 32);
     }
-    return const Icon(Icons.image_outlined, size: 32);
+    return const Icon(Icons.insert_drive_file_outlined, size: 36);
   }
 
   @override
@@ -179,25 +338,30 @@ class _AttachmentsPickerState extends State<AttachmentsPicker> {
           runSpacing: 8,
           children: [
             FilledButton.icon(
-              onPressed: _temporarilyDisabled ? null : _pick,
-              icon: const Icon(Icons.add_photo_alternate_outlined),
-              label: Text(
-                _temporarilyDisabled
-                    ? 'Indisponible (relancer build)'
-                    : 'Ajouter des images',
-              ),
+              onPressed: _busy ? null : _openChooser,
+              icon: _busy
+                  ? const SizedBox(
+                      width: 18,
+                      height: 18,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    )
+                  : const Icon(Icons.attach_file_outlined),
+              label: Text(_busy ? 'Chargement…' : 'Ajouter (photos)'),
             ),
             if (_items.isNotEmpty)
               Chip(
-                avatar: const Icon(Icons.photo_library_outlined, size: 18),
-                label: Text('${_items.length} sélectionnée(s)'),
+                avatar: const Icon(Icons.folder_open_outlined, size: 18),
+                label: Text('${_items.length} élément(s)'),
               ),
             if (_items.isNotEmpty)
               OutlinedButton.icon(
-                onPressed: () {
-                  setState(() => _items = []);
-                  widget.onChanged(_items);
-                },
+                onPressed: _busy
+                    ? null
+                    : () {
+                        _log('Clear all attachments');
+                        setState(() => _items = []);
+                        widget.onChanged(_items);
+                      },
                 icon: const Icon(Icons.delete_sweep_outlined),
                 label: const Text('Tout effacer'),
               ),
@@ -206,18 +370,14 @@ class _AttachmentsPickerState extends State<AttachmentsPicker> {
         const SizedBox(height: 12),
         if (_items.isEmpty)
           Text(
-            'Aucune image sélectionnée',
+            'Aucun fichier sélectionné',
             style: Theme.of(context).textTheme.bodySmall,
           ),
         if (_items.isNotEmpty)
           LayoutBuilder(
             builder: (context, c) {
               final w = c.maxWidth;
-              final cross = w < 420
-                  ? 3
-                  : w < 720
-                  ? 4
-                  : 6;
+              final cross = w < 420 ? 3 : (w < 720 ? 4 : 6);
               return GridView.builder(
                 shrinkWrap: true,
                 physics: const NeverScrollableScrollPhysics(),
@@ -234,4 +394,14 @@ class _AttachmentsPickerState extends State<AttachmentsPicker> {
       ],
     );
   }
+}
+
+enum _PickChoice { images }
+
+class _PickAction {
+  final _PickChoice choice;
+  final IconData icon;
+  final String title;
+  final String subtitle;
+  const _PickAction(this.choice, this.icon, this.title, this.subtitle);
 }
