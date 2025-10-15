@@ -1,59 +1,49 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
     package="com.example.money_pulse">
 
-    <!-- Modern permissions -->
+    <!-- Permissions modernes (Android 13+) -->
     <uses-permission android:name="android.permission.READ_MEDIA_IMAGES" />
-    <uses-permission android:name="android.permission.READ_MEDIA_VIDEO" />
     <uses-permission android:name="android.permission.INTERNET" />
-    <uses-permission android:name="android.permission.CAMERA" />
+
     <!-- Compat < 33 -->
     <uses-permission
         android:name="android.permission.READ_EXTERNAL_STORAGE"
         android:maxSdkVersion="32" />
 
-            <application
-            android:name="${applicationName}"
-            android:label="money_pulse"
-            android:icon="@mipmap/ic_launcher"
-            android:enableOnBackInvokedCallback="true">
+    <application
+        android:name="${applicationName}"
+        android:label="money_pulse"
+        android:icon="@mipmap/ic_launcher"
+        android:enableOnBackInvokedCallback="true">
 
-            <activity
-                android:name=".MainActivity"
-                android:exported="true"
-                android:launchMode="singleTop"
-                android:theme="@style/LaunchTheme"
-                android:hardwareAccelerated="true"
-                android:windowSoftInputMode="adjustResize"
-                android:configChanges="
-                orientation|
-                keyboardHidden|
+        <activity
+            android:name=".MainActivity"
+            android:exported="true"
+            android:launchMode="singleTop"
+            android:theme="@style/LaunchTheme"
+            android:hardwareAccelerated="true"
+            android:windowSoftInputMode="adjustResize"
+            android:configChanges="
                 keyboard|
-                navigation|
-                screenSize|
-                smallestScreenSize|
+                keyboardHidden|
+                orientation|
                 screenLayout|
                 uiMode|
-                density|
-                layoutDirection|
-                fontScale|
-                locale|
-                mcc|
-                mnc|
-                colorMode|
-                touchscreen">
-                <meta-data
+                screenSize|
+                smallestScreenSize|
+                density">
+
+            <meta-data
                 android:name="io.flutter.embedding.android.NormalTheme"
                 android:resource="@style/NormalTheme" />
-                <intent-filter>
+
+            <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
-                </intent-filter>
-            </activity>
+            </intent-filter>
+        </activity>
 
-            <meta-data android:name="flutterEmbedding" android:value="2" />
-
-
-        <!-- Embedding v2 flag -->
+        <!-- Embedding v2 flag (une seule fois) -->
         <meta-data
             android:name="flutterEmbedding"
             android:value="2" />

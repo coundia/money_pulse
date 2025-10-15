@@ -82,7 +82,7 @@ class _HomePageState extends ConsumerState<HomePage>
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (state == AppLifecycleState.resumed) {
       dev.log('App resumed → refreshAll(remount: true)', name: 'HomePage');
-      _refreshAll(remount: true);
+      //_refreshAll(remount: true);
     }
   }
 

@@ -15,6 +15,7 @@ import 'package:money_pulse/presentation/app/app.dart';
 import 'package:money_pulse/presentation/app/providers.dart';
 import 'package:money_pulse/presentation/app/restart_app.dart';
 import 'package:money_pulse/presentation/navigation/route_observer.dart';
+import 'dart:developer' as dev;
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -83,6 +84,7 @@ class _BootstrapState extends ConsumerState<Bootstrap> {
       Log.d('Bootstrap._init start');
       await ref.read(ensureDefaultAccountUseCaseProvider).execute();
       Log.d('Bootstrap._init done');
+      dev.log('step reached', name: 'MyFeature');
     } on DatabaseException catch (e) {
       final msg = e.toString();
       if (!msg.contains('UNIQUE constraint failed')) rethrow;

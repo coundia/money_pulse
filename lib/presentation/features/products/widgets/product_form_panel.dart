@@ -1,5 +1,3 @@
-/// Right-drawer product form using MediaAttachmentsPicker with logs and French UI.
-
 import 'dart:developer' as dev;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -11,7 +9,6 @@ import 'package:money_pulse/domain/company/entities/company.dart';
 import 'package:money_pulse/domain/company/repositories/company_repository.dart';
 import 'package:money_pulse/presentation/app/providers/company_repo_provider.dart';
 import 'package:money_pulse/presentation/features/transactions/widgets/amount_field_quickpad.dart';
-
 import '../../../widgets/attachments_picker.dart';
 
 class ProductFormResult {
@@ -29,7 +26,6 @@ class ProductFormResult {
   final int quantity;
   final bool hasSold;
   final bool hasPrice;
-
   const ProductFormResult({
     this.code,
     required this.name,
@@ -55,16 +51,13 @@ class SubmitFormIntent extends Intent {
 class ProductFormPanel extends ConsumerStatefulWidget {
   final Product? existing;
   final List<Category> categories;
-
   const ProductFormPanel({super.key, this.existing, required this.categories});
-
   @override
   ConsumerState<ProductFormPanel> createState() => _ProductFormPanelState();
 }
 
 class _ProductFormPanelState extends ConsumerState<ProductFormPanel> {
   final _formKey = GlobalKey<FormState>();
-
   late final TextEditingController _code = TextEditingController(
     text: widget.existing?.code ?? '',
   );
@@ -95,10 +88,8 @@ class _ProductFormPanelState extends ConsumerState<ProductFormPanel> {
         ? '0'
         : (widget.existing!.quantity).toString(),
   );
-
   bool _hasSold = false;
   bool _hasPrice = false;
-
   final _fName = FocusNode();
   final _fCode = FocusNode();
   final _fBarcode = FocusNode();
@@ -107,12 +98,10 @@ class _ProductFormPanelState extends ConsumerState<ProductFormPanel> {
   final _fCompany = FocusNode();
   final _fLevel = FocusNode();
   final _fQuantity = FocusNode();
-
   String? _categoryId;
   String _status = 'ACTIVE';
   String? _companyId;
   List<PickedAttachment> _files = const [];
-
   static const List<(String, String)> _statusOptions = <(String, String)>[
     ('ACTIVE', 'Actif'),
     ('PROMO', 'Promotion'),
@@ -121,7 +110,6 @@ class _ProductFormPanelState extends ConsumerState<ProductFormPanel> {
     ('PUBLISHED', 'Publié'),
     ('UNPUBLISH', 'Retiré'),
   ];
-
   static final _numFilter = FilteringTextInputFormatter.allow(
     RegExp(r'[0-9\.\, \u00A0\u202F]'),
   );
@@ -257,7 +245,6 @@ class _ProductFormPanelState extends ConsumerState<ProductFormPanel> {
   @override
   Widget build(BuildContext context) {
     final isEdit = widget.existing != null;
-
     return Shortcuts(
       shortcuts: {
         LogicalKeySet(LogicalKeyboardKey.enter): const SubmitFormIntent(),
@@ -310,7 +297,6 @@ class _ProductFormPanelState extends ConsumerState<ProductFormPanel> {
               builder: (context, snap) {
                 final companies = snap.data ?? const <Company>[];
                 final busy = snap.connectionState == ConnectionState.waiting;
-
                 final safeCompanyId =
                     (_companyId != null &&
                         companies.any((c) => c.id == _companyId))
@@ -323,7 +309,6 @@ class _ProductFormPanelState extends ConsumerState<ProductFormPanel> {
                 final safeStatus = allowedStatuses.contains(_status)
                     ? _status
                     : 'ACTIVE';
-
                 return Form(
                   key: _formKey,
                   autovalidateMode: AutovalidateMode.onUserInteraction,
@@ -358,6 +343,7 @@ class _ProductFormPanelState extends ConsumerState<ProductFormPanel> {
                           labelText: 'Nom du produit',
                         ),
                         validator: _required,
+                        onChanged: (_) {},
                       ),
                       const SizedBox(height: 12),
                       TextFormField(
@@ -373,6 +359,7 @@ class _ProductFormPanelState extends ConsumerState<ProductFormPanel> {
                         decoration: const InputDecoration(
                           labelText: "Prix d'achat (optionnel)",
                         ),
+                        onChanged: (_) {},
                       ),
                       const SizedBox(height: 12),
                       TextFormField(
@@ -384,6 +371,7 @@ class _ProductFormPanelState extends ConsumerState<ProductFormPanel> {
                           labelText: 'Code (SKU)',
                         ),
                         validator: _validateSku,
+                        onChanged: (_) {},
                       ),
                       const SizedBox(height: 12),
                       TextFormField(
@@ -394,6 +382,7 @@ class _ProductFormPanelState extends ConsumerState<ProductFormPanel> {
                         decoration: const InputDecoration(
                           labelText: 'Code barre (EAN/UPC)',
                         ),
+                        onChanged: (_) {},
                       ),
                       const SizedBox(height: 12),
                       DropdownButtonFormField<String>(
@@ -437,6 +426,7 @@ class _ProductFormPanelState extends ConsumerState<ProductFormPanel> {
                         decoration: const InputDecoration(
                           labelText: 'Description',
                         ),
+                        onChanged: (_) {},
                       ),
                       const SizedBox(height: 16),
                       DropdownButtonFormField<String?>(
@@ -470,6 +460,7 @@ class _ProductFormPanelState extends ConsumerState<ProductFormPanel> {
                         decoration: const InputDecoration(
                           labelText: 'Niveau (levelId)',
                         ),
+                        onChanged: (_) {},
                       ),
                       const SizedBox(height: 12),
                       TextFormField(
@@ -482,6 +473,7 @@ class _ProductFormPanelState extends ConsumerState<ProductFormPanel> {
                         decoration: const InputDecoration(
                           labelText: 'Quantité',
                         ),
+                        onChanged: (_) {},
                       ),
                       const SizedBox(height: 8),
                       SwitchListTile(
@@ -501,6 +493,8 @@ class _ProductFormPanelState extends ConsumerState<ProductFormPanel> {
                       ),
                       const SizedBox(height: 8),
                       MediaAttachmentsPicker(
+                        maxCount: 20,
+                        maxBytes: 15 * 1024 * 1024,
                         onChanged: (items) {
                           _files = items;
                           dev.log(
