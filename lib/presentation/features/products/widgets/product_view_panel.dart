@@ -1,19 +1,24 @@
-// Right-drawer product view with live refresh after edit; uses a provider to reload
-// the product from DB. Shows remoteId only in debug builds (kDebugMode) and provides
-// an action to copy it to clipboard in any build variant.
+// lib/presentation/features/products/widgets/product_view_panel.dart
+//
+// Right-drawer product view with live refresh after edit and publish actions.
+// - Uses a provider to reload the product + images from DB
+// - Shows remoteId (if available), prices, category and stock quantity
+// - Safe layout (no Flexible inside Wrap)
 
 import 'dart:io';
-import 'package:flutter/foundation.dart' show kDebugMode;
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
+
 import 'package:money_pulse/domain/products/entities/product.dart';
 import 'package:money_pulse/presentation/shared/formatters.dart';
+
 import 'product_publish_actions.dart';
 import 'product_files_gallery.dart';
 import 'package:money_pulse/presentation/features/products/product_file_repo_provider.dart';
 import 'package:money_pulse/presentation/features/products/product_repo_provider.dart';
+
+// -- Providers ---------------------------------------------------------------
 
 final _productByIdProvider = FutureProvider.autoDispose
     .family<Product?, String>((ref, id) async {
@@ -37,12 +42,14 @@ final _imagesForPublishProvider = FutureProvider.autoDispose
       return list;
     });
 
+// -- Widget -----------------------------------------------------------------
+
 class ProductViewPanel extends ConsumerWidget {
   final Product product;
   final String? categoryLabel;
   final String marketplaceBaseUri;
 
-  // Async edit callback (awaited) to refresh after returning from edit flow
+  /// Make `onEdit` async so we can `await` it and then refresh the view.
   final Future<void> Function()? onEdit;
   final VoidCallback? onDelete;
   final VoidCallback? onShare;
@@ -61,9 +68,12 @@ class ProductViewPanel extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    // Watch the product and images by ID, so we can re-fetch after editing/publishing
     final productAsync = ref.watch(_productByIdProvider(product.id));
     final p = productAsync.asData?.value ?? product;
+    final imagesAsync = ref.watch(_imagesForPublishProvider(p.id));
 
+    // Pre-format
     final price = Formatters.amountFromCents(p.defaultPrice);
     final priceBuy = p.purchasePrice > 0
         ? Formatters.amountFromCents(p.purchasePrice)
@@ -71,28 +81,15 @@ class ProductViewPanel extends ConsumerWidget {
     final created = Formatters.dateFull(p.createdAt);
     final updated = Formatters.dateFull(p.updatedAt);
     final qty = NumberFormat.decimalPattern().format(p.quantity);
-
-    final imagesAsync = ref.watch(_imagesForPublishProvider(p.id));
+    final remoteId = (p.remoteId ?? '').trim();
 
     Future<void> _editAndRefresh() async {
       if (onEdit != null) {
-        await onEdit!.call();
+        await onEdit!.call(); // run edit flow (modal form)
+        // Re-fetch both product + images after edit
         ref.invalidate(_productByIdProvider(product.id));
+        ref.invalidate(_imagesForPublishProvider(product.id));
       }
-    }
-
-    Future<void> _copyRemoteId() async {
-      final id = (p.remoteId ?? '').trim();
-      if (id.isEmpty) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Aucun identifiant distant.')),
-        );
-        return;
-      }
-      await Clipboard.setData(ClipboardData(text: id));
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(const SnackBar(content: Text('Identifiant copié.')));
     }
 
     return Scaffold(
@@ -119,12 +116,6 @@ class ProductViewPanel extends ConsumerWidget {
             icon: const Icon(Icons.inventory_2_outlined),
             tooltip: 'Ajuster le stock',
           ),
-          // Action accessible partout: copie du remoteId (sans l’afficher en prod)
-          IconButton(
-            onPressed: _copyRemoteId,
-            icon: const Icon(Icons.copy_all_outlined),
-            tooltip: 'Copier l’ID distant',
-          ),
           IconButton(
             onPressed: onDelete,
             icon: const Icon(Icons.delete_outline),
@@ -142,6 +133,7 @@ class ProductViewPanel extends ConsumerWidget {
               final side = bc.maxWidth > maxW ? (bc.maxWidth - maxW) / 2 : 0.0;
               final isNarrow = bc.maxWidth < 640;
 
+              // Left info column (title, desc, chips)
               Widget infoColumn = Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
@@ -171,6 +163,11 @@ class ProductViewPanel extends ConsumerWidget {
                       Chip(label: Text('Stock: $qty')),
                       if ((categoryLabel ?? '').isNotEmpty)
                         Chip(label: Text('Catégorie: $categoryLabel')),
+                      if (remoteId.isNotEmpty)
+                        Chip(
+                          avatar: const Icon(Icons.cloud_done, size: 18),
+                          label: Text('Remote: ${_shortId(remoteId)}'),
+                        ),
                     ],
                   ),
                   const SizedBox(height: 6),
@@ -178,20 +175,10 @@ class ProductViewPanel extends ConsumerWidget {
                     'Créé: $created • Modifié: $updated',
                     style: Theme.of(context).textTheme.bodySmall,
                   ),
-                  // ⬇️ N’affiche l’ID que en debug (pour respecter la consigne en prod)
-                  if (kDebugMode && (p.remoteId ?? '').trim().isNotEmpty) ...[
-                    const SizedBox(height: 8),
-                    SelectableText(
-                      'ID : ${p.remoteId}',
-                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                        fontFeatures: const [FontFeature.tabularFigures()],
-                        fontFamily: 'monospace',
-                      ),
-                    ),
-                  ],
                 ],
               );
 
+              // Publish/Unpublish actions (invalidate product+images on change)
               Widget publishActions = imagesAsync.when(
                 data: (imgs) => ProductPublishActions(
                   product: p,
@@ -199,6 +186,7 @@ class ProductViewPanel extends ConsumerWidget {
                   images: imgs,
                   onChanged: () {
                     ref.invalidate(_productByIdProvider(product.id));
+                    ref.invalidate(_imagesForPublishProvider(product.id));
                     Navigator.of(context).maybePop(true);
                   },
                 ),
@@ -213,6 +201,7 @@ class ProductViewPanel extends ConsumerWidget {
                 error: (e, _) => Text('Erreur images: $e'),
               );
 
+              // Responsive header (no Flexible inside Wrap)
               Widget header;
               if (isNarrow) {
                 header = Column(
@@ -271,6 +260,8 @@ class ProductViewPanel extends ConsumerWidget {
                     ),
                   ),
                   const SizedBox(height: 12),
+
+                  // Files gallery (reloads via provider invalidation above)
                   ProductFilesGallery(productId: p.id),
                 ],
               );
@@ -279,5 +270,10 @@ class ProductViewPanel extends ConsumerWidget {
         },
       ),
     );
+  }
+
+  String _shortId(String id) {
+    if (id.length <= 10) return id;
+    return '${id.substring(0, 6)}…${id.substring(id.length - 4)}';
   }
 }

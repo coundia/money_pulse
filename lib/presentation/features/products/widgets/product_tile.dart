@@ -1,6 +1,7 @@
 // Responsive product list tile with formatted price and an optional thumbnail.
 // Shows a colored status chip below the price. Supports local file or remote URL.
 // NEW: remote sync indicator (cloud) shown before the title when `remoteId` is present.
+// NEW: `logoUrl` fallback + spinner while images load.
 
 import 'dart:io';
 import 'package:flutter/material.dart';
@@ -12,9 +13,19 @@ class ProductTile extends StatelessWidget {
   final String? subtitle;
   final int priceCents;
   final String? statuses;
-  final String? imagePath; // local file path (preferred if present)
-  final String? imageUrl; // remote url fallback
-  final String? remoteId; // NEW: shows cloud status when present
+
+  /// Highest priority: local image path (fast & offline)
+  final String? imagePath;
+
+  /// Next priority: product remote image URL
+  final String? imageUrl;
+
+  /// Fallback: a logo URL (e.g., company/product logo) to show if no product image is available
+  final String? logoUrl;
+
+  /// Shows cloud indicator when present
+  final String? remoteId;
+
   final VoidCallback? onTap;
   final Future<void> Function(String action)? onMenuAction;
 
@@ -26,7 +37,8 @@ class ProductTile extends StatelessWidget {
     this.statuses,
     this.imagePath,
     this.imageUrl,
-    this.remoteId, // NEW
+    this.logoUrl, // ← NEW
+    this.remoteId,
     this.onTap,
     this.onMenuAction,
   });
@@ -51,41 +63,85 @@ class ProductTile extends StatelessWidget {
 
   Widget _leadingThumb(BuildContext context) {
     const double size = 48;
-    Widget img;
 
+    // 1) Local file
     if (imagePath != null &&
         imagePath!.isNotEmpty &&
         File(imagePath!).existsSync()) {
-      img = Image.file(
-        File(imagePath!),
-        fit: BoxFit.cover,
-        width: size,
-        height: size,
-        errorBuilder: (_, __, ___) =>
-            const Icon(Icons.image_not_supported_outlined),
-      );
-    } else if (imageUrl != null && imageUrl!.isNotEmpty) {
-      img = Image.network(
-        imageUrl!,
-        fit: BoxFit.cover,
-        width: size,
-        height: size,
-        errorBuilder: (_, __, ___) =>
-            const Icon(Icons.image_not_supported_outlined),
-      );
-    } else {
-      // Fallback avatar with initial
-      return CircleAvatar(
-        radius: size / 2,
-        child: Text(
-          (title.isNotEmpty ? title.characters.first : '?').toUpperCase(),
+      return _roundedThumb(
+        child: Image.file(
+          File(imagePath!),
+          fit: BoxFit.cover,
+          width: size,
+          height: size,
+          errorBuilder: (_, __, ___) =>
+              const Icon(Icons.image_not_supported_outlined),
         ),
+        size: size,
       );
     }
 
+    // Helper for network image with spinner & graceful fallback
+    Widget _net(String url) {
+      return Image.network(
+        url,
+        fit: BoxFit.cover,
+        width: size,
+        height: size,
+        // Tiny spinner while loading
+        loadingBuilder: (context, child, progress) {
+          if (progress == null) return child;
+          return const Center(
+            child: SizedBox(
+              width: 18,
+              height: 18,
+              child: CircularProgressIndicator(strokeWidth: 2),
+            ),
+          );
+        },
+        errorBuilder: (_, __, ___) =>
+            const Icon(Icons.image_not_supported_outlined),
+      );
+    }
+
+    // 2) Product remote URL
+    if (imageUrl != null && imageUrl!.trim().isNotEmpty) {
+      return _roundedThumb(child: _net(imageUrl!), size: size);
+    }
+
+    // 3) Logo URL fallback (requested)
+    if (logoUrl != null && logoUrl!.trim().isNotEmpty) {
+      return _roundedThumb(child: _net(logoUrl!), size: size);
+    }
+
+    // 4) App transparent 1px placeholder asset (keeps layout nice if you want a consistent box)
+    // Make sure you have this in pubspec:
+    // assets:
+    //   - assets/transparent_1px.png
+    return _roundedThumb(
+      child: Image.asset(
+        'assets/transparent_1px.png',
+        fit: BoxFit.cover,
+        width: size,
+        height: size,
+        errorBuilder: (_, __, ___) {
+          // 5) Last fallback: an avatar with the initial
+          return CircleAvatar(
+            radius: size / 2,
+            child: Text(
+              (title.isNotEmpty ? title.characters.first : '?').toUpperCase(),
+            ),
+          );
+        },
+      ),
+      size: size,
+    );
+  }
+
+  Widget _roundedThumb({required Widget child, required double size}) {
     return ClipRRect(
       borderRadius: BorderRadius.circular(10),
-      child: SizedBox(width: size, height: size, child: img),
+      child: SizedBox(width: size, height: size, child: child),
     );
   }
 
@@ -181,8 +237,10 @@ class ProductTile extends StatelessWidget {
           ],
         ),
 
-        // Optional subtitle (one-liner)
-        subtitle: null,
+        // Optional subtitle if you want to show it
+        subtitle: (subtitle == null || subtitle!.trim().isEmpty)
+            ? null
+            : Text(subtitle!, maxLines: 1, overflow: TextOverflow.ellipsis),
 
         trailing: Column(
           mainAxisAlignment: MainAxisAlignment.center,

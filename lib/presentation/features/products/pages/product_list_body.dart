@@ -378,7 +378,7 @@ class ProductListBodyState extends ConsumerState<ProductListBody> {
 
               return ProductTile(
                 title: p.name ?? p.code ?? 'Produit',
-                subtitle: sub.isEmpty ? null : sub,
+                subtitle: null,
                 priceCents: p.defaultPrice,
                 statuses: p.statuses,
                 remoteId: p.remoteId,

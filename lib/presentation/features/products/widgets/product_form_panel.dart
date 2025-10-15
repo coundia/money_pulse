@@ -1,4 +1,6 @@
-// Product form with robust Quantity input: +/- controls, keyboard arrows, keeps 0 values and never disables editing.
+// Product form with robust Quantity input: +/- controls, keyboard arrows,
+// keeps 0 values if the user sets it, BUT default is 1 for new products.
+// Default status is PUBLISH for new products.
 
 import 'dart:developer' as dev;
 import 'package:flutter/material.dart';
@@ -28,6 +30,7 @@ class ProductFormResult {
   final int quantity;
   final bool hasSold;
   final bool hasPrice;
+
   const ProductFormResult({
     this.code,
     required this.name,
@@ -36,11 +39,11 @@ class ProductFormResult {
     this.categoryId,
     required this.priceCents,
     this.purchasePriceCents = 0,
-    this.status = 'ACTIVE',
+    this.status = 'PUBLISH', // ← default PUBLISH
     this.files = const [],
     this.companyId,
     this.levelId,
-    this.quantity = 0,
+    this.quantity = 1, // ← default 1
     this.hasSold = false,
     this.hasPrice = false,
   });
@@ -86,7 +89,8 @@ class _ProductFormPanelState extends ConsumerState<ProductFormPanel> {
     text: widget.existing?.levelId ?? '',
   );
   late final TextEditingController _quantity = TextEditingController(
-    text: (widget.existing?.quantity ?? 0).toString(),
+    // default 1 if new, else existing quantity
+    text: (widget.existing?.quantity ?? 1).toString(),
   );
 
   bool _hasSold = false;
@@ -102,7 +106,7 @@ class _ProductFormPanelState extends ConsumerState<ProductFormPanel> {
   final _fQuantity = FocusNode();
 
   String? _categoryId;
-  String _status = 'ACTIVE';
+  String _status = 'PUBLISH'; // default PUBLISH if new
   String? _companyId;
   List<PickedAttachment> _files = const [];
 
@@ -120,15 +124,27 @@ class _ProductFormPanelState extends ConsumerState<ProductFormPanel> {
   @override
   void initState() {
     super.initState();
+
     _categoryId =
         widget.existing?.categoryId ??
         (widget.categories.isNotEmpty ? widget.categories.first.id : null);
-    _status = _normalizeStatus(widget.existing?.statuses ?? 'ACTIVE');
-    _hasSold = (widget.existing?.hasSold ?? 0) == 1;
-    _hasPrice = (widget.existing?.hasPrice ?? 0) == 1;
-    _companyId = widget.existing?.company;
+
+    // If editing: normalize from existing; else defaults already set above.
+    if (widget.existing != null) {
+      _status = _normalizeStatus(widget.existing?.statuses ?? 'PUBLISH');
+      _hasSold = (widget.existing?.hasSold ?? 0) == 1;
+      _hasPrice = (widget.existing?.hasPrice ?? 0) == 1;
+      _companyId = widget.existing?.company;
+      _quantity.text = (widget.existing?.quantity ?? 1).toString();
+    } else {
+      _status = 'PUBLISH';
+      _hasSold = false;
+      _hasPrice = false;
+      _quantity.text = '1';
+    }
+
     dev.log(
-      'ProductFormPanel init status=$_status cat=$_categoryId company=$_companyId',
+      'ProductFormPanel init status=$_status cat=$_categoryId company=$_companyId qty=${_quantity.text}',
       name: 'ProductFormPanel',
     );
   }
@@ -157,7 +173,7 @@ class _ProductFormPanelState extends ConsumerState<ProductFormPanel> {
   String _normalizeStatus(String v) {
     final codes = _statusOptions.map((e) => e.$1).toSet();
     final up = v.trim().toUpperCase();
-    return codes.contains(up) ? up : 'ACTIVE';
+    return codes.contains(up) ? up : 'PUBLISH';
   }
 
   String _moneyFromCents(int cents) {
@@ -243,7 +259,7 @@ class _ProductFormPanelState extends ConsumerState<ProductFormPanel> {
       purchasePriceCents: _priceBuy.text.trim().isEmpty
           ? 0
           : _toCents(_priceBuy.text),
-      status: _status,
+      status: _status, // will be PUBLISH by default for new
       files: _files,
       companyId: (_companyId ?? '').isEmpty ? null : _companyId,
       levelId: _levelId.text.trim().isEmpty ? null : _levelId.text.trim(),
@@ -252,7 +268,7 @@ class _ProductFormPanelState extends ConsumerState<ProductFormPanel> {
       hasPrice: _hasPrice,
     );
     dev.log(
-      'submit name=${result.name} price=${result.priceCents} qty=${result.quantity} files=${result.files.length}',
+      'submit name=${result.name} price=${result.priceCents} qty=${result.quantity} status=${result.status} files=${result.files.length}',
       name: 'ProductFormPanel',
     );
     Navigator.pop(context, result);
@@ -265,9 +281,7 @@ class _ProductFormPanelState extends ConsumerState<ProductFormPanel> {
       shortcuts: {
         LogicalKeySet(LogicalKeyboardKey.enter): const SubmitFormIntent(),
         LogicalKeySet(LogicalKeyboardKey.numpadEnter): const SubmitFormIntent(),
-        LogicalKeySet(
-          LogicalKeyboardKey.arrowUp,
-        ): const SubmitFormIntent(), // optional: validate on up if on last field
+        LogicalKeySet(LogicalKeyboardKey.arrowUp): const SubmitFormIntent(),
       },
       child: Actions(
         actions: {
@@ -327,7 +341,7 @@ class _ProductFormPanelState extends ConsumerState<ProductFormPanel> {
                     .toList();
                 final safeStatus = allowedStatuses.contains(_status)
                     ? _status
-                    : 'ACTIVE';
+                    : 'PUBLISH';
 
                 return Form(
                   key: _formKey,
@@ -428,7 +442,7 @@ class _ProductFormPanelState extends ConsumerState<ProductFormPanel> {
                             )
                             .toList(),
                         onChanged: (v) => setState(
-                          () => _status = _normalizeStatus(v ?? 'ACTIVE'),
+                          () => _status = _normalizeStatus(v ?? 'PUBLISH'),
                         ),
                         decoration: const InputDecoration(labelText: 'Statut'),
                       ),
