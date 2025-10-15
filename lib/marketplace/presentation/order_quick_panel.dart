@@ -1,4 +1,13 @@
 // Mini right-drawer quick order panel (French UI) with duplicate-order guard and confirmation.
+// UX improvements:
+// - Primary "Valider" action added to the AppBar (top-right) with loading state
+// - Clear total section with info button
+// - Quantity stepper polished (filled/tonal buttons)
+// - Better focus traversal (Enter submits)
+// - Helper texts + subtle spacing
+//
+// Keeps existing behavior: duplicate-check, prefs prefill, session prefill, confirmation drawer.
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -10,7 +19,6 @@ import '../domain/entities/marketplace_item.dart';
 import 'package:money_pulse/onboarding/presentation/providers/access_session_provider.dart';
 import '../domain/entities/order_command_request.dart';
 import '../infrastructure/order_command_repo_provider.dart';
-import 'package:flutter/foundation.dart';
 import 'widgets/order_confirmation_panel.dart';
 import '../infrastructure/order_guard_provider.dart';
 
@@ -418,6 +426,22 @@ class _OrderQuickPanelState extends ConsumerState<OrderQuickPanel> {
                     onPressed: _submitting ? null : _clearFormFields,
                     icon: const Icon(Icons.delete_sweep),
                   ),
+                  const SizedBox(width: 6),
+                  // 🔝 Primary action on top
+                  Padding(
+                    padding: const EdgeInsets.only(right: 10),
+                    child: FilledButton.icon(
+                      onPressed: _submitting ? null : _submit,
+                      icon: _submitting
+                          ? const SizedBox(
+                              width: 16,
+                              height: 16,
+                              child: CircularProgressIndicator(strokeWidth: 2),
+                            )
+                          : const Icon(Icons.check),
+                      label: Text(_submitting ? 'Envoi…' : 'Valider'),
+                    ),
+                  ),
                 ],
               ),
             ),
@@ -426,6 +450,7 @@ class _OrderQuickPanelState extends ConsumerState<OrderQuickPanel> {
               child: ListView(
                 padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
                 children: [
+                  // TOTAL CARD
                   Container(
                     padding: const EdgeInsets.all(12),
                     decoration: BoxDecoration(
@@ -464,14 +489,17 @@ class _OrderQuickPanelState extends ConsumerState<OrderQuickPanel> {
                       ],
                     ),
                   ),
+
                   const SizedBox(height: 16),
                   TextFormField(
                     controller: _phoneCtrl,
                     decoration: const InputDecoration(
                       labelText: 'Identifiant',
                       hintText: 'Téléphone ou Email',
+                      helperText:
+                          'Nous permet de vous joindre pour la livraison.',
                     ),
-
+                    autofocus: true,
                     textInputAction: TextInputAction.next,
                     validator: (v) => (v == null || v.trim().isEmpty)
                         ? 'Identifiant requis'
@@ -496,6 +524,7 @@ class _OrderQuickPanelState extends ConsumerState<OrderQuickPanel> {
                 ],
               ),
             ),
+            // Keep bottom CTA for convenience (mirrors top action)
             bottomNavigationBar: SafeArea(
               top: false,
               child: Padding(
@@ -594,7 +623,10 @@ class _QtyWithStepperState extends State<_QtyWithStepper> {
           child: TextFormField(
             controller: widget.controller,
             enabled: widget.enabled,
-            decoration: const InputDecoration(labelText: 'Quantité'),
+            decoration: const InputDecoration(
+              labelText: 'Quantité',
+              helperText: 'Minimum 1.',
+            ),
             keyboardType: TextInputType.number,
             textInputAction: TextInputAction.done,
             onChanged: (_) => widget.onChanged(),

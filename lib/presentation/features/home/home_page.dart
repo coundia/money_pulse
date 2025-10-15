@@ -78,8 +78,9 @@ class _HomePageState extends ConsumerState<HomePage>
   /// 🔁 Quand l’app revient en avant-plan, on rafraîchit
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
+    print("didChangeAppLifecycleState");
     if (state == AppLifecycleState.resumed) {
-      _refreshAll(remount: true);
+      //_refreshAll(remount: true);
     }
   }
 

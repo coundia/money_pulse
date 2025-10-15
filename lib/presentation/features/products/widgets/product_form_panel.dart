@@ -1,6 +1,12 @@
 // Product form with robust Quantity input: +/- controls, keyboard arrows,
 // keeps 0 values if the user sets it, BUT default is 1 for new products.
 // Default status is PUBLISH for new products.
+// UI/UX improvements:
+// - Primary "Enregistrer" action in the AppBar (top-right) with loading state
+// - Clear section headers, helper texts, and subtle spacing
+// - ChoiceChip selector for status (faster than a dropdown)
+// - Sticky bottom bar kept for large screens / one-handed use
+// - Better focus traversal and Enter-to-save shortcut
 
 import 'dart:developer' as dev;
 import 'package:flutter/material.dart';
@@ -39,7 +45,7 @@ class ProductFormResult {
     this.categoryId,
     required this.priceCents,
     this.purchasePriceCents = 0,
-    this.status = 'PUBLISH', // ← default PUBLISH
+    this.status = 'ACTIVE', // ← default PUBLISH
     this.files = const [],
     this.companyId,
     this.levelId,
@@ -63,6 +69,7 @@ class ProductFormPanel extends ConsumerStatefulWidget {
 
 class _ProductFormPanelState extends ConsumerState<ProductFormPanel> {
   final _formKey = GlobalKey<FormState>();
+
   late final TextEditingController _code = TextEditingController(
     text: widget.existing?.code ?? '',
   );
@@ -95,6 +102,7 @@ class _ProductFormPanelState extends ConsumerState<ProductFormPanel> {
 
   bool _hasSold = false;
   bool _hasPrice = false;
+  bool _saving = false;
 
   final _fName = FocusNode();
   final _fCode = FocusNode();
@@ -106,7 +114,7 @@ class _ProductFormPanelState extends ConsumerState<ProductFormPanel> {
   final _fQuantity = FocusNode();
 
   String? _categoryId;
-  String _status = 'PUBLISH'; // default PUBLISH if new
+  String _status = 'ACTIVE'; // default PUBLISH if new
   String? _companyId;
   List<PickedAttachment> _files = const [];
 
@@ -117,7 +125,7 @@ class _ProductFormPanelState extends ConsumerState<ProductFormPanel> {
   ];
 
   static final _numFilter = FilteringTextInputFormatter.allow(
-    RegExp(r'[0-9\.\, \u00A0\u202F]'),
+    RegExp(r'[0-9\\., \\u00A0\\u202F]'),
   );
   static final _intFilter = FilteringTextInputFormatter.allow(RegExp(r'[0-9]'));
 
@@ -247,8 +255,12 @@ class _ProductFormPanelState extends ConsumerState<ProductFormPanel> {
     _setQuantity(current + delta);
   }
 
-  void _submit() {
+  Future<void> _submit() async {
+    if (_saving) return;
     if (!_formKey.currentState!.validate()) return;
+
+    setState(() => _saving = true);
+
     final result = ProductFormResult(
       code: _code.text.trim().isEmpty ? null : _code.text.trim(),
       name: _name.text.trim(),
@@ -267,21 +279,26 @@ class _ProductFormPanelState extends ConsumerState<ProductFormPanel> {
       hasSold: _hasSold,
       hasPrice: _hasPrice,
     );
+
     dev.log(
       'submit name=${result.name} price=${result.priceCents} qty=${result.quantity} status=${result.status} files=${result.files.length}',
       name: 'ProductFormPanel',
     );
+
+    if (!mounted) return;
     Navigator.pop(context, result);
   }
 
   @override
   Widget build(BuildContext context) {
     final isEdit = widget.existing != null;
+
     return Shortcuts(
       shortcuts: {
         LogicalKeySet(LogicalKeyboardKey.enter): const SubmitFormIntent(),
         LogicalKeySet(LogicalKeyboardKey.numpadEnter): const SubmitFormIntent(),
-        LogicalKeySet(LogicalKeyboardKey.arrowUp): const SubmitFormIntent(),
+        LogicalKeySet(LogicalKeyboardKey.meta, LogicalKeyboardKey.keyS):
+            const SubmitFormIntent(), // ⌘S / Ctrl+S on desktop
       },
       child: Actions(
         actions: {
@@ -297,9 +314,25 @@ class _ProductFormPanelState extends ConsumerState<ProductFormPanel> {
             title: Text(isEdit ? 'Modifier le produit' : 'Nouveau produit'),
             leading: IconButton(
               icon: const Icon(Icons.close),
-              onPressed: () => Navigator.pop(context),
+              onPressed: _saving ? null : () => Navigator.pop(context),
               tooltip: 'Fermer',
             ),
+            actions: [
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 8.0),
+                child: FilledButton.icon(
+                  onPressed: _saving ? null : _submit,
+                  icon: _saving
+                      ? const SizedBox(
+                          width: 16,
+                          height: 16,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        )
+                      : const Icon(Icons.check),
+                  label: Text(isEdit ? 'Enregistrer' : 'Ajouter'),
+                ),
+              ),
+            ],
           ),
           bottomNavigationBar: SafeArea(
             child: Padding(
@@ -308,15 +341,21 @@ class _ProductFormPanelState extends ConsumerState<ProductFormPanel> {
                 children: [
                   Expanded(
                     child: OutlinedButton(
-                      onPressed: () => Navigator.pop(context),
+                      onPressed: _saving ? null : () => Navigator.pop(context),
                       child: const Text('Annuler'),
                     ),
                   ),
                   const SizedBox(width: 12),
                   Expanded(
                     child: FilledButton.icon(
-                      onPressed: _submit,
-                      icon: const Icon(Icons.check),
+                      onPressed: _saving ? null : _submit,
+                      icon: _saving
+                          ? const SizedBox(
+                              width: 16,
+                              height: 16,
+                              child: CircularProgressIndicator(strokeWidth: 2),
+                            )
+                          : const Icon(Icons.check),
                       label: Text(isEdit ? 'Enregistrer' : 'Ajouter'),
                     ),
                   ),
@@ -335,20 +374,19 @@ class _ProductFormPanelState extends ConsumerState<ProductFormPanel> {
                         companies.any((c) => c.id == _companyId))
                     ? _companyId
                     : null;
-                final allowedStatuses = _statusOptions
-                    .map((e) => e.$1)
-                    .toSet()
-                    .toList();
-                final safeStatus = allowedStatuses.contains(_status)
-                    ? _status
-                    : 'PUBLISH';
 
                 return Form(
                   key: _formKey,
                   autovalidateMode: AutovalidateMode.onUserInteraction,
                   child: ListView(
-                    padding: const EdgeInsets.all(16),
+                    padding: const EdgeInsets.fromLTRB(16, 16, 16, 24),
                     children: [
+                      // ====== PRIX DE VENTE ======
+                      Text(
+                        'Prix & coût',
+                        style: Theme.of(context).textTheme.titleMedium,
+                      ),
+                      const SizedBox(height: 8),
                       AmountFieldQuickPad(
                         controller: _priceSell,
                         quickUnits: const [
@@ -367,17 +405,6 @@ class _ProductFormPanelState extends ConsumerState<ProductFormPanel> {
                         ],
                         onChanged: () => setState(() {}),
                       ),
-                      const SizedBox(height: 16),
-                      TextFormField(
-                        focusNode: _fName,
-                        controller: _name,
-                        textInputAction: TextInputAction.next,
-                        onFieldSubmitted: (_) => _fCode.requestFocus(),
-                        decoration: const InputDecoration(
-                          labelText: 'Nom du produit',
-                        ),
-                        validator: _required,
-                      ),
                       const SizedBox(height: 12),
                       TextFormField(
                         focusNode: _fPriceBuy,
@@ -388,10 +415,31 @@ class _ProductFormPanelState extends ConsumerState<ProductFormPanel> {
                         ),
                         inputFormatters: [_numFilter],
                         textInputAction: TextInputAction.next,
-                        onFieldSubmitted: (_) => _fCompany.requestFocus(),
+                        onFieldSubmitted: (_) => _fName.requestFocus(),
                         decoration: const InputDecoration(
                           labelText: "Prix d'achat (optionnel)",
+                          helperText: 'Coût d’acquisition (FCFA).',
                         ),
+                        enabled: !_saving,
+                      ),
+
+                      const SizedBox(height: 20),
+                      // ====== IDENTITÉ ======
+                      Text(
+                        'Identité',
+                        style: Theme.of(context).textTheme.titleMedium,
+                      ),
+                      const SizedBox(height: 8),
+                      TextFormField(
+                        focusNode: _fName,
+                        controller: _name,
+                        textInputAction: TextInputAction.next,
+                        onFieldSubmitted: (_) => _fCode.requestFocus(),
+                        decoration: const InputDecoration(
+                          labelText: 'Nom du produit',
+                        ),
+                        validator: _required,
+                        enabled: !_saving,
                       ),
                       const SizedBox(height: 12),
                       TextFormField(
@@ -401,8 +449,10 @@ class _ProductFormPanelState extends ConsumerState<ProductFormPanel> {
                         onFieldSubmitted: (_) => _fBarcode.requestFocus(),
                         decoration: const InputDecoration(
                           labelText: 'Code (SKU)',
+                          helperText: 'Laissez vide pour ignorer.',
                         ),
                         validator: _validateSku,
+                        enabled: !_saving,
                       ),
                       const SizedBox(height: 12),
                       TextFormField(
@@ -413,6 +463,7 @@ class _ProductFormPanelState extends ConsumerState<ProductFormPanel> {
                         decoration: const InputDecoration(
                           labelText: 'Code barre (EAN/UPC)',
                         ),
+                        enabled: !_saving,
                       ),
                       const SizedBox(height: 12),
                       DropdownButtonFormField<String>(
@@ -425,28 +476,14 @@ class _ProductFormPanelState extends ConsumerState<ProductFormPanel> {
                               ),
                             )
                             .toList(),
-                        onChanged: (v) => setState(() => _categoryId = v),
+                        onChanged: _saving
+                            ? null
+                            : (v) => setState(() => _categoryId = v),
                         decoration: const InputDecoration(
                           labelText: 'Catégorie',
                         ),
                       ),
                       const SizedBox(height: 12),
-                      DropdownButtonFormField<String>(
-                        value: safeStatus,
-                        items: _statusOptions
-                            .map(
-                              (e) => DropdownMenuItem(
-                                value: e.$1,
-                                child: Text(e.$2),
-                              ),
-                            )
-                            .toList(),
-                        onChanged: (v) => setState(
-                          () => _status = _normalizeStatus(v ?? 'PUBLISH'),
-                        ),
-                        decoration: const InputDecoration(labelText: 'Statut'),
-                      ),
-                      const SizedBox(height: 16),
                       TextFormField(
                         focusNode: _fDesc,
                         controller: _desc,
@@ -455,9 +492,40 @@ class _ProductFormPanelState extends ConsumerState<ProductFormPanel> {
                         onFieldSubmitted: (_) => _fCompany.requestFocus(),
                         decoration: const InputDecoration(
                           labelText: 'Description',
+                          helperText:
+                              'Quelques mots pour présenter le produit.',
                         ),
+                        enabled: !_saving,
                       ),
-                      const SizedBox(height: 16),
+
+                      const SizedBox(height: 20),
+                      // ====== ÉTAT & SOCIÉTÉ ======
+                      Text(
+                        'État & société',
+                        style: Theme.of(context).textTheme.titleMedium,
+                      ),
+                      const SizedBox(height: 8),
+                      Wrap(
+                        spacing: 8,
+                        runSpacing: 8,
+                        children: _statusOptions.map((opt) {
+                          final selected = _status == opt.$1;
+                          return ChoiceChip(
+                            label: Text(opt.$2),
+                            selected: selected,
+                            onSelected: _saving
+                                ? null
+                                : (v) {
+                                    if (!v) return;
+                                    setState(() => _status = opt.$1);
+                                  },
+                            avatar: selected
+                                ? const Icon(Icons.check, size: 18)
+                                : null,
+                          );
+                        }).toList(),
+                      ),
+                      const SizedBox(height: 12),
                       DropdownButtonFormField<String?>(
                         key: ValueKey(safeCompanyId),
                         focusNode: _fCompany,
@@ -475,11 +543,12 @@ class _ProductFormPanelState extends ConsumerState<ProductFormPanel> {
                             ),
                           ),
                         ],
-                        onChanged: busy
+                        onChanged: (_saving || busy)
                             ? null
                             : (v) => setState(() => _companyId = v),
                         decoration: const InputDecoration(labelText: 'Société'),
                       ),
+
                       const SizedBox(height: 12),
                       TextFormField(
                         focusNode: _fLevel,
@@ -488,11 +557,18 @@ class _ProductFormPanelState extends ConsumerState<ProductFormPanel> {
                         onFieldSubmitted: (_) => _fQuantity.requestFocus(),
                         decoration: const InputDecoration(
                           labelText: 'Niveau (levelId)',
+                          helperText: 'Identifiant de niveau, optionnel.',
                         ),
+                        enabled: !_saving,
                       ),
-                      const SizedBox(height: 12),
 
-                      // >>> Quantité : champ + boutons +/-  <<<
+                      const SizedBox(height: 12),
+                      // ====== QUANTITÉ ======
+                      Text(
+                        'Stock',
+                        style: Theme.of(context).textTheme.titleMedium,
+                      ),
+                      const SizedBox(height: 8),
                       Row(
                         children: [
                           Expanded(
@@ -511,22 +587,28 @@ class _ProductFormPanelState extends ConsumerState<ProductFormPanel> {
                               onFieldSubmitted: (_) => _submit(),
                               decoration: const InputDecoration(
                                 labelText: 'Quantité',
+                                helperText:
+                                    'Par défaut 1 pour les nouveaux produits.',
                               ),
+                              enabled: !_saving,
                             ),
                           ),
                           const SizedBox(width: 8),
                           Tooltip(
                             message: '—1',
-                            child: IconButton(
-                              onPressed: () => _incQuantity(-1),
-                              icon: const Icon(Icons.remove_circle_outline),
+                            child: IconButton.filledTonal(
+                              onPressed: _saving
+                                  ? null
+                                  : () => _incQuantity(-1),
+                              icon: const Icon(Icons.remove),
                             ),
                           ),
+                          const SizedBox(width: 6),
                           Tooltip(
                             message: '+1',
-                            child: IconButton(
-                              onPressed: () => _incQuantity(1),
-                              icon: const Icon(Icons.add_circle_outline),
+                            child: IconButton.filledTonal(
+                              onPressed: _saving ? null : () => _incQuantity(1),
+                              icon: const Icon(Icons.add),
                             ),
                           ),
                         ],
@@ -536,14 +618,20 @@ class _ProductFormPanelState extends ConsumerState<ProductFormPanel> {
                       SwitchListTile(
                         title: const Text('Déjà vendu (hasSold)'),
                         value: _hasSold,
-                        onChanged: (v) => setState(() => _hasSold = v),
+                        onChanged: _saving
+                            ? null
+                            : (v) => setState(() => _hasSold = v),
                       ),
                       SwitchListTile(
                         title: const Text('Possède un prix (hasPrice)'),
                         value: _hasPrice,
-                        onChanged: (v) => setState(() => _hasPrice = v),
+                        onChanged: _saving
+                            ? null
+                            : (v) => setState(() => _hasPrice = v),
                       ),
-                      const SizedBox(height: 16),
+
+                      const SizedBox(height: 20),
+                      // ====== FICHIERS ======
                       Text(
                         'Pièces jointes',
                         style: Theme.of(context).textTheme.titleMedium,
@@ -563,10 +651,12 @@ class _ProductFormPanelState extends ConsumerState<ProductFormPanel> {
                           'attachments error $m',
                           name: 'ProductFormPanel',
                         ),
+                        // Enabled state handled internally; form still readable while saving.
                       ),
-                      const SizedBox(height: 10),
+
+                      const SizedBox(height: 12),
                       Text(
-                        'Astuce : appuyez sur Entrée pour enregistrer rapidement.',
+                        'Astuce : Entrée pour enregistrer. Sur desktop, essayez Ctrl/⌘ + S.',
                         style: Theme.of(context).textTheme.bodySmall,
                       ),
                     ],
