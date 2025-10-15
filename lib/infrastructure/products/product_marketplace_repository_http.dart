@@ -1,7 +1,9 @@
-// product_marketplace_repository_http.dart
+// Product marketplace HTTP repository with unified 'log' payload and safe dev logging.
+
 import 'dart:convert';
 import 'dart:io';
 import 'dart:async';
+import 'dart:developer' as dev;
 import 'package:http/http.dart' as http;
 import 'package:money_pulse/domain/products/entities/product.dart';
 import 'package:money_pulse/domain/products/repositories/product_marketplace_repository.dart';
@@ -22,6 +24,36 @@ class ProductMarketplaceRepositoryHttp implements ProductMarketplaceRepository {
 
   ProductMarketplaceRepositoryHttp(this.baseUri, this._http, this._headers);
 
+  Map<String, dynamic> _clientLog({
+    required String endpoint,
+    required String action,
+    Map<String, String>? headers,
+    Map<String, dynamic>? extra,
+  }) {
+    final now = DateTime.now().toUtc();
+    return {
+      'at': now.toIso8601String(),
+      'tzOffsetMin': DateTime.now().timeZoneOffset.inMinutes,
+      'platform': Platform.operatingSystem,
+      'platformVersion': Platform.operatingSystemVersion,
+      'dartVersion': Platform.version,
+      'endpoint': endpoint,
+      'action': action,
+      'headerUser': headers?['X-User-Id'] ?? headers?['x-user-id'],
+      'headerTenant': headers?['X-Tenant-Id'] ?? headers?['x-tenant-id'],
+      if (extra != null) ...extra,
+    };
+  }
+
+  void _devLogPayload(String name, Uri uri, Object payload) {
+    try {
+      final pretty = const JsonEncoder.withIndent('  ').convert(payload);
+      dev.log('POST→ $uri\n$pretty', name: name);
+    } catch (_) {
+      dev.log('POST→ $uri\n$payload', name: name);
+    }
+  }
+
   String _extractApiMessage(String body) {
     try {
       final decoded = jsonDecode(body);
@@ -41,14 +73,10 @@ class ProductMarketplaceRepositoryHttp implements ProductMarketplaceRepository {
         final first = decoded.first.toString().trim();
         if (first.isNotEmpty) return first;
       }
-    } catch (_) {
-      /* ignore parse errors */
-    }
-
+    } catch (_) {}
     final t = body.trim();
-    if (t.startsWith('{') || t.startsWith('[')) {
+    if (t.startsWith('{') || t.startsWith('['))
       return 'Une erreur est survenue côté serveur.';
-    }
     return t.isEmpty ? 'Une erreur est survenue côté serveur.' : t;
   }
 
@@ -66,7 +94,7 @@ class ProductMarketplaceRepositoryHttp implements ProductMarketplaceRepository {
       final headers = _headers();
       req.headers.addAll(headers..remove('Content-Type'));
 
-      req.fields['product'] = jsonEncode({
+      final productMap = {
         'remoteId': product.remoteId,
         'localId': product.localId,
         'code': product.code,
@@ -79,7 +107,20 @@ class ProductMarketplaceRepositoryHttp implements ProductMarketplaceRepository {
         'defaultPrice': product.defaultPrice,
         'statuses': product.statuses,
         'purchasePrice': product.purchasePrice,
+        'log': _clientLog(
+          endpoint: '/api/v1/marketplace',
+          action: 'pushToMarketplace',
+          headers: headers,
+          extra: {'hasImages': images.isNotEmpty},
+        ),
+      }..removeWhere((_, v) => v == null);
+
+      _devLogPayload('ProductMarketplaceRepositoryHttp', uri, {
+        'product': productMap,
+        'files': '[${images.length} files]',
       });
+
+      req.fields['product'] = jsonEncode(productMap);
 
       for (final f in images) {
         req.files.add(await http.MultipartFile.fromPath('files', f.path));
@@ -88,11 +129,8 @@ class ProductMarketplaceRepositoryHttp implements ProductMarketplaceRepository {
       final streamed = await _http.send(req);
       final resp = await http.Response.fromStream(streamed);
 
-      if (resp.statusCode < 200 || resp.statusCode >= 300) {
-        _throwHttp(resp);
-      }
+      if (resp.statusCode < 200 || resp.statusCode >= 300) _throwHttp(resp);
 
-      // Return product possibly enriched by the server response
       try {
         final body = jsonDecode(resp.body);
         if (body is Map<String, dynamic>) {
@@ -124,14 +162,24 @@ class ProductMarketplaceRepositoryHttp implements ProductMarketplaceRepository {
     );
     final headers = _headers();
     try {
+      final payload = {
+        'statuses': statusesCode,
+        'log': _clientLog(
+          endpoint: '/api/v1/marketplace/{id}/status',
+          action: 'changeRemoteStatus',
+          headers: headers,
+          extra: {'productRemoteId': product.remoteId},
+        ),
+      };
+
+      _devLogPayload('ProductMarketplaceRepositoryHttp', uri, payload);
+
       final resp = await _http.post(
         uri,
         headers: {...headers, 'Content-Type': 'application/json'},
-        body: jsonEncode({'statuses': statusesCode}),
+        body: jsonEncode(payload),
       );
-      if (resp.statusCode < 200 || resp.statusCode >= 300) {
-        _throwHttp(resp);
-      }
+      if (resp.statusCode < 200 || resp.statusCode >= 300) _throwHttp(resp);
     } on SocketException {
       throw ApiException(
         'Impossible de se connecter au serveur. Vérifiez votre connexion.',

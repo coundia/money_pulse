@@ -1,9 +1,7 @@
-// Three-action toolbar to publish, unpublish, and republish a product,
-// now requiring an authenticated user via requireAccess() before any action.
-// "Republier" is NEVER disabled.
+// Publish/Unpublish/Republish toolbar; no payload building here, but add dev logs around actions.
 
-import 'dart:convert';
 import 'dart:io';
+import 'dart:developer' as dev;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:money_pulse/domain/products/entities/product.dart';
@@ -13,7 +11,6 @@ import 'package:money_pulse/onboarding/presentation/providers/access_session_pro
 
 import '../../../../shared/api_error_toast.dart';
 
-// If you put ApiException in a shared file, import it instead.
 class ApiException implements Exception {
   final String message;
   final int? statusCode;
@@ -72,6 +69,16 @@ class _ProductPublishActionsState extends ConsumerState<ProductPublishActions> {
     final repo = ref.read(productMarketplaceRepoProvider(widget.baseUri));
     try {
       var current = widget.product;
+      dev.log(
+        'Publish requested',
+        name: 'ProductPublishActions',
+        error: {
+          'remoteId': current.remoteId,
+          'statuses': current.statuses,
+          'imagesCount': widget.images.length,
+        },
+      );
+
       if (!_hasRemoteId) {
         if (widget.images.isEmpty) {
           ScaffoldMessenger.of(context).showSnackBar(
@@ -81,7 +88,6 @@ class _ProductPublishActionsState extends ConsumerState<ProductPublishActions> {
           );
           return;
         }
-        // Expect an updated product with remoteId from the repo:
         current = await repo.pushToMarketplace(current, widget.images);
       }
       await repo.changeRemoteStatus(product: current, statusesCode: 'PUBLISH');
@@ -118,6 +124,15 @@ class _ProductPublishActionsState extends ConsumerState<ProductPublishActions> {
 
     final repo = ref.read(productMarketplaceRepoProvider(widget.baseUri));
     try {
+      dev.log(
+        'Unpublish requested',
+        name: 'ProductPublishActions',
+        error: {
+          'remoteId': widget.product.remoteId,
+          'statuses': widget.product.statuses,
+        },
+      );
+
       await repo.changeRemoteStatus(
         product: widget.product,
         statusesCode: 'UNPUBLISH',
@@ -150,6 +165,16 @@ class _ProductPublishActionsState extends ConsumerState<ProductPublishActions> {
     final repo = ref.read(productMarketplaceRepoProvider(widget.baseUri));
     try {
       var current = widget.product;
+      dev.log(
+        'Republish requested',
+        name: 'ProductPublishActions',
+        error: {
+          'remoteId': current.remoteId,
+          'statuses': current.statuses,
+          'imagesCount': widget.images.length,
+        },
+      );
+
       if (!_hasRemoteId) {
         if (widget.images.isEmpty) {
           ScaffoldMessenger.of(context).showSnackBar(

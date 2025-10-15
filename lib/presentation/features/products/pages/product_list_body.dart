@@ -1,5 +1,8 @@
-// Product list orchestration without right drawer: uses full-page navigations for CRUD, view, and adjustments.
+// Product list orchestration (page): applies all ProductFormResult fields on create & update,
+// including quantity, hasSold, hasPrice, company & level; adds debug logs for before/after.
+
 import 'dart:io';
+import 'dart:developer' as dev;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -129,7 +132,9 @@ class ProductListBodyState extends ConsumerState<ProductListBody> {
     if (res == null) return;
 
     final now = DateTime.now();
+
     if (existing == null) {
+      // CREATE
       final p = Product(
         id: const Uuid().v4(),
         remoteId: null,
@@ -143,8 +148,8 @@ class ProductListBodyState extends ConsumerState<ProductListBody> {
         account: null,
         company: res.companyId,
         levelId: res.levelId,
-        quantity: res.quantity,
-        hasSold: res.hasSold ? 1 : 0,
+        quantity: res.quantity, // ✅ apply quantity
+        hasSold: res.hasSold ? 1 : 0, // ✅ apply flags
         hasPrice: res.hasPrice ? 1 : 0,
         defaultPrice: res.priceCents,
         purchasePrice: res.purchasePriceCents,
@@ -157,9 +162,21 @@ class ProductListBodyState extends ConsumerState<ProductListBody> {
         version: 0,
         isDirty: 1,
       );
+
+      dev.log(
+        'CREATE apply qty=${p.quantity}, hasSold=${p.hasSold}, hasPrice=${p.hasPrice}',
+        name: 'ProductListBody',
+      );
+
       await _repo.create(p);
       await _saveFormFiles(p.id, res.files, _fileRepo);
     } else {
+      // UPDATE (fix: also update quantity, flags, level & company)
+      dev.log(
+        'UPDATE before qty=${existing.quantity} → form qty=${res.quantity}',
+        name: 'ProductListBody',
+      );
+
       final updated = existing.copyWith(
         code: res.code,
         name: res.name,
@@ -171,8 +188,18 @@ class ProductListBodyState extends ConsumerState<ProductListBody> {
         statuses: res.status,
         updatedAt: now,
         company: res.companyId,
+        levelId: res.levelId,
+        quantity: res.quantity, // ✅ FIX: propagate quantity
+        hasSold: res.hasSold ? 1 : 0, // ✅ FIX: propagate flags
+        hasPrice: res.hasPrice ? 1 : 0,
         isDirty: 1,
       );
+
+      dev.log(
+        'UPDATE apply qty=${updated.quantity}, hasSold=${updated.hasSold}, hasPrice=${updated.hasPrice}',
+        name: 'ProductListBody',
+      );
+
       await _repo.update(updated);
       await _saveFormFiles(updated.id, res.files, _fileRepo);
     }

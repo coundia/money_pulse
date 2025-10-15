@@ -1,3 +1,5 @@
+// Product form with robust Quantity input: +/- controls, keyboard arrows, keeps 0 values and never disables editing.
+
 import 'dart:developer' as dev;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -84,12 +86,12 @@ class _ProductFormPanelState extends ConsumerState<ProductFormPanel> {
     text: widget.existing?.levelId ?? '',
   );
   late final TextEditingController _quantity = TextEditingController(
-    text: widget.existing == null
-        ? '0'
-        : (widget.existing!.quantity).toString(),
+    text: (widget.existing?.quantity ?? 0).toString(),
   );
+
   bool _hasSold = false;
   bool _hasPrice = false;
+
   final _fName = FocusNode();
   final _fCode = FocusNode();
   final _fBarcode = FocusNode();
@@ -98,10 +100,12 @@ class _ProductFormPanelState extends ConsumerState<ProductFormPanel> {
   final _fCompany = FocusNode();
   final _fLevel = FocusNode();
   final _fQuantity = FocusNode();
+
   String? _categoryId;
   String _status = 'ACTIVE';
   String? _companyId;
   List<PickedAttachment> _files = const [];
+
   static const List<(String, String)> _statusOptions = <(String, String)>[
     ('ACTIVE', 'Actif'),
     ('PROMO', 'Promotion'),
@@ -110,6 +114,7 @@ class _ProductFormPanelState extends ConsumerState<ProductFormPanel> {
     ('PUBLISHED', 'Publié'),
     ('UNPUBLISH', 'Retiré'),
   ];
+
   static final _numFilter = FilteringTextInputFormatter.allow(
     RegExp(r'[0-9\.\, \u00A0\u202F]'),
   );
@@ -215,6 +220,20 @@ class _ProductFormPanelState extends ConsumerState<ProductFormPanel> {
     return list;
   }
 
+  void _setQuantity(int q) {
+    if (q < 0) q = 0;
+    _quantity.text = q.toString();
+    _quantity.selection = TextSelection.fromPosition(
+      TextPosition(offset: _quantity.text.length),
+    );
+    setState(() {});
+  }
+
+  void _incQuantity(int delta) {
+    final current = int.tryParse(_quantity.text.trim()) ?? 0;
+    _setQuantity(current + delta);
+  }
+
   void _submit() {
     if (!_formKey.currentState!.validate()) return;
     final result = ProductFormResult(
@@ -236,7 +255,7 @@ class _ProductFormPanelState extends ConsumerState<ProductFormPanel> {
       hasPrice: _hasPrice,
     );
     dev.log(
-      'submit name=${result.name} price=${result.priceCents} files=${result.files.length}',
+      'submit name=${result.name} price=${result.priceCents} qty=${result.quantity} files=${result.files.length}',
       name: 'ProductFormPanel',
     );
     Navigator.pop(context, result);
@@ -249,6 +268,9 @@ class _ProductFormPanelState extends ConsumerState<ProductFormPanel> {
       shortcuts: {
         LogicalKeySet(LogicalKeyboardKey.enter): const SubmitFormIntent(),
         LogicalKeySet(LogicalKeyboardKey.numpadEnter): const SubmitFormIntent(),
+        LogicalKeySet(
+          LogicalKeyboardKey.arrowUp,
+        ): const SubmitFormIntent(), // optional: validate on up if on last field
       },
       child: Actions(
         actions: {
@@ -309,6 +331,7 @@ class _ProductFormPanelState extends ConsumerState<ProductFormPanel> {
                 final safeStatus = allowedStatuses.contains(_status)
                     ? _status
                     : 'ACTIVE';
+
                 return Form(
                   key: _formKey,
                   autovalidateMode: AutovalidateMode.onUserInteraction,
@@ -343,7 +366,6 @@ class _ProductFormPanelState extends ConsumerState<ProductFormPanel> {
                           labelText: 'Nom du produit',
                         ),
                         validator: _required,
-                        onChanged: (_) {},
                       ),
                       const SizedBox(height: 12),
                       TextFormField(
@@ -359,7 +381,6 @@ class _ProductFormPanelState extends ConsumerState<ProductFormPanel> {
                         decoration: const InputDecoration(
                           labelText: "Prix d'achat (optionnel)",
                         ),
-                        onChanged: (_) {},
                       ),
                       const SizedBox(height: 12),
                       TextFormField(
@@ -371,7 +392,6 @@ class _ProductFormPanelState extends ConsumerState<ProductFormPanel> {
                           labelText: 'Code (SKU)',
                         ),
                         validator: _validateSku,
-                        onChanged: (_) {},
                       ),
                       const SizedBox(height: 12),
                       TextFormField(
@@ -382,7 +402,6 @@ class _ProductFormPanelState extends ConsumerState<ProductFormPanel> {
                         decoration: const InputDecoration(
                           labelText: 'Code barre (EAN/UPC)',
                         ),
-                        onChanged: (_) {},
                       ),
                       const SizedBox(height: 12),
                       DropdownButtonFormField<String>(
@@ -426,7 +445,6 @@ class _ProductFormPanelState extends ConsumerState<ProductFormPanel> {
                         decoration: const InputDecoration(
                           labelText: 'Description',
                         ),
-                        onChanged: (_) {},
                       ),
                       const SizedBox(height: 16),
                       DropdownButtonFormField<String?>(
@@ -460,21 +478,49 @@ class _ProductFormPanelState extends ConsumerState<ProductFormPanel> {
                         decoration: const InputDecoration(
                           labelText: 'Niveau (levelId)',
                         ),
-                        onChanged: (_) {},
                       ),
                       const SizedBox(height: 12),
-                      TextFormField(
-                        focusNode: _fQuantity,
-                        controller: _quantity,
-                        keyboardType: TextInputType.number,
-                        inputFormatters: [_intFilter],
-                        textInputAction: TextInputAction.done,
-                        onFieldSubmitted: (_) => _submit(),
-                        decoration: const InputDecoration(
-                          labelText: 'Quantité',
-                        ),
-                        onChanged: (_) {},
+
+                      // >>> Quantité : champ + boutons +/-  <<<
+                      Row(
+                        children: [
+                          Expanded(
+                            child: TextFormField(
+                              key: const ValueKey('quantityField'),
+                              focusNode: _fQuantity,
+                              controller: _quantity,
+                              keyboardType: TextInputType.number,
+                              inputFormatters: [_intFilter],
+                              textInputAction: TextInputAction.done,
+                              onEditingComplete: () {
+                                final v =
+                                    int.tryParse(_quantity.text.trim()) ?? 0;
+                                _setQuantity(v);
+                              },
+                              onFieldSubmitted: (_) => _submit(),
+                              decoration: const InputDecoration(
+                                labelText: 'Quantité',
+                              ),
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          Tooltip(
+                            message: '—1',
+                            child: IconButton(
+                              onPressed: () => _incQuantity(-1),
+                              icon: const Icon(Icons.remove_circle_outline),
+                            ),
+                          ),
+                          Tooltip(
+                            message: '+1',
+                            child: IconButton(
+                              onPressed: () => _incQuantity(1),
+                              icon: const Icon(Icons.add_circle_outline),
+                            ),
+                          ),
+                        ],
                       ),
+
                       const SizedBox(height: 8),
                       SwitchListTile(
                         title: const Text('Déjà vendu (hasSold)'),

@@ -82,7 +82,7 @@ class _HomePageState extends ConsumerState<HomePage>
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (state == AppLifecycleState.resumed) {
       dev.log('App resumed → refreshAll(remount: true)', name: 'HomePage');
-      //_refreshAll(remount: true);
+      _refreshAll(remount: true);
     }
   }
 
@@ -108,7 +108,7 @@ class _HomePageState extends ConsumerState<HomePage>
     setState(() => _isBusy = true);
     try {
       await HomeRefreshHook.onManualRefresh(ref);
-      RestartApp.restart(context);
+      //RestartApp.restart(context); // bug when upload image
       dev.log('_refreshAll done (RestartApp)', name: 'HomePage');
     } catch (e, st) {
       dev.log(

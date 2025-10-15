@@ -1,19 +1,13 @@
-// lib/infrastructure/products/product_repository_sqflite.dart
-//
-// Sqflite product repository using ChangeTrackedExec helpers:
-// - Normalization + UTC timestamps
-// - insertTracked / updateTracked / softDeleteTracked -> auto isDirty, updatedAt,
-//   version bump (on update/delete), and change_log upsert
-// - Automatic stock_level bootstrap per company (also via insertTracked)
-// - UpdatedAt-desc ordering for lists
-//
+// Sqflite ProductRepository with structured dev logs for create/update/delete/find/list operations.
+
+import 'dart:convert';
+import 'dart:developer' as dev;
 import 'package:sqflite/sqflite.dart';
 import 'package:uuid/uuid.dart';
 
 import 'package:money_pulse/infrastructure/db/app_database.dart';
 import 'package:money_pulse/domain/products/entities/product.dart';
 import 'package:money_pulse/domain/products/repositories/product_repository.dart';
-
 import 'package:money_pulse/sync/infrastructure/change_tracked_exec.dart';
 
 class ProductRepositorySqflite implements ProductRepository {
@@ -22,6 +16,18 @@ class ProductRepositorySqflite implements ProductRepository {
 
   String _nowUtcIso() => DateTime.now().toUtc().toIso8601String();
 
+  void _log(String op, Map<String, Object?> data) {
+    try {
+      final payload = {'op': op, 'at': _nowUtcIso(), ...data};
+      dev.log(
+        const JsonEncoder.withIndent('  ').convert(payload),
+        name: 'ProductRepositorySqflite',
+      );
+    } catch (_) {
+      dev.log('$op ${data.toString()}', name: 'ProductRepositorySqflite');
+    }
+  }
+
   String? _trimOrNull(String? s) {
     if (s == null) return null;
     final v = s.trim();
@@ -29,6 +35,14 @@ class ProductRepositorySqflite implements ProductRepository {
   }
 
   int _nz(int? v) => (v == null || v < 0) ? 0 : v;
+
+  Map<String, Object?> _stripNulls(Map<String, Object?> m) {
+    final out = <String, Object?>{};
+    m.forEach((k, v) {
+      if (v != null) out[k] = v;
+    });
+    return out;
+  }
 
   Product _normalize(Product p) {
     final nameTrimmed = _trimOrNull(p.name);
@@ -65,8 +79,7 @@ class ProductRepositorySqflite implements ProductRepository {
     final n = _normalize(p);
     return n.copyWith(
       updatedAt: DateTime.now().toUtc(),
-      version:
-          p.version + 1, // updateTracked will bump again; we’ll drop it in map
+      version: p.version + 1,
       isDirty: 1,
     );
   }
@@ -90,104 +103,116 @@ class ProductRepositorySqflite implements ProductRepository {
       if (exists.isNotEmpty) continue;
 
       final id = const Uuid().v4();
-      // insertTracked will stamp timestamps/isDirty and upsert change_log
-      await txn.insertTracked(
-        'stock_level',
-        {
-          'id': id,
-          'productVariantId': productId,
-          'companyId': companyId,
-          'stockOnHand': 0,
-          'stockAllocated': 0,
-          'createdAt': now,
-          'updatedAt': now,
-          'version': 0,
-        },
-        operation: 'INSERT',
-        // If your stock_level table has an 'account' column, ChangeTrackedExec
-        // will auto-stamp it; otherwise it’s a no-op.
-      );
+      await txn.insertTracked('stock_level', {
+        'id': id,
+        'productVariantId': productId,
+        'companyId': companyId,
+        'stockOnHand': 0,
+        'stockAllocated': 0,
+        'createdAt': now,
+        'updatedAt': now,
+        'version': 0,
+      }, operation: 'INSERT');
     }
   }
-
-  // ---------- CRUD ----------
 
   @override
   Future<Product> create(Product product) async {
     final p = _prepCreate(product);
+    _log('CREATE.begin', {
+      'id': p.id,
+      'code': p.code,
+      'name': p.name,
+      'quantity': p.quantity,
+    });
     await _db.tx((txn) async {
-      // Product insert (auto-stamp + changelog)
       await txn.insertTracked('product', p.toMap(), operation: 'INSERT');
-
-      // Bootstrap per-company stock levels (each via insertTracked)
       await _ensureStockLevels(txn, p.id);
     });
+    _log('CREATE.done', {'id': p.id});
     return p;
   }
 
   @override
   Future<void> update(Product product) async {
     final p = _prepUpdate(product);
+    final full = _stripNulls(p.toMap())..remove('version');
+    _log('UPDATE.begin', {
+      'id': p.id,
+      'quantity': p.quantity,
+      'hasSold': p.hasSold,
+      'hasPrice': p.hasPrice,
+      'defaultPrice': p.defaultPrice,
+      'purchasePrice': p.purchasePrice,
+      'statuses': p.statuses,
+    });
     await _db.tx((txn) async {
-      final map = p.toMap()
-        ..remove('version'); // updateTracked will version++ for us
       await txn.updateTracked(
         'product',
-        map,
+        full,
         where: 'id = ?',
         whereArgs: [p.id],
         entityId: p.id,
         operation: 'UPDATE',
       );
     });
+    _log('UPDATE.done', {'id': p.id});
   }
 
   @override
   Future<void> softDelete(String id) async {
+    _log('SOFT_DELETE.begin', {'id': id});
     await _db.tx((txn) async {
       await txn.softDeleteTracked('product', entityId: id);
     });
+    _log('SOFT_DELETE.done', {'id': id});
   }
-
-  // ---------- Queries ----------
 
   @override
   Future<Product?> findById(String id) async {
+    _log('FIND_BY_ID.begin', {'id': id});
     final r = await _db.db.query(
       'product',
       where: 'id=?',
       whereArgs: [id],
       limit: 1,
     );
-    if (r.isEmpty) return null;
-    return _from(r.first);
+    final res = r.isEmpty ? null : _from(r.first);
+    _log('FIND_BY_ID.done', {'id': id, 'found': res != null});
+    return res;
   }
 
   @override
   Future<Product?> findByCode(String code) async {
+    _log('FIND_BY_CODE.begin', {'code': code});
     final r = await _db.db.query(
       'product',
       where: 'code = ? AND deletedAt IS NULL',
       whereArgs: [code],
       limit: 1,
     );
-    if (r.isEmpty) return null;
-    return _from(r.first);
+    final res = r.isEmpty ? null : _from(r.first);
+    _log('FIND_BY_CODE.done', {'code': code, 'found': res != null});
+    return res;
   }
 
   @override
   Future<List<Product>> findAllActive() async {
+    _log('LIST_ACTIVE.begin', {});
     final rows = await _db.db.query(
       'product',
       where: 'deletedAt IS NULL',
       orderBy:
           'updatedAt DESC, COALESCE(name, code) COLLATE NOCASE ASC, code COLLATE NOCASE ASC',
     );
-    return rows.map(_from).toList();
+    final list = rows.map(_from).toList();
+    _log('LIST_ACTIVE.done', {'count': list.length});
+    return list;
   }
 
   @override
   Future<List<Product>> searchActive(String query, {int limit = 200}) async {
+    _log('SEARCH_ACTIVE.begin', {'query': query, 'limit': limit});
     final q = '%${query.trim().toLowerCase()}%';
     final rows = await _db.db.rawQuery(
       '''
@@ -206,6 +231,8 @@ class ProductRepositorySqflite implements ProductRepository {
       ''',
       [q, limit],
     );
-    return rows.map(_from).toList();
+    final list = rows.map(_from).toList();
+    _log('SEARCH_ACTIVE.done', {'count': list.length});
+    return list;
   }
 }

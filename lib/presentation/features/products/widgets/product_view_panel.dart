@@ -1,7 +1,9 @@
-// Right-drawer product view; closes with `true` on publish/unpublish to trigger parent refresh.
+// Right-drawer product view with stock chip: shows quantity in a chip alongside prices and category.
+
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:intl/intl.dart';
 import 'package:money_pulse/domain/products/entities/product.dart';
 import 'package:money_pulse/presentation/shared/formatters.dart';
 import 'product_publish_actions.dart';
@@ -53,6 +55,7 @@ class ProductViewPanel extends ConsumerWidget {
         : null;
     final created = Formatters.dateFull(p.createdAt);
     final updated = Formatters.dateFull(p.updatedAt);
+    final qty = NumberFormat.decimalPattern().format(p.quantity);
 
     final imagesAsync = ref.watch(_imagesForPublishProvider(p.id));
 
@@ -140,6 +143,7 @@ class ProductViewPanel extends ConsumerWidget {
                                 Chip(label: Text('PU: $price')),
                                 if (priceBuy != null)
                                   Chip(label: Text('Achat: $priceBuy')),
+                                Chip(label: Text('Stock: $qty')),
                                 if ((categoryLabel ?? '').isNotEmpty)
                                   Chip(
                                     label: Text('Catégorie: $categoryLabel'),
