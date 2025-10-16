@@ -1,4 +1,4 @@
-// lib/main.dart (or wherever your main() lives)
+// File boots the app and applies light/dark themes.
 import 'dart:async';
 import 'dart:isolate';
 import 'dart:ui';
@@ -8,23 +8,20 @@ import 'package:intl/intl.dart';
 import 'package:intl/date_symbol_data_local.dart';
 import 'package:sqflite/sqflite.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-
-import 'package:money_pulse/presentation/app/log.dart'; // <-- add
+import 'package:money_pulse/presentation/app/log.dart';
 import 'package:money_pulse/infrastructure/db/app_database.dart';
 import 'package:money_pulse/presentation/app/app.dart';
 import 'package:money_pulse/presentation/app/providers.dart';
 import 'package:money_pulse/presentation/app/restart_app.dart';
 import 'package:money_pulse/presentation/navigation/route_observer.dart';
+import 'package:money_pulse/presentation/theme/app_theme.dart';
 import 'dart:developer' as dev;
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
-
-  // init logging FIRST so early logs are visible in both consoles
   Log.init(defaultTag: 'Startup');
   Log.wireGlobalErrorHooks(tag: 'Startup');
 
-  // catch errors from other isolates
   Isolate.current.addErrorListener(
     RawReceivePort((pair) {
       final List<dynamic> errorAndStacktrace = pair;
@@ -116,10 +113,9 @@ class _BootstrapState extends ConsumerState<Bootstrap> {
           return MaterialApp(
             debugShowCheckedModeBanner: false,
             title: 'Money Pulse',
-            theme: ThemeData(
-              useMaterial3: true,
-              colorSchemeSeed: const Color(0xFF2563EB),
-            ),
+            themeMode: ThemeMode.system,
+            theme: AppTheme.light(),
+            darkTheme: AppTheme.dark(),
             localizationsDelegates: const [
               GlobalMaterialLocalizations.delegate,
               GlobalWidgetsLocalizations.delegate,
@@ -138,10 +134,9 @@ class _BootstrapState extends ConsumerState<Bootstrap> {
           return MaterialApp(
             debugShowCheckedModeBanner: false,
             title: 'Money Pulse',
-            theme: ThemeData(
-              useMaterial3: true,
-              colorSchemeSeed: const Color(0xFF2563EB),
-            ),
+            themeMode: ThemeMode.system,
+            theme: AppTheme.light(),
+            darkTheme: AppTheme.dark(),
             localizationsDelegates: const [
               GlobalMaterialLocalizations.delegate,
               GlobalWidgetsLocalizations.delegate,
@@ -160,10 +155,9 @@ class _BootstrapState extends ConsumerState<Bootstrap> {
         return MaterialApp(
           debugShowCheckedModeBanner: false,
           title: 'Money Pulse',
-          theme: ThemeData(
-            useMaterial3: true,
-            colorSchemeSeed: const Color(0xFF2563EB),
-          ),
+          themeMode: ThemeMode.system,
+          theme: AppTheme.light(),
+          darkTheme: AppTheme.dark(),
           localizationsDelegates: const [
             GlobalMaterialLocalizations.delegate,
             GlobalWidgetsLocalizations.delegate,
