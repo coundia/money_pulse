@@ -6,6 +6,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'package:money_pulse/marketplace/presentation/order_quick_panel.dart';
+import '../../presentation/shared/haptics_util.dart';
 import '../../shared/constants/env.dart';
 import '../../shared/formatters.dart';
 import '../application/marketplace_pager_controller.dart';
@@ -298,6 +299,7 @@ class _MarketplacePageState extends ConsumerState<MarketplacePage> {
                         debugPrint(
                           '[MarketplacePage] open Message sheet for "${item.name}"',
                         );
+                        HapticsUtil.vibrate();
                         await _openMessageSheet(context, item);
                       },
                     ),
@@ -323,6 +325,7 @@ class _MarketplacePageState extends ConsumerState<MarketplacePage> {
                             debugPrint(
                               '[MarketplacePage] open order sheet for item="${item.name}" unit=${item.defaultPrice}XOF',
                             );
+                            HapticsUtil.vibrate();
                             _openOrderSheet(context, item);
                           },
                         ),

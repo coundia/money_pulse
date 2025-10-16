@@ -1,10 +1,8 @@
-// Responsive quick actions grid including expense/income and debt/repayment/loan creation, plus nav shortcuts.
-
+// Responsive quick actions grid with enhanced haptics, keyboard shortcuts, and accessibility semantics in French.
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:money_pulse/marketplace/presentation/marketplace_page.dart';
 import 'package:money_pulse/presentation/features/companies/company_list_page.dart';
-
 import 'package:money_pulse/presentation/features/transactions/pages/transaction_list_page.dart';
 import 'package:money_pulse/presentation/features/pos/pos_page.dart';
 import 'package:money_pulse/presentation/features/settings/settings_page.dart';
@@ -14,7 +12,7 @@ import 'package:money_pulse/presentation/features/customers/customer_list_page.d
 import 'package:money_pulse/presentation/features/categories/category_list_page.dart';
 import 'package:money_pulse/presentation/features/accounts/account_page.dart';
 import 'package:money_pulse/presentation/features/stock/stock_level_list_page.dart';
-
+import 'package:money_pulse/presentation/shared/haptics_util.dart';
 import '../../chatbot/chatbot_page.dart';
 import '../../chatbot/chatbot_provider.dart';
 
@@ -111,6 +109,7 @@ class SummaryQuickActions extends StatelessWidget {
             _btn(
               context,
               label: '+ Dépense',
+              hint: 'Créer une dépense',
               icon: Icons.trending_down_rounded,
               tone: Theme.of(context).colorScheme.error,
               onTap: onAddExpense,
@@ -122,6 +121,7 @@ class SummaryQuickActions extends StatelessWidget {
             _btn(
               context,
               label: '+ Revenu',
+              hint: 'Créer un revenu',
               icon: Icons.trending_up_rounded,
               tone: Theme.of(context).colorScheme.tertiary,
               onTap: onAddIncome,
@@ -133,6 +133,7 @@ class SummaryQuickActions extends StatelessWidget {
             _btn(
               context,
               label: '+ Dette',
+              hint: 'Enregistrer une dette',
               icon: Icons.receipt_long_rounded,
               tone: Theme.of(context).colorScheme.primary,
               onTap: onAddDebt,
@@ -144,6 +145,7 @@ class SummaryQuickActions extends StatelessWidget {
             _btn(
               context,
               label: '+ Remboursement',
+              hint: 'Enregistrer un remboursement',
               icon: Icons.payments_rounded,
               tone: Theme.of(context).colorScheme.primary,
               onTap: onAddRepayment,
@@ -155,6 +157,7 @@ class SummaryQuickActions extends StatelessWidget {
             _btn(
               context,
               label: '+ Prêt',
+              hint: 'Enregistrer un prêt',
               icon: Icons.account_balance_rounded,
               tone: Theme.of(context).colorScheme.secondary,
               onTap: onAddLoan,
@@ -168,12 +171,13 @@ class SummaryQuickActions extends StatelessWidget {
               _btn(
                 context,
                 label: 'POS',
+                hint: 'Ouvrir le point de vente',
                 icon: Icons.point_of_sale,
                 tone: Theme.of(context).colorScheme.secondary,
                 onTap:
                     onOpenPos ??
                     () {
-                      HapticFeedback.selectionClick();
+                      HapticsUtil.select();
                       Navigator.of(context).push(
                         MaterialPageRoute(builder: (_) => const PosPage()),
                       );
@@ -186,12 +190,13 @@ class SummaryQuickActions extends StatelessWidget {
               _btn(
                 context,
                 label: 'Paramètres',
+                hint: 'Ouvrir les paramètres',
                 icon: Icons.settings,
                 tone: Theme.of(context).colorScheme.primary,
                 onTap:
                     onOpenSettings ??
                     () {
-                      HapticFeedback.selectionClick();
+                      HapticsUtil.select();
                       Navigator.of(context).push(
                         MaterialPageRoute(builder: (_) => const SettingsPage()),
                       );
@@ -204,10 +209,11 @@ class SummaryQuickActions extends StatelessWidget {
               _btn(
                 context,
                 label: 'Recherche',
+                hint: 'Lancer une recherche',
                 icon: Icons.search_rounded,
                 tone: Theme.of(context).colorScheme.primary,
                 onTap: () {
-                  HapticFeedback.selectionClick();
+                  HapticsUtil.select();
                   if (onOpenSearch != null) {
                     onOpenSearch!();
                   } else {
@@ -227,12 +233,13 @@ class SummaryQuickActions extends StatelessWidget {
               _btn(
                 context,
                 label: 'Produits',
+                hint: 'Voir la liste des produits',
                 icon: Icons.inventory_2_rounded,
                 tone: Theme.of(context).colorScheme.primary,
                 onTap:
                     onOpenProducts ??
                     () {
-                      HapticFeedback.selectionClick();
+                      HapticsUtil.select();
                       Navigator.of(context).push(
                         MaterialPageRoute(
                           builder: (_) => const ProductListPage(),
@@ -247,12 +254,13 @@ class SummaryQuickActions extends StatelessWidget {
               _btn(
                 context,
                 label: 'Clients',
+                hint: 'Voir la liste des clients',
                 icon: Icons.group_rounded,
                 tone: Theme.of(context).colorScheme.primary,
                 onTap:
                     onOpenCustomers ??
                     () {
-                      HapticFeedback.selectionClick();
+                      HapticsUtil.select();
                       Navigator.of(context).push(
                         MaterialPageRoute(
                           builder: (_) => const CustomerListPage(),
@@ -267,12 +275,13 @@ class SummaryQuickActions extends StatelessWidget {
               _btn(
                 context,
                 label: 'Catégories',
+                hint: 'Voir la liste des catégories',
                 icon: Icons.category_outlined,
                 tone: Theme.of(context).colorScheme.primary,
                 onTap:
                     onOpenCategories ??
                     () {
-                      HapticFeedback.selectionClick();
+                      HapticsUtil.select();
                       Navigator.of(context).push(
                         MaterialPageRoute(
                           builder: (_) => const CategoryListPage(),
@@ -287,12 +296,13 @@ class SummaryQuickActions extends StatelessWidget {
               _btn(
                 context,
                 label: 'Comptes',
+                hint: 'Voir la liste des comptes',
                 icon: Icons.account_balance_wallet_outlined,
                 tone: Theme.of(context).colorScheme.primary,
                 onTap:
                     onOpenAccounts ??
                     () {
-                      HapticFeedback.selectionClick();
+                      HapticsUtil.select();
                       Navigator.of(context).push(
                         MaterialPageRoute(
                           builder: (_) => const AccountListPage(),
@@ -309,6 +319,7 @@ class SummaryQuickActions extends StatelessWidget {
             _btn(
               context,
               label: 'Entreprise',
+              hint: 'Voir vos entreprises',
               icon: Icons.home_rounded,
               tone: Theme.of(context).colorScheme.primary,
               onTap:
@@ -329,12 +340,13 @@ class SummaryQuickActions extends StatelessWidget {
             _btn(
               context,
               label: 'Rapport',
+              hint: 'Ouvrir les rapports',
               icon: Icons.assessment_rounded,
               tone: Theme.of(context).colorScheme.primary,
               onTap:
                   onOpenReport ??
                   () {
-                    HapticFeedback.selectionClick();
+                    HapticsUtil.select();
                     Navigator.of(context).push(
                       MaterialPageRoute(builder: (_) => const ReportPage()),
                     );
@@ -348,6 +360,7 @@ class SummaryQuickActions extends StatelessWidget {
             _btn(
               context,
               label: 'Marketplace',
+              hint: 'Ouvrir la marketplace',
               icon: Icons.store_rounded,
               tone: Theme.of(context).colorScheme.primary,
               onTap:
@@ -368,6 +381,7 @@ class SummaryQuickActions extends StatelessWidget {
             _btn(
               context,
               label: 'Assistant IA',
+              hint: 'Discuter avec l’assistant',
               icon: Icons.chat_bubble_rounded,
               tone: Theme.of(context).colorScheme.primary,
               onTap:
@@ -403,12 +417,14 @@ class SummaryQuickActions extends StatelessWidget {
   Widget _btn(
     BuildContext context, {
     required String label,
+    required String hint,
     required IconData icon,
     required Color tone,
     required VoidCallback? onTap,
   }) {
     return _TonedFilledButton(
       label: label,
+      semanticHint: hint,
       icon: icon,
       tone: tone,
       onPressed: onTap,
@@ -426,12 +442,14 @@ class SummaryQuickActions extends StatelessWidget {
 
 class _TonedFilledButton extends StatefulWidget {
   final String label;
+  final String semanticHint;
   final IconData icon;
   final Color tone;
   final VoidCallback? onPressed;
 
   const _TonedFilledButton({
     required this.label,
+    required this.semanticHint,
     required this.icon,
     required this.tone,
     required this.onPressed,
@@ -445,6 +463,12 @@ class _TonedFilledButtonState extends State<_TonedFilledButton> {
   bool _hovered = false;
   bool _focused = false;
   bool _pressed = false;
+
+  void _activate() async {
+    if (widget.onPressed == null) return;
+    await HapticsUtil.vibrate();
+    widget.onPressed!.call();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -488,78 +512,92 @@ class _TonedFilledButtonState extends State<_TonedFilledButton> {
       onShowHoverHighlight: (v) => setState(() => _hovered = v),
       child: Semantics(
         button: true,
+        enabled: widget.onPressed != null,
         label: widget.label,
-        onTapHint: 'Ouvrir',
-        child: AnimatedScale(
-          duration: const Duration(milliseconds: 120),
-          scale: _pressed ? 0.98 : 1.0,
-          child: AnimatedContainer(
-            duration: const Duration(milliseconds: 160),
-            curve: Curves.easeOut,
-            decoration: BoxDecoration(
-              gradient: LinearGradient(
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
-                colors: [bgA, bgB],
-              ),
-              borderRadius: radius,
-              border: border,
-              boxShadow: boxShadow,
-            ),
-            child: Material(
-              color: Colors.transparent,
-              child: InkWell(
-                borderRadius: radius,
-                splashColor: fg.withOpacity(0.10),
-                highlightColor: fg.withOpacity(0.06),
-                onHighlightChanged: (v) => setState(() => _pressed = v),
-                onTap: widget.onPressed == null
-                    ? null
-                    : () {
-                        HapticFeedback.selectionClick();
-                        widget.onPressed!.call();
-                      },
-                child: LayoutBuilder(
-                  builder: (context, constraints) {
-                    final cw = constraints.maxWidth;
-                    final veryTight = cw < 96;
-                    final tight = cw < 150;
-                    final iconSize = veryTight
-                        ? 28.0
-                        : (tight ? 36.0 : (cw < 200 ? 44.0 : 56.0));
-                    final fontSize = veryTight ? 11.0 : (tight ? 12.0 : 14.0);
-                    final padV = veryTight ? 10.0 : (tight ? 12.0 : 16.0);
-                    final minH = veryTight ? 74.0 : (tight ? 88.0 : 118.0);
+        onTapHint: widget.semanticHint,
+        child: CallbackShortcuts(
+          bindings: <ShortcutActivator, VoidCallback>{
+            const SingleActivator(LogicalKeyboardKey.enter): _activate,
+            const SingleActivator(LogicalKeyboardKey.space): _activate,
+            const SingleActivator(LogicalKeyboardKey.select): _activate,
+          },
+          child: Tooltip(
+            message: widget.semanticHint,
+            waitDuration: const Duration(milliseconds: 500),
+            child: AnimatedScale(
+              duration: const Duration(milliseconds: 120),
+              scale: _pressed ? 0.98 : 1.0,
+              child: AnimatedContainer(
+                duration: const Duration(milliseconds: 160),
+                curve: Curves.easeOut,
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                    colors: [bgA, bgB],
+                  ),
+                  borderRadius: radius,
+                  border: border,
+                  boxShadow: boxShadow,
+                ),
+                child: Material(
+                  color: Colors.transparent,
+                  child: InkWell(
+                    borderRadius: radius,
+                    splashColor: fg.withOpacity(0.10),
+                    highlightColor: fg.withOpacity(0.06),
+                    onHighlightChanged: (v) => setState(() => _pressed = v),
+                    onTapDown: (_) => HapticsUtil.tapLight(),
+                    onLongPress: () => HapticsUtil.tapMedium(),
+                    onTap: widget.onPressed == null ? null : _activate,
+                    child: LayoutBuilder(
+                      builder: (context, constraints) {
+                        final cw = constraints.maxWidth;
+                        final veryTight = cw < 96;
+                        final tight = cw < 150;
+                        final iconSize = veryTight
+                            ? 28.0
+                            : (tight ? 36.0 : (cw < 200 ? 44.0 : 56.0));
+                        final fontSize = veryTight
+                            ? 11.0
+                            : (tight ? 12.0 : 14.0);
+                        final padV = veryTight ? 10.0 : (tight ? 12.0 : 16.0);
+                        final minH = veryTight ? 74.0 : (tight ? 88.0 : 118.0);
 
-                    return ConstrainedBox(
-                      constraints: BoxConstraints(minHeight: minH),
-                      child: Padding(
-                        padding: EdgeInsets.symmetric(
-                          vertical: padV,
-                          horizontal: 12,
-                        ),
-                        child: Column(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            Icon(widget.icon, size: iconSize, color: fg),
-                            const SizedBox(height: 6),
-                            Text(
-                              widget.label,
-                              textAlign: TextAlign.center,
-                              maxLines: 2,
-                              overflow: TextOverflow.ellipsis,
-                              style: TextStyle(
-                                fontWeight: FontWeight.w800,
-                                fontSize: fontSize,
-                                color: fg,
-                                letterSpacing: 0.2,
-                              ),
+                        return ConstrainedBox(
+                          constraints: BoxConstraints(
+                            minHeight: minH,
+                            minWidth: 64,
+                          ),
+                          child: Padding(
+                            padding: EdgeInsets.symmetric(
+                              vertical: padV,
+                              horizontal: 12,
                             ),
-                          ],
-                        ),
-                      ),
-                    );
-                  },
+                            child: Column(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: [
+                                Icon(widget.icon, size: iconSize, color: fg),
+                                const SizedBox(height: 6),
+                                Text(
+                                  widget.label,
+                                  textAlign: TextAlign.center,
+                                  maxLines: 2,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: TextStyle(
+                                    fontWeight: FontWeight.w800,
+                                    fontSize: fontSize,
+                                    color: fg,
+                                    letterSpacing: 0.2,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        );
+                      },
+                    ),
+                  ),
                 ),
               ),
             ),

@@ -26,6 +26,7 @@ import 'package:money_pulse/sync/infrastructure/sync_logger.dart';
 import 'package:money_pulse/onboarding/presentation/providers/access_session_provider.dart';
 
 import '../../../../shared/server_unavailable.dart';
+import '../../../app/restart_app.dart';
 import '../../settings/app_settings_provider.dart';
 import '../controllers/transaction_list_controller.dart';
 
@@ -220,11 +221,35 @@ class TransactionListPage extends ConsumerWidget {
                 onOpenSearch: () => _openTxnSearch(context, txns),
               ),
               const SizedBox(height: 12),
+
+              // ⬇️ État vide
               if (txns.isEmpty)
-                const Padding(
-                  padding: EdgeInsets.all(32.0),
-                  child: Center(
-                    child: Text('Aucune transaction pour cette période'),
+                Padding(
+                  padding: const EdgeInsets.all(32.0),
+                  child: Column(
+                    children: [
+                      const Text('Aucune transaction pour cette période'),
+                      const SizedBox(height: 12),
+                      // ⬇️ NEW: bouton "Demander un accès" si pas connecté
+                      if (ref.read(accessSessionProvider) == null)
+                        FilledButton.icon(
+                          icon: const Icon(Icons.lock_open),
+                          label: const Text('Demander un accès'),
+                          onPressed: () async {
+                            final ok = await requireAccess(context, ref);
+                            if (!context.mounted) return;
+                            if (ok && ref.read(accessSessionProvider) != null) {
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                const SnackBar(content: Text('Accès accordé.')),
+                              );
+                              // Optionnel : pull immédiat pour remplir
+                              RestartApp.restart(context);
+                            } else {
+                              RestartApp.restart(context);
+                            }
+                          },
+                        ),
+                    ],
                   ),
                 )
               else ...[
