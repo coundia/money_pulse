@@ -1,11 +1,11 @@
-// Vertical marketplace feed page with search, companies filter, lazy paging, image spinner, and drawer actions.
+// Vertical marketplace feed page with search, companies filter, lazy paging,
+// image spinner, and bottom-sheet actions (no right drawer).
 
 import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'package:money_pulse/marketplace/presentation/order_quick_panel.dart';
-import '../../presentation/widgets/right_drawer.dart';
 import '../../shared/constants/env.dart';
 import '../../shared/formatters.dart';
 import '../application/marketplace_pager_controller.dart';
@@ -70,6 +70,50 @@ class _MarketplacePageState extends ConsumerState<MarketplacePage> {
     _searchCtrl.clear();
     ref.invalidate(marketplacePagerProvider(widget.baseUri));
     if (_pageCtrl.hasClients) _pageCtrl.jumpToPage(0);
+  }
+
+  // ---------- Bottom-sheet helpers (replace right drawer) --------------------
+
+  Future<void> _openOrderSheet(
+    BuildContext context,
+    MarketplaceItem item,
+  ) async {
+    final h = MediaQuery.of(context).size.height;
+    // Keep same feel: 50% screen height (like your suggestedHeightFraction)
+    final heightFactor = OrderQuickPanel.suggestedHeightFraction; // 0.50
+    await showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      useSafeArea: true,
+      backgroundColor: Colors.transparent,
+      builder: (ctx) {
+        return _BottomSheetContainer(
+          height: h * heightFactor,
+          child: OrderQuickPanel(item: item, baseUri: widget.baseUri),
+        );
+      },
+    );
+  }
+
+  Future<void> _openMessageSheet(
+    BuildContext context,
+    MarketplaceItem item,
+  ) async {
+    final h = MediaQuery.of(context).size.height;
+    // Half-screen to match prior UX
+    const heightFactor = 0.50;
+    await showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      useSafeArea: true,
+      backgroundColor: Colors.transparent,
+      builder: (ctx) {
+        return _BottomSheetContainer(
+          height: h * heightFactor,
+          child: MessageComposePanel(item: item, baseUri: widget.baseUri),
+        );
+      },
+    );
   }
 
   @override
@@ -252,19 +296,9 @@ class _MarketplacePageState extends ConsumerState<MarketplacePage> {
                       shopName: _shopName(item),
                       onTap: () async {
                         debugPrint(
-                          '[MarketplacePage] open Message drawer for "${item.name}"',
+                          '[MarketplacePage] open Message sheet for "${item.name}"',
                         );
-                        final w = MediaQuery.of(context).size.width;
-                        final widthFraction = w < 520 ? 0.96 : 0.62;
-                        await showRightDrawer(
-                          context,
-                          widthFraction: widthFraction,
-                          heightFraction: 0.50,
-                          child: MessageComposePanel(
-                            item: item,
-                            baseUri: widget.baseUri,
-                          ),
-                        );
+                        await _openMessageSheet(context, item);
                       },
                     ),
                   ],
@@ -287,22 +321,9 @@ class _MarketplacePageState extends ConsumerState<MarketplacePage> {
                           ],
                           onTap: () {
                             debugPrint(
-                              '[MarketplacePage] open order panel for item="${item.name}" unit=${item.defaultPrice}XOF',
+                              '[MarketplacePage] open order sheet for item="${item.name}" unit=${item.defaultPrice}XOF',
                             );
-                            final w = MediaQuery.of(context).size.width;
-                            final widthFraction = w < 520
-                                ? 0.96
-                                : OrderQuickPanel.suggestedWidthFraction;
-                            showRightDrawer(
-                              context,
-                              widthFraction: widthFraction,
-                              heightFraction:
-                                  OrderQuickPanel.suggestedHeightFraction,
-                              child: OrderQuickPanel(
-                                item: item,
-                                baseUri: widget.baseUri,
-                              ),
-                            );
+                            _openOrderSheet(context, item);
                           },
                         ),
                 ),
@@ -356,6 +377,39 @@ class _OutOfStockBadge extends StatelessWidget {
         const SizedBox(height: 6),
         const SizedBox(height: 18),
       ],
+    );
+  }
+}
+
+/// Common container for the modal bottom sheets to emulate a drawer look,
+/// with rounded top corners, safe area, and a fixed height.
+class _BottomSheetContainer extends StatelessWidget {
+  final double height;
+  final Widget child;
+  const _BottomSheetContainer({required this.height, required this.child});
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    return AnimatedPadding(
+      duration: const Duration(milliseconds: 150),
+      curve: Curves.easeOut,
+      padding: EdgeInsets.only(
+        bottom: MediaQuery.of(context).viewInsets.bottom,
+      ),
+      child: Align(
+        alignment: Alignment.bottomCenter,
+        child: Material(
+          color: cs.surface,
+          elevation: 10,
+          borderRadius: const BorderRadius.only(
+            topLeft: Radius.circular(18),
+            topRight: Radius.circular(18),
+          ),
+          clipBehavior: Clip.antiAlias,
+          child: SizedBox(height: height, width: double.infinity, child: child),
+        ),
+      ),
     );
   }
 }

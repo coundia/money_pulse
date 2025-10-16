@@ -1,18 +1,17 @@
 // Mini right-drawer quick order panel (French UI) with duplicate-order guard and confirmation.
-// UX improvements:
-// - Primary "Valider" action added to the AppBar (top-right) with loading state
-// - Clear total section with info button
-// - Quantity stepper polished (filled/tonal buttons)
-// - Better focus traversal (Enter submits)
-// - Helper texts + subtle spacing
+// Keyboard-safe + Reveal-on-focus edition:
+//  - Inputs appear as compact rows; expand only when tapped/focused
+//  - Strong auto-scroll to keep focused input visible with header + keyboard
+//  - Bottom spacer tied to keyboard height for reliable scroll room
+//  - Same UX goodies (top "Valider", stepper, prefs, duplicate guard)
 //
-// Keeps existing behavior: duplicate-check, prefs prefill, session prefill, confirmation drawer.
+// NOTE: showRightDrawer removed; confirmation uses showModalBottomSheet.
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../shared/formatters.dart';
-import '../../presentation/widgets/right_drawer.dart';
+// REMOVED: import '../../presentation/widgets/right_drawer.dart';
 import '../../shared/constants/env.dart';
 import '../application/order_prefs_controller.dart';
 import '../domain/entities/marketplace_item.dart';
@@ -40,11 +39,17 @@ class OrderQuickPanel extends ConsumerStatefulWidget {
 
 class _OrderQuickPanelState extends ConsumerState<OrderQuickPanel> {
   final _formKey = GlobalKey<FormState>();
+  final _scrollCtrl = ScrollController();
+
   final _nameCtrl = TextEditingController();
   final _phoneCtrl = TextEditingController();
   final _addressCtrl = TextEditingController();
   final _qtyCtrl = TextEditingController(text: '1');
   final _amountCtrl = TextEditingController();
+
+  // Focus nodes (only the focused row expands)
+  final _fPhone = FocusNode();
+  final _fQty = FocusNode();
 
   String _paymentMethod = 'NA';
   String _deliveryMethod = 'NA';
@@ -56,6 +61,11 @@ class _OrderQuickPanelState extends ConsumerState<OrderQuickPanel> {
   void initState() {
     super.initState();
     _amountCtrl.text = widget.item.defaultPrice.toString();
+
+    // Attach scroll helpers + mutual exclusive expansion
+    _attachAutoScroll(_fPhone, others: [_fQty]);
+    _attachAutoScroll(_fQty, others: [_fPhone]);
+
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _prefillFromSession();
       final cur = ref.read(orderPrefsProvider);
@@ -76,6 +86,9 @@ class _OrderQuickPanelState extends ConsumerState<OrderQuickPanel> {
 
   @override
   void dispose() {
+    _scrollCtrl.dispose();
+    _fPhone.dispose();
+    _fQty.dispose();
     _nameCtrl.dispose();
     _phoneCtrl.dispose();
     _addressCtrl.dispose();
@@ -83,6 +96,72 @@ class _OrderQuickPanelState extends ConsumerState<OrderQuickPanel> {
     _amountCtrl.dispose();
     super.dispose();
   }
+
+  // ---- Strong auto-scroll + single-expand logic ----------------------------
+
+  void _attachAutoScroll(FocusNode node, {List<FocusNode> others = const []}) {
+    node.addListener(() {
+      if (node.hasFocus) {
+        // collapse others
+        for (final f in others) {
+          if (f.hasFocus) f.unfocus();
+        }
+        // let the keyboard open/layout settle, then scroll
+        Future.delayed(const Duration(milliseconds: 90), () {
+          if (!mounted) return;
+          _scrollFocusedIntoView(nodeContext: node.context);
+        });
+      }
+    });
+  }
+
+  void _scrollFocusedIntoView({BuildContext? nodeContext}) {
+    if (nodeContext == null) return;
+    final rb = nodeContext.findRenderObject();
+    if (rb is! RenderBox) return;
+
+    final view = MediaQuery.of(context).size;
+    final insets = MediaQuery.of(context).viewInsets.bottom; // keyboard
+    final topPad = MediaQuery.of(context).padding.top;
+
+    const appBarH = 58.0; // our AppBar height
+    const safeTopBand = 16.0; // margin under the app bar
+    const safeBottomBand = 20.0; // margin above the keyboard
+
+    final box = rb;
+    final offset = box.localToGlobal(Offset.zero);
+    final fieldTop = offset.dy;
+    final fieldBottom = fieldTop + box.size.height;
+
+    final visibleTop = topPad + appBarH + safeTopBand;
+    final visibleBottom = view.height - insets - safeBottomBand;
+    final current = _scrollCtrl.offset;
+
+    double? target;
+    if (fieldBottom > visibleBottom) {
+      final delta = fieldBottom - visibleBottom;
+      target = (current + delta).clamp(
+        _scrollCtrl.position.minScrollExtent,
+        _scrollCtrl.position.maxScrollExtent,
+      );
+    } else if (fieldTop < visibleTop) {
+      final delta = visibleTop - fieldTop;
+      target = (current - delta).clamp(
+        _scrollCtrl.position.minScrollExtent,
+        _scrollCtrl.position.maxScrollExtent,
+      );
+    }
+
+    if (target != null && target != current) {
+      _scrollCtrl.animateTo(
+        target,
+        duration: const Duration(milliseconds: 240),
+        curve: Curves.easeOutCubic,
+      );
+    }
+  }
+
+  // ---- Helpers --------------------------------------------------------------
 
   int _parseInt(String v, {int fallback = 0}) =>
       int.tryParse(v.replaceAll(RegExp(r'[^0-9]'), '')) ?? fallback;
@@ -160,7 +239,8 @@ class _OrderQuickPanelState extends ConsumerState<OrderQuickPanel> {
       builder: (ctx) => AlertDialog(
         title: const Text('Confirmer une deuxième commande'),
         content: Text(
-          'Vous avez déjà commandé « ${widget.item.name} ». Voulez-vous confirmer une nouvelle commande pour ce produit ?',
+          'Vous avez déjà commandé « ${widget.item.name} ». '
+          'Voulez-vous confirmer une nouvelle commande pour ce produit ?',
         ),
         actions: [
           TextButton(
@@ -178,6 +258,33 @@ class _OrderQuickPanelState extends ConsumerState<OrderQuickPanel> {
       '[OrderQuickPanel] duplicate-check productId=${widget.item.id} confirm=$ok',
     );
     return ok == true;
+  }
+
+  // --- NEW: Bottom-sheet confirmation (replaces showRightDrawer) ------------
+  Future<void> _showConfirmationSheet({
+    required String productName,
+    required String totalStr,
+    required int quantity,
+  }) async {
+    final h = MediaQuery.of(context).size.height;
+    await showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      useSafeArea: true,
+      backgroundColor: Colors.transparent,
+      builder: (ctx) {
+        return _BottomSheetContainer(
+          height:
+              h *
+              OrderConfirmationPanel.suggestedHeightFraction, // keep same feel
+          child: OrderConfirmationPanel(
+            productName: productName,
+            totalStr: totalStr,
+            quantity: quantity,
+          ),
+        );
+      },
+    );
   }
 
   Future<void> _submit() async {
@@ -253,7 +360,6 @@ class _OrderQuickPanelState extends ConsumerState<OrderQuickPanel> {
     try {
       await ref.read(orderCommandRepoProvider(widget.baseUri)).send(cmd);
       await ref.read(orderPrefsProvider.notifier).save(prefs);
-
       ref
           .read(orderedProductsGuardProvider.notifier)
           .markOrdered(widget.item.id);
@@ -263,17 +369,14 @@ class _OrderQuickPanelState extends ConsumerState<OrderQuickPanel> {
       final totalStr =
           '${Formatters.amountFromCents((prefs.amountCents ?? amountCents))} FCFA';
 
+      // Close current panel if it's inside a route/sheet
       Navigator.of(context).maybePop();
 
-      await showRightDrawer(
-        context,
-        widthFraction: OrderConfirmationPanel.suggestedWidthFraction,
-        heightFraction: OrderConfirmationPanel.suggestedHeightFraction,
-        child: OrderConfirmationPanel(
-          productName: widget.item.name,
-          totalStr: totalStr,
-          quantity: prefs.quantity ?? qty,
-        ),
+      // Show confirmation in a bottom sheet (no right drawer)
+      await _showConfirmationSheet(
+        productName: widget.item.name,
+        totalStr: totalStr,
+        quantity: prefs.quantity ?? qty,
       );
     } catch (e) {
       if (!mounted) return;
@@ -377,7 +480,7 @@ class _OrderQuickPanelState extends ConsumerState<OrderQuickPanel> {
 
     return Shortcuts(
       shortcuts: <LogicalKeySet, Intent>{
-        LogicalKeySet(LogicalKeyboardKey.enter): ActivateIntent(),
+        LogicalKeySet(LogicalKeyboardKey.enter): const ActivateIntent(),
       },
       child: Actions(
         actions: <Type, Action<Intent>>{
@@ -390,6 +493,7 @@ class _OrderQuickPanelState extends ConsumerState<OrderQuickPanel> {
         },
         child: FocusTraversalGroup(
           child: Scaffold(
+            resizeToAvoidBottomInset: true,
             backgroundColor: Theme.of(context).colorScheme.surface,
             appBar: PreferredSize(
               preferredSize: const Size.fromHeight(58),
@@ -427,7 +531,6 @@ class _OrderQuickPanelState extends ConsumerState<OrderQuickPanel> {
                     icon: const Icon(Icons.delete_sweep),
                   ),
                   const SizedBox(width: 6),
-                  // 🔝 Primary action on top
                   Padding(
                     padding: const EdgeInsets.only(right: 10),
                     child: FilledButton.icon(
@@ -445,86 +548,133 @@ class _OrderQuickPanelState extends ConsumerState<OrderQuickPanel> {
                 ],
               ),
             ),
-            body: Form(
-              key: _formKey,
-              child: ListView(
+            body: SafeArea(
+              bottom: false,
+              child: SingleChildScrollView(
+                controller: _scrollCtrl,
+                keyboardDismissBehavior:
+                    ScrollViewKeyboardDismissBehavior.onDrag,
                 padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
-                children: [
-                  // TOTAL CARD
-                  Container(
-                    padding: const EdgeInsets.all(12),
-                    decoration: BoxDecoration(
-                      borderRadius: BorderRadius.circular(14),
-                      border: Border.all(color: Theme.of(context).dividerColor),
-                    ),
-                    child: Row(
-                      children: [
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(
-                                'Total à payer',
-                                style: Theme.of(context).textTheme.labelMedium,
-                              ),
-                              const SizedBox(height: 4),
-                              Text(
-                                totalStr,
-                                style: Theme.of(context).textTheme.headlineSmall
-                                    ?.copyWith(fontWeight: FontWeight.w800),
-                              ),
-                              const SizedBox(height: 2),
-                              Text(
-                                'Prix unitaire: ${Formatters.amountFromCents(widget.item.defaultPrice)} FCFA',
-                                style: Theme.of(context).textTheme.bodySmall,
-                              ),
-                            ],
+                child: Form(
+                  key: _formKey,
+                  child: Column(
+                    children: [
+                      // TOTAL CARD
+                      Container(
+                        padding: const EdgeInsets.all(12),
+                        decoration: BoxDecoration(
+                          borderRadius: BorderRadius.circular(14),
+                          border: Border.all(
+                            color: Theme.of(context).dividerColor,
                           ),
                         ),
-                        IconButton(
-                          tooltip: 'Détails du montant',
-                          onPressed: _showAmountInfoPopup,
-                          icon: const Icon(Icons.info_outline),
+                        child: Row(
+                          children: [
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    'Total à payer',
+                                    style: Theme.of(
+                                      context,
+                                    ).textTheme.labelMedium,
+                                  ),
+                                  const SizedBox(height: 4),
+                                  Text(
+                                    totalStr,
+                                    style: Theme.of(context)
+                                        .textTheme
+                                        .headlineSmall
+                                        ?.copyWith(fontWeight: FontWeight.w800),
+                                  ),
+                                  const SizedBox(height: 2),
+                                  Text(
+                                    'Prix unitaire: ${Formatters.amountFromCents(widget.item.defaultPrice)} FCFA',
+                                    style: Theme.of(
+                                      context,
+                                    ).textTheme.bodySmall,
+                                  ),
+                                ],
+                              ),
+                            ),
+                            IconButton(
+                              tooltip: 'Détails du montant',
+                              onPressed: _showAmountInfoPopup,
+                              icon: const Icon(Icons.info_outline),
+                            ),
+                          ],
                         ),
-                      ],
-                    ),
-                  ),
+                      ),
+                      const SizedBox(height: 16),
 
-                  const SizedBox(height: 16),
-                  TextFormField(
-                    controller: _phoneCtrl,
-                    decoration: const InputDecoration(
-                      labelText: 'Identifiant',
-                      hintText: 'Téléphone ou Email',
-                      helperText:
-                          'Nous permet de vous joindre pour la livraison.',
-                    ),
-                    autofocus: true,
-                    textInputAction: TextInputAction.next,
-                    validator: (v) => (v == null || v.trim().isEmpty)
-                        ? 'Identifiant requis'
-                        : null,
-                    enabled: !_submitting,
+                      // PHONE — reveal on focus
+                      _RevealOnFocus(
+                        label: 'Identifiant',
+                        hint: 'Téléphone ou Email',
+                        helper:
+                            'Nous permet de vous joindre pour la livraison.',
+                        preview: () => _phoneCtrl.text.trim().isEmpty
+                            ? '—'
+                            : _phoneCtrl.text.trim(),
+                        focusNode: _fPhone,
+                        scrollController: _scrollCtrl,
+                        validator: (v) => (v == null || v.trim().isEmpty)
+                            ? 'Identifiant requis'
+                            : null,
+                        fieldBuilder: (ctx) => TextFormField(
+                          focusNode: _fPhone,
+                          controller: _phoneCtrl,
+                          autofocus: true,
+                          decoration: const InputDecoration(
+                            labelText: 'Identifiant',
+                            hintText: 'Téléphone ou Email',
+                            helperText:
+                                'Nous permet de vous joindre pour la livraison.',
+                          ),
+                          textInputAction: TextInputAction.next,
+                          enabled: !_submitting,
+                        ),
+                      ),
+
+                      const SizedBox(height: 12),
+
+                      // QUANTITY — reveal on focus
+                      _RevealOnFocus(
+                        label: 'Quantité',
+                        hint: 'Minimum 1.',
+                        preview: () => _qtyCtrl.text.trim().isEmpty
+                            ? '1'
+                            : _qtyCtrl.text.trim(),
+                        focusNode: _fQty,
+                        scrollController: _scrollCtrl,
+                        fieldBuilder: (ctx) => _QtyWithStepper(
+                          controller: _qtyCtrl,
+                          focusNode: _fQty,
+                          onMinus: _submitting ? null : () => _incQty(-1),
+                          onPlus: _submitting ? null : () => _incQty(1),
+                          onChanged: () {
+                            if (_lockAmountToItems) {
+                              setState(() => _syncAmountFromItems());
+                            } else {
+                              setState(() {});
+                            }
+                          },
+                          enabled: !_submitting,
+                        ),
+                      ),
+
+                      const SizedBox(height: 18),
+
+                      // Spacer that matches keyboard height to always allow scroll room
+                      const _KeyboardInsetSpacer(extra: 24),
+                    ],
                   ),
-                  const SizedBox(height: 12),
-                  _QtyWithStepper(
-                    controller: _qtyCtrl,
-                    onMinus: _submitting ? null : () => _incQty(-1),
-                    onPlus: _submitting ? null : () => _incQty(1),
-                    onChanged: () {
-                      if (_lockAmountToItems) {
-                        setState(() => _syncAmountFromItems());
-                      } else {
-                        setState(() {});
-                      }
-                    },
-                    enabled: !_submitting,
-                  ),
-                  const SizedBox(height: 18),
-                ],
+                ),
               ),
             ),
-            // Keep bottom CTA for convenience (mirrors top action)
+
+            // Bottom CTA (mirrors top)
             bottomNavigationBar: SafeArea(
               top: false,
               child: Padding(
@@ -589,8 +739,205 @@ class _OrderQuickPanelState extends ConsumerState<OrderQuickPanel> {
   }
 }
 
+/// Adds bottom space equal to the keyboard height + [extra].
+class _KeyboardInsetSpacer extends StatelessWidget {
+  final double extra;
+  const _KeyboardInsetSpacer({this.extra = 0});
+  @override
+  Widget build(BuildContext context) {
+    final kb = MediaQuery.of(context).viewInsets.bottom;
+    return SizedBox(height: kb + extra);
+  }
+}
+
+/// Collapsed row that expands into the real field when focused/tapped,
+/// and auto-scrolls into a safe visible region with header+keyboard.
+class _RevealOnFocus extends StatefulWidget {
+  final String label;
+  final String? hint;
+  final String? helper;
+  final String Function()? preview; // how to display collapsed value
+  final FocusNode focusNode;
+  final ScrollController scrollController;
+  final Widget Function(BuildContext) fieldBuilder;
+  final String? Function(String?)? validator;
+
+  const _RevealOnFocus({
+    required this.label,
+    this.hint,
+    this.helper,
+    this.preview,
+    required this.focusNode,
+    required this.scrollController,
+    required this.fieldBuilder,
+    this.validator,
+  });
+
+  @override
+  State<_RevealOnFocus> createState() => _RevealOnFocusState();
+}
+
+class _RevealOnFocusState extends State<_RevealOnFocus>
+    with SingleTickerProviderStateMixin {
+  bool get _expanded => widget.focusNode.hasFocus;
+
+  void _requestFocus() {
+    if (!widget.focusNode.hasFocus) {
+      FocusScope.of(context).requestFocus(widget.focusNode);
+    }
+  }
+
+  @override
+  void initState() {
+    super.initState();
+    widget.focusNode.addListener(_onFocusChange);
+  }
+
+  @override
+  void dispose() {
+    widget.focusNode.removeListener(_onFocusChange);
+    super.dispose();
+  }
+
+  void _onFocusChange() {
+    setState(() {}); // rebuild to switch collapsed/expanded
+    if (widget.focusNode.hasFocus) {
+      // after expand, ensure visible
+      Future.delayed(const Duration(milliseconds: 80), () {
+        final rb = context.findRenderObject();
+        if (rb is! RenderBox) return;
+        final view = MediaQuery.of(context).size;
+        final insets = MediaQuery.of(context).viewInsets.bottom;
+        final topPad = MediaQuery.of(context).padding.top;
+        const appBarH = 58.0;
+        const safeTopBand = 16.0;
+        const safeBottomBand = 20.0;
+
+        final offset = rb.localToGlobal(Offset.zero);
+        final fieldTop = offset.dy;
+        final fieldBottom = fieldTop + rb.size.height;
+
+        final visibleTop = topPad + appBarH + safeTopBand;
+        final visibleBottom = view.height - insets - safeBottomBand;
+
+        final pos = widget.scrollController.position;
+        final current = widget.scrollController.offset;
+
+        double? target;
+        if (fieldBottom > visibleBottom) {
+          final delta = fieldBottom - visibleBottom;
+          target = (current + delta).clamp(
+            pos.minScrollExtent,
+            pos.maxScrollExtent,
+          );
+        } else if (fieldTop < visibleTop) {
+          final delta = visibleTop - fieldTop;
+          target = (current - delta).clamp(
+            pos.minScrollExtent,
+            pos.maxScrollExtent,
+          );
+        }
+
+        if (target != null && target != current) {
+          widget.scrollController.animateTo(
+            target,
+            duration: const Duration(milliseconds: 240),
+            curve: Curves.easeOutCubic,
+          );
+        }
+      });
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final collapsed = _CollapsedRow(
+      label: widget.label,
+      hint: widget.hint,
+      helper: widget.helper,
+      value: widget.preview?.call(),
+      onTap: _requestFocus,
+    );
+
+    return AnimatedSwitcher(
+      duration: const Duration(milliseconds: 180),
+      switchInCurve: Curves.easeOut,
+      switchOutCurve: Curves.easeOut,
+      child: _expanded
+          ? AnimatedSize(
+              duration: const Duration(milliseconds: 180),
+              curve: Curves.easeOut,
+              child: Column(
+                key: const ValueKey('expanded'),
+                children: [widget.fieldBuilder(context)],
+              ),
+            )
+          : Container(key: const ValueKey('collapsed'), child: collapsed),
+    );
+  }
+}
+
+class _CollapsedRow extends StatelessWidget {
+  final String label;
+  final String? hint;
+  final String? helper;
+  final String? value;
+  final VoidCallback onTap;
+
+  const _CollapsedRow({
+    required this.label,
+    this.hint,
+    this.helper,
+    this.value,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    final text = (value == null || value!.isEmpty) ? (hint ?? '—') : value!;
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(12),
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(color: Theme.of(context).dividerColor),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(label, style: Theme.of(context).textTheme.labelMedium),
+              const SizedBox(height: 6),
+              Text(
+                text,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: Theme.of(context).textTheme.titleMedium,
+              ),
+              if ((helper ?? '').isNotEmpty) ...[
+                const SizedBox(height: 2),
+                Text(
+                  helper!,
+                  style: Theme.of(
+                    context,
+                  ).textTheme.bodySmall?.copyWith(color: cs.onSurfaceVariant),
+                ),
+              ],
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
 class _QtyWithStepper extends StatefulWidget {
   final TextEditingController controller;
+  final FocusNode? focusNode;
   final VoidCallback? onMinus;
   final VoidCallback? onPlus;
   final VoidCallback onChanged;
@@ -598,6 +945,7 @@ class _QtyWithStepper extends StatefulWidget {
 
   const _QtyWithStepper({
     required this.controller,
+    this.focusNode,
     required this.onMinus,
     required this.onPlus,
     required this.onChanged,
@@ -621,6 +969,7 @@ class _QtyWithStepperState extends State<_QtyWithStepper> {
       children: [
         Expanded(
           child: TextFormField(
+            focusNode: widget.focusNode,
             controller: widget.controller,
             enabled: widget.enabled,
             decoration: const InputDecoration(
@@ -661,6 +1010,38 @@ class _QtyWithStepperState extends State<_QtyWithStepper> {
           ),
         ),
       ],
+    );
+  }
+}
+
+/// Drawer-like bottom sheet container with rounded top corners.
+class _BottomSheetContainer extends StatelessWidget {
+  final double height;
+  final Widget child;
+  const _BottomSheetContainer({required this.height, required this.child});
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    return AnimatedPadding(
+      duration: const Duration(milliseconds: 150),
+      curve: Curves.easeOut,
+      padding: EdgeInsets.only(
+        bottom: MediaQuery.of(context).viewInsets.bottom,
+      ),
+      child: Align(
+        alignment: Alignment.bottomCenter,
+        child: Material(
+          color: cs.surface,
+          elevation: 10,
+          borderRadius: const BorderRadius.only(
+            topLeft: Radius.circular(18),
+            topRight: Radius.circular(18),
+          ),
+          clipBehavior: Clip.antiAlias,
+          child: SizedBox(height: height, width: double.infinity, child: child),
+        ),
+      ),
     );
   }
 }
