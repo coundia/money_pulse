@@ -24,3 +24,7 @@ flutter pub add url_launcher
 flutter pub add image_picker
 flutter pub add transparent_image
 flutter pub add image_picker  image_picker_android file_picker mime  crypto
+
+
+dart run flutter_launcher_icons
+dart run flutter_native_splash:create

@@ -15,7 +15,7 @@ class AboutPage extends StatefulWidget {
 }
 
 class _AboutPageState extends State<AboutPage> {
-  static const String _assetPath = 'assets/logo.png';
+  static const String _assetPath = 'assets/logo/app_icon.png';
 
   bool _assetOk = true; // optimistic: assume present
 

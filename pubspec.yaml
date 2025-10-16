@@ -28,7 +28,6 @@ dependencies:
   flutter_secure_storage: ^9.2.4
 
   flutter_native_splash: ^2.4.6
-  flutter_launcher_icons: ^0.14.4
   file_picker: ^10.3.3
   url_launcher: ^6.3.2
   image_picker: ^1.2.0
@@ -41,7 +40,15 @@ dev_dependencies:
   flutter_test:
     sdk: flutter
 
+  flutter_launcher_icons: ^0.14.4
   flutter_lints: ^5.0.0
+
+flutter_launcher_icons:
+  android: true
+  ios: true
+  image_path: assets/logo/app_icon.png
+  adaptive_icon_background: "#FFFFFF"
+  adaptive_icon_foreground: assets/logo/app_icon.png
 
 flutter:
 
@@ -51,13 +58,13 @@ flutter:
 
 flutter_native_splash:
   color: "#ffffff"           
-  image: assets/logo.png    
+  image: assets/logo/app_icon.png  
   android: true
   ios: true
   web: false
 
-flutter_icons:
-  android: true
-  ios: true
-  image_path: "assets/logo.png"    
-  min_sdk_android: 21
+# flutter_icons:
+#   android: true
+#   ios: true
+#   image_path: "assets/logo/app_icon.png"    
+#   min_sdk_android: 21
