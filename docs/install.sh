@@ -25,6 +25,7 @@ flutter pub add image_picker
 flutter pub add transparent_image
 flutter pub add image_picker  image_picker_android file_picker mime  crypto
 
-
+# generate icons
+#Just add : assets/logo/app_icon.png
 dart run flutter_launcher_icons
 dart run flutter_native_splash:create
