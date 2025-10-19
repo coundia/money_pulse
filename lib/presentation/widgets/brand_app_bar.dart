@@ -37,7 +37,7 @@ class BrandAppBar extends StatelessWidget implements PreferredSizeWidget {
         ? Colors.black.withOpacity(.10)
         : Colors.white.withOpacity(.06);
 
-    final paintedHeight = height + bottomRadius + bannerHeight;
+    final paintedHeight = height + bottomRadius + bannerHeight + 40;
 
     return ClipPath(
       clipper: _BottomCurveClipper(radius: bottomRadius),
