@@ -322,6 +322,11 @@ class _HomePageState extends ConsumerState<HomePage>
           busy: _isBusy,
           height: 72, // hauteur de la barre
           bannerHeight: 28, // espace vert supplémentaire sous la barre
+          onTapMonogram: () {
+            Navigator.of(
+              context,
+            ).push(MaterialPageRoute(builder: (_) => const SettingsPage()));
+          },
           actions: [
             if (pageIdx == 0)
               PopupMenuButton<String>(
