@@ -1,4 +1,4 @@
-// File: lib/presentation/app/home/home_page.dart
+// Screen that hosts the home shell with a smooth branded AppBar, navigation, syncing actions, and drawers.
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -18,6 +18,9 @@ import 'package:money_pulse/presentation/features/categories/category_list_page.
 import 'package:money_pulse/domain/accounts/entities/account.dart';
 import 'package:money_pulse/domain/transactions/entities/transaction_entry.dart';
 import 'package:sqflite/sqlite_api.dart';
+import 'package:money_pulse/presentation/widgets/under_construction_drawer.dart'
+    hide showRightDrawer;
+import 'package:money_pulse/presentation/widgets/brand_app_bar.dart';
 import '../../../sync/infrastructure/pull_ports/account_pull_port_sqflite.dart';
 import '../../../sync/infrastructure/pull_providers.dart';
 import '../../../sync/infrastructure/sync_api_client.dart';
@@ -37,8 +40,6 @@ import 'widgets/home_app_bar_title.dart';
 import 'package:money_pulse/onboarding/presentation/providers/access_session_provider.dart';
 import 'package:money_pulse/sync/sync_service_provider.dart';
 import 'package:money_pulse/onboarding/presentation/flows/logout_and_purge_flow.dart';
-import 'package:money_pulse/presentation/widgets/under_construction_drawer.dart'
-    hide showRightDrawer;
 
 class HomePage extends ConsumerStatefulWidget {
   const HomePage({super.key});
@@ -60,7 +61,6 @@ class _HomePageState extends ConsumerState<HomePage>
     Future.microtask(() async {
       await ref.read(accessSessionProvider.notifier).restore();
       await HomeRefreshHook.onStartup(ref);
-
       await ref.read(transactionsProvider.notifier).load();
       await ref.read(categoriesProvider.notifier).load();
       await ref.read(ensureSelectedAccountProvider.future);
@@ -75,12 +75,11 @@ class _HomePageState extends ConsumerState<HomePage>
     super.dispose();
   }
 
-  /// 🔁 Quand l’app revient en avant-plan, on rafraîchit
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
     print("didChangeAppLifecycleState");
     if (state == AppLifecycleState.resumed) {
-      //_refreshAll(remount: true);
+      // optional manual refresh
     }
   }
 
@@ -98,7 +97,6 @@ class _HomePageState extends ConsumerState<HomePage>
 
   Future<void> _refreshAll({bool remount = true}) async {
     print("[_refreshAll]");
-
     setState(() => _isBusy = true);
     try {
       await HomeRefreshHook.onManualRefresh(ref);
@@ -108,12 +106,10 @@ class _HomePageState extends ConsumerState<HomePage>
     }
   }
 
-  /// ✅ Helper qui ouvre une page et rafraîchit au retour
   Future<T?> _pushAndRefresh<T>(Widget page) async {
     final res = await Navigator.of(
       context,
     ).push<T>(MaterialPageRoute(builder: (_) => page));
-    // Au retour, on rafraîchit systématiquement
     await _refreshAll(remount: true);
     return res;
   }
@@ -315,8 +311,7 @@ class _HomePageState extends ConsumerState<HomePage>
     return KeyedSubtree(
       key: ValueKey(_remountSeed),
       child: Scaffold(
-        appBar: AppBar(
-          centerTitle: true,
+        appBar: BrandAppBar(
           title: HomeAppBarTitle(
             accountAsync: accAsync,
             onTap: _showAccountPicker,
@@ -324,6 +319,9 @@ class _HomePageState extends ConsumerState<HomePage>
             onToggleHide: () =>
                 ref.read(homePrivacyPrefsProvider.notifier).toggleHideBalance(),
           ),
+          busy: _isBusy,
+          height: 72, // hauteur de la barre
+          bannerHeight: 28, // espace vert supplémentaire sous la barre
           actions: [
             if (pageIdx == 0)
               PopupMenuButton<String>(
@@ -343,7 +341,6 @@ class _HomePageState extends ConsumerState<HomePage>
                       {
                         final ok = await requireAccess(context, ref);
                         if (!mounted || !ok) break;
-
                         try {
                           setState(() => _isBusy = true);
                           await HomeRefreshHook.onManualRefresh(ref);
@@ -351,7 +348,6 @@ class _HomePageState extends ConsumerState<HomePage>
                         } finally {
                           if (mounted) setState(() => _isBusy = false);
                         }
-
                         ScaffoldMessenger.of(context).showSnackBar(
                           const SnackBar(
                             content: Text('Connecté avec succès.'),
@@ -501,12 +497,6 @@ class _HomePageState extends ConsumerState<HomePage>
                 },
               ),
           ],
-          bottom: _isBusy
-              ? const PreferredSize(
-                  preferredSize: Size(double.infinity, 3),
-                  child: LinearProgressIndicator(minHeight: 3),
-                )
-              : null,
         ),
         body: IndexedStack(
           index: pageIdx,
