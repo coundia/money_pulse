@@ -388,7 +388,7 @@ class HomeAppBarTitle extends StatelessWidget {
                                       if (!isTight && lastUpdate != null) ...[
                                         const SizedBox(width: 8),
                                         Text(
-                                          'Maj ${Formatters.timeHm(lastUpdate)}',
+                                          '${Formatters.dateShort(lastUpdate)}',
                                           style: Theme.of(context)
                                               .textTheme
                                               .labelSmall
