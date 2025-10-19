@@ -23,8 +23,7 @@ class BrandAppBar extends StatelessWidget implements PreferredSizeWidget {
   });
 
   @override
-  Size get preferredSize =>
-      Size.fromHeight(height + bannerHeight + (busy ? 3 : 0));
+  Size get preferredSize => Size.fromHeight(height + (busy ? 3 : 0));
 
   @override
   Widget build(BuildContext context) {
@@ -88,9 +87,9 @@ class BrandAppBar extends StatelessWidget implements PreferredSizeWidget {
                               ),
                             ),
                           ),
-                          const Align(
+                          Align(
                             alignment: Alignment.centerLeft,
-                            child: Padding(
+                            child: const Padding(
                               padding: EdgeInsets.only(right: 8.0),
                               child: _BrandMonogram(size: 28),
                             ),
