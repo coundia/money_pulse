@@ -3,6 +3,8 @@
 import 'dart:ui';
 import 'package:flutter/material.dart';
 
+import 'BrandMonogram.dart';
+
 class BrandAppBar extends StatelessWidget implements PreferredSizeWidget {
   final Widget title;
   final List<Widget>? actions;
@@ -226,13 +228,10 @@ class _BrandMonogram extends StatelessWidget {
         ),
       ),
       alignment: Alignment.center,
-      child: const Text(
-        'JK',
-        style: TextStyle(
-          color: Colors.white,
-          fontWeight: FontWeight.w900,
-          letterSpacing: -0.2,
-        ),
+      child: const SizedBox(
+        width: 40,
+        height: 40,
+        child: Center(child: BrandMonogram(size: 28)),
       ),
     );
   }

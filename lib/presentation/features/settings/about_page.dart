@@ -20,7 +20,7 @@ class _AboutPageState extends State<AboutPage> {
   bool _assetOk = true; // on suppose présent, on dégrade si échec
 
   // === Infos jaayKo ===
-  static const String _appName = 'jaayKo';
+  static const String _appName = 'JaayKo';
   static const String _version = '1.0.0';
   static const String _ownerName = 'Papa COUNDIA';
   static const String _ownerEmail = 'contact@pcoundia.com';

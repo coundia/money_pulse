@@ -1,6 +1,7 @@
 // File renders the JK rounded-square logo with gradient background.
 import 'package:flutter/material.dart';
 import '../theme/brand_colors.dart';
+import 'BrandMonogram.dart';
 
 class BrandLogoMark extends StatelessWidget {
   final double size;
@@ -16,13 +17,10 @@ class BrandLogoMark extends StatelessWidget {
         borderRadius: BorderRadius.all(Radius.circular(8)),
       ),
       alignment: Alignment.center,
-      child: const Text(
-        'JK',
-        style: TextStyle(
-          color: BrandColors.onBrand,
-          fontWeight: FontWeight.w800,
-          letterSpacing: -0.5,
-        ),
+      child: const SizedBox(
+        width: 40,
+        height: 40,
+        child: Center(child: BrandMonogram(size: 28)),
       ),
     );
   }
