@@ -1,8 +1,8 @@
 /// Riverpod state and notifiers for app settings.
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:money_pulse/domain/settings/entities/app_settings.dart';
-import 'package:money_pulse/presentation/app/providers/app_settings_repo_provider.dart';
+import 'package:jaayko/domain/settings/entities/app_settings.dart';
+import 'package:jaayko/presentation/app/providers/app_settings_repo_provider.dart';
 
 final appSettingsProvider =
     AsyncNotifierProvider<AppSettingsController, AppSettings>(

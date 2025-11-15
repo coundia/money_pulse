@@ -1,5 +1,5 @@
 // DTO for customer deltas sent to the API; ensures ISO-8601 UTC for dates.
-import 'package:money_pulse/sync/domain/sync_delta_type.dart';
+import 'package:jaayko/sync/domain/sync_delta_type.dart';
 
 import '../../../domain/customer/entities/customer.dart';
 

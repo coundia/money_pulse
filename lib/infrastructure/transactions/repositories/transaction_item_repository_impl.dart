@@ -8,10 +8,10 @@
 //   * optional account stamping via `account` column when present
 // - Bulk soft delete by transaction also writes change_log per row.
 //
-import 'package:money_pulse/domain/transactions/entities/transaction_item.dart';
-import 'package:money_pulse/domain/transactions/repositories/transaction_item_repository.dart';
-import 'package:money_pulse/infrastructure/db/app_database.dart';
-import 'package:money_pulse/sync/infrastructure/change_tracked_exec.dart';
+import 'package:jaayko/domain/transactions/entities/transaction_item.dart';
+import 'package:jaayko/domain/transactions/repositories/transaction_item_repository.dart';
+import 'package:jaayko/infrastructure/db/app_database.dart';
+import 'package:jaayko/sync/infrastructure/change_tracked_exec.dart';
 import 'package:sqflite/sqflite.dart';
 
 class TransactionItemRepositoryImpl implements TransactionItemRepository {

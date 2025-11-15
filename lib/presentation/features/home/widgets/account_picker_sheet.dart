@@ -1,13 +1,13 @@
 // Bottom sheet to pick an account; searchable list, type-aware tiles, inline adjust using AdjustBalanceUseCase.
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:money_pulse/domain/accounts/entities/account.dart';
-import 'package:money_pulse/presentation/features/accounts/account_page.dart';
-import 'package:money_pulse/presentation/widgets/right_drawer.dart';
-import 'package:money_pulse/presentation/features/accounts/widgets/account_adjust_balance_panel.dart';
-import 'package:money_pulse/application/providers/adjust_balance_usecase_provider.dart';
-import 'package:money_pulse/presentation/app/providers.dart';
-import 'package:money_pulse/presentation/features/accounts/providers/account_list_providers.dart';
+import 'package:jaayko/domain/accounts/entities/account.dart';
+import 'package:jaayko/presentation/features/accounts/account_page.dart';
+import 'package:jaayko/presentation/widgets/right_drawer.dart';
+import 'package:jaayko/presentation/features/accounts/widgets/account_adjust_balance_panel.dart';
+import 'package:jaayko/application/providers/adjust_balance_usecase_provider.dart';
+import 'package:jaayko/presentation/app/providers.dart';
+import 'package:jaayko/presentation/features/accounts/providers/account_list_providers.dart';
 
 import '../../../app/account_selection.dart';
 import 'account_picker_tile.dart';

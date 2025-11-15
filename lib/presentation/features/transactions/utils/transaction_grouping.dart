@@ -1,4 +1,4 @@
-import 'package:money_pulse/domain/transactions/entities/transaction_entry.dart';
+import 'package:jaayko/domain/transactions/entities/transaction_entry.dart';
 
 class DayGroup {
   final DateTime day;

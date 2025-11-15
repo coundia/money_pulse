@@ -1,5 +1,5 @@
 // Repository contract for product_file persistence.
-import 'package:money_pulse/domain/products/entities/product_file.dart';
+import 'package:jaayko/domain/products/entities/product_file.dart';
 
 abstract class ProductFileRepository {
   Future<void> create(ProductFile file);

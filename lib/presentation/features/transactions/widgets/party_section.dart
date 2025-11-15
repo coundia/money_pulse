@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
-import 'package:money_pulse/domain/company/entities/company.dart';
-import 'package:money_pulse/domain/customer/entities/customer.dart';
+import 'package:jaayko/domain/company/entities/company.dart';
+import 'package:jaayko/domain/customer/entities/customer.dart';
 
 import 'customer_autocomplete.dart';
 

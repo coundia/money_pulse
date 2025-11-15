@@ -9,12 +9,12 @@
 //
 import 'package:sqflite/sqflite.dart';
 
-import 'package:money_pulse/infrastructure/db/app_database.dart';
-import 'package:money_pulse/domain/transactions/entities/transaction_entry.dart';
-import 'package:money_pulse/domain/transactions/repositories/transaction_repository.dart';
+import 'package:jaayko/infrastructure/db/app_database.dart';
+import 'package:jaayko/domain/transactions/entities/transaction_entry.dart';
+import 'package:jaayko/domain/transactions/repositories/transaction_repository.dart';
 
 // extension with insertTracked / updateTracked / softDeleteTracked
-import 'package:money_pulse/sync/infrastructure/change_tracked_exec.dart';
+import 'package:jaayko/sync/infrastructure/change_tracked_exec.dart';
 
 class TransactionRepositorySqflite implements TransactionRepository {
   final AppDatabase _db;

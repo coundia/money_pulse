@@ -8,13 +8,13 @@ import 'package:intl/intl.dart';
 import 'package:intl/date_symbol_data_local.dart';
 import 'package:sqflite/sqflite.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:money_pulse/presentation/app/log.dart';
-import 'package:money_pulse/infrastructure/db/app_database.dart';
-import 'package:money_pulse/presentation/app/app.dart';
-import 'package:money_pulse/presentation/app/providers.dart';
-import 'package:money_pulse/presentation/app/restart_app.dart';
-import 'package:money_pulse/presentation/navigation/route_observer.dart';
-import 'package:money_pulse/presentation/theme/app_theme.dart';
+import 'package:jaayko/presentation/app/log.dart';
+import 'package:jaayko/infrastructure/db/app_database.dart';
+import 'package:jaayko/presentation/app/app.dart';
+import 'package:jaayko/presentation/app/providers.dart';
+import 'package:jaayko/presentation/app/restart_app.dart';
+import 'package:jaayko/presentation/navigation/route_observer.dart';
+import 'package:jaayko/presentation/theme/app_theme.dart';
 import 'dart:developer' as dev;
 
 Future<void> main() async {

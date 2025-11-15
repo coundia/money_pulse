@@ -1,6 +1,6 @@
 // Compact pill chip for goal or limit amounts shown in list rows.
 import 'package:flutter/material.dart';
-import 'package:money_pulse/presentation/shared/formatters.dart';
+import 'package:jaayko/presentation/shared/formatters.dart';
 
 class MiniChip extends StatelessWidget {
   final IconData icon;

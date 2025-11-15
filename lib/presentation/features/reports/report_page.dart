@@ -10,7 +10,7 @@ import 'report_pie_card.dart';
 import 'report_dual_line_card.dart';
 import 'report_breakdown_list.dart';
 
-import 'package:money_pulse/presentation/shared/formatters.dart';
+import 'package:jaayko/presentation/shared/formatters.dart';
 
 class ReportPage extends ConsumerStatefulWidget {
   const ReportPage({super.key});

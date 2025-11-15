@@ -1,7 +1,7 @@
 /* Small UI action to trigger syncAll() with French labels and feedback. */
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:money_pulse/sync/sync_service_provider.dart';
+import 'package:jaayko/sync/sync_service_provider.dart';
 
 class SyncNowButton extends ConsumerStatefulWidget {
   const SyncNowButton({super.key});

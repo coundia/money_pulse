@@ -8,11 +8,11 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:share_plus/share_plus.dart';
 import 'package:printing/printing.dart';
-import 'package:money_pulse/infrastructure/receipts/receipt_text_formatter.dart';
-import 'package:money_pulse/infrastructure/receipts/receipt_pdf_renderer.dart'
+import 'package:jaayko/infrastructure/receipts/receipt_text_formatter.dart';
+import 'package:jaayko/infrastructure/receipts/receipt_pdf_renderer.dart'
     hide ReceiptTextFormatter;
-import 'package:money_pulse/presentation/features/transactions/receipt/receipt_controller.dart';
-import 'package:money_pulse/presentation/shared/formatters.dart';
+import 'package:jaayko/presentation/features/transactions/receipt/receipt_controller.dart';
+import 'package:jaayko/presentation/shared/formatters.dart';
 
 class ReceiptPreviewPage extends ConsumerWidget {
   final String transactionId;

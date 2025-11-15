@@ -1,7 +1,7 @@
 /// Compact summary and active filter chips for stock movement lists.
 import 'package:flutter/material.dart';
-import 'package:money_pulse/presentation/shared/formatters.dart';
-import 'package:money_pulse/domain/stock/repositories/stock_movement_repository.dart';
+import 'package:jaayko/presentation/shared/formatters.dart';
+import 'package:jaayko/domain/stock/repositories/stock_movement_repository.dart';
 import 'movement_filters.dart';
 import 'movement_type_ui.dart';
 

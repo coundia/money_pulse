@@ -2,9 +2,9 @@
 // State controller for Chat UI: pagination, sending, error handling; mounted-safe updates.
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:uuid/uuid.dart';
-import 'package:money_pulse/domain/chat/entities/chat_models.dart';
-import 'package:money_pulse/presentation/features/chatbot/chat_repo_provider.dart';
-import 'package:money_pulse/application/chat/chat_usecases.dart';
+import 'package:jaayko/domain/chat/entities/chat_models.dart';
+import 'package:jaayko/presentation/features/chatbot/chat_repo_provider.dart';
+import 'package:jaayko/application/chat/chat_usecases.dart';
 
 import '../../../domain/chat/repositories/chat_repository.dart';
 import '../../../shared/api_error_toast.dart';

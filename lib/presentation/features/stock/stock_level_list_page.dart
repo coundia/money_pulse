@@ -1,8 +1,8 @@
 /// Stock level list page orchestrating load/search/navigate and right drawers for view/edit/delete.
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:money_pulse/presentation/shared/formatters.dart';
-import 'package:money_pulse/presentation/widgets/right_drawer.dart';
+import 'package:jaayko/presentation/shared/formatters.dart';
+import 'package:jaayko/presentation/widgets/right_drawer.dart';
 
 import '../../../domain/stock/repositories/stock_level_repository.dart';
 import 'stock_level_view_panel.dart';

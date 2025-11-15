@@ -3,11 +3,11 @@ import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:money_pulse/domain/accounts/entities/account_user.dart';
-import 'package:money_pulse/presentation/features/accounts/providers/account_user_repo_provider.dart';
-import 'package:money_pulse/presentation/shared/formatters.dart';
-import 'package:money_pulse/presentation/widgets/right_drawer.dart';
-import 'package:money_pulse/presentation/features/settings/widgets/confirm_panel.dart';
+import 'package:jaayko/domain/accounts/entities/account_user.dart';
+import 'package:jaayko/presentation/features/accounts/providers/account_user_repo_provider.dart';
+import 'package:jaayko/presentation/shared/formatters.dart';
+import 'package:jaayko/presentation/widgets/right_drawer.dart';
+import 'package:jaayko/presentation/features/settings/widgets/confirm_panel.dart';
 
 class AccountUserTile extends ConsumerStatefulWidget {
   final AccountUser member;

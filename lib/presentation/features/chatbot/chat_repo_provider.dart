@@ -2,10 +2,10 @@
 // initializes and stays synced with the app's default/selected account.
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:money_pulse/domain/chat/repositories/chat_repository.dart';
-import 'package:money_pulse/infrastructure/chat/chat_repository_http.dart';
+import 'package:jaayko/domain/chat/repositories/chat_repository.dart';
+import 'package:jaayko/infrastructure/chat/chat_repository_http.dart';
 
-import 'package:money_pulse/presentation/app/providers.dart'
+import 'package:jaayko/presentation/app/providers.dart'
     show selectedAccountProvider;
 
 import '../../../shared/constants/env.dart';

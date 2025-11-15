@@ -1,7 +1,7 @@
 // Category form in a right drawer with Enter to submit and type selection.
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:money_pulse/domain/categories/entities/category.dart';
+import 'package:jaayko/domain/categories/entities/category.dart';
 
 class CategoryFormResult {
   final String code;

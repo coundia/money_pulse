@@ -1,5 +1,5 @@
 // lib/sync/domain/sync_delta_type_ext.dart
-import 'package:money_pulse/sync/domain/sync_delta_type.dart';
+import 'package:jaayko/sync/domain/sync_delta_type.dart';
 
 extension SyncDeltaTypeExt on SyncDeltaType {
   String get op => switch (this) {

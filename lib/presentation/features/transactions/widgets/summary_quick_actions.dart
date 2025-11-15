@@ -1,18 +1,18 @@
 // Responsive quick actions grid with enhanced haptics, keyboard shortcuts, and accessibility semantics in French.
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:money_pulse/marketplace/presentation/marketplace_page.dart';
-import 'package:money_pulse/presentation/features/companies/company_list_page.dart';
-import 'package:money_pulse/presentation/features/transactions/pages/transaction_list_page.dart';
-import 'package:money_pulse/presentation/features/pos/pos_page.dart';
-import 'package:money_pulse/presentation/features/settings/settings_page.dart';
-import 'package:money_pulse/presentation/features/reports/report_page.dart';
-import 'package:money_pulse/presentation/features/products/product_list_page.dart';
-import 'package:money_pulse/presentation/features/customers/customer_list_page.dart';
-import 'package:money_pulse/presentation/features/categories/category_list_page.dart';
-import 'package:money_pulse/presentation/features/accounts/account_page.dart';
-import 'package:money_pulse/presentation/features/stock/stock_level_list_page.dart';
-import 'package:money_pulse/presentation/shared/haptics_util.dart';
+import 'package:jaayko/marketplace/presentation/marketplace_page.dart';
+import 'package:jaayko/presentation/features/companies/company_list_page.dart';
+import 'package:jaayko/presentation/features/transactions/pages/transaction_list_page.dart';
+import 'package:jaayko/presentation/features/pos/pos_page.dart';
+import 'package:jaayko/presentation/features/settings/settings_page.dart';
+import 'package:jaayko/presentation/features/reports/report_page.dart';
+import 'package:jaayko/presentation/features/products/product_list_page.dart';
+import 'package:jaayko/presentation/features/customers/customer_list_page.dart';
+import 'package:jaayko/presentation/features/categories/category_list_page.dart';
+import 'package:jaayko/presentation/features/accounts/account_page.dart';
+import 'package:jaayko/presentation/features/stock/stock_level_list_page.dart';
+import 'package:jaayko/presentation/shared/haptics_util.dart';
 import '../../chatbot/chatbot_page.dart';
 import '../../chatbot/chatbot_provider.dart';
 

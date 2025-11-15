@@ -7,14 +7,14 @@
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:money_pulse/presentation/features/customers/customer_edit_panel.dart';
+import 'package:jaayko/presentation/features/customers/customer_edit_panel.dart';
 import '../../../domain/customer/entities/customer.dart';
 import '../../../shared/constants/env.dart';
 import 'providers/customer_detail_providers.dart';
 import 'providers/customer_list_providers.dart';
 import 'widgets/customer_linked_section.dart';
-import 'package:money_pulse/presentation/widgets/right_drawer.dart';
-import 'package:money_pulse/presentation/shared/formatters.dart';
+import 'package:jaayko/presentation/widgets/right_drawer.dart';
+import 'package:jaayko/presentation/shared/formatters.dart';
 import 'customer_delete_panel.dart';
 import 'widgets/customer_balance_adjust_panel.dart';
 import 'customer_debt_add_panel.dart';
@@ -41,9 +41,7 @@ class CustomerViewPanel extends ConsumerWidget {
     Customer c,
   ) async {
     try {
-      final market = ref.read(
-        customerMarketplaceRepoProvider(Env.BASE_URI),
-      );
+      final market = ref.read(customerMarketplaceRepoProvider(Env.BASE_URI));
       await market.saveAndReconcile(c);
       await _refreshAll(ref);
       if (!context.mounted) return;

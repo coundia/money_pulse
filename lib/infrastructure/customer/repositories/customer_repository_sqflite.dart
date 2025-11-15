@@ -8,13 +8,13 @@
 //   * optional account stamping via `account` column
 // - Keeps existing query features (search, filters, paging)
 //
-import 'package:money_pulse/sync/infrastructure/change_tracked_exec.dart';
+import 'package:jaayko/sync/infrastructure/change_tracked_exec.dart';
 import 'package:uuid/uuid.dart';
 import 'package:sqflite/sqflite.dart';
 
-import 'package:money_pulse/infrastructure/db/app_database.dart';
-import 'package:money_pulse/domain/customer/entities/customer.dart';
-import 'package:money_pulse/domain/customer/repositories/customer_repository.dart';
+import 'package:jaayko/infrastructure/db/app_database.dart';
+import 'package:jaayko/domain/customer/entities/customer.dart';
+import 'package:jaayko/domain/customer/repositories/customer_repository.dart';
 
 class CustomerRepositorySqflite implements CustomerRepository {
   final AppDatabase db;

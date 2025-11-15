@@ -1,7 +1,7 @@
-name: money_pulse
-description: Personal finance app with ultra-fast entry, clear categories, and visual reports
+name: jaayko
+description: La plateforme qui connecte vendeurs et acheteurs sans intermédiaire. Publiez, vendez ou achetez — le tout en quelques secondes grace à l'IA.
 publish_to: "none"
-version: 1.0.0+2
+version: 1.0.0+1
 
 environment:
   sdk: ^3.8.1

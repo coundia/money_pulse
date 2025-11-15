@@ -4,9 +4,9 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:uuid/uuid.dart';
 
-import 'package:money_pulse/domain/categories/entities/category.dart';
-import 'package:money_pulse/presentation/widgets/right_drawer.dart';
-import 'package:money_pulse/presentation/app/providers.dart'
+import 'package:jaayko/domain/categories/entities/category.dart';
+import 'package:jaayko/presentation/widgets/right_drawer.dart';
+import 'package:jaayko/presentation/app/providers.dart'
     show categoryRepoProvider;
 
 import '../../categories/widgets/category_form_panel.dart';

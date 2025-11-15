@@ -1,7 +1,7 @@
 // File: lib/application/chat/chat_usecases.dart
 // Application use-cases to send and fetch chat messages.
-import 'package:money_pulse/domain/chat/entities/chat_models.dart';
-import 'package:money_pulse/domain/chat/repositories/chat_repository.dart';
+import 'package:jaayko/domain/chat/entities/chat_models.dart';
+import 'package:jaayko/domain/chat/repositories/chat_repository.dart';
 
 class SendChatMessageUseCase {
   final ChatRepository repo;

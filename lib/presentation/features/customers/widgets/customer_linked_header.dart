@@ -1,7 +1,7 @@
 // Header card showing current debt, quick sums, and actions; uses controller for flows.
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:money_pulse/presentation/shared/formatters.dart';
+import 'package:jaayko/presentation/shared/formatters.dart';
 import '../providers/customer_linked_providers.dart';
 import 'customer_linked_controller.dart';
 

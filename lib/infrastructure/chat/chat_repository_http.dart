@@ -4,8 +4,8 @@ import 'dart:developer' as dev;
 import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 import 'package:uuid/uuid.dart';
-import 'package:money_pulse/domain/chat/entities/chat_models.dart';
-import 'package:money_pulse/domain/chat/repositories/chat_repository.dart';
+import 'package:jaayko/domain/chat/entities/chat_models.dart';
+import 'package:jaayko/domain/chat/repositories/chat_repository.dart';
 
 typedef HeaderBuilder = Map<String, String> Function();
 

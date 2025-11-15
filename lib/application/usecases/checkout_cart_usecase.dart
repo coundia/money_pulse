@@ -13,10 +13,10 @@
 import 'package:uuid/uuid.dart';
 import 'package:sqflite/sqflite.dart';
 
-import 'package:money_pulse/infrastructure/db/app_database.dart';
-import 'package:money_pulse/domain/accounts/repositories/account_repository.dart';
-import 'package:money_pulse/domain/debts/entities/debt.dart';
-import 'package:money_pulse/domain/debts/repositories/debt_repository.dart';
+import 'package:jaayko/infrastructure/db/app_database.dart';
+import 'package:jaayko/domain/accounts/repositories/account_repository.dart';
+import 'package:jaayko/domain/debts/entities/debt.dart';
+import 'package:jaayko/domain/debts/repositories/debt_repository.dart';
 
 import '../../sync/infrastructure/change_tracked_exec.dart'; // insertTracked / updateTracked / softDeleteTracked
 import '../../sync/infrastructure/change_log_helper.dart'; // upsertChangeLogPending

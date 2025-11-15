@@ -3,9 +3,9 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import 'package:money_pulse/presentation/shared/formatters.dart';
-import 'package:money_pulse/domain/customer/entities/customer.dart';
-import 'package:money_pulse/presentation/features/customers/providers/customer_list_providers.dart';
+import 'package:jaayko/presentation/shared/formatters.dart';
+import 'package:jaayko/domain/customer/entities/customer.dart';
+import 'package:jaayko/presentation/features/customers/providers/customer_list_providers.dart';
 
 import '../../transactions/widgets/customer_autocomplete.dart';
 

@@ -5,10 +5,10 @@ import 'dart:convert';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:http/http.dart' as http;
 
-import 'package:money_pulse/domain/company/entities/company.dart';
-import 'package:money_pulse/presentation/app/providers/company_repo_provider.dart';
-import 'package:money_pulse/domain/company/repositories/company_repository.dart';
-import 'package:money_pulse/sync/infrastructure/sync_headers_provider.dart';
+import 'package:jaayko/domain/company/entities/company.dart';
+import 'package:jaayko/presentation/app/providers/company_repo_provider.dart';
+import 'package:jaayko/domain/company/repositories/company_repository.dart';
+import 'package:jaayko/sync/infrastructure/sync_headers_provider.dart';
 
 final companyMarketplaceRepoProvider =
     Provider.family<CompanyMarketplaceRepo, String>((ref, baseUri) {

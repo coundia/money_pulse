@@ -1,7 +1,7 @@
 import 'package:equatable/equatable.dart';
-import 'package:money_pulse/domain/categories/entities/category.dart';
-import 'package:money_pulse/domain/company/entities/company.dart';
-import 'package:money_pulse/domain/customer/entities/customer.dart';
+import 'package:jaayko/domain/categories/entities/category.dart';
+import 'package:jaayko/domain/company/entities/company.dart';
+import 'package:jaayko/domain/customer/entities/customer.dart';
 
 import '../models/tx_item.dart';
 import '../widgets/type_selector.dart';

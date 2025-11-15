@@ -4,7 +4,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:money_pulse/domain/company/entities/company.dart';
+import 'package:jaayko/domain/company/entities/company.dart';
 import '../../../../domain/company/repositories/company_repository.dart';
 import '../../../app/providers/company_repo_provider.dart';
 import '../providers/customer_filters_providers.dart'

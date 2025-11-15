@@ -2,8 +2,8 @@
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:money_pulse/presentation/features/chatbot/chatbot_controller.dart';
-import 'package:money_pulse/presentation/features/chatbot/widgets/chat_message_tile.dart';
+import 'package:jaayko/presentation/features/chatbot/chatbot_controller.dart';
+import 'package:jaayko/presentation/features/chatbot/widgets/chat_message_tile.dart';
 
 import '../../accounts/account_page.dart';
 import '../../transactions/pages/transaction_list_page.dart';

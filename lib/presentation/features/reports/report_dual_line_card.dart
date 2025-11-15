@@ -3,9 +3,9 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:fl_chart/fl_chart.dart';
 
 import 'report_range.dart';
-import 'package:money_pulse/presentation/app/providers.dart';
-import 'package:money_pulse/presentation/shared/formatters.dart';
-import 'package:money_pulse/domain/accounts/entities/account.dart';
+import 'package:jaayko/presentation/app/providers.dart';
+import 'package:jaayko/presentation/shared/formatters.dart';
+import 'package:jaayko/domain/accounts/entities/account.dart';
 
 class ReportDualLineCard extends ConsumerWidget {
   final Account account;

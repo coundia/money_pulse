@@ -5,7 +5,7 @@ import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import 'package:money_pulse/marketplace/presentation/order_quick_panel.dart';
+import 'package:jaayko/marketplace/presentation/order_quick_panel.dart';
 import '../../presentation/shared/haptics_util.dart';
 import '../../shared/constants/env.dart';
 import '../../shared/formatters.dart';

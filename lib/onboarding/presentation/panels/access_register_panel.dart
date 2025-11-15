@@ -4,7 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter/scheduler.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:money_pulse/onboarding/presentation/providers/access_repo_provider.dart'
+import 'package:jaayko/onboarding/presentation/providers/access_repo_provider.dart'
     show registerWithPasswordUseCaseProvider;
 import '../providers/access_session_provider.dart';
 import '../../../presentation/features/home/home_page.dart';

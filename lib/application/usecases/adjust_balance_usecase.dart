@@ -1,10 +1,10 @@
 // Use case to adjust an account balance and insert a matching transaction entry atomically.
 import 'package:uuid/uuid.dart';
 import 'package:sqflite/sqflite.dart';
-import 'package:money_pulse/domain/accounts/entities/account.dart';
-import 'package:money_pulse/domain/accounts/repositories/account_repository.dart';
-import 'package:money_pulse/infrastructure/db/app_database.dart';
-import 'package:money_pulse/presentation/shared/formatters.dart';
+import 'package:jaayko/domain/accounts/entities/account.dart';
+import 'package:jaayko/domain/accounts/repositories/account_repository.dart';
+import 'package:jaayko/infrastructure/db/app_database.dart';
+import 'package:jaayko/presentation/shared/formatters.dart';
 
 class AdjustBalanceUseCase {
   final AppDatabase db;

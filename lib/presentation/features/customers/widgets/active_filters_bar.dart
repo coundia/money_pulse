@@ -1,7 +1,7 @@
 // Compact bar showing active filters as removable chips and a reset action.
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:money_pulse/domain/company/entities/company.dart';
+import 'package:jaayko/domain/company/entities/company.dart';
 import '../providers/customer_filters_providers.dart';
 import '../providers/customer_filters_data_providers.dart';
 

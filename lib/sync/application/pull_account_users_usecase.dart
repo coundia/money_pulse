@@ -1,8 +1,8 @@
 /* Pull use case for account_users: cursor by syncAt + upsert. */
-import 'package:money_pulse/sync/application/pull_port.dart';
-import 'package:money_pulse/sync/infrastructure/sync_api_client.dart';
-import 'package:money_pulse/sync/infrastructure/sync_logger.dart';
-import 'package:money_pulse/domain/sync/repositories/sync_state_repository.dart';
+import 'package:jaayko/sync/application/pull_port.dart';
+import 'package:jaayko/sync/infrastructure/sync_api_client.dart';
+import 'package:jaayko/sync/infrastructure/sync_logger.dart';
+import 'package:jaayko/domain/sync/repositories/sync_state_repository.dart';
 import '../infrastructure/pull_ports/account_user_pull_port_sqflite.dart';
 
 class PullAccountUsersUseCase implements PullPort {

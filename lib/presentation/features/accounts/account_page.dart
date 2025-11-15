@@ -7,15 +7,15 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:uuid/uuid.dart';
 
-import 'package:money_pulse/presentation/app/account_selection.dart';
-import 'package:money_pulse/presentation/app/providers.dart'
+import 'package:jaayko/presentation/app/account_selection.dart';
+import 'package:jaayko/presentation/app/providers.dart'
     hide accountRepoProvider;
-import 'package:money_pulse/presentation/shared/formatters.dart';
-import 'package:money_pulse/presentation/widgets/right_drawer.dart';
+import 'package:jaayko/presentation/shared/formatters.dart';
+import 'package:jaayko/presentation/widgets/right_drawer.dart';
 
-import 'package:money_pulse/domain/accounts/entities/account.dart';
-import 'package:money_pulse/domain/accounts/repositories/account_repository.dart';
-import 'package:money_pulse/domain/accounts/entities/account_user.dart';
+import 'package:jaayko/domain/accounts/entities/account.dart';
+import 'package:jaayko/domain/accounts/repositories/account_repository.dart';
+import 'package:jaayko/domain/accounts/entities/account_user.dart';
 
 import '../../../shared/constants/env.dart';
 import 'account_repo_provider.dart';
@@ -27,7 +27,7 @@ import 'widgets/account_details_panel.dart';
 import 'widgets/account_form_panel.dart';
 import 'widgets/account_adjust_balance_panel.dart';
 
-import 'package:money_pulse/presentation/app/connected_username_provider.dart';
+import 'package:jaayko/presentation/app/connected_username_provider.dart';
 import 'providers/account_user_repo_provider.dart';
 
 // >>> NEW: marketplace repo import
@@ -147,9 +147,7 @@ class _AccountListPageState extends ConsumerState<AccountListPage> {
   // >>> NEW: remote pull + local reconcile
   Future<void> _syncWithServer() async {
     try {
-      final market = ref.read(
-        accountMarketplaceRepoProvider(Env.BASE_URI),
-      );
+      final market = ref.read(accountMarketplaceRepoProvider(Env.BASE_URI));
       final n = await market.pullAndReconcileList();
       ref.invalidate(accountListProvider);
       if (!mounted) return;
@@ -189,9 +187,7 @@ class _AccountListPageState extends ConsumerState<AccountListPage> {
             (acc.remoteId?.trim().isNotEmpty == true) ||
             ((acc.code ?? '').trim().isNotEmpty);
         if (hasRemote) {
-          final market = ref.read(
-            accountMarketplaceRepoProvider(Env.BASE_URI),
-          );
+          final market = ref.read(accountMarketplaceRepoProvider(Env.BASE_URI));
           await market.deleteRemoteThenLocal(acc);
         } else {
           await _repo.softDelete(acc.id);
@@ -257,9 +253,7 @@ class _AccountListPageState extends ConsumerState<AccountListPage> {
         onDelete: () => _delete(a),
         onShare: () => _share(a),
         onSaveRemote: () async {
-          final market = ref.read(
-            accountMarketplaceRepoProvider(Env.BASE_URI),
-          );
+          final market = ref.read(accountMarketplaceRepoProvider(Env.BASE_URI));
           await market.saveAndReconcile(a);
           if (context.mounted) {
             ScaffoldMessenger.of(context).showSnackBar(

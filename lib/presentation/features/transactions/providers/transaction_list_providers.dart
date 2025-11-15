@@ -1,6 +1,6 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:money_pulse/domain/transactions/entities/transaction_entry.dart';
-import 'package:money_pulse/presentation/app/providers.dart';
+import 'package:jaayko/domain/transactions/entities/transaction_entry.dart';
+import 'package:jaayko/presentation/app/providers.dart';
 import '../../../app/account_selection.dart';
 import '../controllers/transaction_list_controller.dart';
 

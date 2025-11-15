@@ -5,15 +5,15 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:uuid/uuid.dart';
 
-import 'package:money_pulse/presentation/shared/formatters.dart';
-import 'package:money_pulse/presentation/widgets/right_drawer.dart';
+import 'package:jaayko/presentation/shared/formatters.dart';
+import 'package:jaayko/presentation/widgets/right_drawer.dart';
 
-import 'package:money_pulse/domain/products/entities/product.dart';
+import 'package:jaayko/domain/products/entities/product.dart';
 import '../../app/providers.dart';
 import 'product_repo_provider.dart';
 
-import 'package:money_pulse/presentation/features/products/widgets/product_form_panel.dart';
-import 'package:money_pulse/presentation/features/products/product_list_page.dart';
+import 'package:jaayko/presentation/features/products/widgets/product_form_panel.dart';
+import 'package:jaayko/presentation/features/products/product_list_page.dart';
 
 class ProductPickerPanel extends ConsumerStatefulWidget {
   final List<Map<String, Object?>> initialLines;

@@ -1,6 +1,6 @@
 // Small amount pill used to display a labeled amount (in cents) with accent or error tone.
 import 'package:flutter/material.dart';
-import 'package:money_pulse/presentation/shared/formatters.dart';
+import 'package:jaayko/presentation/shared/formatters.dart';
 
 class CustomerAmountPill extends StatelessWidget {
   final String label;

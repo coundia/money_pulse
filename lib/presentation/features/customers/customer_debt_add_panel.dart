@@ -2,9 +2,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:money_pulse/presentation/shared/amount_utils.dart';
-import 'package:money_pulse/presentation/features/transactions/widgets/amount_field_quickpad.dart';
-import 'package:money_pulse/presentation/app/providers/checkout_cart_usecase_provider.dart'
+import 'package:jaayko/presentation/shared/amount_utils.dart';
+import 'package:jaayko/presentation/features/transactions/widgets/amount_field_quickpad.dart';
+import 'package:jaayko/presentation/app/providers/checkout_cart_usecase_provider.dart'
     hide checkoutCartUseCaseProvider;
 import '../../app/providers.dart';
 import 'providers/customer_linked_providers.dart';

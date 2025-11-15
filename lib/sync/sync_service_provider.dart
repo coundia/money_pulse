@@ -2,25 +2,25 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:sqflite/sqflite.dart' show Database;
 
-import 'package:money_pulse/presentation/app/providers.dart';
-import 'package:money_pulse/presentation/app/base_uri_provider.dart';
+import 'package:jaayko/presentation/app/providers.dart';
+import 'package:jaayko/presentation/app/base_uri_provider.dart';
 
-import 'package:money_pulse/sync/infrastructure/sync_api_client.dart';
-import 'package:money_pulse/sync/infrastructure/sqflite_sync_ports.dart';
-import 'package:money_pulse/sync/infrastructure/sync_logger.dart';
+import 'package:jaayko/sync/infrastructure/sync_api_client.dart';
+import 'package:jaayko/sync/infrastructure/sqflite_sync_ports.dart';
+import 'package:jaayko/sync/infrastructure/sync_logger.dart';
 
-import 'package:money_pulse/sync/application/push_categories_usecase.dart';
-import 'package:money_pulse/sync/application/push_accounts_usecase.dart';
-import 'package:money_pulse/sync/application/push_companies_usecase.dart';
-import 'package:money_pulse/sync/application/push_customers_usecase.dart';
-import 'package:money_pulse/sync/application/push_transactions_usecase.dart';
-import 'package:money_pulse/sync/application/push_products_usecase.dart';
-import 'package:money_pulse/sync/application/push_transaction_items_usecase.dart';
-import 'package:money_pulse/sync/application/push_debts_usecase.dart';
-import 'package:money_pulse/sync/application/push_stock_levels_usecase.dart';
-import 'package:money_pulse/sync/application/push_stock_movements_usecase.dart';
-import 'package:money_pulse/sync/application/push_account_users_usecase.dart';
-import 'package:money_pulse/sync/application/sync_all_usecase.dart';
+import 'package:jaayko/sync/application/push_categories_usecase.dart';
+import 'package:jaayko/sync/application/push_accounts_usecase.dart';
+import 'package:jaayko/sync/application/push_companies_usecase.dart';
+import 'package:jaayko/sync/application/push_customers_usecase.dart';
+import 'package:jaayko/sync/application/push_transactions_usecase.dart';
+import 'package:jaayko/sync/application/push_products_usecase.dart';
+import 'package:jaayko/sync/application/push_transaction_items_usecase.dart';
+import 'package:jaayko/sync/application/push_debts_usecase.dart';
+import 'package:jaayko/sync/application/push_stock_levels_usecase.dart';
+import 'package:jaayko/sync/application/push_stock_movements_usecase.dart';
+import 'package:jaayko/sync/application/push_account_users_usecase.dart';
+import 'package:jaayko/sync/application/sync_all_usecase.dart';
 
 import '../infrastructure/repositories/sync_state_repository_sqflite.dart';
 import '../infrastructure/sync/change_log_sqlite_repository.dart';

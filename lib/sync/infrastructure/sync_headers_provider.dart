@@ -2,7 +2,7 @@
  * Token is read from accessSessionProvider; falls back to --dart-define if absent.
  */
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:money_pulse/onboarding/presentation/providers/access_session_provider.dart';
+import 'package:jaayko/onboarding/presentation/providers/access_session_provider.dart';
 
 final syncAuthTokenProvider = Provider<String?>((ref) {
   final grant = ref.watch(accessSessionProvider);

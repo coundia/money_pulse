@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:money_pulse/presentation/shared/formatters.dart';
+import 'package:jaayko/presentation/shared/formatters.dart';
 
 class DateRow extends StatelessWidget {
   final DateTime when;

@@ -1,5 +1,5 @@
 /* Abstractions for enabling/disabling sync per domain. */
-import 'package:money_pulse/sync/domain/sync_domain.dart';
+import 'package:jaayko/sync/domain/sync_domain.dart';
 
 abstract class SyncPolicy {
   bool enabled(SyncDomain domain);

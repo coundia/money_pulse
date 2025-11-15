@@ -1,8 +1,8 @@
 // Creates a default customer if none exists (idempotent), linked to a company when available.
 import 'package:uuid/uuid.dart';
-import 'package:money_pulse/domain/customer/entities/customer.dart';
-import 'package:money_pulse/domain/customer/repositories/customer_repository.dart';
-import 'package:money_pulse/domain/company/repositories/company_repository.dart';
+import 'package:jaayko/domain/customer/entities/customer.dart';
+import 'package:jaayko/domain/customer/repositories/customer_repository.dart';
+import 'package:jaayko/domain/company/repositories/company_repository.dart';
 
 class SeedDefaultCustomerUseCase {
   final CustomerRepository customerRepo;

@@ -1,6 +1,6 @@
 import 'package:uuid/uuid.dart';
-import 'package:money_pulse/domain/categories/entities/category.dart';
-import 'package:money_pulse/domain/categories/repositories/category_repository.dart';
+import 'package:jaayko/domain/categories/entities/category.dart';
+import 'package:jaayko/domain/categories/repositories/category_repository.dart';
 
 class SeedDefaultCategoriesUseCase {
   final CategoryRepository repo;

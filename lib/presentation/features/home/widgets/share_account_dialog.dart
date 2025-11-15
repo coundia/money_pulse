@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:money_pulse/domain/accounts/entities/account.dart';
+import 'package:jaayko/domain/accounts/entities/account.dart';
 
 /// Affiche une boite de dialogue permettant de partager/copier les infos d’un compte.
 Future<void> showShareAccountDialog({

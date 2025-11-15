@@ -1,6 +1,6 @@
 // Bottom sheet to edit POS filters with category and price range.
 import 'package:flutter/material.dart';
-import 'package:money_pulse/domain/categories/entities/category.dart';
+import 'package:jaayko/domain/categories/entities/category.dart';
 import 'pos_filters.dart';
 
 class PosFiltersSheet extends StatefulWidget {

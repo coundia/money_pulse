@@ -1,7 +1,7 @@
 // Read-only stock movements page using SRP components: summary, filter sheet, list items and right drawer view.
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:money_pulse/presentation/widgets/right_drawer.dart';
+import 'package:jaayko/presentation/widgets/right_drawer.dart';
 
 import '../../../domain/stock/repositories/stock_movement_repository.dart';
 import '../../shared/formatters.dart';

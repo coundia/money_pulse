@@ -1,5 +1,5 @@
 /* Helpers for membership permissions: normalize phone and determine if the connected user is the inviter/creator of a member. */
-import 'package:money_pulse/domain/accounts/entities/account_user.dart';
+import 'package:jaayko/domain/accounts/entities/account_user.dart';
 
 class AccountUserGuards {
   static String? normalizePhone(String? raw) {

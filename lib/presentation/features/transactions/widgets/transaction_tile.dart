@@ -3,10 +3,10 @@
 // NOTE: "Rejeter" supprime désormais directement la transaction (sans statut REJECTED).
 
 import 'package:flutter/material.dart';
-import 'package:money_pulse/domain/transactions/entities/transaction_entry.dart';
-import 'package:money_pulse/presentation/features/transactions/transaction_form_sheet.dart';
-import 'package:money_pulse/presentation/shared/formatters.dart';
-import 'package:money_pulse/presentation/widgets/right_drawer.dart';
+import 'package:jaayko/domain/transactions/entities/transaction_entry.dart';
+import 'package:jaayko/presentation/features/transactions/transaction_form_sheet.dart';
+import 'package:jaayko/presentation/shared/formatters.dart';
+import 'package:jaayko/presentation/widgets/right_drawer.dart';
 import 'transaction_detail_view.dart';
 
 class TransactionTile extends StatelessWidget {

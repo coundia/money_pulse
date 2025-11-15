@@ -1,8 +1,8 @@
 /// SharedPreferences-based implementation for app settings.
 
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:money_pulse/domain/settings/entities/app_settings.dart';
-import 'package:money_pulse/domain/settings/repositories/app_settings_repository.dart';
+import 'package:jaayko/domain/settings/entities/app_settings.dart';
+import 'package:jaayko/domain/settings/repositories/app_settings_repository.dart';
 
 class AppSettingsRepositoryPrefs implements AppSettingsRepository {
   static const _kAutoRefresh = 'settings.autoRefreshOnFocus';

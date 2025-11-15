@@ -1,7 +1,7 @@
 // Creates a default company if none exists (idempotent).
 import 'package:uuid/uuid.dart';
-import 'package:money_pulse/domain/company/entities/company.dart';
-import 'package:money_pulse/domain/company/repositories/company_repository.dart';
+import 'package:jaayko/domain/company/entities/company.dart';
+import 'package:jaayko/domain/company/repositories/company_repository.dart';
 
 class SeedDefaultCompanyUseCase {
   final CompanyRepository repo;

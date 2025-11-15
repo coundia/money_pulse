@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
-import 'package:money_pulse/domain/transactions/entities/transaction_entry.dart';
+import 'package:jaayko/domain/transactions/entities/transaction_entry.dart';
 
 class TransactionViewSheet extends StatelessWidget {
   final TransactionEntry entry;

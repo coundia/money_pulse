@@ -1,7 +1,7 @@
 // lib/presentation/features/transactions/detail/widgets/items_section.dart
 
 import 'package:flutter/material.dart';
-import 'package:money_pulse/presentation/shared/formatters.dart';
+import 'package:jaayko/presentation/shared/formatters.dart';
 
 class ItemRowData {
   final String label;

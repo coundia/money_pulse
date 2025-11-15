@@ -1,12 +1,12 @@
 // Flow to confirm logout, push sync, clear session, purge local db, then restart.
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:money_pulse/presentation/widgets/right_drawer.dart';
-import 'package:money_pulse/presentation/features/settings/widgets/confirm_panel.dart';
-import 'package:money_pulse/onboarding/presentation/providers/access_session_provider.dart';
-import 'package:money_pulse/infrastructure/db/app_database.dart';
-import 'package:money_pulse/presentation/app/restart_app.dart';
-import 'package:money_pulse/sync/sync_service_provider.dart';
+import 'package:jaayko/presentation/widgets/right_drawer.dart';
+import 'package:jaayko/presentation/features/settings/widgets/confirm_panel.dart';
+import 'package:jaayko/onboarding/presentation/providers/access_session_provider.dart';
+import 'package:jaayko/infrastructure/db/app_database.dart';
+import 'package:jaayko/presentation/app/restart_app.dart';
+import 'package:jaayko/sync/sync_service_provider.dart';
 
 Future<void> runLogoutAndPurgeFlow(BuildContext context, WidgetRef ref) async {
   final ok = await showRightDrawer<bool>(

@@ -1,6 +1,6 @@
 // Riverpod providers to expose a persistent installation ID.
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:money_pulse/shared/services/installation_id_service.dart';
+import 'package:jaayko/shared/services/installation_id_service.dart';
 
 final installationIdServiceProvider = Provider<InstallationIdService>((ref) {
   return InstallationIdService();

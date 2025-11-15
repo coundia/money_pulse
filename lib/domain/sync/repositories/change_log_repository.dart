@@ -1,4 +1,4 @@
-import 'package:money_pulse/domain/sync/entities/change_log_entry.dart';
+import 'package:jaayko/domain/sync/entities/change_log_entry.dart';
 
 abstract class ChangeLogRepository {
   Future<List<ChangeLogEntry>> findAll({String? status, int limit = 300});

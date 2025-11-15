@@ -3,7 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../domain/stock/entities/stock_level.dart';
 import 'providers/stock_level_repo_provider.dart';
-import 'package:money_pulse/domain/stock/repositories/stock_level_repository.dart';
+import 'package:jaayko/domain/stock/repositories/stock_level_repository.dart';
 import '../../shared/formatters.dart';
 
 class StockLevelViewPanel extends ConsumerWidget {

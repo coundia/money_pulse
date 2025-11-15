@@ -3,10 +3,10 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import 'package:money_pulse/domain/products/entities/product.dart';
-import 'package:money_pulse/presentation/features/products/product_repo_provider.dart';
-import 'package:money_pulse/presentation/features/products/product_file_repo_provider.dart';
-import 'package:money_pulse/presentation/features/products/filters/product_filters.dart';
+import 'package:jaayko/domain/products/entities/product.dart';
+import 'package:jaayko/presentation/features/products/product_repo_provider.dart';
+import 'package:jaayko/presentation/features/products/product_file_repo_provider.dart';
+import 'package:jaayko/presentation/features/products/filters/product_filters.dart';
 
 /// Query string state + debounced controller
 final productQueryProvider = StateProvider<String>((ref) => '');

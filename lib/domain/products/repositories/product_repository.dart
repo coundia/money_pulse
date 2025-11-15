@@ -1,4 +1,4 @@
-import 'package:money_pulse/domain/products/entities/product.dart';
+import 'package:jaayko/domain/products/entities/product.dart';
 
 abstract class ProductRepository {
   Future<Product> create(Product product);

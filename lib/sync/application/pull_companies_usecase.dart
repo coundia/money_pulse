@@ -1,7 +1,7 @@
 /* Pull use case for companies: pulls since last sync, adopts remote ids, upserts locally, then updates sync_state. */
-import 'package:money_pulse/sync/infrastructure/sync_api_client.dart';
-import 'package:money_pulse/domain/sync/repositories/sync_state_repository.dart';
-import 'package:money_pulse/sync/infrastructure/sync_logger.dart';
+import 'package:jaayko/sync/infrastructure/sync_api_client.dart';
+import 'package:jaayko/domain/sync/repositories/sync_state_repository.dart';
+import 'package:jaayko/sync/infrastructure/sync_logger.dart';
 
 import '../infrastructure/pull_ports/company_pull_port_sqflite.dart';
 import 'pull_port.dart';

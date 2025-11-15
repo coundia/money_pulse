@@ -3,11 +3,11 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:money_pulse/domain/accounts/entities/account_user.dart';
-import 'package:money_pulse/presentation/app/connected_username_provider.dart';
-import 'package:money_pulse/presentation/features/accounts/providers/account_user_list_providers.dart';
-import 'package:money_pulse/presentation/features/accounts/providers/account_user_repo_provider.dart';
-import 'package:money_pulse/presentation/features/accounts/widgets/account_user_tile.dart';
+import 'package:jaayko/domain/accounts/entities/account_user.dart';
+import 'package:jaayko/presentation/app/connected_username_provider.dart';
+import 'package:jaayko/presentation/features/accounts/providers/account_user_list_providers.dart';
+import 'package:jaayko/presentation/features/accounts/providers/account_user_repo_provider.dart';
+import 'package:jaayko/presentation/features/accounts/widgets/account_user_tile.dart';
 
 class AccountUserListPanel extends ConsumerStatefulWidget {
   final String accountId;

@@ -5,16 +5,16 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import 'package:money_pulse/onboarding/presentation/providers/access_session_provider.dart';
-import 'package:money_pulse/presentation/features/chatbot/chatbot_controller.dart'
+import 'package:jaayko/onboarding/presentation/providers/access_session_provider.dart';
+import 'package:jaayko/presentation/features/chatbot/chatbot_controller.dart'
     hide accountIdProvider;
 
 // ensure a default/selected account exists
-import 'package:money_pulse/presentation/app/account_selection.dart'
+import 'package:jaayko/presentation/app/account_selection.dart'
     show ensureSelectedAccountProvider, selectedAccountIdProvider;
 
 // read current chat account id
-import 'package:money_pulse/presentation/features/chatbot/chat_repo_provider.dart'
+import 'package:jaayko/presentation/features/chatbot/chat_repo_provider.dart'
     show accountIdProvider;
 
 class ChatInputBar extends ConsumerStatefulWidget {

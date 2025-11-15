@@ -10,11 +10,11 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:uuid/uuid.dart';
 
-import 'package:money_pulse/domain/products/entities/product.dart';
-import 'package:money_pulse/domain/products/entities/product_file.dart';
-import 'package:money_pulse/domain/products/repositories/product_repository.dart';
+import 'package:jaayko/domain/products/entities/product.dart';
+import 'package:jaayko/domain/products/entities/product_file.dart';
+import 'package:jaayko/domain/products/repositories/product_repository.dart';
 
-import 'package:money_pulse/presentation/widgets/attachments_picker.dart';
+import 'package:jaayko/presentation/widgets/attachments_picker.dart';
 
 import '../../../../infrastructure/products/product_marketplace_repo_provider.dart';
 import '../../../../shared/constants/env.dart';
@@ -31,8 +31,8 @@ import '../filters/product_filters.dart';
 import '../../stock/providers/stock_level_repo_provider.dart';
 import '../widgets/top_bar.dart';
 import '../application/product_list_providers.dart';
-import 'package:money_pulse/domain/categories/entities/category.dart';
-import 'package:money_pulse/domain/categories/repositories/category_repository.dart';
+import 'package:jaayko/domain/categories/entities/category.dart';
+import 'package:jaayko/domain/categories/repositories/category_repository.dart';
 
 class ProductListBody extends ConsumerStatefulWidget {
   final TextEditingController queryController;

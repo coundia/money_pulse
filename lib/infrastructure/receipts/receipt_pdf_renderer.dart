@@ -4,7 +4,7 @@
 import 'dart:typed_data';
 import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
-import 'package:money_pulse/domain/receipts/entities/receipt_models.dart';
+import 'package:jaayko/domain/receipts/entities/receipt_models.dart';
 import 'package:printing/printing.dart';
 
 typedef AmountFormatter = String Function(int cents);

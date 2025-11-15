@@ -1,5 +1,5 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
-    package="com.example.money_pulse">
+    package="com.example.jaayko">
 
     <!-- Permissions modernes (Android 13+) -->
     <uses-permission android:name="android.permission.READ_MEDIA_IMAGES" />
@@ -12,7 +12,7 @@
 
     <application
         android:name="${applicationName}"
-        android:label="money_pulse"
+        android:label="jaayko"
         android:icon="@mipmap/ic_launcher"
         android:enableOnBackInvokedCallback="true">
 

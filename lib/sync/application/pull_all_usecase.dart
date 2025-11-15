@@ -1,6 +1,6 @@
 /* Orchestrates pull use cases in FK-safe order. All ports are optional and skipped if null, policy-driven. */
 import '../infrastructure/sync_logger.dart';
-import 'package:money_pulse/sync/domain/sync_domain.dart';
+import 'package:jaayko/sync/domain/sync_domain.dart';
 import 'sync_policy.dart';
 import 'pull_port.dart';
 

@@ -4,7 +4,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:uuid/uuid.dart';
 import 'providers/stock_level_repo_provider.dart';
-import 'package:money_pulse/domain/stock/entities/stock_level.dart';
+import 'package:jaayko/domain/stock/entities/stock_level.dart';
 
 class StockLevelFormPanel extends ConsumerStatefulWidget {
   final String? itemId;

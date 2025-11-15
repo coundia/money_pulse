@@ -1,6 +1,6 @@
 /* Delta DTO for account_users push with identity/message support and robust DateTime parsing. */
-import 'package:money_pulse/sync/domain/sync_delta_type.dart';
-import 'package:money_pulse/sync/domain/sync_delta_type_ext.dart';
+import 'package:jaayko/sync/domain/sync_delta_type.dart';
+import 'package:jaayko/sync/domain/sync_delta_type_ext.dart';
 
 class AccountUserDeltaDto {
   final String? id;

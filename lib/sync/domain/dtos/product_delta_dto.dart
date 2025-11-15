@@ -1,7 +1,7 @@
 // DTO for product delta payloads.
-import 'package:money_pulse/presentation/shared/formatters.dart';
-import 'package:money_pulse/sync/domain/sync_delta_type.dart';
-import 'package:money_pulse/sync/domain/sync_delta_type_ext.dart';
+import 'package:jaayko/presentation/shared/formatters.dart';
+import 'package:jaayko/sync/domain/sync_delta_type.dart';
+import 'package:jaayko/sync/domain/sync_delta_type_ext.dart';
 
 class ProductDeltaDto {
   final String? id;

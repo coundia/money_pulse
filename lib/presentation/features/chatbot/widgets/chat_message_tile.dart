@@ -6,17 +6,17 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import 'package:money_pulse/domain/chat/entities/chat_models.dart';
-import 'package:money_pulse/shared/formatters.dart';
-import 'package:money_pulse/presentation/features/chatbot/chatbot_controller.dart'
+import 'package:jaayko/domain/chat/entities/chat_models.dart';
+import 'package:jaayko/shared/formatters.dart';
+import 'package:jaayko/presentation/features/chatbot/chatbot_controller.dart'
     hide accountIdProvider;
 
 // ensure a default/selected account exists
-import 'package:money_pulse/presentation/app/account_selection.dart'
+import 'package:jaayko/presentation/app/account_selection.dart'
     show ensureSelectedAccountProvider, selectedAccountIdProvider;
 
 // read current chat account id
-import 'package:money_pulse/presentation/features/chatbot/chat_repo_provider.dart'
+import 'package:jaayko/presentation/features/chatbot/chat_repo_provider.dart'
     show accountIdProvider;
 
 class ChatMessageTile extends ConsumerWidget {

@@ -7,17 +7,17 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:uuid/uuid.dart';
 
-import 'package:money_pulse/presentation/app/providers.dart';
-import 'package:money_pulse/domain/products/entities/product.dart';
-import 'package:money_pulse/presentation/features/products/product_repo_provider.dart';
-import 'package:money_pulse/presentation/shared/formatters.dart';
+import 'package:jaayko/presentation/app/providers.dart';
+import 'package:jaayko/domain/products/entities/product.dart';
+import 'package:jaayko/presentation/features/products/product_repo_provider.dart';
+import 'package:jaayko/presentation/shared/formatters.dart';
 import '../../../domain/debts/repositories/debt_repository.dart';
 import '../debts/debt_repo_provider.dart';
 import 'state/pos_cart.dart';
 import 'widgets/pos_cart_panel.dart';
-import 'package:money_pulse/presentation/widgets/right_drawer.dart';
-import 'package:money_pulse/application/usecases/checkout_cart_usecase.dart';
-import 'package:money_pulse/presentation/features/stock/providers/stock_level_repo_provider.dart';
+import 'package:jaayko/presentation/widgets/right_drawer.dart';
+import 'package:jaayko/application/usecases/checkout_cart_usecase.dart';
+import 'package:jaayko/presentation/features/stock/providers/stock_level_repo_provider.dart';
 
 import 'widgets/pos_cart_tile.dart';
 import 'filters/pos_filters.dart';
@@ -25,14 +25,14 @@ import 'filters/pos_active_filters_bar.dart';
 import 'filters/pos_filters_sheet.dart';
 import 'utils/pos_stock_utils.dart';
 
-import 'package:money_pulse/presentation/features/products/widgets/product_form_panel.dart';
-import 'package:money_pulse/presentation/features/products/product_list_page.dart';
-import 'package:money_pulse/presentation/features/products/widgets/product_view_panel.dart';
-import 'package:money_pulse/domain/categories/entities/category.dart';
+import 'package:jaayko/presentation/features/products/widgets/product_form_panel.dart';
+import 'package:jaayko/presentation/features/products/product_list_page.dart';
+import 'package:jaayko/presentation/features/products/widgets/product_view_panel.dart';
+import 'package:jaayko/domain/categories/entities/category.dart';
 
 // NEW: to fetch product images
-import 'package:money_pulse/presentation/features/products/product_file_repo_provider.dart';
-import 'package:money_pulse/domain/products/repositories/product_file_repository.dart';
+import 'package:jaayko/presentation/features/products/product_file_repo_provider.dart';
+import 'package:jaayko/domain/products/repositories/product_file_repository.dart';
 
 class PosPage extends ConsumerStatefulWidget {
   const PosPage({super.key});

@@ -1,8 +1,8 @@
 // POS cart right-drawer panel; now forwards customerId from checkout payload to onCheckout.
 import 'package:flutter/material.dart';
-import 'package:money_pulse/presentation/features/pos/state/pos_cart.dart';
-import 'package:money_pulse/presentation/widgets/right_drawer.dart';
-import 'package:money_pulse/presentation/shared/formatters.dart';
+import 'package:jaayko/presentation/features/pos/state/pos_cart.dart';
+import 'package:jaayko/presentation/widgets/right_drawer.dart';
+import 'package:jaayko/presentation/shared/formatters.dart';
 import 'pos_checkout_panel.dart';
 
 class _CartLineAdapter {

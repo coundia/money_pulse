@@ -1,7 +1,7 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:money_pulse/domain/categories/entities/category.dart';
-import 'package:money_pulse/domain/transactions/entities/transaction_item.dart';
-import 'package:money_pulse/presentation/app/providers.dart';
+import 'package:jaayko/domain/categories/entities/category.dart';
+import 'package:jaayko/domain/transactions/entities/transaction_item.dart';
+import 'package:jaayko/presentation/app/providers.dart';
 
 final categoryByIdProvider = FutureProvider.family<Category?, String?>((
   ref,

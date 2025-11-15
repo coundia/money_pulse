@@ -1,5 +1,5 @@
 import 'package:flutter/foundation.dart';
-import 'package:money_pulse/domain/products/entities/product.dart';
+import 'package:jaayko/domain/products/entities/product.dart';
 
 @immutable
 class PosCartItem {

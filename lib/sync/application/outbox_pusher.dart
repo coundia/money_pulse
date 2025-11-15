@@ -4,10 +4,10 @@
 
 import 'dart:convert';
 import 'package:http/http.dart' as http;
-import 'package:money_pulse/domain/sync/entities/change_log_entry.dart';
-import 'package:money_pulse/domain/sync/repositories/change_log_repository.dart';
-import 'package:money_pulse/domain/sync/repositories/sync_state_repository.dart';
-import 'package:money_pulse/sync/infrastructure/sync_logger.dart';
+import 'package:jaayko/domain/sync/entities/change_log_entry.dart';
+import 'package:jaayko/domain/sync/repositories/change_log_repository.dart';
+import 'package:jaayko/domain/sync/repositories/sync_state_repository.dart';
+import 'package:jaayko/sync/infrastructure/sync_logger.dart';
 
 typedef Json = Map<String, Object?>;
 

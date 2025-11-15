@@ -5,10 +5,10 @@ import 'dart:developer' as dev;
 import 'package:sqflite/sqflite.dart';
 import 'package:uuid/uuid.dart';
 
-import 'package:money_pulse/infrastructure/db/app_database.dart';
-import 'package:money_pulse/domain/products/entities/product.dart';
-import 'package:money_pulse/domain/products/repositories/product_repository.dart';
-import 'package:money_pulse/sync/infrastructure/change_tracked_exec.dart';
+import 'package:jaayko/infrastructure/db/app_database.dart';
+import 'package:jaayko/domain/products/entities/product.dart';
+import 'package:jaayko/domain/products/repositories/product_repository.dart';
+import 'package:jaayko/sync/infrastructure/change_tracked_exec.dart';
 
 class ProductRepositorySqflite implements ProductRepository {
   final AppDatabase _db;

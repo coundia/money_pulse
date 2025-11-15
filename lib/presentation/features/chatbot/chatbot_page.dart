@@ -8,20 +8,20 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import 'package:money_pulse/onboarding/presentation/providers/access_session_provider.dart';
-import 'package:money_pulse/presentation/features/chatbot/chatbot_controller.dart';
-import 'package:money_pulse/presentation/features/chatbot/widgets/chat_app_bar.dart';
-import 'package:money_pulse/presentation/features/chatbot/widgets/chat_connect_banner.dart';
-import 'package:money_pulse/presentation/features/chatbot/widgets/chat_input_bar.dart';
-import 'package:money_pulse/presentation/features/chatbot/widgets/chat_message_list.dart';
-import 'package:money_pulse/presentation/features/chatbot/hooks/chat_attach_default_account.dart';
+import 'package:jaayko/onboarding/presentation/providers/access_session_provider.dart';
+import 'package:jaayko/presentation/features/chatbot/chatbot_controller.dart';
+import 'package:jaayko/presentation/features/chatbot/widgets/chat_app_bar.dart';
+import 'package:jaayko/presentation/features/chatbot/widgets/chat_connect_banner.dart';
+import 'package:jaayko/presentation/features/chatbot/widgets/chat_input_bar.dart';
+import 'package:jaayko/presentation/features/chatbot/widgets/chat_message_list.dart';
+import 'package:jaayko/presentation/features/chatbot/hooks/chat_attach_default_account.dart';
 
 // ensure selected account default
-import 'package:money_pulse/presentation/app/account_selection.dart'
+import 'package:jaayko/presentation/app/account_selection.dart'
     show ensureSelectedAccountProvider, selectedAccountIdProvider;
 
-import 'package:money_pulse/presentation/navigation/refocus_bus.dart';
-import 'package:money_pulse/shared/server_unavailable.dart';
+import 'package:jaayko/presentation/navigation/refocus_bus.dart';
+import 'package:jaayko/shared/server_unavailable.dart';
 
 class ChatbotPage extends ConsumerStatefulWidget {
   const ChatbotPage({super.key});

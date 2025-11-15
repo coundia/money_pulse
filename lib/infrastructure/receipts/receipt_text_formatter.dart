@@ -1,4 +1,4 @@
-import 'package:money_pulse/domain/receipts/entities/receipt_models.dart';
+import 'package:jaayko/domain/receipts/entities/receipt_models.dart';
 
 typedef AmountFormatter = String Function(int cents);
 typedef DateFormatter = String Function(DateTime dt);

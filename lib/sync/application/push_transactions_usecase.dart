@@ -1,14 +1,14 @@
-import 'package:money_pulse/infrastructure/db/app_database.dart';
-import 'package:money_pulse/sync/application/_ports.dart';
-import 'package:money_pulse/sync/application/outbox_pusher.dart';
-import 'package:money_pulse/sync/application/push_port.dart';
-import 'package:money_pulse/sync/domain/dtos/transaction_delta_dto.dart';
-import 'package:money_pulse/sync/domain/sync_delta_type_ext.dart';
-import 'package:money_pulse/sync/infrastructure/sync_api_client.dart';
-import 'package:money_pulse/domain/sync/repositories/change_log_repository.dart';
-import 'package:money_pulse/domain/sync/repositories/sync_state_repository.dart';
-import 'package:money_pulse/sync/infrastructure/sync_logger.dart';
-import 'package:money_pulse/domain/sync/entities/change_log_entry.dart';
+import 'package:jaayko/infrastructure/db/app_database.dart';
+import 'package:jaayko/sync/application/_ports.dart';
+import 'package:jaayko/sync/application/outbox_pusher.dart';
+import 'package:jaayko/sync/application/push_port.dart';
+import 'package:jaayko/sync/domain/dtos/transaction_delta_dto.dart';
+import 'package:jaayko/sync/domain/sync_delta_type_ext.dart';
+import 'package:jaayko/sync/infrastructure/sync_api_client.dart';
+import 'package:jaayko/domain/sync/repositories/change_log_repository.dart';
+import 'package:jaayko/domain/sync/repositories/sync_state_repository.dart';
+import 'package:jaayko/sync/infrastructure/sync_logger.dart';
+import 'package:jaayko/domain/sync/entities/change_log_entry.dart';
 import 'package:sqflite/sqlite_api.dart';
 
 import '../infrastructure/remote_id_lookup.dart';

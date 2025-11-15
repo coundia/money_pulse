@@ -1,8 +1,8 @@
 /* Riverpod providers to persist sync toggles in SharedPreferences and expose a SyncPolicy. */
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:money_pulse/sync/application/sync_policy.dart';
-import 'package:money_pulse/sync/domain/sync_domain.dart';
+import 'package:jaayko/sync/application/sync_policy.dart';
+import 'package:jaayko/sync/domain/sync_domain.dart';
 
 const _kDisabledDomains = 'sync_disabled_domains';
 

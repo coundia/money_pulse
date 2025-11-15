@@ -24,7 +24,7 @@ abstract class AccountRepository {
  
  - just improve ui of list transaction , grouped it by day
 
- -  improve , traduit in fr, and formatte Amount an date ,   use import 'package:money_pulse/presentation/shared/formatters.dart';
+ -  improve , traduit in fr, and formatte Amount an date ,   use import 'package:jaayko/presentation/shared/formatters.dart';
 
  
  entités Dart + repositories (DDD) pour Company et Customer, ainsi que les providers Riverpod  

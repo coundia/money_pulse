@@ -13,10 +13,10 @@ import 'dart:convert';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:http/http.dart' as http;
 
-import 'package:money_pulse/domain/accounts/entities/account.dart';
-import 'package:money_pulse/domain/accounts/repositories/account_repository.dart';
-import 'package:money_pulse/presentation/features/accounts/account_repo_provider.dart';
-import 'package:money_pulse/sync/infrastructure/sync_headers_provider.dart';
+import 'package:jaayko/domain/accounts/entities/account.dart';
+import 'package:jaayko/domain/accounts/repositories/account_repository.dart';
+import 'package:jaayko/presentation/features/accounts/account_repo_provider.dart';
+import 'package:jaayko/sync/infrastructure/sync_headers_provider.dart';
 
 final accountMarketplaceRepoProvider =
     Provider.family<AccountMarketplaceRepo, String>((ref, baseUri) {

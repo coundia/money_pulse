@@ -10,7 +10,7 @@ import 'widgets/active_filters_bar.dart';
 import 'widgets/customer_tile.dart';
 import 'customer_create_panel.dart';
 import 'widgets/customer_filters_panel.dart';
-import 'package:money_pulse/presentation/widgets/right_drawer.dart';
+import 'package:jaayko/presentation/widgets/right_drawer.dart';
 
 // NEW: marketplace repo
 import 'customer_marketplace_repo.dart';
@@ -44,9 +44,7 @@ class _CustomerListPageState extends ConsumerState<CustomerListPage> {
 
   Future<void> _syncWithServer() async {
     try {
-      final market = ref.read(
-        customerMarketplaceRepoProvider(Env.BASE_URI),
-      );
+      final market = ref.read(customerMarketplaceRepoProvider(Env.BASE_URI));
       final n = await market.pullAndReconcileList();
       _refresh();
       if (!mounted) return;

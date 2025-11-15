@@ -1,4 +1,4 @@
-package com.example.money_pulse
+package com.example.jaayko
 
 import io.flutter.embedding.android.FlutterActivity
 

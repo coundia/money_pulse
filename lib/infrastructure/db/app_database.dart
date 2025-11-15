@@ -7,7 +7,7 @@ class AppDatabase {
   AppDatabase._();
   static final AppDatabase I = AppDatabase._();
 
-  static const _dbFile = 'money_pulse.db';
+  static const _dbFile = 'jaayko.db';
 
   Database? _db;
 

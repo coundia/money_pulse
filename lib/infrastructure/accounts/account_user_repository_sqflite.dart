@@ -1,9 +1,9 @@
 // Sqflite repository using ChangeTrackedExec for insert/update/soft-delete with auditing and safe ordering.
-import 'package:money_pulse/sync/infrastructure/change_tracked_exec.dart';
+import 'package:jaayko/sync/infrastructure/change_tracked_exec.dart';
 import 'package:sqflite/sqflite.dart';
 import 'package:uuid/uuid.dart';
-import 'package:money_pulse/domain/accounts/entities/account_user.dart';
-import 'package:money_pulse/domain/accounts/repositories/account_user_repository.dart';
+import 'package:jaayko/domain/accounts/entities/account_user.dart';
+import 'package:jaayko/domain/accounts/repositories/account_user_repository.dart';
 
 extension _RowRead on Map<String, Object?> {
   String? s(String k) => this[k]?.toString();

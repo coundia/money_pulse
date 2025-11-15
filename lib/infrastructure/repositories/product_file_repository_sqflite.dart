@@ -1,6 +1,6 @@
 // Sqflite implementation for product_file repository.
-import 'package:money_pulse/domain/products/entities/product_file.dart';
-import 'package:money_pulse/domain/products/repositories/product_file_repository.dart';
+import 'package:jaayko/domain/products/entities/product_file.dart';
+import 'package:jaayko/domain/products/repositories/product_file_repository.dart';
 import 'package:sqflite/sqflite.dart';
 
 class ProductFileRepositorySqflite implements ProductFileRepository {

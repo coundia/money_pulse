@@ -5,11 +5,11 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import 'package:money_pulse/domain/products/entities/product.dart';
-import 'package:money_pulse/presentation/shared/formatters.dart';
-import 'package:money_pulse/presentation/features/stock/providers/stock_level_repo_provider.dart';
+import 'package:jaayko/domain/products/entities/product.dart';
+import 'package:jaayko/presentation/shared/formatters.dart';
+import 'package:jaayko/presentation/features/stock/providers/stock_level_repo_provider.dart';
 // ⬇️ NEW: update product repo to keep Product.quantity in sync
-import 'package:money_pulse/presentation/features/products/product_repo_provider.dart';
+import 'package:jaayko/presentation/features/products/product_repo_provider.dart';
 
 class ProductStockAdjustPanel extends ConsumerStatefulWidget {
   final Product product;

@@ -3,10 +3,10 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:money_pulse/presentation/shared/formatters.dart';
+import 'package:jaayko/presentation/shared/formatters.dart';
 import '../providers/customer_linked_providers.dart'; // <-- provides LinkedTxnRow + providers
 import 'customer_linked_controller.dart';
-import 'package:money_pulse/presentation/widgets/right_drawer.dart';
+import 'package:jaayko/presentation/widgets/right_drawer.dart';
 
 // NOTE: Do NOT import TransactionEntry here; this popup works with LinkedTxnRow.
 

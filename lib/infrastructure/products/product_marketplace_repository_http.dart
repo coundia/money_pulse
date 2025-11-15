@@ -5,9 +5,9 @@ import 'dart:io';
 import 'dart:async';
 import 'dart:developer' as dev;
 import 'package:http/http.dart' as http;
-import 'package:money_pulse/domain/products/entities/product.dart';
-import 'package:money_pulse/domain/products/repositories/product_marketplace_repository.dart';
-import 'package:money_pulse/sync/infrastructure/sync_headers_provider.dart';
+import 'package:jaayko/domain/products/entities/product.dart';
+import 'package:jaayko/domain/products/repositories/product_marketplace_repository.dart';
+import 'package:jaayko/sync/infrastructure/sync_headers_provider.dart';
 
 class ApiException implements Exception {
   final String message;

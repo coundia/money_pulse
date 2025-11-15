@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:characters/characters.dart';
-import 'package:money_pulse/domain/accounts/entities/account.dart';
-import 'package:money_pulse/presentation/shared/formatters.dart';
+import 'package:jaayko/domain/accounts/entities/account.dart';
+import 'package:jaayko/presentation/shared/formatters.dart';
 
 class ReportAccountHeader extends StatelessWidget {
   final Account account;

@@ -6,13 +6,13 @@
 // - Txn-aware methods kept (…Tx) and reused by non-txn variants.
 // - "Open" debt is the row with statuses NULL or 'OPEN' (latest updatedAt).
 //
-import 'package:money_pulse/sync/infrastructure/change_tracked_exec.dart';
+import 'package:jaayko/sync/infrastructure/change_tracked_exec.dart';
 import 'package:sqflite/sqflite.dart';
 import 'package:uuid/uuid.dart';
 
-import 'package:money_pulse/infrastructure/db/app_database.dart';
-import 'package:money_pulse/domain/debts/entities/debt.dart';
-import 'package:money_pulse/domain/debts/repositories/debt_repository.dart';
+import 'package:jaayko/infrastructure/db/app_database.dart';
+import 'package:jaayko/domain/debts/entities/debt.dart';
+import 'package:jaayko/domain/debts/repositories/debt_repository.dart';
 
 class DebtRepositorySqflite implements DebtRepository {
   final AppDatabase db;

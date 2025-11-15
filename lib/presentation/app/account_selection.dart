@@ -1,6 +1,6 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:money_pulse/presentation/app/providers.dart';
-import 'package:money_pulse/domain/accounts/entities/account.dart';
+import 'package:jaayko/presentation/app/providers.dart';
+import 'package:jaayko/domain/accounts/entities/account.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 const kLastAccountIdKey = 'last_account_id';

@@ -1,7 +1,7 @@
 /* Waitlist repository implementation using SharedPreferences. */
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:money_pulse/domain/waitlist/entities/waitlist_entry.dart';
-import 'package:money_pulse/domain/waitlist/repositories/waitlist_repository.dart';
+import 'package:jaayko/domain/waitlist/entities/waitlist_entry.dart';
+import 'package:jaayko/domain/waitlist/repositories/waitlist_repository.dart';
 
 class WaitlistRepositoryPrefs implements WaitlistRepository {
   static const _kKey = 'waitlist.entry.v1';

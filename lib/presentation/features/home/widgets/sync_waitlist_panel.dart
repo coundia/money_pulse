@@ -1,8 +1,8 @@
 /* Right-drawer waitlist form with responsive layout, prefill from previous entry, at-least-one-contact validation, and Enter-to-submit. */
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:money_pulse/domain/waitlist/entities/waitlist_entry.dart';
-import 'package:money_pulse/presentation/shared/formatters.dart';
+import 'package:jaayko/domain/waitlist/entities/waitlist_entry.dart';
+import 'package:jaayko/presentation/shared/formatters.dart';
 
 class SyncWaitlistResult {
   final String? email;

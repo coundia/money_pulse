@@ -9,11 +9,11 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:share_plus/share_plus.dart';
 
-import 'package:money_pulse/domain/transactions/entities/transaction_entry.dart';
-import 'package:money_pulse/presentation/shared/formatters.dart';
-import 'package:money_pulse/presentation/widgets/right_drawer.dart';
+import 'package:jaayko/domain/transactions/entities/transaction_entry.dart';
+import 'package:jaayko/presentation/shared/formatters.dart';
+import 'package:jaayko/presentation/widgets/right_drawer.dart';
 
-import 'package:money_pulse/infrastructure/receipts/receipt_pdf_renderer.dart';
+import 'package:jaayko/infrastructure/receipts/receipt_pdf_renderer.dart';
 
 import '../../../app/providers.dart';
 import '../detail/remote/transaction_sync_service.dart';

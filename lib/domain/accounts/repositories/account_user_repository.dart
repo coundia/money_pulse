@@ -1,5 +1,5 @@
 // Repository contract for AccountUser with CRUD-like actions including hard delete.
-import 'package:money_pulse/domain/accounts/entities/account_user.dart';
+import 'package:jaayko/domain/accounts/entities/account_user.dart';
 
 abstract class AccountUserRepository {
   Future<List<AccountUser>> listByAccount(String accountId, {String? q});

@@ -2,12 +2,12 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:money_pulse/domain/categories/entities/category.dart';
-import 'package:money_pulse/presentation/shared/formatters.dart';
-import 'package:money_pulse/presentation/widgets/key_value_row.dart';
+import 'package:jaayko/domain/categories/entities/category.dart';
+import 'package:jaayko/presentation/shared/formatters.dart';
+import 'package:jaayko/presentation/widgets/key_value_row.dart';
 
 import 'category_publish_actions.dart';
-import 'package:money_pulse/infrastructure/categories/category_marketplace_repo_provider.dart';
+import 'package:jaayko/infrastructure/categories/category_marketplace_repo_provider.dart';
 
 class CategoryDetailsPanel extends ConsumerWidget {
   final Category category;

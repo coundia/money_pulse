@@ -14,7 +14,7 @@ if (keystorePropertiesFile.exists()) {
 }
 
 android {
-    namespace = "com.example.money_pulse"
+    namespace = "com.example.jaayko"
     compileSdk = 36
     ndkVersion = "27.0.12077973"
 

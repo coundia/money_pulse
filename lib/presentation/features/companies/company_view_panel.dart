@@ -8,17 +8,17 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import 'package:money_pulse/presentation/shared/formatters.dart';
+import 'package:jaayko/presentation/shared/formatters.dart';
 import '../../../shared/constants/env.dart';
 import 'providers/company_detail_providers.dart';
 
-import 'package:money_pulse/presentation/widgets/right_drawer.dart';
+import 'package:jaayko/presentation/widgets/right_drawer.dart';
 import 'company_form_panel.dart';
 import 'company_delete_panel.dart';
 import 'widgets/company_publish_actions.dart';
 
 // 🆕 repo to update the "default" flag
-import 'package:money_pulse/presentation/app/providers/company_repo_provider.dart';
+import 'package:jaayko/presentation/app/providers/company_repo_provider.dart';
 
 class CompanyViewPanel extends ConsumerWidget {
   final String companyId;

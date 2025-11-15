@@ -4,9 +4,9 @@ import 'dart:convert';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:http/http.dart' as http;
 
-import 'package:money_pulse/domain/categories/entities/category.dart';
-import 'package:money_pulse/domain/categories/repositories/category_repository.dart';
-import 'package:money_pulse/presentation/app/providers.dart';
+import 'package:jaayko/domain/categories/entities/category.dart';
+import 'package:jaayko/domain/categories/repositories/category_repository.dart';
+import 'package:jaayko/presentation/app/providers.dart';
 
 import '../../sync/infrastructure/sync_headers_provider.dart';
 // Adapte l'import si ton chemin diffère

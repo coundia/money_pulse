@@ -4,11 +4,11 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:http/http.dart' as http;
 
-import 'package:money_pulse/domain/company/entities/company.dart';
-import 'package:money_pulse/presentation/features/companies/company_form_panel.dart';
-import 'package:money_pulse/presentation/features/companies/providers/company_list_providers.dart';
-import 'package:money_pulse/presentation/features/companies/widgets/company_tile.dart';
-import 'package:money_pulse/presentation/widgets/right_drawer.dart';
+import 'package:jaayko/domain/company/entities/company.dart';
+import 'package:jaayko/presentation/features/companies/company_form_panel.dart';
+import 'package:jaayko/presentation/features/companies/providers/company_list_providers.dart';
+import 'package:jaayko/presentation/features/companies/widgets/company_tile.dart';
+import 'package:jaayko/presentation/widgets/right_drawer.dart';
 
 import '../../../sync/infrastructure/sync_headers_provider.dart';
 import '../../app/providers/company_repo_provider.dart';

@@ -1,8 +1,8 @@
 // lib/sync/infrastructure/sqflite_sync_ports.dart (extraits)
-import 'package:money_pulse/sync/infrastructure/sync_api_client.dart' hide Json;
+import 'package:jaayko/sync/infrastructure/sync_api_client.dart' hide Json;
 import 'package:sqflite/sqflite.dart';
-import 'package:money_pulse/domain/accounts/entities/account.dart';
-import 'package:money_pulse/domain/categories/entities/category.dart';
+import 'package:jaayko/domain/accounts/entities/account.dart';
+import 'package:jaayko/domain/categories/entities/category.dart';
 
 import '../../domain/accounts/entities/account_user.dart';
 import '../../domain/company/entities/company.dart';

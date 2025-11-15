@@ -2,9 +2,9 @@
 // When hidden, amounts are obfuscated (•••) consistently across the row.
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:money_pulse/domain/accounts/entities/account.dart';
-import 'package:money_pulse/presentation/widgets/money_text.dart';
-import 'package:money_pulse/presentation/shared/formatters.dart';
+import 'package:jaayko/domain/accounts/entities/account.dart';
+import 'package:jaayko/presentation/widgets/money_text.dart';
+import 'package:jaayko/presentation/shared/formatters.dart';
 import 'goal_limit_chip.dart';
 
 class HomeAppBarTitle extends StatelessWidget {

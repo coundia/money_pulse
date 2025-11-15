@@ -1,5 +1,5 @@
-import 'package:money_pulse/domain/categories/entities/category.dart';
-import 'package:money_pulse/sync/domain/sync_delta_type.dart';
+import 'package:jaayko/domain/categories/entities/category.dart';
+import 'package:jaayko/sync/domain/sync_delta_type.dart';
 
 class CategoryDeltaDto {
   final String id;

@@ -1,6 +1,6 @@
 // Helper to trigger token refresh on startup or manual refresh.
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:money_pulse/onboarding/presentation/providers/token_refresh_provider.dart';
+import 'package:jaayko/onboarding/presentation/providers/token_refresh_provider.dart';
 
 class HomeRefreshHook {
   static Future<void> onStartup(WidgetRef ref) async {

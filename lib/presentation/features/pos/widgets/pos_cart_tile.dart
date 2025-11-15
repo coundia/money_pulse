@@ -5,7 +5,7 @@ import 'dart:io';
 import 'package:characters/characters.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:money_pulse/presentation/shared/formatters.dart';
+import 'package:jaayko/presentation/shared/formatters.dart';
 
 class PosProductTile extends StatefulWidget {
   final String title;

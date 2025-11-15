@@ -1,5 +1,5 @@
-import 'package:money_pulse/domain/accounts/entities/account.dart';
-import 'package:money_pulse/domain/categories/entities/category.dart';
+import 'package:jaayko/domain/accounts/entities/account.dart';
+import 'package:jaayko/domain/categories/entities/category.dart';
 
 import '../../domain/accounts/entities/account_user.dart';
 import '../../domain/company/entities/company.dart';

@@ -1,7 +1,7 @@
 // Bridge provider that keeps chat accountIdProvider in sync with the app's selected default account.
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:money_pulse/presentation/features/chatbot/chat_repo_provider.dart';
-import 'package:money_pulse/presentation/features/chatbot/chatbot_controller.dart'
+import 'package:jaayko/presentation/features/chatbot/chat_repo_provider.dart';
+import 'package:jaayko/presentation/features/chatbot/chatbot_controller.dart'
     hide accountIdProvider;
 
 import '../../../app/account_selection.dart';

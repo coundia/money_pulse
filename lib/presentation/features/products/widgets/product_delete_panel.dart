@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
-import 'package:money_pulse/domain/products/entities/product.dart';
+import 'package:jaayko/domain/products/entities/product.dart';
 
 class ProductDeletePanel extends StatelessWidget {
   final Product product;

@@ -2,8 +2,8 @@
 
 import 'package:flutter/material.dart';
 import 'package:flutter/scheduler.dart';
-import 'package:money_pulse/presentation/navigation/route_observer.dart';
-import 'package:money_pulse/presentation/navigation/refocus_bus.dart';
+import 'package:jaayko/presentation/navigation/route_observer.dart';
+import 'package:jaayko/presentation/navigation/refocus_bus.dart';
 
 class AutoRefreshOnFocus extends StatefulWidget {
   final Widget child;

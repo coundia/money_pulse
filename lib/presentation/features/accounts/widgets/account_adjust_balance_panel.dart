@@ -1,8 +1,8 @@
 // Right-drawer panel to adjust account balance; edit in major units, save in cents (x100), preview consistent.
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:money_pulse/domain/accounts/entities/account.dart';
-import 'package:money_pulse/presentation/shared/formatters.dart';
+import 'package:jaayko/domain/accounts/entities/account.dart';
+import 'package:jaayko/presentation/shared/formatters.dart';
 
 import '../../transactions/widgets/amount_field_quickpad.dart';
 

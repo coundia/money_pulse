@@ -1,5 +1,5 @@
 // Stock utilities for POS grid: compute per-product stock and in-stock filter.
-import 'package:money_pulse/domain/products/entities/product.dart';
+import 'package:jaayko/domain/products/entities/product.dart';
 
 Future<Map<String, int>> computeStockMap(
   dynamic stockRepo,

@@ -2,8 +2,8 @@
 // and progress tracking (FR labels, EN code). Bottom actions presented as a Row (icons only).
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:money_pulse/domain/accounts/entities/account.dart';
-import 'package:money_pulse/presentation/shared/formatters.dart';
+import 'package:jaayko/domain/accounts/entities/account.dart';
+import 'package:jaayko/presentation/shared/formatters.dart';
 
 import '../account_share_screen.dart';
 

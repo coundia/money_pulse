@@ -2,7 +2,7 @@
 // Banner prompting the user to authenticate before chatting.
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:money_pulse/onboarding/presentation/providers/access_session_provider.dart';
+import 'package:jaayko/onboarding/presentation/providers/access_session_provider.dart';
 
 class ChatConnectBanner extends ConsumerWidget {
   final VoidCallback onConnected;

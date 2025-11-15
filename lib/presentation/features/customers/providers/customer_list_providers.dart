@@ -1,7 +1,7 @@
 // Providers for customer listing with search, company filter and only-active flag.
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:money_pulse/domain/customer/entities/customer.dart';
-import 'package:money_pulse/domain/customer/repositories/customer_repository.dart';
+import 'package:jaayko/domain/customer/entities/customer.dart';
+import 'package:jaayko/domain/customer/repositories/customer_repository.dart';
 
 import '../../../app/providers/customer_repo_provider.dart';
 

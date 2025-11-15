@@ -3,9 +3,9 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import 'package:money_pulse/domain/products/entities/product_file.dart';
-import 'package:money_pulse/presentation/widgets/right_drawer.dart';
-import 'package:money_pulse/presentation/features/products/product_file_repo_provider.dart';
+import 'package:jaayko/domain/products/entities/product_file.dart';
+import 'package:jaayko/presentation/widgets/right_drawer.dart';
+import 'package:jaayko/presentation/features/products/product_file_repo_provider.dart';
 
 final productFilesProvider = FutureProvider.autoDispose
     .family<List<ProductFile>, String>((ref, productId) async {

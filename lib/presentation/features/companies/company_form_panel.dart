@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:uuid/uuid.dart';
-import 'package:money_pulse/domain/company/entities/company.dart';
+import 'package:jaayko/domain/company/entities/company.dart';
 
 import '../../app/providers/company_repo_provider.dart';
 

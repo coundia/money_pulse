@@ -13,12 +13,12 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:intl/intl.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:money_pulse/domain/products/entities/product.dart';
-import 'package:money_pulse/domain/categories/entities/category.dart';
-import 'package:money_pulse/domain/company/entities/company.dart';
-import 'package:money_pulse/domain/company/repositories/company_repository.dart';
-import 'package:money_pulse/presentation/app/providers/company_repo_provider.dart';
-import 'package:money_pulse/presentation/features/transactions/widgets/amount_field_quickpad.dart';
+import 'package:jaayko/domain/products/entities/product.dart';
+import 'package:jaayko/domain/categories/entities/category.dart';
+import 'package:jaayko/domain/company/entities/company.dart';
+import 'package:jaayko/domain/company/repositories/company_repository.dart';
+import 'package:jaayko/presentation/app/providers/company_repo_provider.dart';
+import 'package:jaayko/presentation/features/transactions/widgets/amount_field_quickpad.dart';
 import '../../../widgets/attachments_picker.dart';
 
 class ProductFormResult {

@@ -4,26 +4,26 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 
-import 'package:money_pulse/domain/transactions/entities/transaction_entry.dart';
-import 'package:money_pulse/presentation/app/providers.dart';
-import 'package:money_pulse/presentation/widgets/right_drawer.dart';
-import 'package:money_pulse/presentation/features/transactions/transaction_quick_add_sheet.dart';
-import 'package:money_pulse/presentation/features/transactions/providers/transaction_list_providers.dart';
-import 'package:money_pulse/presentation/features/transactions/utils/transaction_grouping.dart';
-import 'package:money_pulse/presentation/features/transactions/widgets/day_header.dart';
-import 'package:money_pulse/presentation/features/transactions/widgets/transaction_tile.dart';
-import 'package:money_pulse/presentation/features/transactions/widgets/transaction_summary_card.dart';
-import 'package:money_pulse/presentation/features/transactions/search/txn_search_delegate.dart';
-import 'package:money_pulse/presentation/features/transactions/search/widgets/txn_search_cta.dart';
-import 'package:money_pulse/presentation/features/settings/settings_page.dart';
-import 'package:money_pulse/presentation/features/reports/report_page.dart';
-import 'package:money_pulse/presentation/app/account_selection.dart';
+import 'package:jaayko/domain/transactions/entities/transaction_entry.dart';
+import 'package:jaayko/presentation/app/providers.dart';
+import 'package:jaayko/presentation/widgets/right_drawer.dart';
+import 'package:jaayko/presentation/features/transactions/transaction_quick_add_sheet.dart';
+import 'package:jaayko/presentation/features/transactions/providers/transaction_list_providers.dart';
+import 'package:jaayko/presentation/features/transactions/utils/transaction_grouping.dart';
+import 'package:jaayko/presentation/features/transactions/widgets/day_header.dart';
+import 'package:jaayko/presentation/features/transactions/widgets/transaction_tile.dart';
+import 'package:jaayko/presentation/features/transactions/widgets/transaction_summary_card.dart';
+import 'package:jaayko/presentation/features/transactions/search/txn_search_delegate.dart';
+import 'package:jaayko/presentation/features/transactions/search/widgets/txn_search_cta.dart';
+import 'package:jaayko/presentation/features/settings/settings_page.dart';
+import 'package:jaayko/presentation/features/reports/report_page.dart';
+import 'package:jaayko/presentation/app/account_selection.dart';
 
-import 'package:money_pulse/presentation/widgets/auto_refresh_on_focus.dart';
-import 'package:money_pulse/sync/infrastructure/pull_providers.dart';
-import 'package:money_pulse/sync/infrastructure/sync_logger.dart';
+import 'package:jaayko/presentation/widgets/auto_refresh_on_focus.dart';
+import 'package:jaayko/sync/infrastructure/pull_providers.dart';
+import 'package:jaayko/sync/infrastructure/sync_logger.dart';
 
-import 'package:money_pulse/onboarding/presentation/providers/access_session_provider.dart';
+import 'package:jaayko/onboarding/presentation/providers/access_session_provider.dart';
 
 import '../../../../shared/server_unavailable.dart';
 import '../../../app/restart_app.dart';

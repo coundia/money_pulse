@@ -1,5 +1,5 @@
-import 'package:money_pulse/domain/transactions/entities/transaction_entry.dart';
-import 'package:money_pulse/sync/domain/sync_delta_type.dart';
+import 'package:jaayko/domain/transactions/entities/transaction_entry.dart';
+import 'package:jaayko/sync/domain/sync_delta_type.dart';
 
 class TransactionDeltaDto {
   final String id;

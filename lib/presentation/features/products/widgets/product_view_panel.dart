@@ -10,13 +10,13 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 
-import 'package:money_pulse/domain/products/entities/product.dart';
-import 'package:money_pulse/presentation/shared/formatters.dart';
+import 'package:jaayko/domain/products/entities/product.dart';
+import 'package:jaayko/presentation/shared/formatters.dart';
 
 import 'product_publish_actions.dart';
 import 'product_files_gallery.dart';
-import 'package:money_pulse/presentation/features/products/product_file_repo_provider.dart';
-import 'package:money_pulse/presentation/features/products/product_repo_provider.dart';
+import 'package:jaayko/presentation/features/products/product_file_repo_provider.dart';
+import 'package:jaayko/presentation/features/products/product_repo_provider.dart';
 
 // -- Providers ---------------------------------------------------------------
 

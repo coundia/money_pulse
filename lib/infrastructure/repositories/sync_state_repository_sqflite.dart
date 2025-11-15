@@ -1,6 +1,6 @@
-import 'package:money_pulse/infrastructure/db/app_database.dart';
-import 'package:money_pulse/domain/sync/entities/sync_state.dart';
-import 'package:money_pulse/domain/sync/repositories/sync_state_repository.dart';
+import 'package:jaayko/infrastructure/db/app_database.dart';
+import 'package:jaayko/domain/sync/entities/sync_state.dart';
+import 'package:jaayko/domain/sync/repositories/sync_state_repository.dart';
 import 'package:sqflite/sqflite.dart';
 
 class SyncStateRepositorySqflite implements SyncStateRepository {

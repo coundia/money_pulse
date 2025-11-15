@@ -15,7 +15,7 @@ import '../../../shared/formatters.dart';
 import '../../shared/constants/env.dart';
 import '../application/order_prefs_controller.dart';
 import '../domain/entities/marketplace_item.dart';
-import 'package:money_pulse/onboarding/presentation/providers/access_session_provider.dart';
+import 'package:jaayko/onboarding/presentation/providers/access_session_provider.dart';
 import '../domain/entities/order_command_request.dart';
 import '../infrastructure/order_command_repo_provider.dart';
 import 'widgets/order_confirmation_panel.dart';

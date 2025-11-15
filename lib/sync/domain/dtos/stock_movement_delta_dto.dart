@@ -1,6 +1,6 @@
 // DTO for stock movement delta payloads.
-import 'package:money_pulse/sync/domain/sync_delta_type.dart';
-import 'package:money_pulse/sync/domain/sync_delta_type_ext.dart';
+import 'package:jaayko/sync/domain/sync_delta_type.dart';
+import 'package:jaayko/sync/domain/sync_delta_type_ext.dart';
 
 class StockMovementDeltaDto {
   final Object? id;

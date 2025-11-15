@@ -1,7 +1,7 @@
 // Reusable company tile with publish state (badge + icon) and context menu entry point.
 import 'package:flutter/material.dart';
-import 'package:money_pulse/domain/company/entities/company.dart';
-import 'package:money_pulse/presentation/widgets/right_drawer.dart';
+import 'package:jaayko/domain/company/entities/company.dart';
+import 'package:jaayko/presentation/widgets/right_drawer.dart';
 import '../company_view_panel.dart';
 import '../company_form_panel.dart';
 import '../company_delete_panel.dart';

@@ -1,7 +1,7 @@
 // Reusable list/grid tile for StockLevel with context menu and responsive layout.
 import 'package:flutter/material.dart';
-import 'package:money_pulse/presentation/shared/formatters.dart';
-import 'package:money_pulse/domain/stock/repositories/stock_level_repository.dart';
+import 'package:jaayko/presentation/shared/formatters.dart';
+import 'package:jaayko/domain/stock/repositories/stock_level_repository.dart';
 import 'stock_level_context_menu.dart';
 
 class StockLevelTile extends StatelessWidget {

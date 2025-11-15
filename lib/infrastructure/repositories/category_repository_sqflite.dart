@@ -1,9 +1,9 @@
 // Sqflite repository for categories using tracked insert/update/delete with change_log.
 import 'package:sqflite/sqflite.dart';
-import 'package:money_pulse/infrastructure/db/app_database.dart';
-import 'package:money_pulse/domain/categories/entities/category.dart';
-import 'package:money_pulse/domain/categories/repositories/category_repository.dart';
-import 'package:money_pulse/sync/infrastructure/change_tracked_exec.dart';
+import 'package:jaayko/infrastructure/db/app_database.dart';
+import 'package:jaayko/domain/categories/entities/category.dart';
+import 'package:jaayko/domain/categories/repositories/category_repository.dart';
+import 'package:jaayko/sync/infrastructure/change_tracked_exec.dart';
 
 class CategoryRepositorySqflite implements CategoryRepository {
   final AppDatabase _db;

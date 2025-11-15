@@ -1,4 +1,4 @@
-import 'package:money_pulse/domain/sync/entities/sync_state.dart';
+import 'package:jaayko/domain/sync/entities/sync_state.dart';
 
 abstract class SyncStateRepository {
   Future<List<SyncState>> findAll({int limit});

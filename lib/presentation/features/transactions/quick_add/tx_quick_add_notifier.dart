@@ -1,16 +1,16 @@
 // Riverpod notifier for loading and saving quick transactions with fixed kind from parent.
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:money_pulse/domain/categories/entities/category.dart';
-import 'package:money_pulse/domain/company/entities/company.dart';
-import 'package:money_pulse/domain/customer/entities/customer.dart';
-import 'package:money_pulse/presentation/app/providers/add_sale_to_debt_usecase_provider.dart';
-import 'package:money_pulse/presentation/app/providers/checkout_cart_usecase_provider.dart'
+import 'package:jaayko/domain/categories/entities/category.dart';
+import 'package:jaayko/domain/company/entities/company.dart';
+import 'package:jaayko/domain/customer/entities/customer.dart';
+import 'package:jaayko/presentation/app/providers/add_sale_to_debt_usecase_provider.dart';
+import 'package:jaayko/presentation/app/providers/checkout_cart_usecase_provider.dart'
     hide checkoutCartUseCaseProvider;
-import 'package:money_pulse/presentation/app/providers/company_repo_provider.dart';
-import 'package:money_pulse/presentation/app/providers/customer_repo_provider.dart';
-import 'package:money_pulse/presentation/features/transactions/providers/transaction_list_providers.dart';
-import 'package:money_pulse/presentation/app/account_selection.dart';
+import 'package:jaayko/presentation/app/providers/company_repo_provider.dart';
+import 'package:jaayko/presentation/app/providers/customer_repo_provider.dart';
+import 'package:jaayko/presentation/features/transactions/providers/transaction_list_providers.dart';
+import 'package:jaayko/presentation/app/account_selection.dart';
 import '../../../../domain/company/repositories/company_repository.dart';
 import '../../../../domain/customer/repositories/customer_repository.dart';
 import '../../../app/providers.dart';

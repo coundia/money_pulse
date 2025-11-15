@@ -1,6 +1,6 @@
 // Utilities for quick add transaction.
 
-import 'package:money_pulse/domain/categories/entities/category.dart';
+import 'package:jaayko/domain/categories/entities/category.dart';
 
 import '../widgets/type_selector.dart';
 

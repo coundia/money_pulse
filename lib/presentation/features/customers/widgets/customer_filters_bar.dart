@@ -3,7 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../providers/customer_list_providers.dart';
 import '../../../app/providers/company_repo_provider.dart';
-import 'package:money_pulse/domain/company/entities/company.dart';
+import 'package:jaayko/domain/company/entities/company.dart';
 
 class ActiveFiltersBar extends ConsumerWidget {
   const ActiveFiltersBar({super.key});

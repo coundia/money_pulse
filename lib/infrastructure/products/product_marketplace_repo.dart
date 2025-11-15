@@ -6,12 +6,12 @@ import 'dart:developer' as dev;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:http/http.dart' as http;
 import 'package:http_parser/http_parser.dart';
-import 'package:money_pulse/domain/products/entities/product.dart';
-import 'package:money_pulse/domain/products/repositories/product_repository.dart';
-import 'package:money_pulse/presentation/features/products/product_repo_provider.dart';
+import 'package:jaayko/domain/products/entities/product.dart';
+import 'package:jaayko/domain/products/repositories/product_repository.dart';
+import 'package:jaayko/presentation/features/products/product_repo_provider.dart';
 import '../../sync/infrastructure/sync_headers_provider.dart';
-import 'package:money_pulse/domain/company/repositories/company_repository.dart';
-import 'package:money_pulse/presentation/app/providers/company_repo_provider.dart';
+import 'package:jaayko/domain/company/repositories/company_repository.dart';
+import 'package:jaayko/presentation/app/providers/company_repo_provider.dart';
 
 class ProductMarketplaceRepo {
   final Ref ref;

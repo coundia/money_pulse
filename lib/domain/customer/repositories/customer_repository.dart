@@ -1,4 +1,4 @@
-import 'package:money_pulse/domain/customer/entities/customer.dart';
+import 'package:jaayko/domain/customer/entities/customer.dart';
 
 class CustomerQuery {
   final String? search;

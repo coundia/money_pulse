@@ -1,7 +1,7 @@
 // Amount field with quick chips and a responsive bottom-sheet keypad. Supports +, -, × operations and CC (clear all). French UI, system keyboard hidden.
 
 import 'package:flutter/material.dart';
-import 'package:money_pulse/presentation/shared/formatters.dart';
+import 'package:jaayko/presentation/shared/formatters.dart';
 
 class AmountFieldQuickPad extends StatefulWidget {
   final TextEditingController controller;

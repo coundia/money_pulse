@@ -5,9 +5,9 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'report_range.dart';
 import 'models/report_totals.dart';
 
-import 'package:money_pulse/domain/accounts/entities/account.dart';
-import 'package:money_pulse/presentation/app/providers.dart';
-import 'package:money_pulse/presentation/shared/formatters.dart';
+import 'package:jaayko/domain/accounts/entities/account.dart';
+import 'package:jaayko/presentation/app/providers.dart';
+import 'package:jaayko/presentation/shared/formatters.dart';
 
 class ReportTotalsCard extends ConsumerStatefulWidget {
   final Account account;

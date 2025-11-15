@@ -4,9 +4,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import 'package:money_pulse/domain/categories/entities/category.dart';
-import 'package:money_pulse/infrastructure/categories/category_marketplace_repo_provider.dart';
-import 'package:money_pulse/onboarding/presentation/providers/access_session_provider.dart'
+import 'package:jaayko/domain/categories/entities/category.dart';
+import 'package:jaayko/infrastructure/categories/category_marketplace_repo_provider.dart';
+import 'package:jaayko/onboarding/presentation/providers/access_session_provider.dart'
     show requireAccess;
 
 import '../../../../shared/api_error_toast.dart';

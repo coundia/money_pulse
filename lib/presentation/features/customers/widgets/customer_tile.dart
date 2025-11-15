@@ -8,10 +8,10 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/gestures.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:money_pulse/domain/customer/entities/customer.dart';
-import 'package:money_pulse/presentation/features/customers/customer_edit_panel.dart';
-import 'package:money_pulse/presentation/widgets/right_drawer.dart';
-import 'package:money_pulse/presentation/shared/formatters.dart';
+import 'package:jaayko/domain/customer/entities/customer.dart';
+import 'package:jaayko/presentation/features/customers/customer_edit_panel.dart';
+import 'package:jaayko/presentation/widgets/right_drawer.dart';
+import 'package:jaayko/presentation/shared/formatters.dart';
 
 import '../../../app/account_selection.dart';
 import '../customer_view_panel.dart';
@@ -25,9 +25,9 @@ import '../providers/customer_list_providers.dart';
 import '../providers/customer_detail_providers.dart';
 
 // For quick "reset" actions (needs a selected account + use case)
-import 'package:money_pulse/presentation/app/providers.dart'
+import 'package:jaayko/presentation/app/providers.dart'
     show selectedAccountIdProvider;
-import 'package:money_pulse/presentation/app/providers/checkout_cart_usecase_provider.dart'
+import 'package:jaayko/presentation/app/providers/checkout_cart_usecase_provider.dart'
     show checkoutCartUseCaseProvider;
 
 class CustomerTile extends ConsumerWidget {

@@ -1,9 +1,9 @@
 // Providers for linked data to a customer: open debt + recent transactions.
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:money_pulse/presentation/app/providers.dart';
-import 'package:money_pulse/presentation/features/debts/debt_repo_provider.dart';
-import 'package:money_pulse/domain/debts/entities/debt.dart';
-import 'package:money_pulse/domain/debts/repositories/debt_repository.dart';
+import 'package:jaayko/presentation/app/providers.dart';
+import 'package:jaayko/presentation/features/debts/debt_repo_provider.dart';
+import 'package:jaayko/domain/debts/entities/debt.dart';
+import 'package:jaayko/domain/debts/repositories/debt_repository.dart';
 
 final openDebtByCustomerProvider = FutureProvider.family<Debt?, String>((
   ref,

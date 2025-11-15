@@ -1,10 +1,10 @@
 // Sqflite repository for accounts using ChangeTrackedExec to auto-stamp and log changes; keeps balance_prev in sync and self-heals a single default within user scope.
-import 'package:money_pulse/sync/infrastructure/change_tracked_exec.dart';
+import 'package:jaayko/sync/infrastructure/change_tracked_exec.dart';
 import 'package:uuid/uuid.dart';
 import 'package:sqflite/sqflite.dart';
-import 'package:money_pulse/infrastructure/db/app_database.dart';
-import 'package:money_pulse/domain/accounts/entities/account.dart';
-import 'package:money_pulse/domain/accounts/repositories/account_repository.dart';
+import 'package:jaayko/infrastructure/db/app_database.dart';
+import 'package:jaayko/domain/accounts/entities/account.dart';
+import 'package:jaayko/domain/accounts/repositories/account_repository.dart';
 
 typedef CurrentUserId = String? Function();
 

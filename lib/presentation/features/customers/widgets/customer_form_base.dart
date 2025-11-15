@@ -9,8 +9,8 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:uuid/uuid.dart';
 
-import 'package:money_pulse/domain/customer/entities/customer.dart';
-import 'package:money_pulse/domain/company/entities/company.dart';
+import 'package:jaayko/domain/customer/entities/customer.dart';
+import 'package:jaayko/domain/company/entities/company.dart';
 import '../../../../domain/company/repositories/company_repository.dart';
 import '../../../app/providers/company_repo_provider.dart';
 import '../../../app/providers/customer_repo_provider.dart';

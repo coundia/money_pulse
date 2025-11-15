@@ -6,7 +6,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../prefs/summary_card_prefs_provider.dart';
-import 'package:money_pulse/presentation/features/home/prefs/home_ui_prefs_provider.dart';
+import 'package:jaayko/presentation/features/home/prefs/home_ui_prefs_provider.dart';
 
 class SummaryCardPrefsPanel extends ConsumerWidget {
   const SummaryCardPrefsPanel({super.key});

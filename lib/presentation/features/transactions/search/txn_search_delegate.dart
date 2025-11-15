@@ -2,13 +2,13 @@
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:money_pulse/domain/transactions/entities/transaction_entry.dart';
-import 'package:money_pulse/presentation/shared/formatters.dart';
+import 'package:jaayko/domain/transactions/entities/transaction_entry.dart';
+import 'package:jaayko/presentation/shared/formatters.dart';
 
 import '../widgets/transaction_detail_view.dart';
 import 'models/txn_search_filters.dart';
 import 'widgets/txn_filter_sheet.dart';
-import 'package:money_pulse/presentation/widgets/right_drawer.dart';
+import 'package:jaayko/presentation/widgets/right_drawer.dart';
 
 class TxnSearchDelegate extends SearchDelegate<TransactionEntry?> {
   final List<TransactionEntry> items;

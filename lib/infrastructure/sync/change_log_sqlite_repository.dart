@@ -1,6 +1,6 @@
-import 'package:money_pulse/infrastructure/db/app_database.dart';
-import 'package:money_pulse/domain/sync/entities/change_log_entry.dart';
-import 'package:money_pulse/domain/sync/repositories/change_log_repository.dart';
+import 'package:jaayko/infrastructure/db/app_database.dart';
+import 'package:jaayko/domain/sync/entities/change_log_entry.dart';
+import 'package:jaayko/domain/sync/repositories/change_log_repository.dart';
 import 'package:sqflite/sqflite.dart';
 import 'package:uuid/uuid.dart';
 

@@ -1,8 +1,8 @@
 // Button to unpublish product on marketplace with robust enable logic and clear tooltip.
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:money_pulse/domain/products/entities/product.dart';
-import 'package:money_pulse/infrastructure/products/product_marketplace_repo_provider.dart';
+import 'package:jaayko/domain/products/entities/product.dart';
+import 'package:jaayko/infrastructure/products/product_marketplace_repo_provider.dart';
 
 class ProductUnpublishButton extends ConsumerStatefulWidget {
   final Product product;

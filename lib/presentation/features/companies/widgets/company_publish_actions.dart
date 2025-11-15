@@ -2,10 +2,10 @@
    Now requires an authenticated user via requireAccess() before any action. */
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:money_pulse/domain/company/entities/company.dart';
-import 'package:money_pulse/presentation/features/companies/providers/company_detail_providers.dart';
-import 'package:money_pulse/presentation/features/companies/providers/company_list_providers.dart';
-import 'package:money_pulse/onboarding/presentation/providers/access_session_provider.dart'
+import 'package:jaayko/domain/company/entities/company.dart';
+import 'package:jaayko/presentation/features/companies/providers/company_detail_providers.dart';
+import 'package:jaayko/presentation/features/companies/providers/company_list_providers.dart';
+import 'package:jaayko/onboarding/presentation/providers/access_session_provider.dart'
     show requireAccess;
 
 import '../../../../infrastructure/company/repositories/company_marketplace_repo_provider.dart';

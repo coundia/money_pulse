@@ -4,26 +4,23 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:uuid/uuid.dart';
 
-import 'package:money_pulse/presentation/shared/formatters.dart';
-import 'package:money_pulse/presentation/widgets/right_drawer.dart';
+import 'package:jaayko/presentation/shared/formatters.dart';
+import 'package:jaayko/presentation/widgets/right_drawer.dart';
 
-import 'package:money_pulse/domain/categories/entities/category.dart';
-import 'package:money_pulse/domain/categories/repositories/category_repository.dart';
+import 'package:jaayko/domain/categories/entities/category.dart';
+import 'package:jaayko/domain/categories/repositories/category_repository.dart';
 import '../../../infrastructure/categories/category_marketplace_repo_provider.dart';
 import '../../../shared/constants/env.dart';
 import 'widgets/category_form_panel.dart';
 import 'widgets/category_tile.dart';
 import 'widgets/category_context_menu.dart';
 import 'widgets/category_details_panel.dart';
-import 'package:money_pulse/presentation/app/providers.dart';
-import 'package:money_pulse/infrastructure/categories/category_pull_service.dart';
+import 'package:jaayko/presentation/app/providers.dart';
+import 'package:jaayko/infrastructure/categories/category_pull_service.dart';
 
 class CategoryListPage extends ConsumerStatefulWidget {
   final String marketplaceBaseUri;
-  const CategoryListPage({
-    super.key,
-    this.marketplaceBaseUri = Env.BASE_URI,
-  });
+  const CategoryListPage({super.key, this.marketplaceBaseUri = Env.BASE_URI});
 
   @override
   ConsumerState<CategoryListPage> createState() => _CategoryListPageState();

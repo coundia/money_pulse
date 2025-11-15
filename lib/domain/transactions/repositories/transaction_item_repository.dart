@@ -1,4 +1,4 @@
-import 'package:money_pulse/domain/transactions/entities/transaction_item.dart';
+import 'package:jaayko/domain/transactions/entities/transaction_item.dart';
 
 abstract class TransactionItemRepository {
   Future<List<TransactionItem>> findByTransaction(String transactionId);

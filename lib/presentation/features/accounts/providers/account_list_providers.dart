@@ -1,8 +1,8 @@
 // Providers for account listing with search, type filter and updatedAt-desc ordering.
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:money_pulse/domain/accounts/entities/account.dart';
-import 'package:money_pulse/presentation/features/accounts/account_repo_provider.dart';
+import 'package:jaayko/domain/accounts/entities/account.dart';
+import 'package:jaayko/presentation/features/accounts/account_repo_provider.dart';
 
 final accountSearchProvider = StateProvider<String>((_) => '');
 final accountTypeFilterProvider = StateProvider<String?>((_) => null);

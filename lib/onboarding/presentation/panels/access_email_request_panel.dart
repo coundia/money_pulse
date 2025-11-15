@@ -5,10 +5,10 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'access_register_panel.dart';
 import '../providers/access_repo_provider.dart';
 import '../../domain/models/access_identity.dart';
-import 'package:money_pulse/presentation/app/installation_id_provider.dart';
+import 'package:jaayko/presentation/app/installation_id_provider.dart';
 import 'access_password_login_panel.dart';
 import '../../domain/entities/access_grant.dart';
-import 'package:money_pulse/presentation/widgets/right_drawer.dart';
+import 'package:jaayko/presentation/widgets/right_drawer.dart';
 import 'access_code_verify_panel.dart';
 
 class AccessEmailRequestResult {

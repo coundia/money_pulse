@@ -2,8 +2,8 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:money_pulse/domain/products/entities/product.dart';
-import 'package:money_pulse/infrastructure/products/product_marketplace_repo_provider.dart';
+import 'package:jaayko/domain/products/entities/product.dart';
+import 'package:jaayko/infrastructure/products/product_marketplace_repo_provider.dart';
 
 class ProductMarketButton extends ConsumerStatefulWidget {
   final Product product;

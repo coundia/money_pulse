@@ -2,7 +2,7 @@
 import 'push_port.dart';
 import '../infrastructure/sync_logger.dart';
 import 'sync_policy.dart';
-import 'package:money_pulse/sync/domain/sync_domain.dart';
+import 'package:jaayko/sync/domain/sync_domain.dart';
 
 class SyncSummary {
   final int categories;

@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
-import 'package:money_pulse/domain/sync/entities/change_log_entry.dart';
+import 'package:jaayko/domain/sync/entities/change_log_entry.dart';
 
-import 'package:money_pulse/domain/sync/repositories/change_log_repository.dart';
+import 'package:jaayko/domain/sync/repositories/change_log_repository.dart';
 
 import '../../app/providers.dart';
 

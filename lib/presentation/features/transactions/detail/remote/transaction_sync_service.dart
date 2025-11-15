@@ -6,12 +6,12 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:http/http.dart' as http;
 
-import 'package:money_pulse/domain/transactions/entities/transaction_entry.dart';
-import 'package:money_pulse/presentation/app/providers.dart'; // syncHeaderBuilderProvider
+import 'package:jaayko/domain/transactions/entities/transaction_entry.dart';
+import 'package:jaayko/presentation/app/providers.dart'; // syncHeaderBuilderProvider
 import '../../../../../shared/constants/env.dart';
 import '../../../../../sync/infrastructure/sync_headers_provider.dart';
 import '../../providers/transaction_list_providers.dart';
-import 'package:money_pulse/presentation/features/transactions/providers/transaction_detail_providers.dart';
+import 'package:jaayko/presentation/features/transactions/providers/transaction_detail_providers.dart';
 
 class TransactionSyncService {
   static const String _baseUrl = Env.BASE_URI;

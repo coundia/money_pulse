@@ -1,5 +1,5 @@
 /* DTO for company deltas: builds JSON payload with UTC ISO-8601 dates for push. */
-import 'package:money_pulse/sync/domain/sync_delta_type.dart';
+import 'package:jaayko/sync/domain/sync_delta_type.dart';
 
 import '../../../domain/company/entities/company.dart';
 

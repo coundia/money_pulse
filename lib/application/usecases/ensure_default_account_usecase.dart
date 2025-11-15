@@ -1,6 +1,6 @@
 import 'package:uuid/uuid.dart';
-import 'package:money_pulse/domain/accounts/entities/account.dart';
-import 'package:money_pulse/domain/accounts/repositories/account_repository.dart';
+import 'package:jaayko/domain/accounts/entities/account.dart';
+import 'package:jaayko/domain/accounts/repositories/account_repository.dart';
 
 class EnsureDefaultAccountUseCase {
   final AccountRepository repo;

@@ -1,6 +1,6 @@
 // Report repository for sums and daily totals using UTC ranges, stable grouping, and updated SQL for consistent results.
-import 'package:money_pulse/infrastructure/db/app_database.dart';
-import 'package:money_pulse/domain/reports/repositories/report_repository.dart';
+import 'package:jaayko/infrastructure/db/app_database.dart';
+import 'package:jaayko/domain/reports/repositories/report_repository.dart';
 
 class ReportRepositorySqflite implements ReportRepository {
   final AppDatabase _db;

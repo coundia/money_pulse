@@ -5,12 +5,12 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:uuid/uuid.dart';
 
-import 'package:money_pulse/domain/customer/entities/customer.dart';
-import 'package:money_pulse/domain/products/entities/product.dart';
-import 'package:money_pulse/presentation/widgets/right_drawer.dart';
-import 'package:money_pulse/presentation/features/products/product_picker_panel.dart';
-import 'package:money_pulse/presentation/features/products/product_repo_provider.dart';
-import 'package:money_pulse/presentation/features/products/widgets/product_form_panel.dart';
+import 'package:jaayko/domain/customer/entities/customer.dart';
+import 'package:jaayko/domain/products/entities/product.dart';
+import 'package:jaayko/presentation/widgets/right_drawer.dart';
+import 'package:jaayko/presentation/features/products/product_picker_panel.dart';
+import 'package:jaayko/presentation/features/products/product_repo_provider.dart';
+import 'package:jaayko/presentation/features/products/widgets/product_form_panel.dart';
 import '../customers/customer_create_panel.dart';
 import 'models/tx_item.dart';
 import 'quick_add/tx_quick_add_notifier.dart';

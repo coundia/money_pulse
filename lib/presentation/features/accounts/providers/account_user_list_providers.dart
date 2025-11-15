@@ -1,7 +1,7 @@
 /* Riverpod providers to load and search account members ordered by updatedAt desc. */
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:money_pulse/presentation/features/accounts/providers/account_user_repo_provider.dart';
-import 'package:money_pulse/domain/accounts/entities/account_user.dart';
+import 'package:jaayko/presentation/features/accounts/providers/account_user_repo_provider.dart';
+import 'package:jaayko/domain/accounts/entities/account_user.dart';
 
 final accountUserSearchProvider = StateProvider<String>((ref) => '');
 

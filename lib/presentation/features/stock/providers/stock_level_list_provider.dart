@@ -1,7 +1,7 @@
 // List/search providers for StockLevel list page
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:money_pulse/domain/stock/repositories/stock_level_repository.dart';
+import 'package:jaayko/domain/stock/repositories/stock_level_repository.dart';
 import 'stock_level_repo_provider.dart';
 
 final stockLevelQueryProvider = StateProvider<String>((ref) => '');

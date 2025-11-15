@@ -1,5 +1,5 @@
 /* Company repository abstraction with sync-aware update. */
-import 'package:money_pulse/domain/company/entities/company.dart';
+import 'package:jaayko/domain/company/entities/company.dart';
 
 class CompanyQuery {
   final String? search;

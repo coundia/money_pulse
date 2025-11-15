@@ -1,27 +1,27 @@
 // App-wide providers and bootstrapping helpers (ensure default account, seed categories, refresh states).
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:uuid/uuid.dart';
-import 'package:money_pulse/infrastructure/db/app_database.dart';
+import 'package:jaayko/infrastructure/db/app_database.dart';
 
-import 'package:money_pulse/domain/accounts/entities/account.dart';
-import 'package:money_pulse/domain/accounts/repositories/account_repository.dart';
-import 'package:money_pulse/infrastructure/repositories/account_repository_sqflite.dart';
+import 'package:jaayko/domain/accounts/entities/account.dart';
+import 'package:jaayko/domain/accounts/repositories/account_repository.dart';
+import 'package:jaayko/infrastructure/repositories/account_repository_sqflite.dart';
 
-import 'package:money_pulse/domain/categories/repositories/category_repository.dart';
-import 'package:money_pulse/infrastructure/repositories/category_repository_sqflite.dart';
+import 'package:jaayko/domain/categories/repositories/category_repository.dart';
+import 'package:jaayko/infrastructure/repositories/category_repository_sqflite.dart';
 
-import 'package:money_pulse/domain/transactions/repositories/transaction_repository.dart';
-import 'package:money_pulse/infrastructure/repositories/transaction_repository_sqflite.dart';
+import 'package:jaayko/domain/transactions/repositories/transaction_repository.dart';
+import 'package:jaayko/infrastructure/repositories/transaction_repository_sqflite.dart';
 
-import 'package:money_pulse/application/usecases/ensure_default_account_usecase.dart';
-import 'package:money_pulse/application/usecases/seed_default_categories_usecase.dart';
+import 'package:jaayko/application/usecases/ensure_default_account_usecase.dart';
+import 'package:jaayko/application/usecases/seed_default_categories_usecase.dart';
 
-import 'package:money_pulse/domain/categories/entities/category.dart';
-import 'package:money_pulse/domain/transactions/entities/transaction_entry.dart';
+import 'package:jaayko/domain/categories/entities/category.dart';
+import 'package:jaayko/domain/transactions/entities/transaction_entry.dart';
 
 // REPORT REPO
-import 'package:money_pulse/domain/reports/repositories/report_repository.dart';
-import 'package:money_pulse/infrastructure/repositories/report_repository_sqflite.dart';
+import 'package:jaayko/domain/reports/repositories/report_repository.dart';
+import 'package:jaayko/infrastructure/repositories/report_repository_sqflite.dart';
 
 import '../../application/usecases/checkout_cart_usecase.dart';
 import '../../domain/debts/repositories/debt_repository.dart';

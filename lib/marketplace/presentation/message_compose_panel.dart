@@ -8,9 +8,9 @@ import '../../shared/formatters.dart';
 import '../domain/entities/marketplace_item.dart';
 
 // API
-import 'package:money_pulse/onboarding/presentation/providers/access_session_provider.dart';
-import 'package:money_pulse/marketplace/domain/entities/order_command_request.dart';
-import 'package:money_pulse/marketplace/infrastructure/order_command_repo_provider.dart';
+import 'package:jaayko/onboarding/presentation/providers/access_session_provider.dart';
+import 'package:jaayko/marketplace/domain/entities/order_command_request.dart';
+import 'package:jaayko/marketplace/infrastructure/order_command_repo_provider.dart';
 
 class MessageComposePanel extends ConsumerStatefulWidget {
   final MarketplaceItem item;

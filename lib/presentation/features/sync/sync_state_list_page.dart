@@ -1,10 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
-import 'package:money_pulse/presentation/shared/formatters.dart';
-import 'package:money_pulse/domain/sync/entities/sync_state.dart';
-import 'package:money_pulse/presentation/features/sync/sync_state_repo_provider.dart';
-import 'package:money_pulse/domain/sync/repositories/sync_state_repository.dart';
+import 'package:jaayko/presentation/shared/formatters.dart';
+import 'package:jaayko/domain/sync/entities/sync_state.dart';
+import 'package:jaayko/presentation/features/sync/sync_state_repo_provider.dart';
+import 'package:jaayko/domain/sync/repositories/sync_state_repository.dart';
 
 class SyncStateListPage extends ConsumerStatefulWidget {
   const SyncStateListPage({super.key});
@@ -54,13 +54,22 @@ class _SyncStateListPageState extends ConsumerState<SyncStateListPage> {
           ),
         ),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Annuler')),
-          FilledButton(onPressed: () => Navigator.pop(context, true), child: const Text('Enregistrer')),
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Annuler'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('Enregistrer'),
+          ),
         ],
       ),
     );
     if (ok == true) {
-      await repo.updateCursor(table, ctrl.text.trim().isEmpty ? null : ctrl.text.trim());
+      await repo.updateCursor(
+        table,
+        ctrl.text.trim().isEmpty ? null : ctrl.text.trim(),
+      );
       if (mounted) setState(() {});
     }
   }
@@ -251,9 +260,8 @@ class _SyncStateEditDialogState extends State<_SyncStateEditDialog> {
                   labelText: 'Nom de table (ex: account)',
                   border: OutlineInputBorder(),
                 ),
-                validator: (v) => (v == null || v.trim().isEmpty)
-                    ? 'Requis'
-                    : null,
+                validator: (v) =>
+                    (v == null || v.trim().isEmpty) ? 'Requis' : null,
                 autofocus: !widget.data.lockedTable,
               ),
               const SizedBox(height: 10),
@@ -291,7 +299,10 @@ class _SyncStateEditDialogState extends State<_SyncStateEditDialog> {
         ),
       ),
       actions: [
-        TextButton(onPressed: () => Navigator.pop(context), child: const Text('Annuler')),
+        TextButton(
+          onPressed: () => Navigator.pop(context),
+          child: const Text('Annuler'),
+        ),
         FilledButton(
           onPressed: () {
             if (!_formKey.currentState!.validate()) return;

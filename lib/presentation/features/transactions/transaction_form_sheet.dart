@@ -7,14 +7,14 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:uuid/uuid.dart';
 
-import 'package:money_pulse/domain/categories/entities/category.dart';
-import 'package:money_pulse/domain/company/entities/company.dart';
-import 'package:money_pulse/domain/customer/entities/customer.dart';
-import 'package:money_pulse/domain/transactions/entities/transaction_entry.dart';
+import 'package:jaayko/domain/categories/entities/category.dart';
+import 'package:jaayko/domain/company/entities/company.dart';
+import 'package:jaayko/domain/customer/entities/customer.dart';
+import 'package:jaayko/domain/transactions/entities/transaction_entry.dart';
 
-import 'package:money_pulse/presentation/app/providers.dart';
-import 'package:money_pulse/presentation/shared/formatters.dart';
-import 'package:money_pulse/presentation/features/transactions/providers/transaction_detail_providers.dart';
+import 'package:jaayko/presentation/app/providers.dart';
+import 'package:jaayko/presentation/shared/formatters.dart';
+import 'package:jaayko/presentation/features/transactions/providers/transaction_detail_providers.dart';
 
 import '../../../domain/company/repositories/company_repository.dart';
 import '../../../domain/customer/repositories/customer_repository.dart';

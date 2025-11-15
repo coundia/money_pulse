@@ -5,7 +5,7 @@
 
 import 'dart:io';
 import 'package:flutter/material.dart';
-import 'package:money_pulse/presentation/shared/formatters.dart';
+import 'package:jaayko/presentation/shared/formatters.dart';
 import 'product_context_menu.dart';
 
 class ProductTile extends StatelessWidget {

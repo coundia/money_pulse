@@ -10,11 +10,11 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:http/http.dart' as http;
 
-import 'package:money_pulse/domain/customer/entities/customer.dart';
-import 'package:money_pulse/domain/customer/repositories/customer_repository.dart';
+import 'package:jaayko/domain/customer/entities/customer.dart';
+import 'package:jaayko/domain/customer/repositories/customer_repository.dart';
 
 import '../../app/providers/customer_repo_provider.dart';
-import 'package:money_pulse/onboarding/presentation/providers/access_session_provider.dart';
+import 'package:jaayko/onboarding/presentation/providers/access_session_provider.dart';
 
 class CustomerMarketplaceRepo {
   final Ref ref;

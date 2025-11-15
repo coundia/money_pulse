@@ -2,11 +2,11 @@
 // Receipt controller: builds ReceiptData for a transaction including company and customer info.
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:money_pulse/domain/receipts/entities/receipt_models.dart';
-import 'package:money_pulse/presentation/app/providers.dart';
-import 'package:money_pulse/presentation/shared/formatters.dart';
-import 'package:money_pulse/presentation/app/providers/company_repo_provider.dart';
-import 'package:money_pulse/presentation/app/providers/customer_repo_provider.dart';
+import 'package:jaayko/domain/receipts/entities/receipt_models.dart';
+import 'package:jaayko/presentation/app/providers.dart';
+import 'package:jaayko/presentation/shared/formatters.dart';
+import 'package:jaayko/presentation/app/providers/company_repo_provider.dart';
+import 'package:jaayko/presentation/app/providers/customer_repo_provider.dart';
 
 String _titleForType(String type) {
   final t = type.toUpperCase().trim();

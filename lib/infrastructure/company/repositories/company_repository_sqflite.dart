@@ -1,10 +1,10 @@
 /* Sqflite implementation: adds updateFromSync to persist server state without bumping version. */
 import 'package:uuid/uuid.dart';
 import 'package:sqflite/sqflite.dart';
-import 'package:money_pulse/infrastructure/db/app_database.dart';
-import 'package:money_pulse/domain/company/entities/company.dart';
-import 'package:money_pulse/domain/company/repositories/company_repository.dart';
-import 'package:money_pulse/sync/infrastructure/change_log_helper.dart';
+import 'package:jaayko/infrastructure/db/app_database.dart';
+import 'package:jaayko/domain/company/entities/company.dart';
+import 'package:jaayko/domain/company/repositories/company_repository.dart';
+import 'package:jaayko/sync/infrastructure/change_log_helper.dart';
 
 class CompanyRepositorySqflite implements CompanyRepository {
   final AppDatabase db;
